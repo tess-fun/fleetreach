@@ -15,7 +15,7 @@ description = "Maven (Java) ecosystem feeder for fleetreach: toolchain-free grad
 workspace = true
 
 [dependencies]
-fleetreach-core = { path = "../core" }
+fleetreach-core = { path = "../core", version = "1.0.0" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

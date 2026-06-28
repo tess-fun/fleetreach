@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! R1 verification: the driver's monomorphized-`fn` set must match the
 //! compiler's own `-Zprint-mono-items`.
 //!

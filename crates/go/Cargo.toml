@@ -15,10 +15,10 @@ description = "Go ecosystem feeder for fleetreach: ingests govulncheck JSON into
 workspace = true
 
 [dependencies]
-fleetreach-core = { path = "../core" }
+fleetreach-core = { path = "../core", version = "1.0.0" }
 # Reused for the build sandbox: govulncheck compiles the scanned module (arbitrary
 # code), so it is confined through the same mechanism as `--reachability=static`.
-fleetreach-reach = { path = "../reach" }
+fleetreach-reach = { path = "../reach", version = "1.0.0" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

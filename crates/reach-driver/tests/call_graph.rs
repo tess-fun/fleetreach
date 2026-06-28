@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! R2 verification: the driver emits correct **direct-call** edges, and the
 //! graph supports a root→target reachability query (the substrate R3 turns into
 //! a witness chain).

@@ -42,10 +42,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup show
-      # cargo-rdme resolves intra-doc links in the lib.rs docs with a nightly rustdoc.
-      - run: rustup toolchain install nightly --profile minimal
       - name: install cargo-rdme
         run: cargo install cargo-rdme --locked
+      # cargo-rdme resolves intra-doc links with a specific nightly rustdoc; let it
+      # install the exact toolchain version it needs.
+      - run: cargo rdme install-rust-toolchain-for-intralinks
       # Library READMEs are generated from lib.rs doc comments; fail if stale.
       - name: library READMEs match lib.rs
         run: |

@@ -29,22 +29,22 @@ name = "fleetreach"
 path = "src/main.rs"
 
 [dependencies]
-fleetreach-core = { path = "../core" }
-fleetreach-scan = { path = "../scan" }
-fleetreach-reach = { path = "../reach" }
-fleetreach-correlate = { path = "../correlate" }
-fleetreach-report = { path = "../report" }
-fleetreach-go = { path = "../go" }
-fleetreach-npm = { path = "../npm" }
-fleetreach-pypi = { path = "../pypi" }
-fleetreach-rubygems = { path = "../rubygems" }
-fleetreach-packagist = { path = "../packagist" }
-fleetreach-nuget = { path = "../nuget" }
-fleetreach-julia = { path = "../julia" }
-fleetreach-swift = { path = "../swift" }
-fleetreach-hex = { path = "../hex" }
-fleetreach-ghactions = { path = "../ghactions" }
-fleetreach-maven = { path = "../maven" }
+fleetreach-core = { path = "../core", version = "1.0.0" }
+fleetreach-scan = { path = "../scan", version = "1.0.0" }
+fleetreach-reach = { path = "../reach", version = "1.0.0" }
+fleetreach-correlate = { path = "../correlate", version = "1.0.0" }
+fleetreach-report = { path = "../report", version = "1.0.0" }
+fleetreach-go = { path = "../go", version = "1.0.0" }
+fleetreach-npm = { path = "../npm", version = "1.0.0" }
+fleetreach-pypi = { path = "../pypi", version = "1.0.0" }
+fleetreach-rubygems = { path = "../rubygems", version = "1.0.0" }
+fleetreach-packagist = { path = "../packagist", version = "1.0.0" }
+fleetreach-nuget = { path = "../nuget", version = "1.0.0" }
+fleetreach-julia = { path = "../julia", version = "1.0.0" }
+fleetreach-swift = { path = "../swift", version = "1.0.0" }
+fleetreach-hex = { path = "../hex", version = "1.0.0" }
+fleetreach-ghactions = { path = "../ghactions", version = "1.0.0" }
+fleetreach-maven = { path = "../maven", version = "1.0.0" }
 serde = { workspace = true }
 sha2 = { workspace = true }
 toml = { workspace = true }

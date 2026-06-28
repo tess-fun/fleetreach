@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! R8 soundness corpus (spec §9): the end-to-end evidence that earns the word
 //! "sound". Each case runs the driver on a fixture, analyzes its graph with the
 //! real `reach` engine, and asserts the verdict for a known sink.
