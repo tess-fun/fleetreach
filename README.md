@@ -1,9 +1,8 @@
 # fleetreach
 
-[![crates.io](https://img.shields.io/crates/v/fleetreach-cli.svg)](https://crates.io/crates/fleetreach-cli)
 [![CI](https://github.com/tess-fun/fleetreach/actions/workflows/ci.yml/badge.svg)](https://github.com/tess-fun/fleetreach/actions/workflows/ci.yml)
 [![MSRV](https://img.shields.io/badge/MSRV-1.89-blue)](#msrv)
-[![License](https://img.shields.io/crates/l/fleetreach-cli.svg)](#license)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 
 **A fleet-native dependency security auditor.** Point it at many repositories at
 once and get one deduplicated, ranked, CI-pipeable view of which dependencies
@@ -53,8 +52,11 @@ tools above fit better. If you want one command that answers "what is my
 
 ## Installation
 
+Install the `fleetreach` binary straight from the repository (not yet published to
+crates.io):
+
 ```sh
-cargo install fleetreach-cli --features network   # the `fleetreach` binary, with DB fetch + enrichment
+cargo install --git https://github.com/tess-fun/fleetreach fleetreach-cli --features network   # with DB fetch + enrichment
 ```
 
 The default build is **pure-Rust** (no vendored-C TLS stack): it has no network
