@@ -144,7 +144,7 @@ jobs:
       # The driver links rustc_private and builds on its own pinned nightly
       # (crates/reach-driver/rust-toolchain.toml). rustc-dev/rust-src are required.
       - name: install pinned nightly + components
-        run: rustup toolchain install nightly-2026-06-01 --profile minimal --component rustc-dev --component rust-src --component llvm-tools --component clippy
+        run: rustup toolchain install nightly-2026-06-27 --profile minimal --component rustc-dev --component rust-src --component llvm-tools --component clippy
       - name: build the driver
         working-directory: crates/reach-driver
         run: cargo build
