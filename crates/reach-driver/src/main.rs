@@ -367,7 +367,7 @@ fn intern_and_index<'tcx>(
                     let op_ty = instance.instantiate_mir_and_normalize_erasing_regions(
                         tcx,
                         env,
-                        ty::EarlyBinder::bind(op_ty),
+                        ty::EarlyBinder::bind(tcx, op_ty),
                     );
                     if let Some((target, sig)) = resolve_reified(tcx, env, op_ty) {
                         let id = builder.intern(
@@ -460,7 +460,7 @@ fn emit_call_edges<'tcx>(
             let func_ty = instance.instantiate_mir_and_normalize_erasing_regions(
                 tcx,
                 env,
-                ty::EarlyBinder::bind(func_ty),
+                ty::EarlyBinder::bind(tcx, func_ty),
             );
 
             match func_ty.kind() {

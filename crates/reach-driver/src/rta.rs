@@ -198,7 +198,7 @@ pub fn emit_coercions<'tcx>(
             instance.instantiate_mir_and_normalize_erasing_regions(
                 tcx,
                 env,
-                ty::EarlyBinder::bind(ty),
+                ty::EarlyBinder::bind(tcx, ty),
             )
         };
 
