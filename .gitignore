@@ -11,3 +11,6 @@
 # Local editor / tooling state, not part of the project.
 /.claude
 .DS_Store
+
+# Generated mdBook docs (built in CI into the Pages artifact).
+/site/docs/

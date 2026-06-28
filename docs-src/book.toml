@@ -1,0 +1,21 @@
+[book]
+title = "fleetreach"
+description = "Fleet-wide dependency security audit across 12 ecosystems, from one CLI."
+authors = ["tess-fun"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "../site/docs"
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+site-url = "/fleetreach/docs/"
+git-repository-url = "https://github.com/tess-fun/fleetreach"
+edit-url-template = "https://github.com/tess-fun/fleetreach/edit/main/docs-src/{path}"
+additional-css = ["theme/fleetreach.css"]
+
+[output.html.fold]
+enable = true
+level = 1

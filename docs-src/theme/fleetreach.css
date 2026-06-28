@@ -1,0 +1,12 @@
+:root {
+  --links: #ff7a45;
+  --inline-code-color: #ff9466;
+  --sidebar-active: #ff7a45;
+}
+.navy {
+  --links: #ff8a5a;
+  --inline-code-color: #ffa882;
+  --sidebar-active: #ff8a5a;
+}
+a > .hljs { color: var(--links); }
+.menu-title { font-weight: 500; }
