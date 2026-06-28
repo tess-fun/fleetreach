@@ -53,11 +53,8 @@ tools above fit better. If you want one command that answers "what is my
 
 ## Installation
 
-Install the `fleetreach` binary straight from the repository (not yet published to
-crates.io):
-
 ```sh
-cargo install --git https://github.com/tess-fun/fleetreach fleetreach-cli --features network   # with DB fetch + enrichment
+cargo install fleetreach-cli --features network   # the `fleetreach` binary, with DB fetch + enrichment
 ```
 
 The default build is **pure-Rust** (no vendored-C TLS stack): it has no network
