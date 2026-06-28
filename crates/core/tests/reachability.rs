@@ -9,7 +9,7 @@ use serde_json::json;
 fn reachability(verdict: ReachVerdict) -> Reachability {
     Reachability {
         verdict,
-        config: "nightly-2026-06-01;default-features".into(),
+        config: "nightly-2026-06-27;default-features".into(),
         engine: "static-mir-rta@0.1".into(),
         targets: vec![],
         witness: None,
@@ -48,7 +48,7 @@ fn verdict_wire_shape_is_internally_tagged() {
         value,
         json!({
             "verdict": {"kind": "reachable", "witness": ["a", "b"]},
-            "config": "nightly-2026-06-01;default-features",
+            "config": "nightly-2026-06-27;default-features",
             "engine": "static-mir-rta@0.1"
         })
     );

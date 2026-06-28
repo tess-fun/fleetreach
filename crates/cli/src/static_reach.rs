@@ -25,7 +25,7 @@ use crate::config::Config;
 
 /// The pinned nightly the reach-driver was built against. The verdict is scoped
 /// to it (recorded in `Reachability::config`).
-pub const TOOLCHAIN: &str = "nightly-2026-06-01";
+pub const TOOLCHAIN: &str = "nightly-2026-06-27";
 
 /// Inputs for the static engine.
 pub struct Options<'a> {

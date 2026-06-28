@@ -15,7 +15,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-TOOLCHAIN="nightly-2026-06-01"
+TOOLCHAIN="nightly-2026-06-27"
 DRIVER="crates/reach-driver/target/debug/fleetreach-reach-driver"
 
 if ! rustup toolchain list | grep -q "$TOOLCHAIN"; then

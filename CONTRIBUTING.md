@@ -14,7 +14,7 @@ The static-reachability engine has a separate, nightly-pinned driver that is
 excluded from the stable workspace:
 
 ```sh
-( cd crates/reach-driver && cargo build )                 # needs nightly-2026-06-01
+( cd crates/reach-driver && cargo build )                 # needs nightly-2026-06-27
 cargo test -p fleetreach-reach --test e2e -- --ignored    # real-build e2e
 ```
 

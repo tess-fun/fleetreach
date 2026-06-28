@@ -23,7 +23,7 @@ use std::process::ExitCode;
 
 use fleetreach_reach::{analyze_paths, analyze_project_cached, BuildConfig, Verdict};
 
-const TOOLCHAIN: &str = "nightly-2026-06-01";
+const TOOLCHAIN: &str = "nightly-2026-06-27";
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
