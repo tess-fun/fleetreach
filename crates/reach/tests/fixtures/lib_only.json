@@ -1,0 +1,47 @@
+{
+  "schema": 2,
+  "nodes": [
+    {
+      "id": 0,
+      "label": "public_api",
+      "symbol": "_RNvCs7fdB1ZpMDiB_11audited_lib10public_api",
+      "path": "audited_lib::public_api"
+    },
+    {
+      "id": 1,
+      "label": "internal_vuln",
+      "symbol": "_RNvCs7fdB1ZpMDiB_11audited_lib13internal_vuln",
+      "path": "audited_lib::internal_vuln"
+    }
+  ],
+  "edges": [
+    {
+      "from": 0,
+      "to": 1,
+      "kind": "direct"
+    }
+  ],
+  "roots": [
+    0
+  ],
+  "sinks": [
+    1
+  ],
+  "unresolved_sinks": [],
+  "opaque": [],
+  "virtual_calls": [],
+  "virtual_impls": [],
+  "sink_paths": [
+    {
+      "path": "audited_lib::internal_vuln",
+      "nodes": [
+        1
+      ]
+    }
+  ],
+  "coercions": [],
+  "imprecise_traits": [],
+  "scanned_crates": [
+    "audited_lib"
+  ]
+}

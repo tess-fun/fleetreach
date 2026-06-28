@@ -1,0 +1,32 @@
+# Golden ordering corpus for the Packagist (Composer version_compare / composer/semver) comparator.
+# Format: <a> TAB <b> TAB <sign>, where <sign> is cmp(a, b): -1 (a<b), 0 (a==b), 1 (a>b).
+# Lines beginning with '#' and blank lines are ignored.
+#
+# Pins the comparator's agreement with composer/semver. The signs were produced by the
+# comparator under test (differentially validated against the real PHP composer/semver over
+# 185k pairs) and each row exercises a documented quirk, so a regression fails CI without a
+# PHP/Composer toolchain. Extend the random differential with `examples/vercmp.rs`.
+#
+# The signature Composer divergence from SemVer: the stability ladder is
+#   dev < alpha < beta < RC < stable < patch (-pN)
+# i.e. a `-pN` PATCH release sorts ABOVE the plain release, the opposite of a SemVer prerelease.
+
+# a leading 'v' is tolerated and insignificant
+v1.2.3	1.2.3	0
+# PATCH (-pN) sorts ABOVE the release (Magento-style; opposite of a SemVer prerelease)
+1.0.0-p1	1.0.0	1
+1.0.0-p2	1.0.0-p1	1
+# dev sorts below alpha (bottom of the stability ladder)
+1.0.0-dev	1.0.0-alpha	-1
+# beta < RC on the ladder
+1.0.0-beta	1.0.0-RC	-1
+# stable sorts above RC
+1.0.0-stable	1.0.0-RC	1
+# a plain prerelease sorts below the release
+1.0.0-alpha	1.0.0	-1
+# numeric core is zero-padded, so 1.0 == 1.0.0.0
+1.0	1.0.0.0	0
+# core numbers compare numerically
+2.0.0	10.0.0	-1
+# numbered prereleases of the same stability compare numerically
+1.0.0-RC1	1.0.0-RC2	-1

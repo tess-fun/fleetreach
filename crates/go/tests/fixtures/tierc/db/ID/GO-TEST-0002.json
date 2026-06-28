@@ -1,0 +1,3 @@
+{"schema_version":"1.3.1","id":"GO-TEST-0002","aliases":["CVE-2099-2222"],"summary":"Test vuln in indirectvuln",
+ "affected":[{"package":{"name":"example.com/indirectvuln","ecosystem":"Go"},
+   "ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"1.0.0"}]}]}]}

@@ -1,0 +1,65 @@
+[package]
+name = "fleetreach-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Fleet-wide dependency security audit across 12 ecosystems from one CLI: deduplicated and ranked, with blast-radius analysis, a batched remediation queue, and sound Rust reachability."
+
+[lints]
+workspace = true
+
+[features]
+# Opt-in network access: advisory-DB fetch (via scan) + KEV/EPSS/NVD enrichment
+# (via ureq). Off by default so the build is pure-Rust (no rustls/aws-lc/ring);
+# without it, use --db for the advisory DB and --kev-file/--epss-file to enrich. M-5.
+network = ["dep:ureq", "fleetreach-scan/network"]
+
+[lib]
+name = "fleetreach_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fleetreach"
+path = "src/main.rs"
+
+[dependencies]
+fleetreach-core = { path = "../core" }
+fleetreach-scan = { path = "../scan" }
+fleetreach-reach = { path = "../reach" }
+fleetreach-correlate = { path = "../correlate" }
+fleetreach-report = { path = "../report" }
+fleetreach-go = { path = "../go" }
+fleetreach-npm = { path = "../npm" }
+fleetreach-pypi = { path = "../pypi" }
+fleetreach-rubygems = { path = "../rubygems" }
+fleetreach-packagist = { path = "../packagist" }
+fleetreach-nuget = { path = "../nuget" }
+fleetreach-julia = { path = "../julia" }
+fleetreach-swift = { path = "../swift" }
+fleetreach-hex = { path = "../hex" }
+fleetreach-ghactions = { path = "../ghactions" }
+fleetreach-maven = { path = "../maven" }
+serde = { workspace = true }
+sha2 = { workspace = true }
+toml = { workspace = true }
+walkdir = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+time = { workspace = true }
+serde_json = { workspace = true }
+# blocking HTTP for the KEV/EPSS feeds + advisory-DB fetch (the `network` feature);
+# pulls rustls (vendored-C crypto), so it is optional and off by default. M-5.
+ureq = { version = "2", optional = true }
+rayon = "1"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+proptest = "1"

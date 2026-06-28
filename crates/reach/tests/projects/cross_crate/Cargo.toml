@@ -1,0 +1,14 @@
+[package]
+name = "cross_crate_bin"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "cross_crate_bin"
+path = "src/main.rs"
+
+[dependencies]
+vuln_lib = { path = "vuln_lib" }
+
+[workspace]

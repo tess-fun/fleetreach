@@ -1,0 +1,14 @@
+[package]
+name = "generic_uninstantiated_bin"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "generic_uninstantiated_bin"
+path = "src/main.rs"
+
+[dependencies]
+vuln_gen = { path = "vuln_gen" }
+
+[workspace]

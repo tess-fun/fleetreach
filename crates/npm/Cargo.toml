@@ -1,0 +1,27 @@
+[package]
+name = "fleetreach-npm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description = "npm ecosystem feeder for fleetreach: toolchain-free package-lock.json + OSV matching into the shared finding model."
+
+[lints]
+workspace = true
+
+[dependencies]
+fleetreach-core = { path = "../core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# Parallel load of the OSV mirror: the osv.dev npm export is ~220k JSON files
+# Read the osv.dev export straight from its `all.zip` (one file) instead of 220k
+# unzipped files — profiling showed the per-file `open` syscalls dominate the load.
+
+[dev-dependencies]
+serde_json = { workspace = true }

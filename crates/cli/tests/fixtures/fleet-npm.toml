@@ -1,0 +1,4 @@
+# An npm-only fleet: the repo auto-detects as npm from its package-lock.json.
+[[repo]]
+id = "npm-demo"
+path = "repos/npm-demo"

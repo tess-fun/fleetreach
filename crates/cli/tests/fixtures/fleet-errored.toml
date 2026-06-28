@@ -1,0 +1,9 @@
+# A findable vuln plus a repo with no Cargo.lock: the gap forces exit 2 even
+# though there is a finding.
+[[repo]]
+id = "app"
+path = "repos/repo-vuln"
+
+[[repo]]
+id = "gap"
+path = "repos/repo-empty"

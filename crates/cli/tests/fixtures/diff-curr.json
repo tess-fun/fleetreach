@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "provenance": {
+    "tool_version": "0",
+    "rustsec_crate_version": "0",
+    "host_os": "linux",
+    "host_arch": "x86_64",
+    "generated_at": "t"
+  },
+  "summary": {
+    "repos_scanned": 2,
+    "repos_errored": 0,
+    "vuln_count": 2,
+    "warn_count": 0,
+    "max_severity": "critical",
+    "stale_ignores": []
+  },
+  "vulnerabilities": [
+    {
+      "advisory_id": "RUSTSEC-2021-0002",
+      "aliases": [],
+      "title": "persists, shrinks",
+      "severity": "medium",
+      "url": null,
+      "occurrences": [
+        {
+          "kind": "in_repo",
+          "repo": "app-a",
+          "package": "bar",
+          "installed": "1.0.0",
+          "patched": [],
+          "dependency_kind": "direct"
+        }
+      ]
+    },
+    {
+      "advisory_id": "RUSTSEC-2026-9999",
+      "aliases": [],
+      "title": "brand new critical",
+      "severity": "critical",
+      "url": null,
+      "occurrences": [
+        {
+          "kind": "in_repo",
+          "repo": "app-a",
+          "package": "baz",
+          "installed": "2.0.0",
+          "patched": [],
+          "dependency_kind": "direct"
+        }
+      ]
+    }
+  ],
+  "warnings": [],
+  "outcomes": []
+}

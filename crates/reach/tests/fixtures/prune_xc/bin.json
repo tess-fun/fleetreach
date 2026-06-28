@@ -1,0 +1,504 @@
+{
+  "schema": 2,
+  "nodes": [
+    {
+      "id": 0,
+      "label": "\u27e8opaque external code\u27e9",
+      "symbol": "<opaque>"
+    },
+    {
+      "id": 1,
+      "label": "std::intrinsics::ptr_offset_from_unsigned::<std::ffi::OsString> - intrinsic",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core10intrinsics24ptr_offset_from_unsignedNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::intrinsics::ptr_offset_from_unsigned"
+    },
+    {
+      "id": 2,
+      "label": "std::intrinsics::black_box::<()> - intrinsic",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core10intrinsics9black_boxuECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::intrinsics::black_box"
+    },
+    {
+      "id": 3,
+      "label": "std::ptr::drop_glue::<std::vec::Vec<u8>> - shim(Some(std::vec::Vec<u8>))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueINtNtCs87aRD04Zyr_5alloc3vec3VechEECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 4,
+      "label": "std::ptr::drop_glue::<alloc::raw_vec::RawVec<std::ffi::OsString>> - shim(Some(alloc::raw_vec::RawVec<std::ffi::OsString>))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueINtNtCs87aRD04Zyr_5alloc7raw_vec6RawVecNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringEECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 5,
+      "label": "std::ptr::drop_glue::<alloc::raw_vec::RawVec<u8>> - shim(Some(alloc::raw_vec::RawVec<u8>))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueINtNtCs87aRD04Zyr_5alloc7raw_vec6RawVechEECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 6,
+      "label": "std::ptr::drop_glue::<std::vec::IntoIter<std::ffi::OsString>> - shim(Some(std::vec::IntoIter<std::ffi::OsString>))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueINtNtNtCs87aRD04Zyr_5alloc3vec9into_iter8IntoIterNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringEECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 7,
+      "label": "std::ptr::drop_glue::<<std::vec::IntoIter<T, A> as std::ops::Drop>::drop::DropGuard<'_, std::ffi::OsString, std::alloc::Global>> - shim(Some(<std::vec::IntoIter<T, A> as std::ops::Drop>::drop::DropGuard<'_, std::ffi::OsString, std::alloc::Global>))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueINtNvXse_NtNtCs87aRD04Zyr_5alloc3vec9into_iterINtBK_8IntoIterppENtNtNtB4_3ops4drop4Drop4drop9DropGuardNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringNtNtBO_5alloc6GlobalEECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 8,
+      "label": "std::ptr::drop_glue::<std::string::String> - shim(Some(std::string::String))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueNtNtCs87aRD04Zyr_5alloc6string6StringECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 9,
+      "label": "std::ptr::drop_glue::<std::env::Args> - shim(Some(std::env::Args))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueNtNtCskYvK6KoFAtP_3std3env4ArgsECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 10,
+      "label": "std::ptr::drop_glue::<std::env::ArgsOs> - shim(Some(std::env::ArgsOs))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueNtNtCskYvK6KoFAtP_3std3env6ArgsOsECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 11,
+      "label": "std::ptr::drop_glue::<std::ffi::OsString> - shim(Some(std::ffi::OsString))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 12,
+      "label": "std::ptr::drop_glue::<std::sys::args::common::Args> - shim(Some(std::sys::args::common::Args))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueNtNtNtNtCskYvK6KoFAtP_3std3sys4args6common4ArgsECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 13,
+      "label": "std::ptr::drop_glue::<std::sys::os_str::bytes::Buf> - shim(Some(std::sys::os_str::bytes::Buf))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueNtNtNtNtCskYvK6KoFAtP_3std3sys6os_str5bytes3BufECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 14,
+      "label": "std::ptr::drop_glue::<[std::ffi::OsString]> - shim(Some([std::ffi::OsString]))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueSNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 15,
+      "label": "core::panicking::assert_failed::<std::option::Option<usize>, std::option::Option<usize>>",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core9panicking13assert_failedINtNtB4_6option6OptionjEBM_EB4_",
+      "path": "core::panicking::assert_failed"
+    },
+    {
+      "id": 16,
+      "label": "std::rt::lang_start::<()>",
+      "symbol": "_RINvNtCskYvK6KoFAtP_3std2rt10lang_startuECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::rt::lang_start"
+    },
+    {
+      "id": 17,
+      "label": "std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>",
+      "symbol": "_RINvNtNtCskYvK6KoFAtP_3std3sys9backtrace28___rust_begin_short_backtraceFEuuECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::sys::backtrace::__rust_begin_short_backtrace"
+    },
+    {
+      "id": 18,
+      "label": "<std::env::Args as std::iter::Iterator>::fold::<usize, {closure@<std::env::Args as std::iter::Iterator>::count::{closure#0}}>",
+      "symbol": "_RINvYNtNtCskYvK6KoFAtP_3std3env4ArgsNtNtNtNtCsiDFD6Pt1FH6_4core4iter6traits8iterator8Iterator4foldjNCNvYB3_By_5count0ECs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::iter::Iterator::fold"
+    },
+    {
+      "id": 19,
+      "label": "std::rt::lang_start::<()>::{closure#0}",
+      "symbol": "_RNCINvNtCskYvK6KoFAtP_3std2rt10lang_startuE0Cs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::rt::lang_start::{closure#0}"
+    },
+    {
+      "id": 20,
+      "label": "<std::env::Args as std::iter::Iterator>::count::{closure#0}",
+      "symbol": "_RNCNvYNtNtCskYvK6KoFAtP_3std3env4ArgsNtNtNtNtCsiDFD6Pt1FH6_4core4iter6traits8iterator8Iterator5count0Cs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::iter::Iterator::count::{closure#0}"
+    },
+    {
+      "id": 21,
+      "label": "<{closure@std::rt::lang_start<()>::{closure#0}} as std::ops::FnOnce<()>>::call_once - shim(vtable)",
+      "symbol": "_RNSNvYNCINvNtCskYvK6KoFAtP_3std2rt10lang_startuE0INtNtNtCsiDFD6Pt1FH6_4core3ops8function6FnOnceuE9call_once6vtableCs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ops::FnOnce::call_once"
+    },
+    {
+      "id": 22,
+      "label": "main",
+      "symbol": "_RNvCs1OnJLCRM5sK_12prune_xc_bin4main",
+      "path": "prune_xc_bin::main"
+    },
+    {
+      "id": 23,
+      "label": "widgets::use_decoy_direct",
+      "symbol": "_RNvCs5jZqQjND0Pz_7widgets16use_decoy_direct",
+      "path": "widgets::use_decoy_direct"
+    },
+    {
+      "id": 24,
+      "label": "widgets::use_real",
+      "symbol": "_RNvCs5jZqQjND0Pz_7widgets8use_real",
+      "path": "widgets::use_real"
+    },
+    {
+      "id": 25,
+      "label": "std::vec::IntoIter::<std::ffi::OsString>::as_raw_mut_slice",
+      "symbol": "_RNvMs0_NtNtCs87aRD04Zyr_5alloc3vec9into_iterINtB5_8IntoIterNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringE16as_raw_mut_sliceCs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::vec::IntoIter::<T, A>::as_raw_mut_slice"
+    },
+    {
+      "id": 26,
+      "label": "alloc::raw_vec::RawVecInner::deallocate",
+      "symbol": "_RNvMs2_NtCs87aRD04Zyr_5alloc7raw_vecNtB5_11RawVecInner10deallocateCs3xnfy9NooCB_5gimli",
+      "path": "alloc::raw_vec::RawVecInner::<A>::deallocate"
+    },
+    {
+      "id": 27,
+      "label": "core::panicking::panic_nounwind_fmt",
+      "symbol": "_RNvNtCsiDFD6Pt1FH6_4core9panicking18panic_nounwind_fmt",
+      "path": "core::panicking::panic_nounwind_fmt"
+    },
+    {
+      "id": 28,
+      "label": "core::panicking::panic",
+      "symbol": "_RNvNtCsiDFD6Pt1FH6_4core9panicking5panic",
+      "path": "core::panicking::panic"
+    },
+    {
+      "id": 29,
+      "label": "std::rt::lang_start_internal",
+      "symbol": "_RNvNtCskYvK6KoFAtP_3std2rt19lang_start_internal",
+      "path": "std::rt::lang_start_internal"
+    },
+    {
+      "id": 30,
+      "label": "std::env::args",
+      "symbol": "_RNvNtCskYvK6KoFAtP_3std3env4args",
+      "path": "std::env::args"
+    },
+    {
+      "id": 31,
+      "label": "std::ptr::const_ptr::<impl *const T>::offset_from_unsigned::precondition_check",
+      "symbol": "_RNvNvMNtNtCsiDFD6Pt1FH6_4core3ptr9const_ptrPp20offset_from_unsigned18precondition_checkCs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ptr::const_ptr::<impl *const T>::offset_from_unsigned::precondition_check"
+    },
+    {
+      "id": 32,
+      "label": "<<std::vec::IntoIter<T, A> as std::ops::Drop>::drop::DropGuard<'_, std::ffi::OsString, std::alloc::Global> as std::ops::Drop>::drop",
+      "symbol": "_RNvXNvXse_NtNtCs87aRD04Zyr_5alloc3vec9into_iterINtB8_8IntoIterppENtNtNtCsiDFD6Pt1FH6_4core3ops4drop4Drop4dropINtB2_9DropGuardNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringNtNtBc_5alloc6GlobalEB11_4dropCs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "<<std::vec::IntoIter<T, A> as std::ops::Drop>::drop::DropGuard<'_, T, A> as std::ops::Drop>::drop"
+    },
+    {
+      "id": 33,
+      "label": "<alloc::raw_vec::RawVec<std::ffi::OsString> as std::ops::Drop>::drop",
+      "symbol": "_RNvXs1_NtCs87aRD04Zyr_5alloc7raw_vecINtB5_6RawVecNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringENtNtNtCsiDFD6Pt1FH6_4core3ops4drop4Drop4dropCs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "<alloc::raw_vec::RawVec<T, A> as std::ops::Drop>::drop"
+    },
+    {
+      "id": 34,
+      "label": "<alloc::raw_vec::RawVec<u8> as std::ops::Drop>::drop",
+      "symbol": "_RNvXs1_NtCs87aRD04Zyr_5alloc7raw_vecINtB5_6RawVechENtNtNtCsiDFD6Pt1FH6_4core3ops4drop4Drop4dropCs3xnfy9NooCB_5gimli",
+      "path": "<alloc::raw_vec::RawVec<T, A> as std::ops::Drop>::drop"
+    },
+    {
+      "id": 35,
+      "label": "<std::vec::IntoIter<std::ffi::OsString> as std::iter::Iterator>::size_hint",
+      "symbol": "_RNvXs4_NtNtCs87aRD04Zyr_5alloc3vec9into_iterINtB5_8IntoIterNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringENtNtNtNtCsiDFD6Pt1FH6_4core4iter6traits8iterator8Iterator9size_hintCs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "<std::vec::IntoIter<T, A> as std::iter::Iterator>::size_hint"
+    },
+    {
+      "id": 36,
+      "label": "<() as std::process::Termination>::report",
+      "symbol": "_RNvXsZ_NtCskYvK6KoFAtP_3std7processuNtB5_11Termination6reportCs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "<() as std::process::Termination>::report"
+    },
+    {
+      "id": 37,
+      "label": "<std::env::Args as std::iter::Iterator>::next",
+      "symbol": "_RNvXsa_NtCskYvK6KoFAtP_3std3envNtB5_4ArgsNtNtNtNtCsiDFD6Pt1FH6_4core4iter6traits8iterator8Iterator4next",
+      "path": "<std::env::Args as std::iter::Iterator>::next"
+    },
+    {
+      "id": 38,
+      "label": "<std::vec::IntoIter<std::ffi::OsString> as std::ops::Drop>::drop",
+      "symbol": "_RNvXse_NtNtCs87aRD04Zyr_5alloc3vec9into_iterINtB5_8IntoIterNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringENtNtNtCsiDFD6Pt1FH6_4core3ops4drop4Drop4dropCs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "<std::vec::IntoIter<T, A> as std::ops::Drop>::drop"
+    },
+    {
+      "id": 39,
+      "label": "<std::vec::Vec<u8> as std::ops::Drop>::drop",
+      "symbol": "_RNvXso_NtCs87aRD04Zyr_5alloc3vecINtB5_3VechENtNtNtCsiDFD6Pt1FH6_4core3ops4drop4Drop4dropCs3xnfy9NooCB_5gimli",
+      "path": "<std::vec::Vec<T, A> as std::ops::Drop>::drop"
+    },
+    {
+      "id": 40,
+      "label": "<fn() as std::ops::FnOnce<()>>::call_once - shim(fn())",
+      "symbol": "_RNvYFEuINtNtNtCsiDFD6Pt1FH6_4core3ops8function6FnOnceuE9call_onceCs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ops::FnOnce::call_once"
+    },
+    {
+      "id": 41,
+      "label": "<{closure@std::rt::lang_start<()>::{closure#0}} as std::ops::FnOnce<()>>::call_once - shim",
+      "symbol": "_RNvYNCINvNtCskYvK6KoFAtP_3std2rt10lang_startuE0INtNtNtCsiDFD6Pt1FH6_4core3ops8function6FnOnceuE9call_onceCs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::ops::FnOnce::call_once"
+    },
+    {
+      "id": 42,
+      "label": "<std::env::Args as std::iter::Iterator>::count",
+      "symbol": "_RNvYNtNtCskYvK6KoFAtP_3std3env4ArgsNtNtNtNtCsiDFD6Pt1FH6_4core4iter6traits8iterator8Iterator5countCs1OnJLCRM5sK_12prune_xc_bin",
+      "path": "std::iter::Iterator::count"
+    }
+  ],
+  "edges": [
+    {
+      "from": 3,
+      "to": 39,
+      "kind": "direct"
+    },
+    {
+      "from": 4,
+      "to": 33,
+      "kind": "direct"
+    },
+    {
+      "from": 5,
+      "to": 34,
+      "kind": "direct"
+    },
+    {
+      "from": 6,
+      "to": 38,
+      "kind": "direct"
+    },
+    {
+      "from": 7,
+      "to": 32,
+      "kind": "direct"
+    },
+    {
+      "from": 16,
+      "to": 29,
+      "kind": "direct"
+    },
+    {
+      "from": 17,
+      "to": 2,
+      "kind": "direct"
+    },
+    {
+      "from": 17,
+      "to": 40,
+      "kind": "direct"
+    },
+    {
+      "from": 18,
+      "to": 20,
+      "kind": "direct"
+    },
+    {
+      "from": 18,
+      "to": 37,
+      "kind": "direct"
+    },
+    {
+      "from": 19,
+      "to": 17,
+      "kind": "direct"
+    },
+    {
+      "from": 19,
+      "to": 36,
+      "kind": "direct"
+    },
+    {
+      "from": 21,
+      "to": 41,
+      "kind": "direct"
+    },
+    {
+      "from": 22,
+      "to": 23,
+      "kind": "direct"
+    },
+    {
+      "from": 22,
+      "to": 24,
+      "kind": "direct"
+    },
+    {
+      "from": 22,
+      "to": 30,
+      "kind": "direct"
+    },
+    {
+      "from": 22,
+      "to": 42,
+      "kind": "direct"
+    },
+    {
+      "from": 25,
+      "to": 15,
+      "kind": "direct"
+    },
+    {
+      "from": 25,
+      "to": 35,
+      "kind": "direct"
+    },
+    {
+      "from": 31,
+      "to": 27,
+      "kind": "direct"
+    },
+    {
+      "from": 33,
+      "to": 26,
+      "kind": "direct"
+    },
+    {
+      "from": 35,
+      "to": 1,
+      "kind": "direct"
+    },
+    {
+      "from": 35,
+      "to": 28,
+      "kind": "direct"
+    },
+    {
+      "from": 35,
+      "to": 31,
+      "kind": "direct"
+    },
+    {
+      "from": 38,
+      "to": 14,
+      "kind": "direct"
+    },
+    {
+      "from": 38,
+      "to": 25,
+      "kind": "direct"
+    },
+    {
+      "from": 40,
+      "to": 0,
+      "kind": "opaque"
+    },
+    {
+      "from": 41,
+      "to": 19,
+      "kind": "direct"
+    },
+    {
+      "from": 42,
+      "to": 18,
+      "kind": "direct"
+    }
+  ],
+  "roots": [
+    22
+  ],
+  "sinks": [],
+  "unresolved_sinks": [
+    "widgets::decoy_vuln",
+    "widgets::real_vuln"
+  ],
+  "opaque": [
+    0
+  ],
+  "virtual_calls": [],
+  "virtual_impls": [
+    {
+      "method": "std::iter::Iterator::count",
+      "node": 42,
+      "self_key": "std::env::Args",
+      "trait_key": "std::iter::Iterator"
+    },
+    {
+      "method": "std::iter::Iterator::fold",
+      "node": 18,
+      "self_key": "std::env::Args",
+      "trait_key": "std::iter::Iterator"
+    },
+    {
+      "method": "std::iter::Iterator::size_hint",
+      "node": 35,
+      "self_key": "std::vec::IntoIter",
+      "trait_key": "std::iter::Iterator"
+    },
+    {
+      "method": "std::ops::Drop::drop",
+      "node": 32,
+      "self_key": "<std::vec::IntoIter<T, A> as std::ops::Drop>::drop::DropGuard",
+      "trait_key": "std::ops::Drop"
+    },
+    {
+      "method": "std::ops::Drop::drop",
+      "node": 33,
+      "self_key": "alloc::raw_vec::RawVec",
+      "trait_key": "std::ops::Drop"
+    },
+    {
+      "method": "std::ops::Drop::drop",
+      "node": 38,
+      "self_key": "std::vec::IntoIter",
+      "trait_key": "std::ops::Drop"
+    },
+    {
+      "method": "std::ops::FnOnce::call_once",
+      "node": 21,
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnOnce"
+    },
+    {
+      "method": "std::ops::FnOnce::call_once",
+      "node": 40,
+      "trait_key": "std::ops::FnOnce"
+    },
+    {
+      "method": "std::ops::FnOnce::call_once",
+      "node": 41,
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnOnce"
+    },
+    {
+      "method": "std::process::Termination::report",
+      "node": 36,
+      "trait_key": "std::process::Termination"
+    }
+  ],
+  "sink_paths": [],
+  "coercions": [
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::marker::MetaSized"
+    },
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::Fn"
+    },
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnMut"
+    },
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnOnce"
+    }
+  ],
+  "imprecise_traits": [],
+  "scanned_crates": [
+    "prune_xc_bin"
+  ]
+}

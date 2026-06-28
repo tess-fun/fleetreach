@@ -1,0 +1,20 @@
+[package]
+name = "feature_gated_bin"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "feature_gated_bin"
+path = "src/main.rs"
+
+[dependencies]
+vuln_lib = { path = "vuln_lib" }
+
+# When off (default), `main` never calls into `vuln_lib`, so `vulnerable_fn` is
+# unreachable. When on, the call edge appears and it becomes reachable — the
+# same lock + source, a different verdict, purely from feature selection.
+[features]
+enable-vuln = []
+
+[workspace]

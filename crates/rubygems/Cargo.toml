@@ -1,0 +1,28 @@
+[package]
+name = "fleetreach-rubygems"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description = "RubyGems ecosystem feeder for fleetreach: toolchain-free Gemfile.lock + OSV matching into the shared finding model."
+
+[lints]
+workspace = true
+
+[dependencies]
+fleetreach-core = { path = "../core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# Parallel load of the OSV mirror: the osv.dev RubyGems export is a large set of JSON
+# Read the osv.dev export straight from its `all.zip` (one file) instead of every
+# unzipped record — profiling the npm path showed the per-file `open` syscalls
+# Derive a severity band + base score from an OSV CVSS_V3 vector (records that carry no
+
+[dev-dependencies]
+serde_json = { workspace = true }

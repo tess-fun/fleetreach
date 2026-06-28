@@ -1,0 +1,15 @@
+[settings.vex]
+author = "secteam@acme.example"
+
+# A human asserts the fixture advisory is not_affected, with a machine label and a
+# named approver — the only path to a not_affected on a default (no-reachability)
+# scan (§6).
+[[settings.vex_assertion]]
+id            = "RUSTSEC-2099-0001"
+justification = "vulnerable_code_not_in_execute_path"
+reason        = "audited: the vulnerable path is unreachable in our usage"
+approved_by   = "secteam"
+
+[[repo]]
+id   = "app"
+path = "repos/repo-vuln"

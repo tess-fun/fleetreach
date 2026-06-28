@@ -1,0 +1,44 @@
+# Golden ordering corpus for the Gem::Version comparator.
+# Format: <a> TAB <b> TAB <sign>, where <sign> is cmp(a, b): -1 (a<b), 0 (a==b), 1 (a>b).
+# Lines beginning with '#' and blank lines are ignored.
+#
+# These encode MODERN RubyGems (>= 3.3.0) `Gem::Version#<=>` semantics, which compares
+# `canonical_segments` (trailing zeros of the numeric prefix and of the prerelease tail
+# dropped). RubyGems <= 3.2 compared the raw `segments` and disagrees on the marked
+# CANONICAL-VS-RAW cases below. This comparator deliberately targets the modern rule, so
+# the marked rows lock in the modern result; do NOT "fix" them to match an old system Ruby.
+#
+# Provenance: derived from the canonical_segments algorithm and cross-checked against the
+# documented RubyGems spec. Regenerate/extend with `examples/vercmp.rs` against Ruby >= 3.3.
+
+# --- basic numeric ordering ---
+1.0.0	1.0.1	-1
+2.0.0	10.0.0	-1
+1.2.3	1.2.3	0
+
+# --- trailing-zero insignificance (canonical equality) ---
+1.0	1.0.0	0
+1.0.0.0	1.0	0
+1.0.0	1.0.0.0.0.1	-1
+
+# --- prereleases sort below their release; string segment < numeric segment ---
+1.0.0.beta	1.0.0	-1
+2.0.0.rc1	2.0.0	-1
+1.0.0.beta	1.0.0.1	-1
+1.0.0.alpha	1.0.0.beta	-1
+1.0.0.pre	1.0.0.rc	-1
+
+# --- alphanumeric segments split letter/number; the number compares numerically ---
+1.0.a10	1.0.a9	1
+1.0.0.beta2	1.0.0.beta10	-1
+
+# --- platform suffix (everything from the first '-') is irrelevant to the version ---
+1.13.10-x86_64-linux	1.13.10	0
+1.0.0-java	1.0.0	0
+1.0.0.beta1-x86_64-linux	1.0.0.beta1	0
+
+# --- CANONICAL-VS-RAW: differing-length numeric cores under a prerelease tag.
+# Modern (canonical_segments): 1.0.0.beta1 -> [1,"beta",1], 1.0.beta2 -> [1,"beta",2] => a<b.
+# Old RubyGems (<=3.2, raw segments) gave a>b. We pin the modern result.
+1.0.0.beta1	1.0.beta2	-1
+5.0.0.rc1	5.0.rc2	-1

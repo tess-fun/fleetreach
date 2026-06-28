@@ -1,0 +1,30 @@
+# Golden ordering corpus for the NuGet (NuGetVersion) comparator.
+# Format: <a> TAB <b> TAB <sign>, where <sign> is cmp(a, b): -1 (a<b), 0 (a==b), 1 (a>b).
+# Lines beginning with '#' and blank lines are ignored.
+#
+# Pins the comparator's agreement with NuGet.Versioning's NuGetVersion.CompareTo. The signs
+# were produced by the comparator under test (which is differentially validated against the
+# real .NET implementation over 20k random pairs) and each row exercises a documented quirk,
+# so a regression on any of these fails CI without a .NET toolchain present. Extend the random
+# differential with `examples/vercmp.rs` against `NuGet.Versioning.VersionComparer.Default`.
+
+# four-part version: a trailing zero revision is insignificant
+1.0.0.0	1.0.0	0
+# leading zeros in a numeric segment are insignificant
+1.00.0	1.0.0	0
+# prerelease labels are case-insensitive
+1.0.0-Alpha	1.0.0-alpha	0
+# a prerelease sorts below its release
+1.0.0-alpha	1.0.0	-1
+# dotted numeric prerelease ids compare numerically (2 < 10, not lexically)
+1.0.0-alpha.2	1.0.0-alpha.10	-1
+# build metadata is ignored in ordering
+1.0.0+build1	1.0.0+build2	0
+# a numeric prerelease id sorts below an alphanumeric one (SemVer 2 rule)
+1.0.0-1	1.0.0-alpha	-1
+# identical prereleases are equal
+1.0.0-rc.1	1.0.0-rc.1	0
+# core numbers compare numerically
+2.0.0	10.0.0	-1
+# alphabetic prerelease labels compare lexically
+1.0.0-beta	1.0.0-rc	-1

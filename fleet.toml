@@ -1,0 +1,12 @@
+# fleetreach dogfoods itself: from the repo root, `fleetreach scan` audits its
+# own dependency tree. (See fleet.toml.example for the full set of options.)
+
+[[repo]]
+id   = "fleetreach"
+path = "."
+
+[settings]
+
+[[settings.ignore]]
+id     = "RUSTSEC-2026-0173"
+reason = "proc-macro-error2 is an UNBUILT optional dep of jiff (its defmt feature is off); a Cargo.lock-only entry, not in any compiled path"

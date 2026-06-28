@@ -1,0 +1,39 @@
+[package]
+name = "fleetreach-reach-driver"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+description = "rustc-driver (rustc_private, nightly) that emits a monomorphized call graph for reachability analysis. Quarantines all rustc_private use behind a parse-not-trust boundary."
+
+# NOTE: standalone package, excluded from the root workspace (it builds only on
+# the pinned nightly). It therefore cannot use `*.workspace = true` inheritance
+# or the workspace lint table — config is spelled out locally on purpose.
+
+[[bin]]
+name = "fleetreach-reach-driver"
+path = "src/main.rs"
+
+# The driver is excluded from the workspace, so it cannot inherit the workspace
+# lint table. Spell out the same guardrails locally: this is the one crate linking
+# compiler internals, where an `unsafe` block could corrupt the emitted graph
+# (forging a NotReachable) and a panic on a hostile target crate is most likely.
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+[dependencies]
+# The emitted call graph is serialized as JSON on stdout — the structured,
+# parse-not-trust artifact the safe `reach` crate consumes across the quarantine
+# boundary. serde/serde_json are stable crates; they add no rustc_private churn.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+# The soundness corpus runs the driver, then analyzes its output with the real
+# `reach` engine and asserts the verdict — end-to-end evidence (spec §9).
+fleetreach-reach = { path = "../reach" }

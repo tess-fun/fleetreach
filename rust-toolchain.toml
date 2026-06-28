@@ -1,0 +1,5 @@
+[toolchain]
+# Pinned in-project so the build is reproducible and your global default is left
+# untouched. Must be >= the pinned `rustsec` version's MSRV (set at M2).
+channel = "1.96.0"
+components = ["clippy", "rustfmt"]

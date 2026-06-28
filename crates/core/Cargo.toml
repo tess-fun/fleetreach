@@ -1,0 +1,31 @@
+[package]
+name = "fleetreach-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description = "Domain types for fleetreach + the shared toolchain-free OSV feeder scaffolding. No rustsec types in the public API."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+semver = { workspace = true }
+# Shared toolchain-free OSV feeder scaffolding (load/wire/severity). All pure-Rust (no C).
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# Parallel load of the OSV mirror (the osv.dev exports are large sets of JSON records).
+rayon = "1"
+# Read the osv.dev export straight from its `all.zip`. Pure-Rust deflate (miniz_oxide), no C.
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# Severity band + base score from an OSV CVSS_V3 vector. Pure-Rust.
+cvss = "2"
+
+[dev-dependencies]
+serde_json = { workspace = true }

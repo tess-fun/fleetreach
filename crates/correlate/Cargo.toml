@@ -1,0 +1,22 @@
+[package]
+name = "fleetreach-correlate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description = "Cross-repo dedupe into findings with per-occurrence verdicts."
+
+[lints]
+workspace = true
+
+[dependencies]
+fleetreach-core = { path = "../core" }
+
+[dev-dependencies]
+# The highest-value verification target (§13).
+proptest = "1"

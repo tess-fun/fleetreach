@@ -1,0 +1,5 @@
+[
+  {"path":"example.com/vuln","vulns":[{"id":"GO-TEST-0001","fixed":"1.2.0"}]},
+  {"path":"example.com/indirectvuln","vulns":[{"id":"GO-TEST-0002","fixed":"1.0.0"}]},
+  {"path":"example.com/safe","vulns":[{"id":"GO-TEST-0003","fixed":"1.0.0"}]}
+]

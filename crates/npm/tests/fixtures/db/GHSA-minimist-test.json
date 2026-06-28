@@ -1,0 +1,14 @@
+{
+  "id": "GHSA-vh95-rmgr-6w4m",
+  "aliases": ["CVE-2021-44906"],
+  "summary": "Prototype pollution in minimist",
+  "database_specific": { "severity": "CRITICAL" },
+  "affected": [
+    {
+      "package": { "ecosystem": "npm", "name": "minimist" },
+      "ranges": [
+        { "type": "SEMVER", "events": [ { "introduced": "0" }, { "fixed": "1.2.6" } ] }
+      ]
+    }
+  ]
+}

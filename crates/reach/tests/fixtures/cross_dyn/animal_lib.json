@@ -1,0 +1,145 @@
+{
+  "schema": 2,
+  "nodes": [
+    {
+      "id": 0,
+      "label": "\u27e8opaque external code\u27e9",
+      "symbol": "<opaque>"
+    },
+    {
+      "id": 1,
+      "label": "make",
+      "symbol": "_RNvCs6PmBSRxixvG_10animal_lib4make",
+      "path": "animal_lib::make"
+    },
+    {
+      "id": 2,
+      "label": "lib_vuln",
+      "symbol": "_RNvCs6PmBSRxixvG_10animal_lib8lib_vuln",
+      "path": "animal_lib::lib_vuln"
+    },
+    {
+      "id": 3,
+      "label": "std::alloc::Global::alloc_impl_runtime",
+      "symbol": "_RNvMNtCs87aRD04Zyr_5alloc5allocNtB2_6Global18alloc_impl_runtimeCs6PmBSRxixvG_10animal_lib",
+      "path": "std::alloc::Global::alloc_impl_runtime"
+    },
+    {
+      "id": 4,
+      "label": "std::boxed::Box::<Dog>::new",
+      "symbol": "_RNvMNtCs87aRD04Zyr_5alloc5boxedINtB2_3BoxNtCs6PmBSRxixvG_10animal_lib3DogE3newBF_",
+      "path": "std::boxed::Box::<T>::new"
+    },
+    {
+      "id": 5,
+      "label": "std::alloc::handle_alloc_error",
+      "symbol": "_RNvNtCs87aRD04Zyr_5alloc5alloc18handle_alloc_error",
+      "path": "std::alloc::handle_alloc_error"
+    },
+    {
+      "id": 6,
+      "label": "std::boxed::box_new_uninit",
+      "symbol": "_RNvNtCs87aRD04Zyr_5alloc5boxed14box_new_uninitCs6PmBSRxixvG_10animal_lib",
+      "path": "std::boxed::box_new_uninit"
+    },
+    {
+      "id": 7,
+      "label": "core::panicking::panic_nounwind_fmt",
+      "symbol": "_RNvNtCsiDFD6Pt1FH6_4core9panicking18panic_nounwind_fmt",
+      "path": "core::panicking::panic_nounwind_fmt"
+    },
+    {
+      "id": 8,
+      "label": "std::ptr::NonNull::<T>::new_unchecked::precondition_check",
+      "symbol": "_RNvNvMs1_NtNtCsiDFD6Pt1FH6_4core3ptr8non_nullINtB7_7NonNullpE13new_unchecked18precondition_checkCs6PmBSRxixvG_10animal_lib",
+      "path": "std::ptr::NonNull::<T>::new_unchecked::precondition_check"
+    },
+    {
+      "id": 9,
+      "label": "<Dog as Animal>::speak",
+      "symbol": "_RNvXCs6PmBSRxixvG_10animal_libNtB2_3DogNtB2_6Animal5speak",
+      "path": "animal_lib::<Dog as Animal>::speak"
+    }
+  ],
+  "edges": [
+    {
+      "from": 1,
+      "to": 4,
+      "kind": "direct"
+    },
+    {
+      "from": 3,
+      "to": 0,
+      "kind": "opaque"
+    },
+    {
+      "from": 3,
+      "to": 8,
+      "kind": "direct"
+    },
+    {
+      "from": 4,
+      "to": 6,
+      "kind": "direct"
+    },
+    {
+      "from": 6,
+      "to": 3,
+      "kind": "direct"
+    },
+    {
+      "from": 6,
+      "to": 5,
+      "kind": "direct"
+    },
+    {
+      "from": 8,
+      "to": 7,
+      "kind": "direct"
+    },
+    {
+      "from": 9,
+      "to": 2,
+      "kind": "direct"
+    }
+  ],
+  "roots": [],
+  "sinks": [
+    2
+  ],
+  "unresolved_sinks": [],
+  "opaque": [
+    0
+  ],
+  "virtual_calls": [],
+  "virtual_impls": [
+    {
+      "method": "animal_lib::Animal::speak",
+      "node": 9,
+      "self_key": "animal_lib::Dog",
+      "trait_key": "animal_lib::Animal"
+    }
+  ],
+  "sink_paths": [
+    {
+      "path": "animal_lib::lib_vuln",
+      "nodes": [
+        2
+      ]
+    }
+  ],
+  "coercions": [
+    {
+      "self_key": "animal_lib::Dog",
+      "trait_key": "animal_lib::Animal"
+    },
+    {
+      "self_key": "animal_lib::Dog",
+      "trait_key": "std::marker::MetaSized"
+    }
+  ],
+  "imprecise_traits": [],
+  "scanned_crates": [
+    "animal_lib"
+  ]
+}

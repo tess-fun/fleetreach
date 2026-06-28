@@ -1,0 +1,9 @@
+# Self-dogfood (§15): fleetreach scanning its own workspace. The repo holds
+# itself to a zero-vuln bar (see the cargo-audit CI job), so its OpenVEX self-scan
+# carries zero `affected` statements. Used by the `vex-roundtrip` CI job.
+[settings.vex]
+author = "ci@fleetreach"
+
+[[repo]]
+id   = "fleetreach"
+path = ".."

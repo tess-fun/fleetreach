@@ -1,0 +1,29 @@
+[package]
+name = "fleetreach-reach"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description = "Safe orchestration of static reachability: parses the reach-driver call graph and computes Reachable/NotReachable/Unknown verdicts with witness chains. No rustc_private."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# Pure-Rust SHA-256, for the keyed MAC that authenticates cache entries at rest
+# (a planted graph must not be able to forge a NotReachable verdict).
+sha2 = { workspace = true }
+# Secure (random, 0700, O_EXCL, auto-cleaned) working dirs for the build — never
+# a predictable /tmp path (avoids symlink/TOCTOU attacks on shared machines).
+tempfile = "3"
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -1,0 +1,17 @@
+# A standalone cargo project (own [workspace]) used to test feature resolution
+# offline: `optdep` is optional and off by default, so it must NOT appear in the
+# built set; `realdep` is a normal dep and must.
+[package]
+name = "resolve-app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+realdep = { path = "realdep" }
+optdep = { path = "optdep", optional = true }
+
+[features]
+default = []
+extra = ["optdep"]
+
+[workspace]

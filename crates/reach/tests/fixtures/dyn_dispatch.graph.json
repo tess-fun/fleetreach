@@ -1,0 +1,764 @@
+{
+  "schema": 2,
+  "nodes": [
+    {
+      "id": 0,
+      "label": "⟨opaque external code⟩",
+      "symbol": "<opaque>"
+    },
+    {
+      "id": 1,
+      "label": "std::intrinsics::size_of_val::<dyn Animal> - intrinsic",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core10intrinsics11size_of_valDNtCsk29ap3GDYaq_12dyn_dispatch6AnimalEL_EBP_",
+      "path": "std::intrinsics::size_of_val"
+    },
+    {
+      "id": 2,
+      "label": "std::intrinsics::align_of_val::<dyn Animal> - intrinsic",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core10intrinsics12align_of_valDNtCsk29ap3GDYaq_12dyn_dispatch6AnimalEL_EBQ_",
+      "path": "std::intrinsics::align_of_val"
+    },
+    {
+      "id": 3,
+      "label": "std::intrinsics::ptr_offset_from_unsigned::<std::ffi::OsString> - intrinsic",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core10intrinsics24ptr_offset_from_unsignedNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::intrinsics::ptr_offset_from_unsigned"
+    },
+    {
+      "id": 4,
+      "label": "std::intrinsics::ctpop::<usize> - intrinsic",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core10intrinsics5ctpopjECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::intrinsics::ctpop"
+    },
+    {
+      "id": 5,
+      "label": "std::intrinsics::black_box::<()> - intrinsic",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core10intrinsics9black_boxuECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::intrinsics::black_box"
+    },
+    {
+      "id": 6,
+      "label": "std::ptr::drop_glue::<dyn Animal> - shim(Some(dyn Animal))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueDNtCsk29ap3GDYaq_12dyn_dispatch6AnimalEL_EBE_",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 7,
+      "label": "std::ptr::drop_glue::<std::vec::Vec<u8>> - shim(Some(std::vec::Vec<u8>))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueINtNtCs87aRD04Zyr_5alloc3vec3VechEECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 8,
+      "label": "std::ptr::drop_glue::<std::boxed::Box<dyn Animal>> - shim(Some(std::boxed::Box<dyn Animal>))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueINtNtCs87aRD04Zyr_5alloc5boxed3BoxDNtCsk29ap3GDYaq_12dyn_dispatch6AnimalEL_EEB1c_",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 9,
+      "label": "std::ptr::drop_glue::<alloc::raw_vec::RawVec<std::ffi::OsString>> - shim(Some(alloc::raw_vec::RawVec<std::ffi::OsString>))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueINtNtCs87aRD04Zyr_5alloc7raw_vec6RawVecNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringEECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 10,
+      "label": "std::ptr::drop_glue::<alloc::raw_vec::RawVec<u8>> - shim(Some(alloc::raw_vec::RawVec<u8>))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueINtNtCs87aRD04Zyr_5alloc7raw_vec6RawVechEECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 11,
+      "label": "std::ptr::drop_glue::<std::vec::IntoIter<std::ffi::OsString>> - shim(Some(std::vec::IntoIter<std::ffi::OsString>))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueINtNtNtCs87aRD04Zyr_5alloc3vec9into_iter8IntoIterNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringEECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 12,
+      "label": "std::ptr::drop_glue::<<std::vec::IntoIter<T, A> as std::ops::Drop>::drop::DropGuard<'_, std::ffi::OsString, std::alloc::Global>> - shim(Some(<std::vec::IntoIter<T, A> as std::ops::Drop>::drop::DropGuard<'_, std::ffi::OsString, std::alloc::Global>))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueINtNvXse_NtNtCs87aRD04Zyr_5alloc3vec9into_iterINtBK_8IntoIterppENtNtNtB4_3ops4drop4Drop4drop9DropGuardNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringNtNtBO_5alloc6GlobalEECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 13,
+      "label": "std::ptr::drop_glue::<std::string::String> - shim(Some(std::string::String))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueNtNtCs87aRD04Zyr_5alloc6string6StringECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 14,
+      "label": "std::ptr::drop_glue::<std::env::Args> - shim(Some(std::env::Args))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueNtNtCskYvK6KoFAtP_3std3env4ArgsECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 15,
+      "label": "std::ptr::drop_glue::<std::env::ArgsOs> - shim(Some(std::env::ArgsOs))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueNtNtCskYvK6KoFAtP_3std3env6ArgsOsECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 16,
+      "label": "std::ptr::drop_glue::<std::ffi::OsString> - shim(Some(std::ffi::OsString))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 17,
+      "label": "std::ptr::drop_glue::<std::sys::args::common::Args> - shim(Some(std::sys::args::common::Args))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueNtNtNtNtCskYvK6KoFAtP_3std3sys4args6common4ArgsECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 18,
+      "label": "std::ptr::drop_glue::<std::sys::os_str::bytes::Buf> - shim(Some(std::sys::os_str::bytes::Buf))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueNtNtNtNtCskYvK6KoFAtP_3std3sys6os_str5bytes3BufECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 19,
+      "label": "std::ptr::drop_glue::<[std::ffi::OsString]> - shim(Some([std::ffi::OsString]))",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core3ptr9drop_glueSNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ptr::drop_glue"
+    },
+    {
+      "id": 20,
+      "label": "core::panicking::assert_failed::<std::option::Option<usize>, std::option::Option<usize>>",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core9panicking13assert_failedINtNtB4_6option6OptionjEBM_EB4_",
+      "path": "core::panicking::assert_failed"
+    },
+    {
+      "id": 21,
+      "label": "std::rt::lang_start::<()>",
+      "symbol": "_RINvNtCskYvK6KoFAtP_3std2rt10lang_startuECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::rt::lang_start"
+    },
+    {
+      "id": 22,
+      "label": "std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>",
+      "symbol": "_RINvNtNtCskYvK6KoFAtP_3std3sys9backtrace28___rust_begin_short_backtraceFEuuECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::sys::backtrace::__rust_begin_short_backtrace"
+    },
+    {
+      "id": 23,
+      "label": "<std::env::Args as std::iter::Iterator>::fold::<usize, {closure@<std::env::Args as std::iter::Iterator>::count::{closure#0}}>",
+      "symbol": "_RINvYNtNtCskYvK6KoFAtP_3std3env4ArgsNtNtNtNtCsiDFD6Pt1FH6_4core4iter6traits8iterator8Iterator4foldjNCNvYB3_By_5count0ECsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::iter::Iterator::fold"
+    },
+    {
+      "id": 24,
+      "label": "std::rt::lang_start::<()>::{closure#0}",
+      "symbol": "_RNCINvNtCskYvK6KoFAtP_3std2rt10lang_startuE0Csk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::rt::lang_start::{closure#0}"
+    },
+    {
+      "id": 25,
+      "label": "<std::env::Args as std::iter::Iterator>::count::{closure#0}",
+      "symbol": "_RNCNvYNtNtCskYvK6KoFAtP_3std3env4ArgsNtNtNtNtCsiDFD6Pt1FH6_4core4iter6traits8iterator8Iterator5count0Csk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::iter::Iterator::count::{closure#0}"
+    },
+    {
+      "id": 26,
+      "label": "<{closure@std::rt::lang_start<()>::{closure#0}} as std::ops::FnOnce<()>>::call_once - shim(vtable)",
+      "symbol": "_RNSNvYNCINvNtCskYvK6KoFAtP_3std2rt10lang_startuE0INtNtNtCsiDFD6Pt1FH6_4core3ops8function6FnOnceuE9call_once6vtableCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ops::FnOnce::call_once"
+    },
+    {
+      "id": 27,
+      "label": "vulnerable_dog",
+      "symbol": "_RNvCsk29ap3GDYaq_12dyn_dispatch14vulnerable_dog",
+      "path": "dyn_dispatch::vulnerable_dog"
+    },
+    {
+      "id": 28,
+      "label": "main",
+      "symbol": "_RNvCsk29ap3GDYaq_12dyn_dispatch4main",
+      "path": "dyn_dispatch::main"
+    },
+    {
+      "id": 29,
+      "label": "make",
+      "symbol": "_RNvCsk29ap3GDYaq_12dyn_dispatch4make",
+      "path": "dyn_dispatch::make"
+    },
+    {
+      "id": 30,
+      "label": "std::alloc::Global::alloc_impl_runtime",
+      "symbol": "_RNvMNtCs87aRD04Zyr_5alloc5allocNtB2_6Global18alloc_impl_runtimeCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::alloc::Global::alloc_impl_runtime"
+    },
+    {
+      "id": 31,
+      "label": "std::boxed::Box::<Cat>::new",
+      "symbol": "_RNvMNtCs87aRD04Zyr_5alloc5boxedINtB2_3BoxNtCsk29ap3GDYaq_12dyn_dispatch3CatE3newBF_",
+      "path": "std::boxed::Box::<T>::new"
+    },
+    {
+      "id": 32,
+      "label": "std::boxed::Box::<Dog>::new",
+      "symbol": "_RNvMNtCs87aRD04Zyr_5alloc5boxedINtB2_3BoxNtCsk29ap3GDYaq_12dyn_dispatch3DogE3newBF_",
+      "path": "std::boxed::Box::<T>::new"
+    },
+    {
+      "id": 33,
+      "label": "std::vec::IntoIter::<std::ffi::OsString>::as_raw_mut_slice",
+      "symbol": "_RNvMs0_NtNtCs87aRD04Zyr_5alloc3vec9into_iterINtB5_8IntoIterNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringE16as_raw_mut_sliceCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::vec::IntoIter::<T, A>::as_raw_mut_slice"
+    },
+    {
+      "id": 34,
+      "label": "alloc::raw_vec::RawVecInner::deallocate",
+      "symbol": "_RNvMs2_NtCs87aRD04Zyr_5alloc7raw_vecNtB5_11RawVecInner10deallocateCs3xnfy9NooCB_5gimli",
+      "path": "alloc::raw_vec::RawVecInner::<A>::deallocate"
+    },
+    {
+      "id": 35,
+      "label": "std::alloc::handle_alloc_error",
+      "symbol": "_RNvNtCs87aRD04Zyr_5alloc5alloc18handle_alloc_error",
+      "path": "std::alloc::handle_alloc_error"
+    },
+    {
+      "id": 36,
+      "label": "std::boxed::box_new_uninit",
+      "symbol": "_RNvNtCs87aRD04Zyr_5alloc5boxed14box_new_uninitCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::boxed::box_new_uninit"
+    },
+    {
+      "id": 37,
+      "label": "core::panicking::panic_nounwind_fmt",
+      "symbol": "_RNvNtCsiDFD6Pt1FH6_4core9panicking18panic_nounwind_fmt",
+      "path": "core::panicking::panic_nounwind_fmt"
+    },
+    {
+      "id": 38,
+      "label": "core::panicking::panic",
+      "symbol": "_RNvNtCsiDFD6Pt1FH6_4core9panicking5panic",
+      "path": "core::panicking::panic"
+    },
+    {
+      "id": 39,
+      "label": "std::rt::lang_start_internal",
+      "symbol": "_RNvNtCskYvK6KoFAtP_3std2rt19lang_start_internal",
+      "path": "std::rt::lang_start_internal"
+    },
+    {
+      "id": 40,
+      "label": "std::env::args",
+      "symbol": "_RNvNtCskYvK6KoFAtP_3std3env4args",
+      "path": "std::env::args"
+    },
+    {
+      "id": 41,
+      "label": "std::mem::Alignment::new_unchecked::precondition_check",
+      "symbol": "_RNvNvMNtNtCsiDFD6Pt1FH6_4core3mem9alignmentNtB4_9Alignment13new_unchecked18precondition_checkCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::mem::Alignment::new_unchecked::precondition_check"
+    },
+    {
+      "id": 42,
+      "label": "std::ptr::const_ptr::<impl *const T>::offset_from_unsigned::precondition_check",
+      "symbol": "_RNvNvMNtNtCsiDFD6Pt1FH6_4core3ptr9const_ptrPp20offset_from_unsigned18precondition_checkCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ptr::const_ptr::<impl *const T>::offset_from_unsigned::precondition_check"
+    },
+    {
+      "id": 43,
+      "label": "std::alloc::Layout::from_size_alignment_unchecked::precondition_check",
+      "symbol": "_RNvNvMNtNtCsiDFD6Pt1FH6_4core5alloc6layoutNtB4_6Layout29from_size_alignment_unchecked18precondition_checkCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::alloc::Layout::from_size_alignment_unchecked::precondition_check"
+    },
+    {
+      "id": 44,
+      "label": "std::ptr::NonNull::<T>::new_unchecked::precondition_check",
+      "symbol": "_RNvNvMs1_NtNtCsiDFD6Pt1FH6_4core3ptr8non_nullINtB7_7NonNullpE13new_unchecked18precondition_checkCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ptr::NonNull::<T>::new_unchecked::precondition_check"
+    },
+    {
+      "id": 45,
+      "label": "<Dog as Animal>::speak",
+      "symbol": "_RNvXCsk29ap3GDYaq_12dyn_dispatchNtB2_3DogNtB2_6Animal5speak",
+      "path": "dyn_dispatch::<Dog as Animal>::speak"
+    },
+    {
+      "id": 46,
+      "label": "<<std::vec::IntoIter<T, A> as std::ops::Drop>::drop::DropGuard<'_, std::ffi::OsString, std::alloc::Global> as std::ops::Drop>::drop",
+      "symbol": "_RNvXNvXse_NtNtCs87aRD04Zyr_5alloc3vec9into_iterINtB8_8IntoIterppENtNtNtCsiDFD6Pt1FH6_4core3ops4drop4Drop4dropINtB2_9DropGuardNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringNtNtBc_5alloc6GlobalEB11_4dropCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "<<std::vec::IntoIter<T, A> as std::ops::Drop>::drop::DropGuard<'_, T, A> as std::ops::Drop>::drop"
+    },
+    {
+      "id": 47,
+      "label": "<alloc::raw_vec::RawVec<std::ffi::OsString> as std::ops::Drop>::drop",
+      "symbol": "_RNvXs1_NtCs87aRD04Zyr_5alloc7raw_vecINtB5_6RawVecNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringENtNtNtCsiDFD6Pt1FH6_4core3ops4drop4Drop4dropCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "<alloc::raw_vec::RawVec<T, A> as std::ops::Drop>::drop"
+    },
+    {
+      "id": 48,
+      "label": "<alloc::raw_vec::RawVec<u8> as std::ops::Drop>::drop",
+      "symbol": "_RNvXs1_NtCs87aRD04Zyr_5alloc7raw_vecINtB5_6RawVechENtNtNtCsiDFD6Pt1FH6_4core3ops4drop4Drop4dropCs3xnfy9NooCB_5gimli",
+      "path": "<alloc::raw_vec::RawVec<T, A> as std::ops::Drop>::drop"
+    },
+    {
+      "id": 49,
+      "label": "<std::vec::IntoIter<std::ffi::OsString> as std::iter::Iterator>::size_hint",
+      "symbol": "_RNvXs4_NtNtCs87aRD04Zyr_5alloc3vec9into_iterINtB5_8IntoIterNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringENtNtNtNtCsiDFD6Pt1FH6_4core4iter6traits8iterator8Iterator9size_hintCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "<std::vec::IntoIter<T, A> as std::iter::Iterator>::size_hint"
+    },
+    {
+      "id": 50,
+      "label": "<std::boxed::Box<dyn Animal> as std::ops::Drop>::drop",
+      "symbol": "_RNvXs8_NtCs87aRD04Zyr_5alloc5boxedINtB5_3BoxDNtCsk29ap3GDYaq_12dyn_dispatch6AnimalEL_ENtNtNtCsiDFD6Pt1FH6_4core3ops4drop4Drop4dropBJ_",
+      "path": "<std::boxed::Box<T, A> as std::ops::Drop>::drop"
+    },
+    {
+      "id": 51,
+      "label": "<() as std::process::Termination>::report",
+      "symbol": "_RNvXsZ_NtCskYvK6KoFAtP_3std7processuNtB5_11Termination6reportCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "<() as std::process::Termination>::report"
+    },
+    {
+      "id": 52,
+      "label": "<Cat as Animal>::speak",
+      "symbol": "_RNvXs_Csk29ap3GDYaq_12dyn_dispatchNtB4_3CatNtB4_6Animal5speak",
+      "path": "dyn_dispatch::<Cat as Animal>::speak"
+    },
+    {
+      "id": 53,
+      "label": "<std::alloc::Global as std::alloc::Allocator>::deallocate",
+      "symbol": "_RNvXs_NtCs87aRD04Zyr_5alloc5allocNtB4_6GlobalNtNtCsiDFD6Pt1FH6_4core5alloc9Allocator10deallocateCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "<std::alloc::Global as std::alloc::Allocator>::deallocate"
+    },
+    {
+      "id": 54,
+      "label": "<std::env::Args as std::iter::Iterator>::next",
+      "symbol": "_RNvXsa_NtCskYvK6KoFAtP_3std3envNtB5_4ArgsNtNtNtNtCsiDFD6Pt1FH6_4core4iter6traits8iterator8Iterator4next",
+      "path": "<std::env::Args as std::iter::Iterator>::next"
+    },
+    {
+      "id": 55,
+      "label": "<std::vec::IntoIter<std::ffi::OsString> as std::ops::Drop>::drop",
+      "symbol": "_RNvXse_NtNtCs87aRD04Zyr_5alloc3vec9into_iterINtB5_8IntoIterNtNtNtCskYvK6KoFAtP_3std3ffi6os_str8OsStringENtNtNtCsiDFD6Pt1FH6_4core3ops4drop4Drop4dropCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "<std::vec::IntoIter<T, A> as std::ops::Drop>::drop"
+    },
+    {
+      "id": 56,
+      "label": "<std::vec::Vec<u8> as std::ops::Drop>::drop",
+      "symbol": "_RNvXso_NtCs87aRD04Zyr_5alloc3vecINtB5_3VechENtNtNtCsiDFD6Pt1FH6_4core3ops4drop4Drop4dropCs3xnfy9NooCB_5gimli",
+      "path": "<std::vec::Vec<T, A> as std::ops::Drop>::drop"
+    },
+    {
+      "id": 57,
+      "label": "<fn() as std::ops::FnOnce<()>>::call_once - shim(fn())",
+      "symbol": "_RNvYFEuINtNtNtCsiDFD6Pt1FH6_4core3ops8function6FnOnceuE9call_onceCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ops::FnOnce::call_once"
+    },
+    {
+      "id": 58,
+      "label": "<{closure@std::rt::lang_start<()>::{closure#0}} as std::ops::FnOnce<()>>::call_once - shim",
+      "symbol": "_RNvYNCINvNtCskYvK6KoFAtP_3std2rt10lang_startuE0INtNtNtCsiDFD6Pt1FH6_4core3ops8function6FnOnceuE9call_onceCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::ops::FnOnce::call_once"
+    },
+    {
+      "id": 59,
+      "label": "<std::env::Args as std::iter::Iterator>::count",
+      "symbol": "_RNvYNtNtCskYvK6KoFAtP_3std3env4ArgsNtNtNtNtCsiDFD6Pt1FH6_4core4iter6traits8iterator8Iterator5countCsk29ap3GDYaq_12dyn_dispatch",
+      "path": "std::iter::Iterator::count"
+    }
+  ],
+  "edges": [
+    {
+      "from": 7,
+      "to": 56,
+      "kind": "direct"
+    },
+    {
+      "from": 8,
+      "to": 50,
+      "kind": "direct"
+    },
+    {
+      "from": 9,
+      "to": 47,
+      "kind": "direct"
+    },
+    {
+      "from": 10,
+      "to": 48,
+      "kind": "direct"
+    },
+    {
+      "from": 11,
+      "to": 55,
+      "kind": "direct"
+    },
+    {
+      "from": 12,
+      "to": 46,
+      "kind": "direct"
+    },
+    {
+      "from": 21,
+      "to": 39,
+      "kind": "direct"
+    },
+    {
+      "from": 22,
+      "to": 5,
+      "kind": "direct"
+    },
+    {
+      "from": 22,
+      "to": 57,
+      "kind": "direct"
+    },
+    {
+      "from": 23,
+      "to": 25,
+      "kind": "direct"
+    },
+    {
+      "from": 23,
+      "to": 54,
+      "kind": "direct"
+    },
+    {
+      "from": 24,
+      "to": 22,
+      "kind": "direct"
+    },
+    {
+      "from": 24,
+      "to": 51,
+      "kind": "direct"
+    },
+    {
+      "from": 26,
+      "to": 58,
+      "kind": "direct"
+    },
+    {
+      "from": 28,
+      "to": 29,
+      "kind": "direct"
+    },
+    {
+      "from": 28,
+      "to": 40,
+      "kind": "direct"
+    },
+    {
+      "from": 28,
+      "to": 45,
+      "kind": "virtual"
+    },
+    {
+      "from": 28,
+      "to": 52,
+      "kind": "virtual"
+    },
+    {
+      "from": 28,
+      "to": 59,
+      "kind": "direct"
+    },
+    {
+      "from": 29,
+      "to": 31,
+      "kind": "direct"
+    },
+    {
+      "from": 29,
+      "to": 32,
+      "kind": "direct"
+    },
+    {
+      "from": 30,
+      "to": 0,
+      "kind": "opaque"
+    },
+    {
+      "from": 30,
+      "to": 44,
+      "kind": "direct"
+    },
+    {
+      "from": 31,
+      "to": 36,
+      "kind": "direct"
+    },
+    {
+      "from": 32,
+      "to": 36,
+      "kind": "direct"
+    },
+    {
+      "from": 33,
+      "to": 20,
+      "kind": "direct"
+    },
+    {
+      "from": 33,
+      "to": 49,
+      "kind": "direct"
+    },
+    {
+      "from": 36,
+      "to": 30,
+      "kind": "direct"
+    },
+    {
+      "from": 36,
+      "to": 35,
+      "kind": "direct"
+    },
+    {
+      "from": 41,
+      "to": 4,
+      "kind": "direct"
+    },
+    {
+      "from": 41,
+      "to": 37,
+      "kind": "direct"
+    },
+    {
+      "from": 42,
+      "to": 37,
+      "kind": "direct"
+    },
+    {
+      "from": 43,
+      "to": 37,
+      "kind": "direct"
+    },
+    {
+      "from": 44,
+      "to": 37,
+      "kind": "direct"
+    },
+    {
+      "from": 45,
+      "to": 27,
+      "kind": "direct"
+    },
+    {
+      "from": 47,
+      "to": 34,
+      "kind": "direct"
+    },
+    {
+      "from": 49,
+      "to": 3,
+      "kind": "direct"
+    },
+    {
+      "from": 49,
+      "to": 38,
+      "kind": "direct"
+    },
+    {
+      "from": 49,
+      "to": 42,
+      "kind": "direct"
+    },
+    {
+      "from": 50,
+      "to": 1,
+      "kind": "direct"
+    },
+    {
+      "from": 50,
+      "to": 2,
+      "kind": "direct"
+    },
+    {
+      "from": 50,
+      "to": 41,
+      "kind": "direct"
+    },
+    {
+      "from": 50,
+      "to": 43,
+      "kind": "direct"
+    },
+    {
+      "from": 50,
+      "to": 53,
+      "kind": "direct"
+    },
+    {
+      "from": 53,
+      "to": 0,
+      "kind": "opaque"
+    },
+    {
+      "from": 55,
+      "to": 19,
+      "kind": "direct"
+    },
+    {
+      "from": 55,
+      "to": 33,
+      "kind": "direct"
+    },
+    {
+      "from": 57,
+      "to": 0,
+      "kind": "opaque"
+    },
+    {
+      "from": 58,
+      "to": 24,
+      "kind": "direct"
+    },
+    {
+      "from": 59,
+      "to": 23,
+      "kind": "direct"
+    }
+  ],
+  "roots": [
+    28
+  ],
+  "sinks": [
+    27
+  ],
+  "unresolved_sinks": [],
+  "opaque": [
+    0
+  ],
+  "virtual_calls": [
+    {
+      "from": 28,
+      "method": "dyn_dispatch::Animal::speak"
+    }
+  ],
+  "virtual_impls": [
+    {
+      "method": "dyn_dispatch::Animal::speak",
+      "node": 45,
+      "self_key": "dyn_dispatch::Dog",
+      "trait_key": "dyn_dispatch::Animal"
+    },
+    {
+      "method": "dyn_dispatch::Animal::speak",
+      "node": 52,
+      "self_key": "dyn_dispatch::Cat",
+      "trait_key": "dyn_dispatch::Animal"
+    },
+    {
+      "method": "std::alloc::Allocator::deallocate",
+      "node": 53,
+      "self_key": "std::alloc::Global",
+      "trait_key": "std::alloc::Allocator"
+    },
+    {
+      "method": "std::iter::Iterator::count",
+      "node": 59,
+      "self_key": "std::env::Args",
+      "trait_key": "std::iter::Iterator"
+    },
+    {
+      "method": "std::iter::Iterator::fold",
+      "node": 23,
+      "self_key": "std::env::Args",
+      "trait_key": "std::iter::Iterator"
+    },
+    {
+      "method": "std::iter::Iterator::size_hint",
+      "node": 49,
+      "self_key": "std::vec::IntoIter",
+      "trait_key": "std::iter::Iterator"
+    },
+    {
+      "method": "std::ops::Drop::drop",
+      "node": 46,
+      "self_key": "<std::vec::IntoIter<T, A> as std::ops::Drop>::drop::DropGuard",
+      "trait_key": "std::ops::Drop"
+    },
+    {
+      "method": "std::ops::Drop::drop",
+      "node": 47,
+      "self_key": "alloc::raw_vec::RawVec",
+      "trait_key": "std::ops::Drop"
+    },
+    {
+      "method": "std::ops::Drop::drop",
+      "node": 50,
+      "self_key": "std::boxed::Box",
+      "trait_key": "std::ops::Drop"
+    },
+    {
+      "method": "std::ops::Drop::drop",
+      "node": 55,
+      "self_key": "std::vec::IntoIter",
+      "trait_key": "std::ops::Drop"
+    },
+    {
+      "method": "std::ops::FnOnce::call_once",
+      "node": 26,
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnOnce"
+    },
+    {
+      "method": "std::ops::FnOnce::call_once",
+      "node": 57,
+      "trait_key": "std::ops::FnOnce"
+    },
+    {
+      "method": "std::ops::FnOnce::call_once",
+      "node": 58,
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnOnce"
+    },
+    {
+      "method": "std::process::Termination::report",
+      "node": 51,
+      "trait_key": "std::process::Termination"
+    }
+  ],
+  "sink_paths": [
+    {
+      "path": "vulnerable_dog",
+      "nodes": [
+        27
+      ]
+    }
+  ],
+  "coercions": [
+    {
+      "self_key": "dyn_dispatch::Cat",
+      "trait_key": "dyn_dispatch::Animal"
+    },
+    {
+      "self_key": "dyn_dispatch::Cat",
+      "trait_key": "std::marker::MetaSized"
+    },
+    {
+      "self_key": "dyn_dispatch::Dog",
+      "trait_key": "dyn_dispatch::Animal"
+    },
+    {
+      "self_key": "dyn_dispatch::Dog",
+      "trait_key": "std::marker::MetaSized"
+    },
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::marker::MetaSized"
+    },
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::Fn"
+    },
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnMut"
+    },
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnOnce"
+    }
+  ],
+  "imprecise_traits": [
+    "dyn_dispatch::Animal"
+  ],
+  "scanned_crates": [
+    "dyn_dispatch"
+  ]
+}

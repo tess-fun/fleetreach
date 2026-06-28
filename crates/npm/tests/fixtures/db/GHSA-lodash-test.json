@@ -1,0 +1,14 @@
+{
+  "id": "GHSA-p6mc-m468-83gw",
+  "aliases": ["CVE-2020-8203"],
+  "summary": "Prototype pollution in lodash",
+  "database_specific": { "severity": "HIGH" },
+  "affected": [
+    {
+      "package": { "ecosystem": "npm", "name": "lodash" },
+      "ranges": [
+        { "type": "SEMVER", "events": [ { "introduced": "0" }, { "fixed": "4.17.21" } ] }
+      ]
+    }
+  ]
+}

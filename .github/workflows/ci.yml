@@ -1,0 +1,163 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: lint + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # rust-toolchain.toml pins the exact toolchain + components.
+      - run: rustup show
+      - name: rustfmt
+        run: cargo fmt --all --check
+      - name: clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test
+        run: cargo test --workspace   # includes README doctests
+      # The default build must stay pure-Rust: no vendored-C crypto (M-5). The
+      # network feature (rustls/aws-lc/ring) is opt-in and covered separately.
+      - name: pure-Rust guard (no vendored-C crypto by default)
+        run: |
+          if cargo tree -e no-dev 2>/dev/null | grep -E '\b(aws-lc-sys|ring)\b'; then
+            echo "::error::default build pulled vendored-C crypto (aws-lc-sys/ring); keep it behind --features network"
+            exit 1
+          fi
+      # Lint + test the opt-in network feature so the gated code stays healthy.
+      - name: clippy + test (network feature)
+        run: |
+          cargo clippy --workspace --all-targets --features fleetreach-cli/network -- -D warnings
+          cargo test --workspace --features fleetreach-cli/network
+
+  readme:
+    name: README in sync (cargo-rdme)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - name: install cargo-rdme
+        run: cargo install cargo-rdme --locked
+      # Library READMEs are generated from lib.rs doc comments; fail if stale.
+      - name: library READMEs match lib.rs
+        run: |
+          for c in core scan correlate report reach go npm pypi rubygems packagist nuget julia swift hex ghactions maven; do
+            (cd "crates/$c" && cargo rdme --check)
+          done
+
+  msrv:
+    name: MSRV (1.89)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The effective MSRV is driven by the whole closure (smol_str, via gix),
+      # not just rustsec — so verify the declared rust-version actually builds.
+      # `+1.89.0` overrides rust-toolchain.toml's pin.
+      - run: rustup toolchain install 1.89.0 --profile minimal
+      - run: cargo +1.89.0 check --workspace --locked
+
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
+  audit:
+    name: cargo-audit (eat our own dog food)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The tool must pass its own bar: no advisories against its own lockfile.
+      - run: cargo install cargo-audit --locked
+      - run: cargo audit
+
+  vex-roundtrip:
+    name: VEX round-trip (Grype + Trivy honor suppression, §15)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      # Pinned consumer versions (§15): a behavioural change in either is a
+      # compatibility event we want to catch, so the matrix tracks the version.
+      - name: install Grype (pinned)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+            | sh -s -- -b /usr/local/bin v0.79.0
+      - name: install Trivy (pinned)
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin v0.55.0
+      # Emit fleetreach OpenVEX, feed it back to each consumer, and assert the
+      # finding is actually suppressed (not merely that the JSON parses). The
+      # tests skip-if-missing, so this step is the only place they run for real.
+      # This job exercises the real binary against live consumers, so it builds
+      # with the opt-in `network` feature (DB fetch + enrichment).
+      - name: round-trip suppression (Grype + Trivy)
+        run: cargo test -p fleetreach-cli --features network --test vex_roundtrip -- --nocapture
+      # Self-dogfood: the self-scan VEX must carry zero `affected` statements.
+      - name: self-dogfood (zero `affected`)
+        run: |
+          cargo build --release -p fleetreach-cli --features network
+          ./target/release/fleetreach scan -c ci/self-fleet.toml -f vex \
+            --vex-timestamp 2026-06-25T00:00:00Z -q > self.openvex.json || true
+          affected=$(jq '[.statements[]? | select(.status=="affected")] | length' self.openvex.json)
+          echo "affected statements: $affected"
+          test "$affected" = "0"
+
+  fuzz:
+    name: fuzz (short run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install nightly
+      - run: cargo install cargo-fuzz --locked
+      - name: fuzz fleet.toml
+        run: cargo +nightly fuzz run fleet_toml -- -max_total_time=30
+      - name: fuzz lockfile
+        run: cargo +nightly fuzz run lockfile -- -max_total_time=30
+
+  reach-driver:
+    name: reach-driver (static reachability + soundness corpus)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The driver links rustc_private and builds on its own pinned nightly
+      # (crates/reach-driver/rust-toolchain.toml). rustc-dev/rust-src are required.
+      - name: install pinned nightly + components
+        run: rustup toolchain install nightly-2026-06-01 --component rustc-dev rust-src llvm-tools clippy --profile minimal
+      - name: build the driver
+        working-directory: crates/reach-driver
+        run: cargo build
+      # The driver is outside the workspace, so the workspace clippy job skips it.
+      # Lint it here so its forbid(unsafe)/panic-deny guardrails are enforced.
+      - name: clippy the driver (deny warnings)
+        working-directory: crates/reach-driver
+        run: cargo clippy --all-targets -- -D warnings
+      - name: driver unit tests + soundness corpus (spec §9)
+        working-directory: crates/reach-driver
+        run: cargo test
+      - name: whole-closure + cache + cli e2e (needs the built driver)
+        run: cargo test -p fleetreach-reach -p fleetreach-cli --test e2e --test static_reach_e2e -- --ignored
+
+  reach-driver-canary:
+    name: reach-driver churn canary (latest nightly)
+    runs-on: ubuntu-latest
+    # Non-blocking: a failure here is an EARLY WARNING that a rustc_private API
+    # the driver depends on broke on a newer nightly — bump the pin and the
+    # compat code before the pinned toolchain ages out (spec §9, §11).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: install latest nightly + components
+        run: rustup toolchain install nightly --component rustc-dev rust-src llvm-tools --profile minimal
+      - name: build the driver on latest nightly
+        working-directory: crates/reach-driver
+        # Override the pinned channel with the freshest nightly.
+        run: cargo +nightly build

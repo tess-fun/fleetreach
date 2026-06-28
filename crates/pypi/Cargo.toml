@@ -1,0 +1,32 @@
+[package]
+name = "fleetreach-pypi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description = "PyPI ecosystem feeder for fleetreach: toolchain-free poetry.lock/uv.lock/Pipfile.lock + OSV matching into the shared finding model."
+
+[lints]
+workspace = true
+
+[dependencies]
+fleetreach-core = { path = "../core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+thiserror = { workspace = true }
+# Parallel load of the OSV mirror: the osv.dev PyPI export is a large set of JSON
+# Read the osv.dev export straight from its `all.zip` (one file) instead of every
+# unzipped record — profiling the npm path showed the per-file `open` syscalls
+# PEP 440 versions (epochs, .post/.dev, a1/rc, local segments) — semver cannot parse
+# these and PyPI OSV ranges are PEP 440. Pure-Rust (astral/uv), no vendored C.
+pep440_rs = "0.7"
+# Derive a severity band + base score from an OSV CVSS_V3 vector (PyPI records that
+
+[dev-dependencies]
+serde_json = { workspace = true }

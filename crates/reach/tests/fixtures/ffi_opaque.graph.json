@@ -1,0 +1,204 @@
+{
+  "schema": 2,
+  "nodes": [
+    {
+      "id": 0,
+      "label": "⟨opaque external code⟩",
+      "symbol": "<opaque>"
+    },
+    {
+      "id": 1,
+      "label": "std::intrinsics::black_box::<()> - intrinsic",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core10intrinsics9black_boxuECsaI0PRYwP1ov_10ffi_opaque",
+      "path": "std::intrinsics::black_box"
+    },
+    {
+      "id": 2,
+      "label": "std::rt::lang_start::<()>",
+      "symbol": "_RINvNtCskYvK6KoFAtP_3std2rt10lang_startuECsaI0PRYwP1ov_10ffi_opaque",
+      "path": "std::rt::lang_start"
+    },
+    {
+      "id": 3,
+      "label": "std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>",
+      "symbol": "_RINvNtNtCskYvK6KoFAtP_3std3sys9backtrace28___rust_begin_short_backtraceFEuuECsaI0PRYwP1ov_10ffi_opaque",
+      "path": "std::sys::backtrace::__rust_begin_short_backtrace"
+    },
+    {
+      "id": 4,
+      "label": "std::rt::lang_start::<()>::{closure#0}",
+      "symbol": "_RNCINvNtCskYvK6KoFAtP_3std2rt10lang_startuE0CsaI0PRYwP1ov_10ffi_opaque",
+      "path": "std::rt::lang_start::{closure#0}"
+    },
+    {
+      "id": 5,
+      "label": "<{closure@std::rt::lang_start<()>::{closure#0}} as std::ops::FnOnce<()>>::call_once - shim(vtable)",
+      "symbol": "_RNSNvYNCINvNtCskYvK6KoFAtP_3std2rt10lang_startuE0INtNtNtCsiDFD6Pt1FH6_4core3ops8function6FnOnceuE9call_once6vtableCsaI0PRYwP1ov_10ffi_opaque",
+      "path": "std::ops::FnOnce::call_once"
+    },
+    {
+      "id": 6,
+      "label": "main",
+      "symbol": "_RNvCsaI0PRYwP1ov_10ffi_opaque4main",
+      "path": "ffi_opaque::main"
+    },
+    {
+      "id": 7,
+      "label": "vuln",
+      "symbol": "_RNvCsaI0PRYwP1ov_10ffi_opaque4vuln",
+      "path": "ffi_opaque::vuln"
+    },
+    {
+      "id": 8,
+      "label": "callback",
+      "symbol": "_RNvCsaI0PRYwP1ov_10ffi_opaque8callback",
+      "path": "ffi_opaque::callback"
+    },
+    {
+      "id": 9,
+      "label": "std::rt::lang_start_internal",
+      "symbol": "_RNvNtCskYvK6KoFAtP_3std2rt19lang_start_internal",
+      "path": "std::rt::lang_start_internal"
+    },
+    {
+      "id": 10,
+      "label": "<() as std::process::Termination>::report",
+      "symbol": "_RNvXsZ_NtCskYvK6KoFAtP_3std7processuNtB5_11Termination6reportCsaI0PRYwP1ov_10ffi_opaque",
+      "path": "<() as std::process::Termination>::report"
+    },
+    {
+      "id": 11,
+      "label": "<fn() as std::ops::FnOnce<()>>::call_once - shim(fn())",
+      "symbol": "_RNvYFEuINtNtNtCsiDFD6Pt1FH6_4core3ops8function6FnOnceuE9call_onceCsaI0PRYwP1ov_10ffi_opaque",
+      "path": "std::ops::FnOnce::call_once"
+    },
+    {
+      "id": 12,
+      "label": "<{closure@std::rt::lang_start<()>::{closure#0}} as std::ops::FnOnce<()>>::call_once - shim",
+      "symbol": "_RNvYNCINvNtCskYvK6KoFAtP_3std2rt10lang_startuE0INtNtNtCsiDFD6Pt1FH6_4core3ops8function6FnOnceuE9call_onceCsaI0PRYwP1ov_10ffi_opaque",
+      "path": "std::ops::FnOnce::call_once"
+    }
+  ],
+  "edges": [
+    {
+      "from": 0,
+      "to": 8,
+      "kind": "opaque"
+    },
+    {
+      "from": 2,
+      "to": 9,
+      "kind": "direct"
+    },
+    {
+      "from": 3,
+      "to": 1,
+      "kind": "direct"
+    },
+    {
+      "from": 3,
+      "to": 11,
+      "kind": "direct"
+    },
+    {
+      "from": 4,
+      "to": 3,
+      "kind": "direct"
+    },
+    {
+      "from": 4,
+      "to": 10,
+      "kind": "direct"
+    },
+    {
+      "from": 5,
+      "to": 12,
+      "kind": "direct"
+    },
+    {
+      "from": 6,
+      "to": 0,
+      "kind": "opaque"
+    },
+    {
+      "from": 8,
+      "to": 7,
+      "kind": "direct"
+    },
+    {
+      "from": 11,
+      "to": 0,
+      "kind": "opaque"
+    },
+    {
+      "from": 12,
+      "to": 4,
+      "kind": "direct"
+    }
+  ],
+  "roots": [
+    6
+  ],
+  "sinks": [
+    7
+  ],
+  "unresolved_sinks": [],
+  "opaque": [
+    0
+  ],
+  "virtual_calls": [],
+  "virtual_impls": [
+    {
+      "method": "std::ops::FnOnce::call_once",
+      "node": 5,
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnOnce"
+    },
+    {
+      "method": "std::ops::FnOnce::call_once",
+      "node": 11,
+      "trait_key": "std::ops::FnOnce"
+    },
+    {
+      "method": "std::ops::FnOnce::call_once",
+      "node": 12,
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnOnce"
+    },
+    {
+      "method": "std::process::Termination::report",
+      "node": 10,
+      "trait_key": "std::process::Termination"
+    }
+  ],
+  "sink_paths": [
+    {
+      "path": "vuln",
+      "nodes": [
+        7
+      ]
+    }
+  ],
+  "coercions": [
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::marker::MetaSized"
+    },
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::Fn"
+    },
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnMut"
+    },
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnOnce"
+    }
+  ],
+  "imprecise_traits": [],
+  "scanned_crates": [
+    "ffi_opaque"
+  ]
+}

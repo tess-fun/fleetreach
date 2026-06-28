@@ -1,0 +1,31 @@
+[package]
+name = "fleetreach-scan"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description = "All rustsec interaction: query advisories and map engine types to core."
+
+[lints]
+workspace = true
+
+[features]
+# Opt-in advisory-DB fetch over the network (git). Off by default keeps the build
+# pure-Rust (no reqwest/rustls/aws-lc/ring); without it, scan an explicit local
+# advisory-db via `AdvisoryDb::open` (`--db`). See M-5.
+network = ["rustsec/gix-reqwest"]
+
+[dependencies]
+fleetreach-core = { path = "../core" }
+thiserror = { workspace = true }
+# `dependency-tree` pulls in cargo-lock's petgraph model so we can compute the
+# chain from a root crate to each flagged package (dependency provenance).
+# default-features off (workspace) — the git/network backend is the `network` feature.
+rustsec = { workspace = true, features = ["dependency-tree"] }
+# Formatting the advisory-db timestamp + computing its age; unified with rustsec's `time`.
+time = { version = "0.3", default-features = false, features = ["formatting", "std"] }

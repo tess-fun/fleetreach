@@ -1,0 +1,40 @@
+# cargo-fuzz harness for the untrusted-byte surfaces (§13). Its own
+# workspace so `cargo build --workspace` at the repo root ignores it.
+# Run with: cargo +nightly fuzz run go_mod
+[package]
+name = "fleetreach-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+fleetreach-cli = { path = "../crates/cli" }
+fleetreach-go = { path = "../crates/go" }
+rustsec = "=0.33.0"
+
+[[bin]]
+name = "fleet_toml"
+path = "fuzz_targets/fleet_toml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "lockfile"
+path = "fuzz_targets/lockfile.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "go_mod"
+path = "fuzz_targets/go_mod.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

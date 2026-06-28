@@ -1,0 +1,51 @@
+name: "fleetreach"
+description: "Fleet-wide Rust dependency advisory audit — uploads findings to GitHub code scanning (SARIF)."
+branding:
+  icon: "shield"
+  color: "orange"
+
+inputs:
+  args:
+    description: "Extra arguments passed to `fleetreach scan` (e.g. '--enrich --resolve-features')."
+    required: false
+    default: ""
+  config:
+    description: "Path to fleet.toml (defaults to scanning this repo via a generated one)."
+    required: false
+    default: ""
+  sarif-file:
+    description: "Where to write the SARIF report."
+    required: false
+    default: "fleetreach.sarif"
+  upload:
+    description: "Upload the SARIF to GitHub code scanning."
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install fleetreach
+      shell: bash
+      # `network` enables advisory-DB fetch + KEV/EPSS/NVD enrichment, which a CI
+      # consumer needs (it pulls a rustls TLS stack — fine for the Action image;
+      # the default crate build stays pure-Rust). See M-5.
+      run: cargo install --locked --features network --git https://github.com/tess-fun/fleetreach fleetreach-cli
+
+    - name: Generate a default fleet.toml (scan this repo) if none provided
+      if: ${{ inputs.config == '' }}
+      shell: bash
+      run: printf '[[repo]]\nid = "%s"\npath = "."\n' "${GITHUB_REPOSITORY##*/}" > fleetreach-ci.toml
+
+    - name: Scan
+      shell: bash
+      # Don't abort on a non-zero gate exit — we still want to publish the SARIF.
+      run: |
+        cfg="${{ inputs.config }}"; [ -z "$cfg" ] && cfg="fleetreach-ci.toml"
+        fleetreach scan -c "$cfg" -f sarif ${{ inputs.args }} > "${{ inputs.sarif-file }}" || true
+
+    - name: Upload SARIF to code scanning
+      if: ${{ inputs.upload == 'true' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.sarif-file }}

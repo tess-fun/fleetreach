@@ -1,0 +1,87 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/scan",
+    "crates/reach",
+    "crates/correlate",
+    "crates/report",
+    "crates/go",
+    "crates/npm",
+    "crates/pypi",
+    "crates/rubygems",
+    "crates/packagist",
+    "crates/nuget",
+    "crates/julia",
+    "crates/swift",
+    "crates/hex",
+    "crates/ghactions",
+    "crates/maven",
+    "crates/cli",
+]
+# `reach-driver` links `rustc_private` and builds ONLY on its own pinned nightly
+# (see crates/reach-driver/rust-toolchain.toml). It is deliberately excluded from
+# the stable (1.96) workspace so `cargo build` here never tries to compile it —
+# the quarantine boundary from the reachability spec (§6), enforced by the build.
+exclude = [
+    "crates/reach-driver",
+    # Standalone fixture projects compiled (under the wrapper) by reach's tests.
+    "crates/reach/tests/projects/cross_crate",
+    "crates/reach/tests/projects/cross_dyn",
+    "crates/reach/tests/projects/lib_only",
+    "crates/reach/tests/projects/sandbox_probe",
+    "crates/reach/tests/projects/feature_gated",
+    "crates/reach/tests/projects/prune_xc",
+    "crates/cli/tests/projects/differential",
+]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+# Effective MSRV of the whole dependency closure: rustsec declares 1.88, but a
+# transitive dep (smol_str, via gix) requires 1.89. Verified in CI (msrv job).
+rust-version = "1.89"
+repository = "https://github.com/tess-fun/fleetreach"
+homepage = "https://github.com/tess-fun/fleetreach"
+readme = "README.md"
+keywords = ["security", "audit", "rustsec", "advisory", "vulnerability"]
+categories = ["command-line-utilities", "development-tools"]
+
+# ---- Fail-closed lints, enforced workspace-wide (§3) ----
+# Every crate forbids unsafe and denies the panic-on-untrusted-input family.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+[workspace.dependencies]
+# core data model
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# `rustsec` re-exports semver 1.x; we pin the same major to avoid version skew (§12).
+semver = { version = "1", features = ["serde"] }
+# typed library errors ("error A+"); no anyhow in any lib public API (§12)
+thiserror = "2"
+# advisory engine — pinned EXACTLY (§12). Re-confirm API + MSRV on any bump.
+# default-features OFF: the default `gix-reqwest` feature pulls a reqwest/rustls
+# TLS stack (vendored-C aws-lc/ring). The git-fetch backend is opt-in behind the
+# `network` feature so the default build is pure-Rust (M-5).
+rustsec = { version = "=0.33.0", default-features = false }
+# fleet.toml parsing
+toml = "0.9"
+# bounded-depth lockfile discovery for `glob = true`
+walkdir = "2"
+# application-level error context — cli binary ONLY (§12)
+anyhow = "1"
+# CLI surface
+clap = { version = "4", features = ["derive"] }
+# human-readable table rendering (display-only)
+comfy-table = "7"
+# content-addressed OpenVEX `@id` (§9.1) — pure-Rust RustCrypto, no vendored C
+sha2 = "0.10"
+# RFC3339 timestamps + DB age
+time = { version = "0.3", features = ["formatting", "std"] }

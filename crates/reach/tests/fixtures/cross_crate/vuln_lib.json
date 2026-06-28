@@ -1,0 +1,45 @@
+{
+  "schema": 2,
+  "nodes": [
+    {
+      "id": 0,
+      "label": "vulnerable_fn",
+      "symbol": "_RNvCskW8Jfr4Oh6M_8vuln_lib13vulnerable_fn",
+      "path": "vuln_lib::vulnerable_fn"
+    },
+    {
+      "id": 1,
+      "label": "trigger",
+      "symbol": "_RNvCskW8Jfr4Oh6M_8vuln_lib7trigger",
+      "path": "vuln_lib::trigger"
+    }
+  ],
+  "edges": [
+    {
+      "from": 1,
+      "to": 0,
+      "kind": "direct"
+    }
+  ],
+  "roots": [],
+  "sinks": [
+    0
+  ],
+  "unresolved_sinks": [],
+  "opaque": [],
+  "virtual_calls": [],
+  "virtual_impls": [],
+  "sink_paths": [
+    {
+      "path": "vuln_lib::vulnerable_fn",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "coercions": [],
+  "imprecise_traits": [],
+  "scanned_crates": [
+    "vuln_lib"
+  ]
+}

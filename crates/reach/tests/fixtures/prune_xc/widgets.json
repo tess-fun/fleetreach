@@ -1,0 +1,123 @@
+{
+  "schema": 2,
+  "nodes": [
+    {
+      "id": 0,
+      "label": "decoy_vuln",
+      "symbol": "_RNvCs5jZqQjND0Pz_7widgets10decoy_vuln",
+      "path": "widgets::decoy_vuln"
+    },
+    {
+      "id": 1,
+      "label": "use_decoy_direct",
+      "symbol": "_RNvCs5jZqQjND0Pz_7widgets16use_decoy_direct",
+      "path": "widgets::use_decoy_direct"
+    },
+    {
+      "id": 2,
+      "label": "use_real",
+      "symbol": "_RNvCs5jZqQjND0Pz_7widgets8use_real",
+      "path": "widgets::use_real"
+    },
+    {
+      "id": 3,
+      "label": "real_vuln",
+      "symbol": "_RNvCs5jZqQjND0Pz_7widgets9real_vuln",
+      "path": "widgets::real_vuln"
+    },
+    {
+      "id": 4,
+      "label": "<Real as Draw>::draw",
+      "symbol": "_RNvXCs5jZqQjND0Pz_7widgetsNtB2_4RealNtB2_4Draw4draw",
+      "path": "widgets::<Real as Draw>::draw"
+    },
+    {
+      "id": 5,
+      "label": "<Decoy as Draw>::draw",
+      "symbol": "_RNvXs_Cs5jZqQjND0Pz_7widgetsNtB4_5DecoyNtB4_4Draw4draw",
+      "path": "widgets::<Decoy as Draw>::draw"
+    }
+  ],
+  "edges": [
+    {
+      "from": 1,
+      "to": 5,
+      "kind": "direct"
+    },
+    {
+      "from": 2,
+      "to": 4,
+      "kind": "virtual"
+    },
+    {
+      "from": 2,
+      "to": 5,
+      "kind": "virtual"
+    },
+    {
+      "from": 4,
+      "to": 3,
+      "kind": "direct"
+    },
+    {
+      "from": 5,
+      "to": 0,
+      "kind": "direct"
+    }
+  ],
+  "roots": [],
+  "sinks": [
+    0,
+    3
+  ],
+  "unresolved_sinks": [],
+  "opaque": [],
+  "virtual_calls": [
+    {
+      "from": 2,
+      "method": "widgets::Draw::draw"
+    }
+  ],
+  "virtual_impls": [
+    {
+      "method": "widgets::Draw::draw",
+      "node": 4,
+      "self_key": "widgets::Real",
+      "trait_key": "widgets::Draw"
+    },
+    {
+      "method": "widgets::Draw::draw",
+      "node": 5,
+      "self_key": "widgets::Decoy",
+      "trait_key": "widgets::Draw"
+    }
+  ],
+  "sink_paths": [
+    {
+      "path": "widgets::decoy_vuln",
+      "nodes": [
+        0
+      ]
+    },
+    {
+      "path": "widgets::real_vuln",
+      "nodes": [
+        3
+      ]
+    }
+  ],
+  "coercions": [
+    {
+      "self_key": "widgets::Real",
+      "trait_key": "std::marker::MetaSized"
+    },
+    {
+      "self_key": "widgets::Real",
+      "trait_key": "widgets::Draw"
+    }
+  ],
+  "imprecise_traits": [],
+  "scanned_crates": [
+    "widgets"
+  ]
+}

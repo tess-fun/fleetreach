@@ -1,0 +1,5 @@
+jobs:
+  build:
+    steps:
+      - uses: actions/checkout@v4
+      - uses: tj-actions/changed-files@v35

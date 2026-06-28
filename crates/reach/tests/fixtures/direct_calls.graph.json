@@ -1,0 +1,214 @@
+{
+  "schema": 2,
+  "nodes": [
+    {
+      "id": 0,
+      "label": "⟨opaque external code⟩",
+      "symbol": "<opaque>"
+    },
+    {
+      "id": 1,
+      "label": "identity::<u8>",
+      "symbol": "_RINvCs3fnrW9ekmNX_12direct_calls8identityhEB2_",
+      "path": "direct_calls::identity"
+    },
+    {
+      "id": 2,
+      "label": "identity::<u32>",
+      "symbol": "_RINvCs3fnrW9ekmNX_12direct_calls8identitymEB2_",
+      "path": "direct_calls::identity"
+    },
+    {
+      "id": 3,
+      "label": "std::intrinsics::black_box::<()> - intrinsic",
+      "symbol": "_RINvNtCsiDFD6Pt1FH6_4core10intrinsics9black_boxuECs3fnrW9ekmNX_12direct_calls",
+      "path": "std::intrinsics::black_box"
+    },
+    {
+      "id": 4,
+      "label": "std::rt::lang_start::<()>",
+      "symbol": "_RINvNtCskYvK6KoFAtP_3std2rt10lang_startuECs3fnrW9ekmNX_12direct_calls",
+      "path": "std::rt::lang_start"
+    },
+    {
+      "id": 5,
+      "label": "std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>",
+      "symbol": "_RINvNtNtCskYvK6KoFAtP_3std3sys9backtrace28___rust_begin_short_backtraceFEuuECs3fnrW9ekmNX_12direct_calls",
+      "path": "std::sys::backtrace::__rust_begin_short_backtrace"
+    },
+    {
+      "id": 6,
+      "label": "std::rt::lang_start::<()>::{closure#0}",
+      "symbol": "_RNCINvNtCskYvK6KoFAtP_3std2rt10lang_startuE0Cs3fnrW9ekmNX_12direct_calls",
+      "path": "std::rt::lang_start::{closure#0}"
+    },
+    {
+      "id": 7,
+      "label": "<{closure@std::rt::lang_start<()>::{closure#0}} as std::ops::FnOnce<()>>::call_once - shim(vtable)",
+      "symbol": "_RNSNvYNCINvNtCskYvK6KoFAtP_3std2rt10lang_startuE0INtNtNtCsiDFD6Pt1FH6_4core3ops8function6FnOnceuE9call_once6vtableCs3fnrW9ekmNX_12direct_calls",
+      "path": "std::ops::FnOnce::call_once"
+    },
+    {
+      "id": 8,
+      "label": "used_directly",
+      "symbol": "_RNvCs3fnrW9ekmNX_12direct_calls13used_directly",
+      "path": "direct_calls::used_directly"
+    },
+    {
+      "id": 9,
+      "label": "main",
+      "symbol": "_RNvCs3fnrW9ekmNX_12direct_calls4main",
+      "path": "direct_calls::main"
+    },
+    {
+      "id": 10,
+      "label": "std::rt::lang_start_internal",
+      "symbol": "_RNvNtCskYvK6KoFAtP_3std2rt19lang_start_internal",
+      "path": "std::rt::lang_start_internal"
+    },
+    {
+      "id": 11,
+      "label": "<() as std::process::Termination>::report",
+      "symbol": "_RNvXsZ_NtCskYvK6KoFAtP_3std7processuNtB5_11Termination6reportCs3fnrW9ekmNX_12direct_calls",
+      "path": "<() as std::process::Termination>::report"
+    },
+    {
+      "id": 12,
+      "label": "<fn() as std::ops::FnOnce<()>>::call_once - shim(fn())",
+      "symbol": "_RNvYFEuINtNtNtCsiDFD6Pt1FH6_4core3ops8function6FnOnceuE9call_onceCs3fnrW9ekmNX_12direct_calls",
+      "path": "std::ops::FnOnce::call_once"
+    },
+    {
+      "id": 13,
+      "label": "<{closure@std::rt::lang_start<()>::{closure#0}} as std::ops::FnOnce<()>>::call_once - shim",
+      "symbol": "_RNvYNCINvNtCskYvK6KoFAtP_3std2rt10lang_startuE0INtNtNtCsiDFD6Pt1FH6_4core3ops8function6FnOnceuE9call_onceCs3fnrW9ekmNX_12direct_calls",
+      "path": "std::ops::FnOnce::call_once"
+    }
+  ],
+  "edges": [
+    {
+      "from": 4,
+      "to": 10,
+      "kind": "direct"
+    },
+    {
+      "from": 5,
+      "to": 3,
+      "kind": "direct"
+    },
+    {
+      "from": 5,
+      "to": 12,
+      "kind": "direct"
+    },
+    {
+      "from": 6,
+      "to": 5,
+      "kind": "direct"
+    },
+    {
+      "from": 6,
+      "to": 11,
+      "kind": "direct"
+    },
+    {
+      "from": 7,
+      "to": 13,
+      "kind": "direct"
+    },
+    {
+      "from": 8,
+      "to": 1,
+      "kind": "direct"
+    },
+    {
+      "from": 8,
+      "to": 2,
+      "kind": "direct"
+    },
+    {
+      "from": 9,
+      "to": 8,
+      "kind": "direct"
+    },
+    {
+      "from": 12,
+      "to": 0,
+      "kind": "opaque"
+    },
+    {
+      "from": 13,
+      "to": 6,
+      "kind": "direct"
+    }
+  ],
+  "roots": [
+    9
+  ],
+  "sinks": [
+    1,
+    2
+  ],
+  "unresolved_sinks": [
+    "nonexistent::sink"
+  ],
+  "opaque": [
+    0
+  ],
+  "virtual_calls": [],
+  "virtual_impls": [
+    {
+      "method": "std::ops::FnOnce::call_once",
+      "node": 7,
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnOnce"
+    },
+    {
+      "method": "std::ops::FnOnce::call_once",
+      "node": 12,
+      "trait_key": "std::ops::FnOnce"
+    },
+    {
+      "method": "std::ops::FnOnce::call_once",
+      "node": 13,
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnOnce"
+    },
+    {
+      "method": "std::process::Termination::report",
+      "node": 11,
+      "trait_key": "std::process::Termination"
+    }
+  ],
+  "sink_paths": [
+    {
+      "path": "identity",
+      "nodes": [
+        1,
+        2
+      ]
+    }
+  ],
+  "coercions": [
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::marker::MetaSized"
+    },
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::Fn"
+    },
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnMut"
+    },
+    {
+      "self_key": "std::rt::lang_start::{closure#0}",
+      "trait_key": "std::ops::FnOnce"
+    }
+  ],
+  "imprecise_traits": [],
+  "scanned_crates": [
+    "direct_calls"
+  ]
+}

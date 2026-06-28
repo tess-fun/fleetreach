@@ -1,0 +1,40 @@
+# Example fleet used by the README walkthrough (`impact`, `--enrich`, `--why`).
+#
+# The repo ids below match the names shown in the README tables. Point each
+# `path` at a real checkout on your machine; the findings in the README came
+# from a set of deliberately-vulnerable control crates plus a few real-world
+# tools, which are not bundled here.
+#
+# See fleet.toml.example for the full set of options.
+
+[[repo]]
+id   = "payments-api"
+path = "../payments-api"
+
+[[repo]]
+id   = "auth-gateway"
+path = "../auth-gateway"
+
+[[repo]]
+id   = "search-svc"
+path = "../search-svc"
+
+[[repo]]
+id   = "ingest-worker"
+path = "../ingest-worker"
+
+[[repo]]
+id   = "scheduler"
+path = "../scheduler"
+
+[[repo]]
+id   = "net-proxy"
+path = "../net-proxy"
+
+# A subtree can be scanned in one entry: every **/Cargo.lock under `path`
+# becomes its own repo, bounded by `glob_max_depth`.
+[[repo]]
+id   = "tools"
+path = "../tools"
+glob = true
+glob_max_depth = 3

@@ -1,0 +1,17 @@
+[fleet]
+
+[[repo]]
+id   = "core-lib"
+path = "../core-lib"                 # repo root; Cargo.lock located within
+
+[[repo]]
+id   = "services"
+path = "../services"
+glob = true                          # treat path as a tree; find **/Cargo.lock
+glob_max_depth = 4                   # bounded; default 3 if omitted
+
+[settings]
+
+[[settings.ignore]]
+id     = "RUSTSEC-2020-0071"
+reason = "time 0.1 — dev-dependency only, not in any shipped path"  # REQUIRED

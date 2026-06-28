@@ -1,0 +1,25 @@
+# Example consumer workflow — copy into a Rust repo to get fleetreach findings
+# in the Security tab and on PRs. (Not run in this repo's own CI.)
+name: fleetreach (example)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * *" # daily, so newly-published advisories surface
+
+permissions:
+  contents: read
+  security-events: write # required to upload SARIF to code scanning
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: tess-fun/fleetreach@v1
+        with:
+          # rank by real-world exploit risk and flag never-built optional deps
+          args: "--enrich --resolve-features"

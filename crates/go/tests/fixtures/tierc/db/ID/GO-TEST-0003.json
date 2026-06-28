@@ -1,0 +1,3 @@
+{"schema_version":"1.3.1","id":"GO-TEST-0003","aliases":["CVE-2099-3333"],"summary":"Fixed before installed",
+ "affected":[{"package":{"name":"example.com/safe","ecosystem":"Go"},
+   "ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"1.0.0"}]}]}]}

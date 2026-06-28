@@ -1,0 +1,12 @@
+[package]
+name = "sandbox_probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+build = "build.rs"
+
+[[bin]]
+name = "sandbox_probe"
+path = "src/main.rs"
+
+[workspace]

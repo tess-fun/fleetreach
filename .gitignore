@@ -1,0 +1,13 @@
+/target
+# reach-driver is excluded from the workspace, so it has its own target dir.
+/crates/reach-driver/target
+# Build output from standalone fixture projects driven by tests.
+/crates/reach/tests/projects/*/target
+/crates/cli/tests/projects/*/target
+/fuzz/target
+/fuzz/corpus
+/fuzz/artifacts
+**/*.rs.bk
+# Local editor / tooling state, not part of the project.
+/.claude
+.DS_Store

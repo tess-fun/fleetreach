@@ -1,0 +1,11 @@
+[package]
+name = "cross_dyn_bin"
+version = "0.0.0"
+edition = "2021"
+publish = false
+[[bin]]
+name = "cross_dyn_bin"
+path = "src/main.rs"
+[dependencies]
+animal_lib = { path = "animal_lib" }
+[workspace]

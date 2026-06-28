@@ -1,0 +1,14 @@
+# A minimal lockfile pinning a known-vulnerable crate, for the §15 round-trip
+# tests: grype/trivy detect the vuln from this, then fleetreach's OpenVEX is fed
+# back to suppress it. `time` 0.2.7 is RUSTSEC-2020-0071 / CVE-2020-26235 /
+# GHSA-wcg3-cvx6-7396.
+version = 3
+
+[[package]]
+name = "roundtrip"
+version = "0.1.0"
+dependencies = ["time"]
+
+[[package]]
+name = "time"
+version = "0.2.7"

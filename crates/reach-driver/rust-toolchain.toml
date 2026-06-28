@@ -1,0 +1,7 @@
+# reach-driver links `rustc_private`, which is nightly-only. This pin is the
+# single source of truth for the toolchain the driver builds against; bump it on
+# a bi-weekly cadence (Kani's model) so each rustc-internal API delta stays small.
+# Tested with: 1.98.0-nightly (14210df0e 2026-05-31).
+[toolchain]
+channel = "nightly-2026-06-01"
+components = ["rustc-dev", "rust-src", "llvm-tools"]

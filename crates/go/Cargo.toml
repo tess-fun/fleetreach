@@ -1,0 +1,30 @@
+[package]
+name = "fleetreach-go"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description = "Go ecosystem feeder for fleetreach: ingests govulncheck JSON into the shared finding model."
+
+[lints]
+workspace = true
+
+[dependencies]
+fleetreach-core = { path = "../core" }
+# Reused for the build sandbox: govulncheck compiles the scanned module (arbitrary
+# code), so it is confined through the same mechanism as `--reachability=static`.
+fleetreach-reach = { path = "../reach" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# Random, 0700, auto-cleaned scratch dir the confined build writes into (Go build
+# cache + temp), never a predictable path — mirrors the reach driver's work dir.
+tempfile = "3"
+
+[dev-dependencies]
+serde_json = { workspace = true }
