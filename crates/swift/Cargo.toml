@@ -15,7 +15,7 @@ description = "Swift (SwiftURL) ecosystem feeder for fleetreach: toolchain-free 
 workspace = true
 
 [dependencies]
-fleetreach-core = { path = "../core", version = "1.0.0" }
+fleetreach-core = { path = "../core", version = "1.0.1" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

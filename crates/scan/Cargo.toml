@@ -21,7 +21,7 @@ workspace = true
 network = ["rustsec/gix-reqwest"]
 
 [dependencies]
-fleetreach-core = { path = "../core", version = "1.0.0" }
+fleetreach-core = { path = "../core", version = "1.0.1" }
 thiserror = { workspace = true }
 # `dependency-tree` pulls in cargo-lock's petgraph model so we can compute the
 # chain from a root crate to each flagged package (dependency provenance).

@@ -29,22 +29,22 @@ name = "fleetreach"
 path = "src/main.rs"
 
 [dependencies]
-fleetreach-core = { path = "../core", version = "1.0.0" }
-fleetreach-scan = { path = "../scan", version = "1.0.0" }
-fleetreach-reach = { path = "../reach", version = "1.0.0" }
-fleetreach-correlate = { path = "../correlate", version = "1.0.0" }
-fleetreach-report = { path = "../report", version = "1.0.0" }
-fleetreach-go = { path = "../go", version = "1.0.0" }
-fleetreach-npm = { path = "../npm", version = "1.0.0" }
-fleetreach-pypi = { path = "../pypi", version = "1.0.0" }
-fleetreach-rubygems = { path = "../rubygems", version = "1.0.0" }
-fleetreach-packagist = { path = "../packagist", version = "1.0.0" }
-fleetreach-nuget = { path = "../nuget", version = "1.0.0" }
-fleetreach-julia = { path = "../julia", version = "1.0.0" }
-fleetreach-swift = { path = "../swift", version = "1.0.0" }
-fleetreach-hex = { path = "../hex", version = "1.0.0" }
-fleetreach-ghactions = { path = "../ghactions", version = "1.0.0" }
-fleetreach-maven = { path = "../maven", version = "1.0.0" }
+fleetreach-core = { path = "../core", version = "1.0.1" }
+fleetreach-scan = { path = "../scan", version = "1.0.1" }
+fleetreach-reach = { path = "../reach", version = "1.0.1" }
+fleetreach-correlate = { path = "../correlate", version = "1.0.1" }
+fleetreach-report = { path = "../report", version = "1.0.1" }
+fleetreach-go = { path = "../go", version = "1.0.1" }
+fleetreach-npm = { path = "../npm", version = "1.0.1" }
+fleetreach-pypi = { path = "../pypi", version = "1.0.1" }
+fleetreach-rubygems = { path = "../rubygems", version = "1.0.1" }
+fleetreach-packagist = { path = "../packagist", version = "1.0.1" }
+fleetreach-nuget = { path = "../nuget", version = "1.0.1" }
+fleetreach-julia = { path = "../julia", version = "1.0.1" }
+fleetreach-swift = { path = "../swift", version = "1.0.1" }
+fleetreach-hex = { path = "../hex", version = "1.0.1" }
+fleetreach-ghactions = { path = "../ghactions", version = "1.0.1" }
+fleetreach-maven = { path = "../maven", version = "1.0.1" }
 serde = { workspace = true }
 sha2 = { workspace = true }
 toml = { workspace = true }

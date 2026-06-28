@@ -15,7 +15,7 @@ description = "Cross-repo dedupe into findings with per-occurrence verdicts."
 workspace = true
 
 [dependencies]
-fleetreach-core = { path = "../core", version = "1.0.0" }
+fleetreach-core = { path = "../core", version = "1.0.1" }
 
 [dev-dependencies]
 # The highest-value verification target (§13).

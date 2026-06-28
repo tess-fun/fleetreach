@@ -36,4 +36,4 @@ serde_json = "1"
 [dev-dependencies]
 # The soundness corpus runs the driver, then analyzes its output with the real
 # `reach` engine and asserts the verdict — end-to-end evidence (spec §9).
-fleetreach-reach = { path = "../reach", version = "1.0.0" }
+fleetreach-reach = { path = "../reach", version = "1.0.1" }

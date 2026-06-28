@@ -4,7 +4,28 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.1] - 2026-06-28
+
+### Changed
+
+- Crate `homepage` now points at the project website
+  (<https://tess-fun.github.io/fleetreach/>) instead of the repository.
+
+### Fixed
+
+- `reach-driver`: migrated to rustc's current `EarlyBinder::bind(cx, value)` API and bumped the
+  pinned nightly to `2026-06-27` (the churn canary flagged the `rustc_private` drift).
+- CI: resolved first-run failures — a Linux-only sandbox compile error, cargo-deny license/wildcard
+  policy, the reach-driver toolchain-component install, the cargo-rdme intra-doc-link toolchain, and
+  the VEX round-trip consumer install (pinned release binaries; trivy bumped to a fetchable version).
+
+### Added
+
+- Project website: a hand-built landing page and an mdBook documentation site, deployed to GitHub
+  Pages (<https://tess-fun.github.io/fleetreach/>).
+- `scripts/release.sh` — one-command version bump, test, tag, and publish of all crates.
+
+## [1.0.0] - 2026-06-27
 
 ### Added
 

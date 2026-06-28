@@ -15,7 +15,7 @@ description = "PyPI ecosystem feeder for fleetreach: toolchain-free poetry.lock/
 workspace = true
 
 [dependencies]
-fleetreach-core = { path = "../core", version = "1.0.0" }
+fleetreach-core = { path = "../core", version = "1.0.1" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
