@@ -93,14 +93,20 @@ jobs:
       - run: rustup show
       # Pinned consumer versions (§15): a behavioural change in either is a
       # compatibility event we want to catch, so the matrix tracks the version.
-      - name: install Grype (pinned)
+      # Fetch the release binaries directly (the upstream install scripts and old
+      # pinned versions drift / get pruned).
+      - name: install Grype (pinned binary)
         run: |
-          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
-            | sh -s -- -b /usr/local/bin v0.79.0
-      - name: install Trivy (pinned)
+          tmp=$(mktemp -d)
+          curl -sSfL https://github.com/anchore/grype/releases/download/v0.79.0/grype_0.79.0_linux_amd64.tar.gz | tar -xz -C "$tmp"
+          sudo install "$tmp/grype" /usr/local/bin/grype
+          grype version
+      - name: install Trivy (pinned binary)
         run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin v0.55.0
+          tmp=$(mktemp -d)
+          curl -sSfL https://github.com/aquasecurity/trivy/releases/download/v0.71.2/trivy_0.71.2_Linux-64bit.tar.gz | tar -xz -C "$tmp"
+          sudo install "$tmp/trivy" /usr/local/bin/trivy
+          trivy --version
       # Emit fleetreach OpenVEX, feed it back to each consumer, and assert the
       # finding is actually suppressed (not merely that the JSON parses). The
       # tests skip-if-missing, so this step is the only place they run for real.
