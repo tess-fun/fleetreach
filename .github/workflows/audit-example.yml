@@ -1,13 +1,18 @@
 # Example consumer workflow — copy into a Rust repo to get fleetreach findings
-# in the Security tab and on PRs. (Not run in this repo's own CI.)
+# in the Security tab and on PRs. It is manual-only HERE (so it does not run in
+# fleetreach's own CI); when you copy it into your repo, swap the trigger below for
+# the real one so it audits on every push/PR and daily:
+#
+#   on:
+#     push:
+#       branches: [main]
+#     pull_request:
+#     schedule:
+#       - cron: "0 6 * * *"  # daily, so newly-published advisories surface
 name: fleetreach (example)
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-  schedule:
-    - cron: "0 6 * * *" # daily, so newly-published advisories surface
+  workflow_dispatch: # manual-only in this repo; see the comment above when copying
 
 permissions:
   contents: read

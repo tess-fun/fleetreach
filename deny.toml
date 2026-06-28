@@ -7,7 +7,12 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
-ignore = []
+ignore = [
+    # proc-macro-error2 is flagged unmaintained (RUSTSEC-2026-0173) — a maintenance
+    # notice, not a vulnerability, on a transitive dependency we do not control.
+    # Revisit if an actual vulnerability is filed or the upstream is replaced.
+    "RUSTSEC-2026-0173",
+]
 
 [licenses]
 version = 2
@@ -20,12 +25,21 @@ allow = [
     "ISC",
     "Unicode-3.0",
     "Zlib",
+    # Pulled by the opt-in `network` feature's TLS stack (rustls/webpki CA bundle):
+    # MPL-2.0 is file-level copyleft (fine to use as a dependency), CDLA-Permissive-2.0
+    # is the Mozilla CA-data license. Both are permissive for our use.
+    "MPL-2.0",
+    "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.9
 
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# The inter-crate workspace deps use `{ path = "../x" }` with no version, which reads
+# as a `*` wildcard. That is expected for a workspace; only flag wildcards on real
+# (registry) dependencies.
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"

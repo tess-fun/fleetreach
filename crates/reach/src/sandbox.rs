@@ -255,7 +255,9 @@ fn detect() -> Option<Mechanism> {
 /// A `sandbox-exec` profile: deny by default, allow process exec + broad reads,
 /// confine writes to `writable`, and deny the network. `(allow mach*)` /
 /// `(allow sysctl-read)` are needed for cargo/rustc to spawn at all.
-#[cfg(any(target_os = "macos", test))]
+// Not cfg-gated: the `Mechanism::MacSandbox` match arm is compiled on every platform
+// (the enum is exhaustive), so this must compile everywhere even though it is only
+// *called* on macOS. It builds an SBPL string and touches no platform APIs.
 fn mac_profile(writable: &[PathBuf]) -> String {
     let mut p = String::from(
         "(version 1)\n(deny default)\n(allow process*)\n(allow sysctl-read)\n\
@@ -274,7 +276,7 @@ fn mac_profile(writable: &[PathBuf]) -> String {
 }
 
 /// Quote a string as a Scheme/TinyScheme string literal for the SBPL profile.
-#[cfg(any(target_os = "macos", test))]
+/// Not cfg-gated, for the same reason as [`mac_profile`].
 fn quote_sb(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
