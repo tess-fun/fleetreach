@@ -16,6 +16,7 @@ extern crate rustc_interface;
 extern crate rustc_middle;
 extern crate rustc_session;
 extern crate rustc_span;
+extern crate rustc_structures;
 
 mod graph;
 mod rta;
@@ -119,7 +120,7 @@ fn build_call_graph(tcx: TyCtxt<'_>, dump_mono: bool) -> String {
     // it is out of scope. Its generated code lives in the consuming crate.
     if tcx
         .crate_types()
-        .contains(&rustc_session::config::CrateType::ProcMacro)
+        .contains(&rustc_structures::CrateType::ProcMacro)
     {
         return EMPTY_GRAPH.to_string();
     }
@@ -469,6 +470,10 @@ fn emit_call_edges<'tcx>(
                 // — if the callee is a foreign (FFI) fn with no MIR — the opaque
                 // frontier. Unresolvable (`Ok(None)`/`Err`): skip, never invent.
                 ty::FnDef(def_id, args) => {
+                    // FnDef args carry late-bound regions in a Binder; resolution
+                    // is region-agnostic, so erase them (never `no_bound_vars()`,
+                    // which is `None` on polymorphic MIR).
+                    let args = tcx.instantiate_bound_regions_with_erased(*args);
                     if let Ok(Some(callee)) = Instance::try_resolve(tcx, env, *def_id, args) {
                         if let InstanceKind::Virtual(trait_method, _) = callee.def {
                             // Portable fact for cross-crate merge + same-fragment edges.
@@ -542,7 +547,8 @@ fn resolve_reified<'tcx>(
     op_ty: ty::Ty<'tcx>,
 ) -> Option<(Instance<'tcx>, ty::FnSig<'tcx>)> {
     let (def_id, args) = match op_ty.kind() {
-        ty::FnDef(def_id, args) | ty::Closure(def_id, args) => (*def_id, *args),
+        ty::FnDef(def_id, args) => (*def_id, tcx.instantiate_bound_regions_with_erased(*args)),
+        ty::Closure(def_id, args) => (*def_id, *args),
         _ => return None,
     };
     let instance = Instance::try_resolve(tcx, env, def_id, args).ok()??;
@@ -575,7 +581,7 @@ fn run_direct(mut args: Vec<String>) {
         args.push(env!("REACH_SYSROOT").to_string());
     }
     let mut callbacks = ReachCallbacks { mode: Mode::Direct };
-    rustc_driver::run_compiler(&args, &mut callbacks);
+    rustc_driver::compiler_entrypoint(&args, &mut callbacks);
 }
 
 /// cargo-wrapper analysis: pass cargo's exact compiler args through to a normal
@@ -583,7 +589,7 @@ fn run_direct(mut args: Vec<String>) {
 /// write the graph for the target crate as a side effect. The build's feature
 /// and target resolution is inherited for free — no re-derivation.
 fn run_wrapper(args: &[String]) {
-    // Drop argv[0] (our path); argv[1..] is `<rustc> <args…>`, which run_compiler
+    // Drop argv[0] (our path); argv[1..] is `<rustc> <args…>`, which compiler_entrypoint
     // takes verbatim (it ignores args[0] as the program name).
     let compiler_args = &args[1..];
     let mode = Mode::Wrapper {
@@ -592,5 +598,5 @@ fn run_wrapper(args: &[String]) {
             .unwrap_or_default(),
     };
     let mut callbacks = ReachCallbacks { mode };
-    rustc_driver::run_compiler(compiler_args, &mut callbacks);
+    rustc_driver::compiler_entrypoint(compiler_args, &mut callbacks);
 }

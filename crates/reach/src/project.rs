@@ -66,7 +66,7 @@ impl FeatureSelection {
 /// sound for the exact closure that produced the graph).
 #[derive(Clone)]
 pub struct BuildConfig<'a> {
-    /// The pinned nightly the driver was built against, e.g. `nightly-2026-06-27`.
+    /// The pinned nightly the driver was built against, e.g. `nightly-2026-10-15`.
     pub toolchain: &'a str,
     /// Which cargo features to build with. See [`FeatureSelection`].
     pub features: FeatureSelection,

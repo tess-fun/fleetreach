@@ -21,7 +21,7 @@ members = [
 ]
 # `reach-driver` links `rustc_private` and builds ONLY on its own pinned nightly
 # (see crates/reach-driver/rust-toolchain.toml). It is deliberately excluded from
-# the stable (1.96) workspace so `cargo build` here never tries to compile it —
+# the stable (1.99) workspace so `cargo build` here never tries to compile it —
 # the quarantine boundary from the reachability spec (§6), enforced by the build.
 exclude = [
     "crates/reach-driver",

@@ -103,9 +103,9 @@ pub(super) fn decode_hex32(hex: &[u8]) -> Option<[u8; 32]> {
         return None;
     }
     let mut out = [0u8; 32];
-    for (i, chunk) in hex.chunks_exact(2).enumerate() {
-        let hi = (chunk[0] as char).to_digit(16)?;
-        let lo = (chunk[1] as char).to_digit(16)?;
+    for (i, [h, l]) in hex.as_chunks::<2>().0.iter().enumerate() {
+        let hi = (*h as char).to_digit(16)?;
+        let lo = (*l as char).to_digit(16)?;
         out[i] = (hi * 16 + lo) as u8;
     }
     Some(out)

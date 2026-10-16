@@ -154,7 +154,7 @@ fn supertrait_closure(tcx: TyCtxt<'_>, trait_id: DefId) -> HashSet<DefId> {
         if !seen.insert(t) {
             continue;
         }
-        for (clause, _) in tcx.explicit_super_predicates_of(t).skip_binder() {
+        for (clause, _) in tcx.explicit_super_clauses_of(t).skip_binder() {
             if let Some(tp) = clause.as_trait_clause() {
                 stack.push(tp.def_id());
             }

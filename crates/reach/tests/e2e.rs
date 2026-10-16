@@ -15,7 +15,7 @@ use fleetreach_reach::{
     analyze_project, analyze_project_cached, BuildConfig, FeatureSelection, ProjectOptions, Verdict,
 };
 
-const TOOLCHAIN: &str = "nightly-2026-06-27";
+const TOOLCHAIN: &str = "nightly-2026-10-15";
 
 fn driver_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
