@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-16
+
 ### Security
 
 - `Cargo.lock` refreshed: clears 11 advisories in transitive deps (rustls, quinn-proto, h2,
@@ -31,7 +33,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   inflate backend. A malformed entry name in the archive now fails closed as a load error.
 - `deny.toml`: dropped the RUSTSEC-2026-0173 ignore, whose crate left the tree with the lockfile
   refresh (cargo-deny rejects stale ignores).
-- Website footer showed `1.0.0` instead of the released `1.0.1`.
+- Website footer showed `1.0.0` instead of the released `1.0.1`. `scripts/release.sh` now bumps
+  the footer and the reach-driver lockfile itself.
 
 ## [1.0.1] - 2026-06-28
 
@@ -418,7 +421,8 @@ Initial release. Fleet-wide Rust dependency advisory audit built on `rustsec`.
   targets on the two untrusted-byte surfaces (`fleet.toml`, lockfile content);
   black-box tests over the compiled binary's exit-code and stream contract.
 
-[Unreleased]: https://github.com/tess-fun/fleetreach/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/tess-fun/fleetreach/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/tess-fun/fleetreach/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/tess-fun/fleetreach/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/tess-fun/fleetreach/releases/tag/v1.0.0
 [0.1.0]: https://github.com/tess-fun/fleetreach/releases/tag/v0.1.0

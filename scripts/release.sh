@@ -45,22 +45,28 @@ perl -i -pe 'if (!$d && /^version = "\Q'"$OLD"'\E"$/) { s/"\Q'"$OLD"'\E"/"'"$NEW
 # 2) every inter-crate path-dep version requirement, kept in lockstep
 perl -i -pe 's/(fleetreach-[a-z]+ = \{ path = "\.\.\/[a-z]+", version = ")[^"]+(")/${1}'"$NEW"'${2}/g' crates/*/Cargo.toml
 
+# 3) the site footer's version stamp (missed by hand in 1.0.1)
+perl -i -pe 's/(fleetreach )\Q'"$OLD"'\E(<\/div>)/${1}'"$NEW"'${2}/' site/index.html
+
 # refresh the lockfile to the new versions
 cargo update --workspace --quiet
+# reach-driver is its own workspace (excluded, nightly) with its own lockfile;
+# keep its fleetreach-reach path-dep entry in step too.
+( cd crates/reach-driver && cargo update -p fleetreach-reach --quiet )
 
 echo ">> running the full test suite (release gate)"
 cargo test --workspace
 
 if [ "$DRY" = "--dry-run" ]; then
   echo ">> dry run OK — would publish: ${ORDER[*]/#/fleetreach-}"
-  git checkout -- Cargo.toml Cargo.lock crates/*/Cargo.toml
+  git checkout -- Cargo.toml Cargo.lock crates/*/Cargo.toml crates/reach-driver/Cargo.lock site/index.html
   echo ">> reverted version bump."
   exit 0
 fi
 
 # --- confirm (irreversible) ---
 printf ">> About to TAG v%s and PUBLISH 17 crates to crates.io. This is permanent. Continue? [y/N] " "$NEW"
-read -r ans; [ "$ans" = "y" ] || [ "$ans" = "Y" ] || { echo ">> aborted; reverting bump"; git checkout -- Cargo.toml Cargo.lock crates/*/Cargo.toml; exit 1; }
+read -r ans; [ "$ans" = "y" ] || [ "$ans" = "Y" ] || { echo ">> aborted; reverting bump"; git checkout -- Cargo.toml Cargo.lock crates/*/Cargo.toml crates/reach-driver/Cargo.lock site/index.html; exit 1; }
 
 # --- commit + tag ---
 git add -A
