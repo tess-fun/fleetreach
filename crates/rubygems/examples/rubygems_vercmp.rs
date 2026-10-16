@@ -1,9 +1,9 @@
 //! Differential / fuzz harness for the `Gem::Version` comparator.
 //!
 //! Usage:
-//!   `cargo run -p fleetreach-rubygems --example vercmp -- parse < versions.txt`
+//!   `cargo run -p fleetreach-rubygems --example rubygems_vercmp -- parse < versions.txt`
 //!     prints `version<TAB>ok|fail` per input line (no panic = robustness signal).
-//!   `cargo run -p fleetreach-rubygems --example vercmp -- cmp < pairs.txt`
+//!   `cargo run -p fleetreach-rubygems --example rubygems_vercmp -- cmp < pairs.txt`
 //!     reads `a<TAB>b` per line, prints `a<TAB>b<TAB>{-1,0,1,NA}` for diffing against real
 //!     Ruby's `Gem::Version#<=>`.
 //!

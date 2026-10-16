@@ -1308,7 +1308,7 @@ fn exploit_cell(kev: bool, epss: f32) -> String {
 /// in exactly one place.
 fn styled_table(color: bool, header: Vec<&str>) -> Table {
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table.load_style(UTF8_FULL);
     if color {
         table.enforce_styling();
     }

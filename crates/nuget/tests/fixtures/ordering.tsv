@@ -6,7 +6,7 @@
 # were produced by the comparator under test (which is differentially validated against the
 # real .NET implementation over 20k random pairs) and each row exercises a documented quirk,
 # so a regression on any of these fails CI without a .NET toolchain present. Extend the random
-# differential with `examples/vercmp.rs` against `NuGet.Versioning.VersionComparer.Default`.
+# differential with `examples/nuget_vercmp.rs` against `NuGet.Versioning.VersionComparer.Default`.
 
 # four-part version: a trailing zero revision is insignificant
 1.0.0.0	1.0.0	0

@@ -506,9 +506,9 @@ pub fn default_severity(osv: &OsvRecord) -> (Severity, Option<f32>) {
         .severity
         .iter()
         .filter(|s| s.kind.as_deref() == Some("CVSS_V3"))
-        .filter_map(|s| cvss::v3::Base::from_str(s.score.as_deref()?).ok())
-        .map(|base| {
-            let score = base.score();
+        .filter_map(|s| cvss::v3::Vector::from_str(s.score.as_deref()?).ok())
+        .map(|vector| {
+            let score = vector.base_score();
             (band_from_cvss(score.severity()), score.value() as f32)
         })
         .max_by(|a, b| a.1.total_cmp(&b.1));

@@ -25,7 +25,7 @@ rayon = "1"
 # Read the osv.dev export straight from its `all.zip`. Pure-Rust inflate (flate2 on zlib-rs), no C. (Every zip 2.x release is yanked.)
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 # Severity band + base score from an OSV CVSS_V3 vector. Pure-Rust.
-cvss = "2"
+cvss = { version = "3", default-features = false, features = ["std", "v3"] }
 
 [dev-dependencies]
 serde_json = { workspace = true }

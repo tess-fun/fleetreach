@@ -72,7 +72,7 @@ thiserror = "2"
 # `network` feature so the default build is pure-Rust (M-5).
 rustsec = { version = "=0.33.0", default-features = false }
 # fleet.toml parsing
-toml = "0.9"
+toml = "1"
 # bounded-depth lockfile discovery for `glob = true`
 walkdir = "2"
 # application-level error context — cli binary ONLY (§12)
@@ -80,8 +80,8 @@ anyhow = "1"
 # CLI surface
 clap = { version = "4", features = ["derive"] }
 # human-readable table rendering (display-only)
-comfy-table = "7"
+comfy-table = "8"
 # content-addressed OpenVEX `@id` (§9.1) — pure-Rust RustCrypto, no vendored C
-sha2 = "0.10"
+sha2 = "0.11"
 # RFC3339 timestamps + DB age
 time = { version = "0.3", features = ["formatting", "std"] }

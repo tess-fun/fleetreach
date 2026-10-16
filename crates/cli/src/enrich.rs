@@ -205,12 +205,14 @@ mod net {
     fn agent() -> &'static ureq::Agent {
         static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
         AGENT.get_or_init(|| {
-            ureq::AgentBuilder::new()
-                .timeout_connect(Duration::from_secs(10))
-                .timeout_read(Duration::from_secs(30))
-                .timeout_write(Duration::from_secs(30))
-                .timeout(Duration::from_secs(60))
+            ureq::Agent::config_builder()
+                .timeout_connect(Some(Duration::from_secs(10)))
+                .timeout_send_request(Some(Duration::from_secs(30)))
+                .timeout_recv_response(Some(Duration::from_secs(30)))
+                // Bounds the body read too (a stalled dribble cannot outlive it).
+                .timeout_global(Some(Duration::from_secs(60)))
                 .build()
+                .into()
         })
     }
 
@@ -219,7 +221,8 @@ mod net {
             .get(url)
             .call()
             .map_err(|e| format!("GET {url}: {e}"))?
-            .into_string()
+            .body_mut()
+            .read_to_string()
             .map_err(|e| format!("reading {url}: {e}"))
     }
 
@@ -289,11 +292,12 @@ mod net {
     fn nvd_get(url: &str, api_key: Option<&str>) -> Result<String, String> {
         let mut req = agent().get(url);
         if let Some(key) = api_key {
-            req = req.set("apiKey", key);
+            req = req.header("apiKey", key);
         }
         req.call()
             .map_err(|e| format!("GET {url}: {e}"))?
-            .into_string()
+            .body_mut()
+            .read_to_string()
             .map_err(|e| format!("reading {url}: {e}"))
     }
 

@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Dependency majors: `comfy-table` 8, `sha2` 0.11, `toml` 1, `cvss` 3, and `ureq` 3 (the opt-in
+  `network` feature). No output change: SHA-256 digests are hex-encoded byte by byte, and the
+  CVSS v3 base score and severity band were checked identical between `cvss` 2 and 3 over all
+  5,184 CVSS 3.0/3.1 base vectors. HTTP timeouts map onto ureq 3's per-phase timeouts with the
+  same 60s overall cap; the 10 MiB response-body limit is unchanged.
+- The per-ecosystem comparator harness examples are renamed `<ecosystem>_vercmp` (e.g.
+  `cargo run -p fleetreach-nuget --example nuget_vercmp`), fixing cargo's output-filename
+  collision across six crates.
+
+### Fixed
+
+- CHANGELOG: merged the two `## [1.0.0]` sections into one.
+
 ## [1.0.2] - 2026-10-16
 
 ### Security
@@ -58,6 +73,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `scripts/release.sh` — one-command version bump, test, tag, and publish of all crates.
 
 ## [1.0.0] - 2026-06-27
+
+First stable release. Fleet-wide, reachability-aware dependency advisory auditing across
+twelve ecosystems (Cargo, Go, npm, PyPI, RubyGems, Packagist, NuGet, Julia, Swift, Hex,
+GitHub Actions, Maven) through one agnostic core, with a fail-closed spine (an unreadable
+repo is an honest gap, never a clean scan) and ten output views plus a `diff` subcommand
+for tracking drift.
 
 ### Added
 
@@ -237,22 +258,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   end-to-end against real `uv`/`poetry`/`pipenv` lockfiles. A mixed Rust + Go + npm + PyPI
   fleet folds into one unified remediation queue.
 
-### Changed
-
-- The shared OSV range matcher (`fleetreach_core::osv`) is now generic over the version
-  type, so the Go/npm SemVer feeders and the new PyPI PEP 440 feeder share one
-  event-walking skeleton (the place where a missed case is a false-clean). Behavior for
-  Go and npm is unchanged.
-
-## [1.0.0] - 2026-06-27
-
-First stable release. Fleet-wide, reachability-aware dependency advisory auditing across
-three ecosystems (Cargo, Go, npm) through one agnostic core, with a fail-closed spine
-(an unreadable repo is an honest gap, never a clean scan) and ten output views plus a
-`diff` subcommand for tracking drift.
-
-### Added
-
 - **npm ecosystem support** (`fleetreach-npm`) — a third ecosystem through the shared
   finding model. A repo with a `package-lock.json` (and no `Cargo.lock`/`go.mod`) is
   scanned **toolchain-free**: `fleetreach` reads the lockfile (the full transitive tree,
@@ -386,6 +391,13 @@ three ecosystems (Cargo, Go, npm) through one agnostic core, with a fail-closed 
   findings whose packages are never compiled, so CI doesn't gate on optional deps
   that aren't in the build. The count suppressed is reported on stderr;
   unknown-build-status findings are always kept (fail-closed).
+
+### Changed
+
+- The shared OSV range matcher (`fleetreach_core::osv`) is now generic over the version
+  type, so the Go/npm SemVer feeders and the new PyPI PEP 440 feeder share one
+  event-walking skeleton (the place where a missed case is a false-clean). Behavior for
+  Go and npm is unchanged.
 
 ## [0.1.0] - 2026-06-24
 

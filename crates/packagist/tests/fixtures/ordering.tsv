@@ -5,7 +5,7 @@
 # Pins the comparator's agreement with composer/semver. The signs were produced by the
 # comparator under test (differentially validated against the real PHP composer/semver over
 # 185k pairs) and each row exercises a documented quirk, so a regression fails CI without a
-# PHP/Composer toolchain. Extend the random differential with `examples/vercmp.rs`.
+# PHP/Composer toolchain. Extend the random differential with `examples/packagist_vercmp.rs`.
 #
 # The signature Composer divergence from SemVer: the stability ladder is
 #   dev < alpha < beta < RC < stable < patch (-pN)

@@ -9,7 +9,7 @@
 # the marked rows lock in the modern result; do NOT "fix" them to match an old system Ruby.
 #
 # Provenance: derived from the canonical_segments algorithm and cross-checked against the
-# documented RubyGems spec. Regenerate/extend with `examples/vercmp.rs` against Ruby >= 3.3.
+# documented RubyGems spec. Regenerate/extend with `examples/rubygems_vercmp.rs` against Ruby >= 3.3.
 
 # --- basic numeric ordering ---
 1.0.0	1.0.1	-1
