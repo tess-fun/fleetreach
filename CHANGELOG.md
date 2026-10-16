@@ -19,8 +19,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`compiler_entrypoint`, `rustc_structures::CrateType`, `explicit_super_clauses_of`, and `FnDef`
   args now wrapped in a `Binder`, whose late-bound regions are erased before resolution).
 
+- CI also runs weekly (Mondays 06:17 UTC) and on manual dispatch. On the scheduled run the
+  reach-driver churn canary and VEX round-trip are blocking, so upstream drift fails the run and
+  notifies instead of passing silently.
+
 ### Fixed
 
+- **`cargo install fleetreach-cli` failed to resolve**: every `zip` 2.x release has been yanked
+  from crates.io, so a fresh resolve of `zip = "^2"` (used by `fleetreach-core` to read the OSV
+  `all.zip`) had no candidate. Moved to `zip` 9 with only the pure-Rust `flate2`/`zlib-rs`
+  inflate backend. A malformed entry name in the archive now fails closed as a load error.
+- `deny.toml`: dropped the RUSTSEC-2026-0173 ignore, whose crate left the tree with the lockfile
+  refresh (cargo-deny rejects stale ignores).
 - Website footer showed `1.0.0` instead of the released `1.0.1`.
 
 ## [1.0.1] - 2026-06-28

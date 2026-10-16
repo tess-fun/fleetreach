@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Weekly run so the drift jobs (reach-driver churn canary, VEX round-trip) and
+  # the full suite still execute when nobody pushes. On this trigger those jobs
+  # are blocking, so a break fails the run and GitHub emails the maintainer.
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays 06:17 UTC
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -86,8 +92,9 @@ jobs:
     runs-on: ubuntu-latest
     # Exercises pinned third-party consumers (grype/trivy) fetched via upstream install
     # scripts that drift over time; keep it non-blocking so external churn is a warning,
-    # not a hard CI failure (same stance as the reach-driver canary).
-    continue-on-error: true
+    # not a hard CI failure (same stance as the reach-driver canary). Blocking on
+    # the weekly schedule so drift is reported instead of silently swallowed.
+    continue-on-error: ${{ github.event_name != 'schedule' }}
     steps:
       - uses: actions/checkout@v4
       - run: rustup show
@@ -164,8 +171,9 @@ jobs:
     runs-on: ubuntu-latest
     # Non-blocking: a failure here is an EARLY WARNING that a rustc_private API
     # the driver depends on broke on a newer nightly — bump the pin and the
-    # compat code before the pinned toolchain ages out (spec §9, §11).
-    continue-on-error: true
+    # compat code before the pinned toolchain ages out (spec §9, §11). Blocking on
+    # the weekly schedule so a break fails that run and triggers a notification.
+    continue-on-error: ${{ github.event_name != 'schedule' }}
     steps:
       - uses: actions/checkout@v4
       - name: install latest nightly + components

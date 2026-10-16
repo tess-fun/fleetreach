@@ -399,7 +399,8 @@ where
             || archive.clone(),
             |archive, i| {
                 let mut entry = archive.by_index(i).map_err(|e| LoadError::new(path, e))?;
-                if !entry.name().ends_with(".json") {
+                let name = entry.name().map_err(|e| LoadError::new(path, e))?;
+                if !name.ends_with(".json") {
                     return Ok(Vec::new());
                 }
                 let mut body = String::new();

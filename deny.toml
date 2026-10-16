@@ -7,12 +7,9 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
-ignore = [
-    # proc-macro-error2 is flagged unmaintained (RUSTSEC-2026-0173) — a maintenance
-    # notice, not a vulnerability, on a transitive dependency we do not control.
-    # Revisit if an actual vulnerability is filed or the upstream is replaced.
-    "RUSTSEC-2026-0173",
-]
+# No ignores. cargo-deny flags a stale entry (advisory-not-detected), so remove
+# an ignore as soon as the crate it covers leaves the tree.
+ignore = []
 
 [licenses]
 version = 2
