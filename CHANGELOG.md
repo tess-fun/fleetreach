@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-30
+
 ### Added
 
 - **Python reachability with witness chains.** `--reachability` now builds a package import
@@ -484,7 +486,8 @@ Initial release. Fleet-wide Rust dependency advisory audit built on `rustsec`.
   targets on the two untrusted-byte surfaces (`fleet.toml`, lockfile content);
   black-box tests over the compiled binary's exit-code and stream contract.
 
-[Unreleased]: https://github.com/tess-fun/fleetreach/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/tess-fun/fleetreach/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/tess-fun/fleetreach/compare/v1.0.3...v1.1.0
 [1.0.3]: https://github.com/tess-fun/fleetreach/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/tess-fun/fleetreach/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/tess-fun/fleetreach/compare/v1.0.0...v1.0.1
