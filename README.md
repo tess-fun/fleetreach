@@ -247,7 +247,7 @@ ecosystem = "npm"               # optional; auto-detected from the manifests
 
 [[repo]]
 id        = "ml-service"
-path      = "../ml-service"     # a uv.lock/poetry.lock/Pipfile.lock repo; toolchain-free
+path      = "../ml-service"     # a uv.lock/poetry.lock/pylock.toml/requirements repo; toolchain-free
 ecosystem = "pypi"              # optional; auto-detected from the manifests
 
 [[repo]]
@@ -353,7 +353,7 @@ reachability mode runs.
 | Ecosystem | Lockfile(s) | Flag | Version semantics |
 |-----------|-------------|------|-------------------|
 | npm | `package-lock.json` / `pnpm-lock.yaml` / `yarn.lock` (v1 and berry) | `--npm-vuln-db` | SemVer |
-| PyPI | `uv.lock` / `poetry.lock` / `Pipfile.lock` | `--pypi-vuln-db` | PEP 440 (PEP 503 names) |
+| PyPI | `uv.lock` / `poetry.lock` / `Pipfile.lock` / `pylock.toml` / `requirements*.txt` | `--pypi-vuln-db` | PEP 440 (PEP 503 names) |
 | RubyGems | `Gemfile.lock` | `--rubygems-vuln-db` | `Gem::Version` |
 | Packagist | `composer.lock` | `--packagist-vuln-db` | Composer `version_compare` |
 | NuGet | `packages.lock.json` | `--nuget-vuln-db` | four-part `NuGetVersion` |

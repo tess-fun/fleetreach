@@ -1,0 +1,9 @@
+# Python repos without a uv/poetry/Pipfile lockfile (spec 03): pip-compiled requirements
+# plus an unpinned dev file, and a PEP 751 pylock.toml.
+[[repo]]
+id = "py-req"
+path = "repos/py-req"
+
+[[repo]]
+id = "py-pylock"
+path = "repos/py-pylock"

@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Python without a lockfile.** The PyPI feeder now reads `pylock.toml` (PEP 751) and, when
+  a repo has no Python lockfile at all, its requirements files (`requirements*.txt`,
+  `*requirements.txt`, `requirements/*.txt`) with `-r` includes, `-c` constraints, hashes and
+  markers. pip-compile and uv output is full coverage with dependency paths from `# via`
+  annotations; pinned files with no sign of a resolver are labelled partial, and unpinned
+  requirements direct-only with their names listed, never guessed. Checked against pip's own
+  parser on warehouse, NetBox and Home Assistant (1,603 of 1,603 pinned packages). Fleet
+  sources now check out these files too.
+
 ## [1.2.0] - 2026-10-30
 
 ### Added

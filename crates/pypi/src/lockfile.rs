@@ -147,7 +147,7 @@ fn poetry_graph(lock_text: &str, direct: &BTreeSet<String>) -> Result<DepGraph, 
 /// Collapse duplicate `(name, version)` rows into one, with `direct` winning if any
 /// occurrence was direct and `dev` only if every occurrence was dev, and sort for
 /// deterministic output.
-fn dedupe(pkgs: Vec<InstalledPackage>) -> Vec<InstalledPackage> {
+pub(crate) fn dedupe(pkgs: Vec<InstalledPackage>) -> Vec<InstalledPackage> {
     let mut by_key: std::collections::BTreeMap<(String, String), (bool, bool)> =
         std::collections::BTreeMap::new();
     for p in pkgs {
@@ -344,7 +344,7 @@ pub fn parse_poetry(
 /// `[tool.poetry.dependencies]` and every `[tool.poetry.group.*.dependencies]`, plus
 /// PEP 621 `[project.dependencies]` requirement strings. Returns an empty set if the
 /// file is absent or unparseable (direct is only a hint, never a soundness gate).
-fn poetry_direct_set(repo_dir: &Path) -> BTreeSet<String> {
+pub(crate) fn poetry_direct_set(repo_dir: &Path) -> BTreeSet<String> {
     let mut set = BTreeSet::new();
     let Ok(body) = std::fs::read_to_string(repo_dir.join("pyproject.toml")) else {
         return set;
@@ -456,7 +456,7 @@ fn pipfile_direct_set(repo_dir: &Path) -> BTreeSet<String> {
 /// The package name at the head of a PEP 508 requirement string (`"requests>=2.31"` →
 /// `"requests"`, `"ruamel.yaml[jinja2]"` → `"ruamel.yaml"`). Returns `None` for an empty
 /// or non-name leading token.
-fn requirement_name(req: &str) -> Option<&str> {
+pub(crate) fn requirement_name(req: &str) -> Option<&str> {
     let end = req
         .find(|c: char| !(c.is_alphanumeric() || matches!(c, '-' | '_' | '.')))
         .unwrap_or(req.len());

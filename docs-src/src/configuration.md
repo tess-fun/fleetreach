@@ -22,7 +22,7 @@ ecosystem = "go"                # optional; auto-detected from the manifests
 
 [[repo]]
 id        = "ml-service"
-path      = "../ml-service"     # a uv.lock/poetry.lock/Pipfile.lock repo
+path      = "../ml-service"     # a uv.lock/poetry.lock/pylock.toml/requirements repo
 ecosystem = "pypi"
 
 [[settings.ignore]]

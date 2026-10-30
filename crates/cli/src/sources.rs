@@ -35,6 +35,14 @@ pub const SPARSE_PATTERNS: &[&str] = &[
     "**/uv.lock",
     "**/poetry.lock",
     "**/Pipfile.lock",
+    "**/pylock.toml",
+    "**/pylock.*.toml",
+    // Requirements files and what they usually include; an include under another name is
+    // reported as a coverage gap, not silently skipped.
+    "**/requirements*.txt",
+    "**/*requirements.txt",
+    "**/requirements/*.txt",
+    "**/constraints*.txt",
     "**/pyproject.toml",
     "**/Gemfile.lock",
     "**/composer.lock",

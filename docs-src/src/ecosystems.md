@@ -35,7 +35,7 @@ band or a CVSS vector; direct vs transitive comes from the lockfile; findings ar
 | Ecosystem | Lockfile(s) | Flag | Version semantics |
 |-----------|-------------|------|-------------------|
 | npm | `package-lock.json` / `pnpm-lock.yaml` (v6, v9) / `yarn.lock` (v1, berry) | `--npm-vuln-db` | SemVer |
-| PyPI | `uv.lock` / `poetry.lock` / `Pipfile.lock` | `--pypi-vuln-db` | PEP 440 (PEP 503 names) |
+| PyPI | `uv.lock` / `poetry.lock` / `Pipfile.lock` / `pylock.toml` / `requirements*.txt` | `--pypi-vuln-db` | PEP 440 (PEP 503 names) |
 | RubyGems | `Gemfile.lock` | `--rubygems-vuln-db` | `Gem::Version` |
 | Packagist | `composer.lock` | `--packagist-vuln-db` | Composer `version_compare` |
 | NuGet | `packages.lock.json` | `--nuget-vuln-db` | four-part `NuGetVersion` |
@@ -44,6 +44,24 @@ band or a CVSS vector; direct vs transitive comes from the lockfile; findings ar
 | Hex | `mix.lock` | `--hex-vuln-db` | SemVer |
 | Maven | `gradle.lockfile` / `pom.xml` | `--maven-vuln-db` | `ComparableVersion` |
 | GitHub Actions | `.github/workflows/*.yml` | `--ghactions-vuln-db` | tag SemVer |
+
+Python projects without a `uv.lock`, `poetry.lock` or `Pipfile.lock` are read from
+`pylock.toml` ([PEP 751](https://packaging.python.org/en/latest/specifications/pylock-toml/)),
+else from requirements files: `requirements*.txt`, `*requirements.txt` and
+`requirements/*.txt`, following `-r` includes inside the repo and applying `-c`
+constraints. A requirements file is not always a resolved set, so each one gets a
+coverage label:
+
+| Requirements file | Coverage |
+|-------------------|----------|
+| Every line pinned (`name==X`) and written by a resolver (pip-compile or uv header, `# via` annotations, or hashes on every line) | full; `# via` gives direct/transitive and the dependency path |
+| Every line pinned, nothing showing a resolver wrote it (`pip freeze`, hand-written pins) | partial: dependencies of the listed packages may be missing |
+| Any line not pinned to one version (`>=`, `~=`, a bare name) | direct-only: unpinned names are listed and never guessed |
+
+Environment markers are not evaluated (a marker could only hide a finding), and
+`-e`, URL and path requirements are counted, not matched. Files named for
+development (`requirements-dev.txt`, `requirements/test.txt`) are dev scope.
+`--require-full-coverage` turns any label below full into exit 2.
 
 The osv.dev exports live at
 `https://osv-vulnerabilities.storage.googleapis.com/<Ecosystem>/all.zip`.

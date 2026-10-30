@@ -1,0 +1,39 @@
+{
+  "id": "GHSA-q2x7-8rv6-6q7h",
+  "modified": "2025-01-08T00:00:00Z",
+  "summary": "Jinja has a sandbox breakout through indirect reference to format method",
+  "aliases": [
+    "CVE-2024-56326"
+  ],
+  "affected": [
+    {
+      "package": {
+        "ecosystem": "PyPI",
+        "name": "jinja2"
+      },
+      "ranges": [
+        {
+          "type": "ECOSYSTEM",
+          "events": [
+            {
+              "introduced": "0"
+            },
+            {
+              "fixed": "3.1.5"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "database_specific": {
+    "severity": "MODERATE",
+    "github_reviewed": true
+  },
+  "references": [
+    {
+      "type": "ADVISORY",
+      "url": "https://github.com/advisories/GHSA-q2x7-8rv6-6q7h"
+    }
+  ]
+}

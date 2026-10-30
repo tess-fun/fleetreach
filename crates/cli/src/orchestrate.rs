@@ -612,7 +612,7 @@ fn dir_ecosystems(dir: &Path, files: &BTreeSet<String>, is_root: bool) -> Vec<Ec
     if fleetreach_npm::LOCKFILES.iter().any(|name| has(name)) {
         found.push(Ecosystem::Npm);
     }
-    if fleetreach_pypi::detect(dir).is_some() {
+    if fleetreach_pypi::has_python_sources(dir) {
         found.push(Ecosystem::Pypi);
     }
     if has("Gemfile.lock") {
@@ -860,8 +860,9 @@ fn scan_npm_repo(repo: &Repo, npm_db: Option<&Result<NpmDb, NpmError>>) -> RepoR
 }
 
 /// Scan a PyPI repo with the toolchain-free Tier-C matcher: read the Python lockfile
-/// (`uv.lock`/`poetry.lock`/`Pipfile.lock`) and match each package version against the
-/// preloaded OSV DB. Builds nothing, so it needs no consent and no sandbox. `pypi_db` is
+/// (`uv.lock`/`poetry.lock`/`Pipfile.lock`), else `pylock.toml`, else requirements files, and
+/// match each package version against the preloaded OSV DB. Requirements files that are not a
+/// full resolved set are reported as coverage gaps (C1). Builds nothing, so it needs no consent and no sandbox. `pypi_db` is
 /// the once-loaded DB: `None` means no `file://` mirror was given (an honest gap),
 /// `Some(Err)` a mirror that failed to load (the reason is surfaced, never a false-clean).
 fn scan_pypi_repo(repo: &Repo, pypi_db: Option<&Result<PyPiDb, PyPiError>>) -> RepoResult {
@@ -872,16 +873,27 @@ fn scan_pypi_repo(repo: &Repo, pypi_db: Option<&Result<PyPiDb, PyPiError>>) -> R
         Some(Err(e)) => return errored(format!("PyPI OSV DB: {e}")),
         None => {
             return errored(
-                "PyPI repo (uv.lock/poetry.lock/Pipfile.lock): no OSV DB mirror for the \
+                "PyPI repo (uv.lock/poetry.lock/Pipfile.lock/pylock.toml/requirements): no OSV DB mirror for the \
                  toolchain-free matcher (pass --osv-dir=<dir> or --pypi-vuln-db=file://<path>, e.g. the osv.dev \
                  PyPI export all.zip or an unzipped directory)"
                     .to_string(),
             )
         }
     };
-    match fleetreach_pypi::scan_offline(&repo.path, db, &repo.id) {
-        Ok(scan) => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
-            .with_skipped(scan.skipped_unparseable),
+    match fleetreach_pypi::scan_offline_with_coverage(&repo.path, db, &repo.id) {
+        Ok(scan) => scan.coverage.into_iter().fold(
+            RepoResult::scanned(&repo.id, scan.scan.findings, Vec::new())
+                .with_skipped(scan.scan.skipped_unparseable),
+            |result, gap| {
+                result.with_coverage(CoverageGap {
+                    repo: repo.id.clone(),
+                    source: gap.source,
+                    ecosystem: Ecosystem::Pypi,
+                    level: gap.level,
+                    reason: gap.reason,
+                })
+            },
+        ),
         Err(e) => errored(format!("pypi tier-c scan: {e}")),
     }
 }

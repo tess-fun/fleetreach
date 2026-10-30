@@ -12,37 +12,60 @@ use std::path::Path;
 
 use fleetreach_core::osv::{sort_dedup_findings, Match, TierCFinding, TierCScan};
 use fleetreach_core::semver::VersionReq;
-use fleetreach_core::{Ecosystem, RepoId, VulnFinding};
+use fleetreach_core::{DepGraph, Ecosystem, RepoId, VulnFinding};
 
 use crate::db::{affected_fixed, Advisory, PyPiDb};
 use crate::error::PyPiError;
-use crate::lockfile::{detect, installed_packages, InstalledPackage};
+use crate::lockfile::{dedupe, detect, installed_packages, InstalledPackage};
+use crate::requirements::SourceCoverage;
 use crate::version::{normalize_name, parse_pypi_version, to_semver};
+use crate::{pylock, requirements};
 
-/// Scan the Python project at `repo_dir` (containing a `uv.lock`, `poetry.lock`, or
-/// `Pipfile.lock`) against the preloaded OSV DB, without a Python toolchain. Emits one
-/// module-level [`VulnFinding`] per affected package; output is sorted by `(advisory id,
-/// package)` for determinism.
+/// Scan the Python project at `repo_dir` against the preloaded OSV DB, without a Python
+/// toolchain. Reads, in order of preference, a lockfile (`uv.lock`, `poetry.lock`,
+/// `Pipfile.lock`), `pylock.toml` files, or requirements files. Emits one module-level
+/// [`VulnFinding`] per affected package; output is sorted by `(advisory id, package)` for
+/// determinism.
+///
+/// This drops the coverage of requirements files; [`scan_offline_with_coverage`] keeps it.
 ///
 /// # Errors
 ///
-/// Returns [`PyPiError::Db`] if no recognized lockfile is present or it cannot be parsed
-/// — failing closed, so an unreadable/absent lockfile is an honest gap rather than a
+/// Returns [`PyPiError::Db`] if no recognized source is present or one cannot be parsed —
+/// failing closed, so an unreadable/absent lockfile is an honest gap rather than a
 /// false-clean scan.
 pub fn scan_offline(repo_dir: &Path, db: &PyPiDb, repo: &RepoId) -> Result<TierCScan, PyPiError> {
-    let Some((kind, lock_path)) = detect(repo_dir) else {
-        return Err(PyPiError::db(
-            repo_dir.to_path_buf(),
-            std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "no recognized Python lockfile (uv.lock, poetry.lock, or Pipfile.lock)",
-            ),
-        ));
-    };
-    let (installed, graph) = installed_packages(kind, &lock_path, repo_dir)?;
+    scan_offline_with_coverage(repo_dir, db, repo).map(|scan| scan.scan)
+}
+
+/// A PyPI scan, with the sources it read with less than full coverage.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct PyPiScan {
+    pub scan: TierCScan,
+    /// Requirements files that are not a full resolved set (unpinned requirements, pins with
+    /// no sign of a resolver, unreadable includes or lines). Lockfiles are always full.
+    pub coverage: Vec<SourceCoverage>,
+}
+
+/// [`scan_offline`], also reporting which sources were read with less than full coverage.
+///
+/// # Errors
+///
+/// As [`scan_offline`].
+pub fn scan_offline_with_coverage(
+    repo_dir: &Path,
+    db: &PyPiDb,
+    repo: &RepoId,
+) -> Result<PyPiScan, PyPiError> {
+    let source = read_sources(repo_dir)?;
+    let installed = dedupe(source.packages);
+    let graph = source.graph;
 
     let mut out: Vec<VulnFinding> = Vec::new();
-    let mut skipped_unparseable = 0u32;
+    // Editable, VCS, URL and path requirements: not registry releases, so skipping them does
+    // not hide a PyPI advisory.
+    let mut skipped_unparseable = source.non_registry;
     for pkg in &installed {
         let Some(version) = parse_pypi_version(&pkg.version) else {
             // A non-PEP-440 resolved version (a VCS/URL/local-path pin) cannot be matched
@@ -61,10 +84,70 @@ pub fn scan_offline(repo_dir: &Path, db: &PyPiDb, repo: &RepoId) -> Result<TierC
         }
     }
     sort_dedup_findings(&mut out);
-    Ok(TierCScan {
-        findings: out,
-        skipped_unparseable,
+    Ok(PyPiScan {
+        scan: TierCScan {
+            findings: out,
+            skipped_unparseable,
+        },
+        coverage: source.coverage,
     })
+}
+
+/// Whether `dir` holds anything the PyPI feeder reads: a lockfile, a `pylock.toml`, or a
+/// requirements file.
+#[must_use]
+pub fn has_python_sources(dir: &Path) -> bool {
+    detect(dir).is_some()
+        || !pylock::pylock_files(dir).is_empty()
+        || !requirements::requirements_files(dir).is_empty()
+}
+
+/// What one directory's Python dependency sources hold.
+struct Sources {
+    packages: Vec<InstalledPackage>,
+    graph: DepGraph,
+    coverage: Vec<SourceCoverage>,
+    non_registry: u32,
+}
+
+/// Read the preferred source in `repo_dir`: a lockfile, else `pylock.toml` files, else
+/// requirements files.
+fn read_sources(repo_dir: &Path) -> Result<Sources, PyPiError> {
+    if let Some((kind, lock_path)) = detect(repo_dir) {
+        let (packages, graph) = installed_packages(kind, &lock_path, repo_dir)?;
+        return Ok(Sources {
+            packages,
+            graph,
+            coverage: Vec::new(),
+            non_registry: 0,
+        });
+    }
+    if !pylock::pylock_files(repo_dir).is_empty() {
+        let (packages, graph, non_registry) = pylock::read_dir(repo_dir)?;
+        return Ok(Sources {
+            packages,
+            graph,
+            coverage: Vec::new(),
+            non_registry,
+        });
+    }
+    if !requirements::requirements_files(repo_dir).is_empty() {
+        let read = requirements::read_dir(repo_dir)?;
+        return Ok(Sources {
+            packages: read.packages,
+            graph: read.graph,
+            coverage: read.coverage,
+            non_registry: read.non_registry,
+        });
+    }
+    Err(PyPiError::db(
+        repo_dir.to_path_buf(),
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "no recognized Python dependency file (uv.lock, poetry.lock, Pipfile.lock, \
+             pylock.toml or requirements*.txt)",
+        ),
+    ))
 }
 
 /// Build a finding if `adv` lists `pkg` as affected at `version` (a PEP 440 version).

@@ -5,9 +5,12 @@
 //!
 //! Like the npm feeder it needs no build: a lockfile already pins the full transitive
 //! tree to exact versions, so the matcher is the only tier. It reads `uv.lock`,
-//! `poetry.lock`, or `Pipfile.lock` (in that detection order) and compares versions
-//! against OSV `ECOSYSTEM` ranges, running no Python tool and no package build, so it is
-//! **safe by construction**: no untrusted-build consent and no sandbox.
+//! `poetry.lock`, or `Pipfile.lock` (in that detection order), else `pylock.toml` files,
+//! else requirements files, and compares versions against OSV `ECOSYSTEM` ranges, running no
+//! Python tool and no package build, so it is **safe by construction**: no untrusted-build
+//! consent and no sandbox. A requirements file is not always a resolved set, so
+//! [`scan_offline_with_coverage`] reports which ones were read with less than full coverage
+//! (unpinned requirements, pins with no sign of a resolver).
 //!
 //! Two things are Python-specific. Versions are [PEP 440] (epochs, `.post`/`.dev`,
 //! `a1`/`rc1`, local segments), not SemVer, so matching uses the `pep440_rs` crate via
@@ -48,6 +51,8 @@
 mod db;
 mod error;
 mod lockfile;
+mod pylock;
+mod requirements;
 mod scan;
 mod version;
 
@@ -56,5 +61,6 @@ pub use error::{DbError, PyPiError};
 /// The OSV version-match outcome, shared with the other ecosystem feeders.
 pub use fleetreach_core::osv::Match;
 pub use lockfile::{detect, installed_packages, InstalledPackage, LockfileKind};
-pub use scan::scan_offline;
+pub use requirements::SourceCoverage;
+pub use scan::{has_python_sources, scan_offline, scan_offline_with_coverage, PyPiScan};
 pub use version::{normalize_name, parse_pypi_version, to_semver, Version};

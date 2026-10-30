@@ -289,6 +289,61 @@ fn yarn_and_pnpm_repos_scan_without_package_lock() {
 }
 
 #[test]
+fn requirements_and_pylock_repos_scan_with_coverage_labels() {
+    let args = |extra: &[&'static str]| {
+        let mut v = vec![
+            "scan".to_string(),
+            "-c".into(),
+            cfg("fleet-py.toml"),
+            "--db".into(),
+            db(),
+            "--pypi-vuln-db".into(),
+            file_url("pypi-osv"),
+            "-f".into(),
+            "json".into(),
+            "-q".into(),
+        ];
+        v.extend(extra.iter().map(|s| (*s).to_string()));
+        v
+    };
+    let argv = args(&[]);
+    let out = run(&argv.iter().map(String::as_str).collect::<Vec<_>>());
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(value["summary"]["repos_errored"], 0, "{value}");
+    let occ: Vec<&serde_json::Value> = value["vulnerabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|v| v["occurrences"].as_array().unwrap())
+        .collect();
+    let find = |repo: &str| {
+        occ.iter()
+            .find(|o| o["repo"] == repo && o["package"] == "jinja2")
+            .unwrap_or_else(|| panic!("no jinja2 hit in {repo}: {occ:?}"))
+    };
+    // pip-compile's `# via` annotations give the introducer chain.
+    let req = find("py-req");
+    assert_eq!(req["dependency_kind"], "transitive");
+    assert_eq!(
+        req["dependency_path"],
+        serde_json::json!(["(root)", "flask", "jinja2"])
+    );
+    assert_eq!(find("py-pylock")["installed"], "3.1.4");
+
+    // The compiled requirements.txt and pylock.toml are full; the dev file's unpinned
+    // `pytest` is named, and gates under --require-full-coverage.
+    let coverage = value["coverage"].as_array().unwrap();
+    assert_eq!(coverage.len(), 1, "{coverage:?}");
+    assert_eq!(coverage[0]["source"], "requirements-dev.txt");
+    assert_eq!(coverage[0]["level"], "direct-only");
+    assert!(coverage[0]["reason"].as_str().unwrap().contains("pytest"));
+    let argv = args(&["--require-full-coverage"]);
+    let out = run(&argv.iter().map(String::as_str).collect::<Vec<_>>());
+    assert_eq!(code(&out), 2, "stderr: {}", stderr(&out));
+}
+
+#[test]
 fn incomplete_coverage_is_reported_and_can_gate() {
     let args = |extra: &[&'static str]| {
         let mut v = vec![

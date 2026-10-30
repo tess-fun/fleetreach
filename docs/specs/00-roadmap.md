@@ -113,7 +113,7 @@ C1 coverage ─┬─ 02 JS     │
 Ordering principle: the fleet thesis only holds if the whole fleet is readable on the first
 run, so onboarding and coverage come before new kinds of output.
 
-**Wave 1: the first run works on a real fleet** (implemented 2026-10-30, uncommitted; open: bun.lock, GitLab sources)
+**Wave 1: the first run works on a real fleet** (shipped in 1.2.0, 2026-10-30; open: bun.lock, GitLab sources)
 1. 01 OSV sync, phases 1–2.
 2. C1 coverage model.
 3. 06 fleet sources, phases 1–2 (git + GitHub).
