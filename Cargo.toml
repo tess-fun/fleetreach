@@ -85,3 +85,11 @@ comfy-table = "8"
 sha2 = "0.11"
 # RFC3339 timestamps + DB age
 time = { version = "0.3", features = ["formatting", "std"] }
+
+# Release binaries (.github/workflows/release.yml): smaller and faster than plain
+# `release`, at the cost of a longer build. `cargo install` keeps the default profile.
+[profile.dist]
+inherits = "release"
+lto = "thin"
+codegen-units = 1
+strip = true

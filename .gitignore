@@ -14,3 +14,6 @@
 
 # Generated mdBook docs (built in CI into the Pages artifact).
 /site/docs/
+
+# Release binaries staged for the container build (release workflow).
+/packaging/bin/

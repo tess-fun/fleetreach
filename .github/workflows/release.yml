@@ -1,0 +1,212 @@
+name: Release
+
+# Builds prebuilt `fleetreach` binaries for every supported platform when a version tag is
+# pushed (scripts/release.sh pushes `vX.Y.Z` after publishing to crates.io), then:
+#   - attaches them to the GitHub release with SHA256SUMS and build-provenance attestations,
+#   - publishes a multi-arch container image to ghcr.io,
+#   - renders the Homebrew formula (and pushes it to the tap when HOMEBREW_TAP_TOKEN is set).
+# A manual run (workflow_dispatch) builds and uploads the archives as workflow artifacts
+# only: nothing is published.
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # glibc 2.35 baseline (Ubuntu 22.04) so the binary runs on most current distros.
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04 }
+          - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm }
+          - { target: aarch64-apple-darwin, os: macos-14 }
+          # Cross-compiled from Apple silicon; the Apple toolchain targets x86_64 natively.
+          - { target: x86_64-apple-darwin, os: macos-14 }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+    steps:
+      - uses: actions/checkout@v4
+      # rust-toolchain.toml pins the exact toolchain.
+      - name: toolchain
+        shell: bash
+        run: |
+          rustup show
+          rustup target add "${{ matrix.target }}"
+      # Release binaries ship the `network` feature (OSV auto-sync, fleet sources listing,
+      # KEV/EPSS/NVD enrichment). The pure-Rust offline build stays available via cargo.
+      - name: build
+        shell: bash
+        run: >-
+          cargo build --locked --profile dist -p fleetreach-cli --features network
+          --target "${{ matrix.target }}"
+      - name: smoke test
+        if: matrix.target != 'x86_64-apple-darwin'
+        shell: bash
+        run: |
+          bin="target/${{ matrix.target }}/dist/fleetreach"
+          [ -f "$bin.exe" ] && bin="$bin.exe"
+          "$bin" --version
+          "$bin" scan --help > /dev/null
+      - name: package
+        id: package
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          [ "${GITHUB_REF_TYPE}" = "tag" ] || version="0.0.0-${GITHUB_SHA::7}"
+          name="fleetreach-${version}-${{ matrix.target }}"
+          mkdir -p "pkg/$name"
+          cp LICENSE-MIT LICENSE-APACHE README.md CHANGELOG.md "pkg/$name/"
+          if [[ "${{ matrix.target }}" == *windows* ]]; then
+            cp "target/${{ matrix.target }}/dist/fleetreach.exe" "pkg/$name/"
+            (cd pkg && 7z a -bd "$name.zip" "$name" > /dev/null)
+            echo "archive=pkg/$name.zip" >> "$GITHUB_OUTPUT"
+          else
+            cp "target/${{ matrix.target }}/dist/fleetreach" "pkg/$name/"
+            tar -C pkg -czf "pkg/$name.tar.gz" "$name"
+            echo "archive=pkg/$name.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.target }}
+          path: ${{ steps.package.outputs.archive }}
+          if-no-files-found: error
+
+  release:
+    name: GitHub release
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: checksums
+        run: cd dist && sha256sum fleetreach-* | tee SHA256SUMS
+      # Signed SLSA build provenance for every archive: verify with
+      # `gh attestation verify <archive> --repo tess-fun/fleetreach`.
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/fleetreach-*"
+      - name: release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "fleetreach $version" > notes.md
+      - name: create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --title "fleetreach ${GITHUB_REF_NAME#v}" --notes-file notes.md --verify-tag
+          fi
+
+  container:
+    name: container image
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*-linux-gnu
+          path: dist
+          merge-multiple: true
+      # The image reuses the release binaries instead of compiling again.
+      - name: stage binaries by architecture
+        run: |
+          for pair in amd64:x86_64 arm64:aarch64; do
+            arch="${pair%%:*}"; triple="${pair##*:}-unknown-linux-gnu"
+            mkdir -p "packaging/bin/$arch"
+            tar -xzf dist/fleetreach-*-"$triple".tar.gz -C "packaging/bin/$arch" --strip-components=1
+          done
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+      - id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: packaging
+          file: packaging/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  homebrew:
+    name: Homebrew formula
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: render the formula from the published checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --pattern SHA256SUMS --dir dist
+          scripts/render-formula.sh "${GITHUB_REF_NAME#v}" dist/SHA256SUMS > fleetreach.rb
+          gh release upload "$GITHUB_REF_NAME" fleetreach.rb --clobber
+      # Optional: publish to the tap (github.com/tess-fun/homebrew-tap) when a token with
+      # write access to it is configured. Without it the formula is still on the release.
+      - name: push to the tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        if: env.TAP_TOKEN != ''
+        run: |
+          git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/tess-fun/homebrew-tap.git" tap
+          mkdir -p tap/Formula
+          cp fleetreach.rb tap/Formula/fleetreach.rb
+          cd tap
+          git config user.name "fleetreach release"
+          git config user.email "release@users.noreply.github.com"
+          git add Formula/fleetreach.rb
+          git diff --cached --quiet || git commit -m "fleetreach ${GITHUB_REF_NAME#v}"
+          git push
