@@ -27,6 +27,8 @@ fn provenance() -> Provenance {
         host_os: "x".into(),
         host_arch: "x".into(),
         generated_at: "2026-10-30T00:00:00Z".into(),
+        osv: Vec::new(),
+        sources: Vec::new(),
     }
 }
 
@@ -81,7 +83,7 @@ fn assessed(findings: Vec<VulnFinding>) -> fleetreach_core::FleetReport {
         warnings: vec![],
         outcomes: vec![],
         skipped_unparseable: 0,
-        unsupported_lockfiles: Vec::new(),
+        coverage: Vec::new(),
     };
     let mut report = build_report(scan, &[], None, provenance());
     py_reach::assess(&mut report, &config());

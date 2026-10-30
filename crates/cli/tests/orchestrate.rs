@@ -256,3 +256,63 @@ fn toolchain_advisory_joins_the_fleet_streams() {
         Occurrence::Toolchain { .. }
     ));
 }
+
+#[test]
+fn pom_only_maven_repo_is_labelled_direct_only() {
+    // A pom.xml declares direct dependencies only; the scan must say so (C1) instead of
+    // presenting the transitive blind spot as a full scan. With a gradle.lockfile it is full.
+    use fleetreach_core::Coverage;
+    let root = std::env::temp_dir().join(format!("fr-pom-coverage-{}", std::process::id()));
+    let repo = root.join("svc");
+    let osv = root.join("maven-osv");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&osv).unwrap();
+    std::fs::write(
+        repo.join("pom.xml"),
+        r#"<project><dependencies><dependency><groupId>org.example</groupId>
+           <artifactId>lib</artifactId><version>1.0.0</version></dependency></dependencies>
+           </project>"#,
+    )
+    .unwrap();
+    let toml = "[[repo]]\nid = \"svc\"\npath = \"svc\"\n";
+    let config = Config::from_str(toml, &root, "fleet.toml").unwrap();
+    let url = format!("file://{}", osv.display());
+    let scan = |config: &Config| {
+        scan_fleet(
+            &advisory_db(),
+            config,
+            None,
+            None,
+            &go(),
+            &npm(),
+            &pypi(),
+            &rubygems(),
+            &packagist(),
+            &nuget(),
+            &julia(),
+            &swift(),
+            &hex(),
+            &ghactions(),
+            &MavenScan {
+                vuln_db: Some(&url),
+            },
+        )
+    };
+    let data = scan(&config);
+    assert!(matches!(
+        status_of(&data, "svc"),
+        ScanStatus::Scanned { .. }
+    ));
+    assert_eq!(data.coverage.len(), 1, "{:?}", data.coverage);
+    assert_eq!(data.coverage[0].source, "pom.xml");
+    assert_eq!(data.coverage[0].level, Coverage::DirectOnly);
+
+    std::fs::write(
+        repo.join("gradle.lockfile"),
+        "org.example:lib:1.0.0=compileClasspath\nempty=\n",
+    )
+    .unwrap();
+    let data = scan(&config);
+    assert!(data.coverage.is_empty(), "{:?}", data.coverage);
+    let _ = std::fs::remove_dir_all(&root);
+}

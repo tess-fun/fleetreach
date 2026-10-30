@@ -408,6 +408,8 @@ mod tests {
                 host_os: "t".into(),
                 host_arch: "t".into(),
                 generated_at: "t".into(),
+                osv: Vec::new(),
+                sources: Vec::new(),
             },
             summary: Summary {
                 repos_scanned: 0,
@@ -420,6 +422,7 @@ mod tests {
             vulnerabilities: vulns,
             warnings: vec![],
             outcomes: vec![],
+            coverage: Vec::new(),
         }
     }
 

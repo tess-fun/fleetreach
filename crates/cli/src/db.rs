@@ -117,7 +117,7 @@ pub(crate) fn check_db_age(db: &AdvisoryDb, spec: &str) -> Result<(), String> {
 }
 
 /// Parse a duration like `7d`, `24h`, `30m`, `90s`, or a bare seconds count.
-fn parse_duration_secs(spec: &str) -> Result<i64, String> {
+pub(crate) fn parse_duration_secs(spec: &str) -> Result<i64, String> {
     let spec = spec.trim();
     let (digits, mult) = match spec.chars().last() {
         Some('d') => (&spec[..spec.len() - 1], 86_400),
@@ -158,6 +158,8 @@ pub(crate) fn build_provenance(meta: &DatabaseMeta) -> Provenance {
         host_os: std::env::consts::OS.to_string(),
         host_arch: std::env::consts::ARCH.to_string(),
         generated_at: now_rfc3339(),
+        osv: Vec::new(),
+        sources: Vec::new(),
     }
 }
 

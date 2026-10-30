@@ -6,8 +6,43 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **OSV exports without per-ecosystem flags.** Network builds fetch exactly the osv.dev
+  exports a fleet needs into `~/.cache/fleetreach/osv/` and keep them fresh (conditional
+  requests, atomic install, never replacing a good copy with a failed download). One
+  `--osv-dir` (or `FLEETREACH_OSV_DIR`, `[settings.osv] dir`) laid out like the osv.dev
+  bucket serves every ecosystem for air-gapped use. New `fleetreach db sync` and
+  `fleetreach db status`. Each export's source, age and hash is recorded in
+  `provenance.osv`.
+- **pnpm and yarn lockfiles.** The npm feeder reads `pnpm-lock.yaml` (v6, v9) and `yarn.lock`
+  (v1 and berry, including aliases, patches and workspaces) with direct/transitive, dev scope
+  and dependency paths, validated on 19 real lockfiles. Several npm-family lockfiles in one
+  directory are all read.
+- **Coverage labels.** Sources read with less than a full resolved graph (`pom.xml` without
+  `gradle.lockfile`, `bun.lock`/`bun.lockb`) are listed in a JSON `coverage` array, on
+  stderr and in the summary line. `--require-full-coverage` makes them exit 2.
+- **Fleet sources.** `[[source]]` entries discover repos from a GitHub organization or user
+  (with include/exclude globs, topics, archived and fork filters, GitHub Enterprise via
+  `api_url`) or a list of https URLs. `fleetreach fleet sync` / `scan --sync` keep shallow,
+  blob-less, sparse checkouts holding only lockfiles and manifests; the commit scanned is
+  recorded in `provenance.sources`. A failed listing stops the run; a failed clone is an
+  errored gap. `git` runs without hooks, submodules or the `file://` transport, and the token
+  never appears on the command line.
+
+### Changed
+
+- `--max-db-age` now also checks every OSV export used (upstream `Last-Modified` from a sync,
+  else file mtime; unknown age refuses).
+- NVD severity backfill caches answers per CVE (7 days for a score, 1 day for none), waits
+  only between real requests, and says how long an unkeyed lookup will take. `NVD_API_KEY`
+  is now documented.
+
 ### Fixed
 
+- `--npm-prune-unreachable` could mark packages `NotReachable` in a pnpm `node_modules`
+  layout, whose transitive packages the import graph does not walk. It no longer prunes
+  there.
 - **`--npm-prune-unreachable` pruned tools the project runs.** The npm import graph only started
   from imports, so a package run as a command (vitest, jest, stylelint, eslint from a
   `package.json` script or a CI workflow step) and everything it loads came out `NotReachable`;

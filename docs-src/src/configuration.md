@@ -58,12 +58,59 @@ module of the root build and not scanned on its own, and GitHub Actions workflow
 are scanned only when the repo has no package ecosystem.
 
 Every discovered lockfile must be scannable: one whose ecosystem has no OSV
-mirror (or, for Go, no govulncheck) makes the repo an errored gap, as it would
-for a single-ecosystem repo. Lockfiles in formats fleetreach cannot read
-(`yarn.lock`, `pnpm-lock.yaml`, `bun.lock`) are listed in a note on stderr.
+export (or, for Go, no govulncheck) makes the repo an errored gap, as it would
+for a single-ecosystem repo. When several npm-family lockfiles sit together
+(`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`), all are read.
+
+## Coverage
+
+A source that was read but not as a full resolved graph is reported with a
+coverage level: `direct-only` (a `pom.xml` without `gradle.lockfile`, which lists
+declared dependencies only) or `partial` (a `bun.lock`/`bun.lockb`, which no
+feeder reads yet). The repo still counts as scanned, the gaps are listed on
+stderr and in the JSON `coverage` array, and the summary line counts them.
+`--require-full-coverage` turns any of them into exit 2.
 
 Set `ecosystem` to scan exactly one ecosystem at the repo root, which is also
 how to opt a repo out of the multi-ecosystem scan.
+
+## Fleet sources
+
+A `[[source]]` discovers repos instead of listing local paths:
+
+```toml
+[[source]]
+kind     = "github"        # or "git", with urls = ["https://host/owner/repo.git"]
+org      = "acme"          # an organization or a user
+include  = ["svc-*"]       # globs on the repo name (default: all)
+exclude  = ["*-sandbox"]
+topics   = ["production"]  # all must be present
+archived = false           # default: skip archived repos
+forks    = false           # default: skip forks
+checkout = "lockfiles"     # sparse clone of lockfiles/manifests; "full" for reachability
+glob     = true            # default for discovered repos
+# api_url = "https://ghe.example.com/api/v3"
+# token_env = "GHE_TOKEN"  # default: GITHUB_TOKEN or GH_TOKEN
+```
+
+`fleetreach fleet sync` lists each source and clones or refreshes its repos under
+`~/.cache/fleetreach/checkouts/`; `scan --sync` does the same before scanning, and a
+plain `scan` uses what is already there. `fleetreach fleet list` prints the resolved
+fleet. A discovered repo's id is `owner/name`; a `[[repo]]` with the same id wins.
+The commit scanned is recorded in the report's `provenance.sources`.
+
+Fail-closed: a source that cannot be listed (or was never synced) stops the run with
+exit 2, and a repo that cannot be cloned is an errored gap.
+
+## OSV exports
+
+```toml
+[settings.osv]
+dir     = "../osv"   # a directory laid out as <dir>/<Ecosystem>/all.zip
+refresh = "6h"       # how stale the default cache may get before a re-check
+```
+
+See [Ecosystems](./ecosystems.md) for the resolution order.
 
 ## Key flags
 
@@ -72,6 +119,9 @@ how to opt a repo out of the multi-ecosystem scan.
 | `-f <view>` | Output format / view (see [Report views](./views.md)). |
 | `--db <PATH>` | Use a local advisory-db clone (required without `--features network`). |
 | `--offline` | Never touch the network. |
+| `--osv-dir <DIR>` | One directory of osv.dev exports for every toolchain-free ecosystem. |
+| `--sync` | List `[[source]]` entries afresh and clone/refresh checkouts first. |
+| `--require-full-coverage` | Exit 2 if any source was read as `direct-only` or `partial`. |
 | `--max-db-age 7d` | Refuse a DB older than this (refuses when age is unknown). |
 | `--min-severity high` | Filter below a severity (Unknown always survives). |
 | `--fail-on <severity>` | Gate threshold for a new vulnerability. |

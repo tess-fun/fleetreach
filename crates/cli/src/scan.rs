@@ -2,11 +2,12 @@
 //! scan → assemble → enrich → reachability → render), and return the exit code.
 //! Also hosts the `--why`/`--explain` short-circuits and `-f vex` parameter build.
 
+use std::collections::BTreeMap;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
-use fleetreach_core::{Ecosystem, FleetReport, Severity};
+use fleetreach_core::{Ecosystem, FleetReport, RepoOutcome, ScanStatus, Severity};
 use fleetreach_report as report;
 use fleetreach_scan::{routes_to, AdvisoryDb};
 
@@ -16,13 +17,16 @@ use crate::assemble::{
 };
 use crate::cli::{fail, usage_fail, BuildSandbox, Format, ReachMode, SeverityArg, VexScopeArg};
 use crate::config::Config;
-use crate::db::{build_provenance, check_db_age, detect_toolchain, fetch_enrichment, load_db_from};
+use crate::db::{
+    build_provenance, check_db_age, detect_toolchain, fetch_enrichment, load_db_from,
+    parse_duration_secs,
+};
 use crate::enrich::{self, Enrichment};
 use crate::orchestrate::{
-    discover_lockfiles, scan_fleet, GhActionsScan, GoScan, HexScan, JuliaScan, MavenScan, NpmScan,
-    NuGetScan, PackagistScan, PyPiScan, RubyGemsScan, SwiftScan,
+    discover_lockfiles, fleet_ecosystems, scan_fleet, GhActionsScan, GoScan, HexScan, JuliaScan,
+    MavenScan, NpmScan, NuGetScan, PackagistScan, PyPiScan, RubyGemsScan, SwiftScan,
 };
-use crate::{npm_reach, py_reach, reach, resolve, static_reach, vex};
+use crate::{npm_reach, osvdb, py_reach, reach, resolve, sources, static_reach, vex};
 
 #[derive(Parser)]
 pub(crate) struct ScanArgs {
@@ -48,6 +52,11 @@ pub(crate) struct ScanArgs {
     fail_on: SeverityArg,
     #[arg(long, help = "also fail if any warning is present")]
     fail_on_warnings: bool,
+    #[arg(
+        long,
+        help = "exit 2 if any source was read with less than full coverage (a pom.xml without a resolved graph, a lockfile format fleetreach cannot read), as for an errored repo"
+    )]
+    require_full_coverage: bool,
 
     #[arg(
         long,
@@ -186,6 +195,17 @@ pub(crate) struct ScanArgs {
     maven_vuln_db: Option<String>,
     #[arg(
         long,
+        help = "list every [[source]] afresh and clone or refresh its checkouts before scanning (otherwise the cached listing and existing checkouts are used)"
+    )]
+    sync: bool,
+    #[arg(
+        long,
+        value_name = "DIR",
+        help = "one directory holding the osv.dev exports for every toolchain-free ecosystem, laid out like the osv.dev bucket: <DIR>/<Ecosystem>/all.zip (or an unzipped <DIR>/<Ecosystem>/). A per-ecosystem --<eco>-vuln-db flag still wins. Also FLEETREACH_OSV_DIR or settings.osv.dir. Without it, the default cache (~/.cache/fleetreach/osv) is used and, in network builds, kept fresh automatically (set FLEETREACH_OSV_SYNC=off or --offline to stop that)."
+    )]
+    osv_dir: Option<PathBuf>,
+    #[arg(
+        long,
         value_enum,
         default_value = "auto",
         value_name = "MODE",
@@ -290,6 +310,44 @@ fn load_db(args: &ScanArgs) -> Result<AdvisoryDb, String> {
     load_db_from(args.db.as_deref(), args.db_rev.as_deref(), args.offline)
 }
 
+/// The per-ecosystem OSV values given explicitly: the `--<eco>-vuln-db` flag, else its env
+/// var (`NPMVULNDB`, `PYPIVULNDB`, ...). Empty values count as absent.
+fn explicit_osv_dbs(args: &ScanArgs) -> BTreeMap<Ecosystem, String> {
+    let pairs = [
+        (Ecosystem::Npm, &args.npm_vuln_db, "NPMVULNDB"),
+        (Ecosystem::Pypi, &args.pypi_vuln_db, "PYPIVULNDB"),
+        (
+            Ecosystem::RubyGems,
+            &args.rubygems_vuln_db,
+            "RUBYGEMSVULNDB",
+        ),
+        (
+            Ecosystem::Packagist,
+            &args.packagist_vuln_db,
+            "PACKAGISTVULNDB",
+        ),
+        (Ecosystem::NuGet, &args.nuget_vuln_db, "NUGETVULNDB"),
+        (Ecosystem::Julia, &args.julia_vuln_db, "JULIAVULNDB"),
+        (Ecosystem::Swift, &args.swift_vuln_db, "SWIFTVULNDB"),
+        (Ecosystem::Hex, &args.hex_vuln_db, "HEXVULNDB"),
+        (
+            Ecosystem::GitHubActions,
+            &args.ghactions_vuln_db,
+            "GHACTIONSVULNDB",
+        ),
+        (Ecosystem::Maven, &args.maven_vuln_db, "MAVENVULNDB"),
+    ];
+    pairs
+        .into_iter()
+        .filter_map(|(eco, flag, env)| {
+            flag.clone()
+                .or_else(|| std::env::var(env).ok())
+                .filter(|s| !s.is_empty())
+                .map(|v| (eco, v))
+        })
+        .collect()
+}
+
 /// Find the govulncheck binary: an explicit `--govulncheck` path if it exists,
 /// else the first `govulncheck` on `PATH`, `$GOPATH/bin`, or `~/go/bin`.
 fn locate_govulncheck(explicit: Option<&Path>) -> Option<PathBuf> {
@@ -331,10 +389,25 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
     }
 
     // 1. Config (§10.2): any failure is a could-not-scan -> 2.
-    let config = match Config::load(&args.config) {
+    let mut config = match Config::load(&args.config) {
         Ok(c) => c,
         Err(e) => return fail(&e.to_string()),
     };
+
+    // 1a. Fleet sources (spec 06): expand `[[source]]` into repos. With --sync, list afresh
+    //     and clone/refresh; without, use the cached listing and existing checkouts. A
+    //     listing that cannot be read stops the run: the fleet itself is unknown.
+    let materialized = match sources::materialize(&config, args.sync, args.quiet) {
+        Ok(m) => m,
+        Err(e) => return fail(&e),
+    };
+    config.repos.extend(materialized.repos.iter().cloned());
+    if config.repos.is_empty() && !materialized.failed.is_empty() {
+        for (repo, reason) in &materialized.failed {
+            eprintln!("error: {repo}: {reason}");
+        }
+        return fail("no fleet-source repo could be checked out");
+    }
 
     // --why short-circuits (§10.1): a dependency-tree query, no advisory DB.
     if let Some(package) = &args.why {
@@ -382,66 +455,65 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         .clone()
         .or_else(|| std::env::var("GOVULNDB").ok())
         .filter(|s| !s.is_empty());
-    // The npm OSV mirror: explicit flag, else the NPMVULNDB env var (mirrors GOVULNDB).
-    let npm_vuln_db = args
-        .npm_vuln_db
-        .clone()
-        .or_else(|| std::env::var("NPMVULNDB").ok())
-        .filter(|s| !s.is_empty());
-    // The PyPI OSV mirror: explicit flag, else the PYPIVULNDB env var (mirrors the above).
-    let pypi_vuln_db = args
-        .pypi_vuln_db
-        .clone()
-        .or_else(|| std::env::var("PYPIVULNDB").ok())
-        .filter(|s| !s.is_empty());
-    // The RubyGems OSV mirror: explicit flag, else the RUBYGEMSVULNDB env var (mirrors the above).
-    let rubygems_vuln_db = args
-        .rubygems_vuln_db
-        .clone()
-        .or_else(|| std::env::var("RUBYGEMSVULNDB").ok())
-        .filter(|s| !s.is_empty());
-    // The Packagist OSV mirror: explicit flag, else the PACKAGISTVULNDB env var (mirrors the above).
-    let packagist_vuln_db = args
-        .packagist_vuln_db
-        .clone()
-        .or_else(|| std::env::var("PACKAGISTVULNDB").ok())
-        .filter(|s| !s.is_empty());
-    // The NuGet OSV mirror: explicit flag, else the NUGETVULNDB env var (mirrors the above).
-    let nuget_vuln_db = args
-        .nuget_vuln_db
-        .clone()
-        .or_else(|| std::env::var("NUGETVULNDB").ok())
-        .filter(|s| !s.is_empty());
-    // The Julia OSV mirror: explicit flag, else the JULIAVULNDB env var (mirrors the above).
-    let julia_vuln_db = args
-        .julia_vuln_db
-        .clone()
-        .or_else(|| std::env::var("JULIAVULNDB").ok())
-        .filter(|s| !s.is_empty());
-    // The Swift OSV mirror: explicit flag, else the SWIFTVULNDB env var (mirrors the above).
-    let swift_vuln_db = args
-        .swift_vuln_db
-        .clone()
-        .or_else(|| std::env::var("SWIFTVULNDB").ok())
-        .filter(|s| !s.is_empty());
-    // The Hex OSV mirror: explicit flag, else the HEXVULNDB env var (mirrors the above).
-    let hex_vuln_db = args
-        .hex_vuln_db
-        .clone()
-        .or_else(|| std::env::var("HEXVULNDB").ok())
-        .filter(|s| !s.is_empty());
-    // The GitHub Actions OSV mirror: explicit flag, else the GHACTIONSVULNDB env var.
-    let ghactions_vuln_db = args
-        .ghactions_vuln_db
-        .clone()
-        .or_else(|| std::env::var("GHACTIONSVULNDB").ok())
-        .filter(|s| !s.is_empty());
-    // The Maven OSV mirror: explicit flag, else the MAVENVULNDB env var.
-    let maven_vuln_db = args
-        .maven_vuln_db
-        .clone()
-        .or_else(|| std::env::var("MAVENVULNDB").ok())
-        .filter(|s| !s.is_empty());
+    // The OSV exports for the toolchain-free feeders (spec 01). Each ecosystem resolves from
+    // its explicit flag (or env var), then the one OSV directory, then the default cache,
+    // which network builds keep fresh. Only ecosystems the fleet actually has are resolved,
+    // so a Rust-only fleet never touches the network for them.
+    let needed = fleet_ecosystems(&config);
+    let explicit = explicit_osv_dbs(&args);
+    let osv_opts = osvdb::Options {
+        dir: args
+            .osv_dir
+            .clone()
+            .or_else(|| std::env::var_os(osvdb::DIR_ENV).map(PathBuf::from))
+            .or_else(|| config.osv.dir.clone()),
+        cache: osvdb::default_cache_dir(),
+        sync: cfg!(feature = "network") && !args.offline && osvdb::sync_enabled_by_env(),
+        refresh: config.osv.refresh.unwrap_or(osvdb::DEFAULT_REFRESH),
+        quiet: args.quiet,
+    };
+    let (osv_sources, osv_warnings) = osvdb::resolve_all(&needed, &explicit, &osv_opts);
+    for warning in &osv_warnings {
+        eprintln!("warning: {warning}");
+    }
+    let unresolved: Vec<&str> = needed
+        .iter()
+        .filter(|eco| !osv_sources.contains_key(eco) && !explicit.contains_key(eco))
+        .filter_map(|&eco| osvdb::osv_name(eco))
+        .collect();
+    if !unresolved.is_empty() {
+        eprintln!(
+            "note: no OSV export for {}; run `fleetreach db sync` (network build) or pass \
+             --osv-dir <dir> laid out as <dir>/<Ecosystem>/all.zip",
+            unresolved.join(", ")
+        );
+    }
+    // Freshness gate for OSV data, same contract as the RustSec gate above.
+    if let Some(spec) = &args.max_db_age {
+        let limit = match parse_duration_secs(spec) {
+            Ok(limit) => limit,
+            Err(e) => return fail(&e),
+        };
+        if let Err(e) = osvdb::check_ages(&osv_sources, limit, std::time::SystemTime::now()) {
+            return fail(&e);
+        }
+    }
+    let osv_url = |eco: Ecosystem| {
+        osv_sources
+            .get(&eco)
+            .map(osvdb::OsvSource::url)
+            .or_else(|| explicit.get(&eco).cloned())
+    };
+    let npm_vuln_db = osv_url(Ecosystem::Npm);
+    let pypi_vuln_db = osv_url(Ecosystem::Pypi);
+    let rubygems_vuln_db = osv_url(Ecosystem::RubyGems);
+    let packagist_vuln_db = osv_url(Ecosystem::Packagist);
+    let nuget_vuln_db = osv_url(Ecosystem::NuGet);
+    let julia_vuln_db = osv_url(Ecosystem::Julia);
+    let swift_vuln_db = osv_url(Ecosystem::Swift);
+    let hex_vuln_db = osv_url(Ecosystem::Hex);
+    let ghactions_vuln_db = osv_url(Ecosystem::GitHubActions);
+    let maven_vuln_db = osv_url(Ecosystem::Maven);
     let scan = scan_fleet(
         &db,
         &config,
@@ -485,6 +557,20 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         },
     );
 
+    // Discovered repos that could not be checked out are gaps, never silently absent.
+    let mut scan = scan;
+    scan.outcomes.extend(
+        materialized
+            .failed
+            .iter()
+            .map(|(repo, reason)| RepoOutcome {
+                repo: repo.clone(),
+                status: ScanStatus::Errored {
+                    reason: format!("fleet source: {reason}"),
+                },
+            }),
+    );
+
     if args.verbose {
         for outcome in &scan.outcomes {
             eprintln!("  {} — {:?}", outcome.repo, outcome.status);
@@ -503,23 +589,35 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         );
     }
 
-    // Lockfiles no feeder reads (yarn/pnpm/bun) mean packages that were never matched. The
-    // repo still scans what it can, so this is a visible note rather than an errored gap,
-    // which no flag could ever clear.
-    if !scan.unsupported_lockfiles.is_empty() {
+    // Sources read with less than full coverage (C1): unreadable lockfile formats, manifests
+    // that only declare direct dependencies. The repo still scans what it can, so this is a
+    // visible note (and a gate under --require-full-coverage), not an errored gap.
+    if !scan.coverage.is_empty() {
         eprintln!(
-            "note: {} lockfile(s) in a format fleetreach cannot read were not scanned \
-             (generate a package-lock.json, or set `ecosystem` to scope the repo):",
-            scan.unsupported_lockfiles.len()
+            "note: {} source(s) scanned with incomplete coverage (findings outside what was \
+             read were never matched):",
+            scan.coverage.len()
         );
-        for path in &scan.unsupported_lockfiles {
-            eprintln!("  {}", fleetreach_report::sanitize_cell(path));
+        for gap in &scan.coverage {
+            eprintln!(
+                "  {}: {} [{}] {}",
+                fleetreach_report::sanitize_cell(&gap.repo.0),
+                fleetreach_report::sanitize_cell(&gap.source),
+                gap.level.label(),
+                fleetreach_report::sanitize_cell(&gap.reason),
+            );
         }
     }
+    let coverage_incomplete = !scan.coverage.is_empty();
 
     // 5. Assemble. Ignores + vex_assertions suppress findings; the removed
     //    occurrences are captured for VEX promotion (used only by `-f vex`).
-    let provenance = build_provenance(&db.meta());
+    let mut provenance = build_provenance(&db.meta());
+    provenance.osv = osv_sources
+        .values()
+        .map(osvdb::OsvSource::provenance)
+        .collect();
+    provenance.sources = materialized.provenance.clone();
     let mut suppressions: Vec<Suppression> = config
         .ignores
         .iter()
@@ -772,7 +870,16 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             fail_on_warnings: args.fail_on_warnings,
         },
     );
-    combine_baseline(combine_baseline(code, kev_hit), baseline_new)
+    let code = combine_baseline(combine_baseline(code, kev_hit), baseline_new);
+    // --require-full-coverage: a source read only partly means the fleet cannot be called
+    // clean, the same contract as an errored repo.
+    if args.require_full_coverage && coverage_incomplete {
+        if !args.quiet {
+            eprintln!("error: incomplete coverage under --require-full-coverage (see note above)");
+        }
+        return 2;
+    }
+    code
 }
 
 /// Resolve `-f vex` parameters from flags + `settings.vex` + the report, failing

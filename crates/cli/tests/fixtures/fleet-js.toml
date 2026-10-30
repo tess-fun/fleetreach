@@ -1,0 +1,8 @@
+# yarn v1 and pnpm v9 repos, read by the npm feeder without package-lock.json (spec 02).
+[[repo]]
+id = "yarn-app"
+path = "repos/yarn-app"
+
+[[repo]]
+id = "pnpm-app"
+path = "repos/pnpm-app"

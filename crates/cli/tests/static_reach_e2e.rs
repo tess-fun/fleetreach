@@ -99,6 +99,8 @@ fn static_engine_annotates_a_dependency_finding_reachable() {
         ignores: vec![],
         vex: Default::default(),
         vex_assertions: vec![],
+        osv: Default::default(),
+        sources: Vec::new(),
     };
 
     assess(
@@ -192,6 +194,8 @@ fn uninstantiated_generic_dependency_fn_is_not_reachable() {
         ignores: vec![],
         vex: Default::default(),
         vex_assertions: vec![],
+        osv: Default::default(),
+        sources: Vec::new(),
     };
 
     assess(

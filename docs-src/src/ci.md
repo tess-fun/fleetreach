@@ -43,6 +43,8 @@ trips a failure:
 - `--fail-on-warnings` — also gate on supply-chain warnings.
 - `--fail-on-kev` / `--min-epss 0.5` — gate on real-world exploit risk (needs
   `--enrich`).
+- `--require-full-coverage`: exit 2 if any source was only partly read (a
+  `pom.xml` without a resolved graph, a `bun.lockb`).
 
 ## Drift gating with `diff`
 

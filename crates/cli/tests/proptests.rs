@@ -24,6 +24,8 @@ fn provenance() -> Provenance {
         host_os: "linux".into(),
         host_arch: "x86_64".into(),
         generated_at: "2026-06-24T00:00:00Z".into(),
+        osv: Vec::new(),
+        sources: Vec::new(),
     }
 }
 
@@ -120,7 +122,7 @@ proptest! {
         warns in prop::collection::vec(arb_warn(), 0..15),
         outcomes in prop::collection::vec(arb_outcome(), 0..8),
     ) {
-        let make = || ScanData { skipped_unparseable: 0, unsupported_lockfiles: Vec::new(),
+        let make = || ScanData { skipped_unparseable: 0, coverage: Vec::new(),
             vulnerabilities: vulns.clone(),
             warnings: warns.clone(),
             outcomes: outcomes.clone(),

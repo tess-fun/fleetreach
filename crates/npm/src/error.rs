@@ -30,6 +30,15 @@ pub enum NpmError {
         #[source]
         source: DbError,
     },
+    /// A `pnpm-lock.yaml` or `yarn.lock` at `path` is malformed or in a format version
+    /// this reader does not support. Failing closed: the repo becomes an honest gap.
+    #[error("npm scan {path}: {message}")]
+    Lockfile {
+        /// The lockfile that could not be read.
+        path: PathBuf,
+        /// What is wrong with it.
+        message: String,
+    },
 }
 
 impl NpmError {

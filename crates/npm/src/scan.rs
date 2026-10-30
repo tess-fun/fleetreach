@@ -12,7 +12,7 @@ use std::path::Path;
 
 use fleetreach_core::osv::{sort_dedup_findings, Match, TierCFinding, TierCScan};
 use fleetreach_core::semver::{Version, VersionReq};
-use fleetreach_core::{Ecosystem, RepoId, VulnFinding};
+use fleetreach_core::{DepGraph, Ecosystem, RepoId, VulnFinding};
 
 use crate::db::{affected_fixed, Advisory, NpmDb};
 use crate::error::NpmError;
@@ -29,9 +29,7 @@ use crate::lockfile::{parse_lockfile, InstalledPackage};
 /// failing closed, so an unreadable lockfile is an honest gap rather than a
 /// false-clean scan.
 pub fn scan_offline(repo_dir: &Path, db: &NpmDb, repo: &RepoId) -> Result<TierCScan, NpmError> {
-    let lock_path = repo_dir.join("package-lock.json");
-    let body = std::fs::read_to_string(&lock_path).map_err(|e| NpmError::db(&lock_path, e))?;
-    let (installed, graph) = parse_lockfile(&body).map_err(|e| NpmError::db(&lock_path, e))?;
+    let (installed, graph) = read_lockfile(repo_dir)?;
 
     let mut out: Vec<VulnFinding> = Vec::new();
     let mut skipped_unparseable = 0u32;
@@ -58,6 +56,73 @@ pub fn scan_offline(repo_dir: &Path, db: &NpmDb, repo: &RepoId) -> Result<TierCS
         findings: out,
         skipped_unparseable,
     })
+}
+
+/// The lockfiles the npm feeder reads. When several sit in one directory (a migration left
+/// a stale one behind) every one is read and the package sets are merged: a stale lockfile
+/// may add noise, but picking one could hide what the other installs.
+pub const LOCKFILES: [&str; 3] = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock"];
+
+/// Read every npm-family lockfile in `dir` into one installed-package set and graph. The
+/// graph (for `dependency_path`) comes from the first lockfile in [`LOCKFILES`] order.
+///
+/// # Errors
+///
+/// [`NpmError::Db`] if no lockfile can be read or `package-lock.json` is not valid JSON;
+/// [`NpmError::Lockfile`] if a pnpm or yarn lockfile is malformed or of an unsupported
+/// version. Any one failing fails the whole directory closed.
+pub fn read_lockfile(dir: &Path) -> Result<(Vec<InstalledPackage>, DepGraph), NpmError> {
+    let present: Vec<std::path::PathBuf> = LOCKFILES
+        .iter()
+        .map(|name| dir.join(name))
+        .filter(|p| p.is_file())
+        .collect();
+    if present.is_empty() {
+        let missing = dir.join(LOCKFILES[0]);
+        let err = std::io::Error::new(std::io::ErrorKind::NotFound, "no npm lockfile");
+        return Err(NpmError::db(&missing, err));
+    }
+    let mut merged: std::collections::BTreeMap<(String, String), (bool, bool)> =
+        std::collections::BTreeMap::new();
+    let mut graph: Option<DepGraph> = None;
+    for path in &present {
+        let (installed, g) = read_one(dir, path)?;
+        for p in installed {
+            let entry = merged.entry((p.name, p.version)).or_insert((false, true));
+            entry.0 |= p.direct;
+            entry.1 &= p.dev;
+        }
+        if graph.as_ref().is_none_or(DepGraph::is_empty) {
+            graph = Some(g);
+        }
+    }
+    let installed = merged
+        .into_iter()
+        .map(|((name, version), (direct, dev))| InstalledPackage {
+            name,
+            version,
+            direct,
+            dev,
+        })
+        .collect();
+    Ok((installed, graph.unwrap_or_default()))
+}
+
+fn read_one(dir: &Path, path: &Path) -> Result<(Vec<InstalledPackage>, DepGraph), NpmError> {
+    let body = std::fs::read_to_string(path).map_err(|e| NpmError::db(path, e))?;
+    let lockfile_err = |message: String| NpmError::Lockfile {
+        path: path.to_path_buf(),
+        message,
+    };
+    match path.file_name().and_then(|n| n.to_str()) {
+        Some("pnpm-lock.yaml") => Ok(crate::pnpm::parse(&body)
+            .map_err(lockfile_err)?
+            .into_parts()),
+        Some("yarn.lock") => Ok(crate::yarn::parse(&body, dir)
+            .map_err(lockfile_err)?
+            .into_parts()),
+        _ => parse_lockfile(&body).map_err(|e| NpmError::db(path, e)),
+    }
 }
 
 /// Build a finding if `adv` lists `pkg` as affected at `version`.

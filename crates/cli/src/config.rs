@@ -37,6 +37,10 @@ pub enum ConfigError {
     EmptyAssertionApprover(String),
     #[error("vex_assertion `{id}`: justification `{justification}` is not a VEX WG label")]
     InvalidVexJustification { id: String, justification: String },
+    #[error("settings.osv.refresh: {0}")]
+    InvalidOsvRefresh(String),
+    #[error("source #{index}: {message}")]
+    InvalidSource { index: usize, message: String },
 }
 
 /// The five CISA VEX Working Group `not_affected` justification labels; a
@@ -59,7 +63,34 @@ struct RawConfig {
     #[serde(default)]
     repo: Vec<RawRepo>,
     #[serde(default)]
+    source: Vec<RawSource>,
+    #[serde(default)]
     settings: SettingsTable,
+}
+
+/// A `[[source]]` entry (spec 06): repos discovered from a forge or listed by URL.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawSource {
+    kind: String,
+    org: Option<String>,
+    api_url: Option<String>,
+    #[serde(default)]
+    urls: Vec<String>,
+    #[serde(default)]
+    include: Vec<String>,
+    #[serde(default)]
+    exclude: Vec<String>,
+    #[serde(default)]
+    topics: Vec<String>,
+    #[serde(default)]
+    archived: bool,
+    #[serde(default)]
+    forks: bool,
+    checkout: Option<String>,
+    glob: Option<bool>,
+    glob_max_depth: Option<usize>,
+    token_env: Option<String>,
 }
 
 /// The `[fleet]` table carries no fields yet; `deny_unknown_fields` rejects
@@ -149,6 +180,19 @@ struct SettingsTable {
     vex: RawVex,
     #[serde(default)]
     vex_assertion: Vec<RawVexAssertion>,
+    #[serde(default)]
+    osv: RawOsv,
+}
+
+/// The `[settings.osv]` block (spec 01): where the osv.dev exports live and how often the
+/// default cache is re-checked upstream.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawOsv {
+    /// A directory laid out like the osv.dev bucket (`<dir>/<Ecosystem>/all.zip`).
+    dir: Option<String>,
+    /// e.g. `6h`; how stale a cached export may get before a sync re-checks it.
+    refresh: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -190,6 +234,18 @@ pub struct Config {
     pub ignores: Vec<Ignore>,
     pub vex: VexConfig,
     pub vex_assertions: Vec<VexAssertion>,
+    pub osv: OsvSettings,
+    /// `[[source]]` entries; expanded into repos by [`crate::sources`] at scan time.
+    pub sources: Vec<crate::sources::Source>,
+}
+
+/// Validated `[settings.osv]` (spec 01).
+#[derive(Debug, Clone, Default)]
+pub struct OsvSettings {
+    /// Resolved against the config file's directory. Not required to exist: an absent
+    /// ecosystem directory just falls through to the default cache.
+    pub dir: Option<PathBuf>,
+    pub refresh: Option<std::time::Duration>,
 }
 
 #[derive(Debug, Clone)]
@@ -330,11 +386,88 @@ impl Config {
             });
         }
 
+        let refresh = match raw.settings.osv.refresh {
+            Some(spec) => {
+                let secs = crate::db::parse_duration_secs(&spec)
+                    .map_err(ConfigError::InvalidOsvRefresh)?;
+                let secs = u64::try_from(secs)
+                    .map_err(|_| ConfigError::InvalidOsvRefresh(format!("`{spec}` is negative")))?;
+                Some(std::time::Duration::from_secs(secs))
+            }
+            None => None,
+        };
+        let osv = OsvSettings {
+            dir: raw.settings.osv.dir.map(|d| base_dir.join(d)),
+            refresh,
+        };
+
+        let mut sources = Vec::with_capacity(raw.source.len());
+        for (index, src) in raw.source.into_iter().enumerate() {
+            let invalid = |message: String| ConfigError::InvalidSource {
+                index: index + 1,
+                message,
+            };
+            let kind = match src.kind.as_str() {
+                "github" => crate::sources::SourceKind::GitHub,
+                "git" => crate::sources::SourceKind::Git,
+                other => {
+                    return Err(invalid(format!(
+                        "kind `{other}` is not one of `github`, `git`"
+                    )))
+                }
+            };
+            let checkout = match src.checkout.as_deref().unwrap_or("lockfiles") {
+                "lockfiles" => crate::sources::Checkout::Lockfiles,
+                "full" => crate::sources::Checkout::Full,
+                other => {
+                    return Err(invalid(format!(
+                        "checkout `{other}` is not one of `lockfiles`, `full`"
+                    )))
+                }
+            };
+            match kind {
+                crate::sources::SourceKind::GitHub if src.org.is_none() => {
+                    return Err(invalid("kind `github` needs `org`".to_string()))
+                }
+                crate::sources::SourceKind::Git if src.urls.is_empty() => {
+                    return Err(invalid("kind `git` needs `urls`".to_string()))
+                }
+                _ => {}
+            }
+            if let Some(url) = src.urls.iter().find(|u| !u.starts_with("https://")) {
+                return Err(invalid(format!("url `{url}` must be https://")));
+            }
+            if let Some(api) = src
+                .api_url
+                .as_deref()
+                .filter(|u| !u.starts_with("https://"))
+            {
+                return Err(invalid(format!("api_url `{api}` must be https://")));
+            }
+            sources.push(crate::sources::Source {
+                kind,
+                org: src.org,
+                api_url: src.api_url,
+                urls: src.urls,
+                include: src.include,
+                exclude: src.exclude,
+                topics: src.topics,
+                archived: src.archived,
+                forks: src.forks,
+                checkout,
+                glob: src.glob.unwrap_or(true),
+                glob_max_depth: src.glob_max_depth.unwrap_or(DEFAULT_GLOB_MAX_DEPTH),
+                token_env: src.token_env,
+            });
+        }
+
         Ok(Config {
             repos,
             ignores,
             vex,
             vex_assertions,
+            osv,
+            sources,
         })
     }
 }

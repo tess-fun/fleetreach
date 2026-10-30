@@ -39,11 +39,16 @@
 mod db;
 mod error;
 mod lockfile;
+mod manifest;
+mod pnpm;
+mod resolved;
 mod scan;
+mod yaml;
+mod yarn;
 
 pub use db::{npm_db_path, Advisory, NpmDb};
 pub use error::{DbError, NpmError};
 /// The OSV version-match outcome, shared with the other ecosystem feeders.
 pub use fleetreach_core::osv::Match;
 pub use lockfile::{installed_packages, InstalledPackage};
-pub use scan::{parse_npm_version, scan_offline};
+pub use scan::{parse_npm_version, read_lockfile, scan_offline, LOCKFILES};

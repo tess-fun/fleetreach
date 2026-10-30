@@ -19,6 +19,8 @@ fn provenance() -> Provenance {
         host_os: "linux".into(),
         host_arch: "x86_64".into(),
         generated_at: "t".into(),
+        osv: Vec::new(),
+        sources: Vec::new(),
     }
 }
 
@@ -68,6 +70,7 @@ fn report(vulns: Vec<VulnFinding>, warnings: Vec<WarnFinding>) -> FleetReport {
         vulnerabilities: vulns,
         warnings,
         outcomes: vec![],
+        coverage: Vec::new(),
     }
 }
 

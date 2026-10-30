@@ -36,12 +36,30 @@ fn file_url(name: &str) -> String {
     )
 }
 
+/// An empty, per-process cache root, so a developer's real `~/.cache/fleetreach/osv` can never
+/// satisfy a test that expects a missing mirror.
+fn empty_cache() -> PathBuf {
+    let dir =
+        std::env::temp_dir().join(format!("fleetreach-cli-test-cache-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// Run the binary hermetically: no OSV auto-sync, no inherited OSV directory, an empty cache.
 fn run(args: &[&str]) -> Output {
-    Command::cargo_bin("fleetreach")
-        .unwrap()
-        .args(args)
-        .output()
-        .unwrap()
+    run_env(args, &[])
+}
+
+fn run_env(args: &[&str], env: &[(&str, &std::ffi::OsStr)]) -> Output {
+    let mut cmd = Command::cargo_bin("fleetreach").unwrap();
+    cmd.args(args)
+        .env("FLEETREACH_OSV_SYNC", "off")
+        .env("XDG_CACHE_HOME", empty_cache())
+        .env_remove("FLEETREACH_OSV_DIR");
+    for (key, value) in env {
+        cmd.env(key, value);
+    }
+    cmd.output().unwrap()
 }
 
 fn code(out: &Output) -> i32 {
@@ -86,6 +104,89 @@ fn npm_repo_scans_against_osv_mirror() {
     assert_eq!(vuln["ecosystem"], "npm");
     assert_eq!(vuln["severity"], "high"); // mapped from the GHSA band
     assert_eq!(vuln["occurrences"][0]["package"], "lodash");
+}
+
+/// Lay out a temp OSV directory the way osv.dev's bucket does, with the npm fixture records
+/// under `npm/`.
+fn osv_dir_with_npm(tag: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!("fleetreach-osvdir-{tag}-{}", std::process::id()));
+    let npm = root.join("npm");
+    std::fs::create_dir_all(&npm).unwrap();
+    for entry in std::fs::read_dir(manifest().join("tests/fixtures/npm-osv")).unwrap() {
+        let entry = entry.unwrap();
+        std::fs::copy(entry.path(), npm.join(entry.file_name())).unwrap();
+    }
+    root
+}
+
+#[test]
+fn osv_dir_serves_the_npm_export_without_a_per_ecosystem_flag() {
+    let dir = osv_dir_with_npm("flag");
+    let out = run(&[
+        "scan",
+        "-c",
+        &cfg("fleet-npm.toml"),
+        "--db",
+        &db(),
+        "--osv-dir",
+        dir.to_str().unwrap(),
+        "-f",
+        "json",
+        "-q",
+    ]);
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(
+        value["vulnerabilities"][0]["advisory_id"],
+        "GHSA-p6mc-m468-83gw"
+    );
+    let osv = &value["provenance"]["osv"][0];
+    assert_eq!(osv["ecosystem"], "npm");
+    assert_eq!(osv["source"], "dir");
+    assert_eq!(osv["age_basis"], "mtime");
+}
+
+#[test]
+fn osv_dir_from_env_and_the_default_cache_are_used() {
+    let dir = osv_dir_with_npm("env");
+    let out = run_env(
+        &["scan", "-c", &cfg("fleet-npm.toml"), "--db", &db(), "-q"],
+        &[("FLEETREACH_OSV_DIR", dir.as_os_str())],
+    );
+    assert_eq!(code(&out), 1, "env dir: stderr: {}", stderr(&out));
+
+    // The same layout as the default cache root (`$XDG_CACHE_HOME/fleetreach/osv`).
+    let cache = std::env::temp_dir().join(format!("fleetreach-xdg-{}", std::process::id()));
+    let osv = cache.join("fleetreach").join("osv");
+    std::fs::create_dir_all(&osv).unwrap();
+    let _ = std::fs::remove_dir_all(osv.join("npm"));
+    std::fs::rename(dir.join("npm"), osv.join("npm")).unwrap();
+    let out = run_env(
+        &["scan", "-c", &cfg("fleet-npm.toml"), "--db", &db(), "-q"],
+        &[("XDG_CACHE_HOME", cache.as_os_str())],
+    );
+    assert_eq!(code(&out), 1, "cache: stderr: {}", stderr(&out));
+}
+
+#[test]
+fn missing_osv_export_names_the_fix() {
+    let out = run(&["scan", "-c", &cfg("fleet-npm.toml"), "--db", &db()]);
+    assert_eq!(code(&out), 2);
+    assert!(
+        stderr(&out).contains("fleetreach db sync"),
+        "stderr: {}",
+        stderr(&out)
+    );
+}
+
+#[test]
+fn db_status_lists_every_osv_ecosystem() {
+    let dir = osv_dir_with_npm("status");
+    let out = run(&["db", "status", "--osv-dir", dir.to_str().unwrap()]);
+    assert_eq!(code(&out), 0, "stderr: {}", stderr(&out));
+    let text = stdout(&out);
+    assert!(text.contains("npm") && text.contains("present"), "{text}");
+    assert!(text.contains("PyPI") && text.contains("missing"), "{text}");
 }
 
 #[test]
@@ -147,9 +248,88 @@ fn polyglot_repo_scans_every_ecosystem_and_nested_lockfiles() {
     );
     // `.flox/env/manifest.toml` (Flox, lowercase) is not a Julia `Manifest.toml`, even on a
     // case-insensitive filesystem; misdetecting it would error the repo (no Julia mirror).
-    // The unreadable yarn.lock is named, not silently skipped.
+    // yarn.lock is read now (spec 02); the binary bun.lockb is named, not silently skipped.
     let err = stderr(&out);
-    assert!(err.contains("polyglot: legacy-ui/yarn.lock"), "{err}");
+    assert!(err.contains("polyglot: legacy-bun/bun.lockb"), "{err}");
+    assert!(!err.contains("yarn.lock"), "{err}");
+}
+
+#[test]
+fn yarn_and_pnpm_repos_scan_without_package_lock() {
+    let out = run(&[
+        "scan",
+        "-c",
+        &cfg("fleet-js.toml"),
+        "--db",
+        &db(),
+        "--npm-vuln-db",
+        &file_url("npm-osv"),
+        "-f",
+        "json",
+        "-q",
+    ]);
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(value["summary"]["repos_errored"], 0, "{value}");
+    assert!(value.get("coverage").is_none(), "{value}");
+    let occ: Vec<&serde_json::Value> = value["vulnerabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|v| v["occurrences"].as_array().unwrap())
+        .collect();
+    let find = |repo: &str| {
+        occ.iter()
+            .find(|o| o["repo"] == repo && o["package"] == "lodash")
+            .unwrap_or_else(|| panic!("no lodash hit in {repo}: {occ:?}"))
+    };
+    assert_eq!(find("yarn-app")["dependency_kind"], "direct");
+    // In pnpm-app lodash is a devDependency: still found, and labelled dev.
+    assert_eq!(find("pnpm-app")["scope"], "dev");
+}
+
+#[test]
+fn incomplete_coverage_is_reported_and_can_gate() {
+    let args = |extra: &[&'static str]| {
+        let mut v = vec![
+            "scan".to_string(),
+            "-c".into(),
+            cfg("fleet-polyglot.toml"),
+            "--db".into(),
+            db(),
+            "--npm-vuln-db".into(),
+            file_url("npm-osv"),
+            "-f".into(),
+            "json".into(),
+        ];
+        v.extend(extra.iter().map(|s| s.to_string()));
+        v
+    };
+    let plain = args(&[]);
+    let out = run(&plain.iter().map(String::as_str).collect::<Vec<_>>());
+    assert_eq!(
+        code(&out),
+        1,
+        "a coverage gap alone does not gate by default"
+    );
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    let gap = value["coverage"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|g| g["source"] == "legacy-bun/bun.lockb")
+        .unwrap_or_else(|| panic!("{}", value["coverage"]));
+    assert_eq!(gap["repo"], "polyglot");
+    assert_eq!(gap["level"], "partial");
+    assert!(
+        stderr(&out).contains("Incomplete coverage"),
+        "{}",
+        stderr(&out)
+    );
+
+    let gated = args(&["--require-full-coverage"]);
+    let out = run(&gated.iter().map(String::as_str).collect::<Vec<_>>());
+    assert_eq!(code(&out), 2, "stderr: {}", stderr(&out));
 }
 
 #[test]
@@ -886,5 +1066,83 @@ fn static_reachability_requires_explicit_consent() {
     assert!(
         err.contains("build scripts") || err.contains("arbitrary code"),
         "names the risk; stderr: {err}"
+    );
+}
+
+fn temp_fleet(tag: &str, toml: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("fleetreach-src-{tag}-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("fleet.toml");
+    std::fs::write(&path, toml).unwrap();
+    path
+}
+
+#[test]
+fn unsynced_github_source_fails_closed_with_the_fix() {
+    // Never listed: the fleet is unknown, so the scan must not run as if it were complete.
+    let path = temp_fleet(
+        "unsynced",
+        "[[source]]\nkind = \"github\"\norg = \"acme\"\n",
+    );
+    let out = run(&["scan", "-c", path.to_str().unwrap(), "--db", &db()]);
+    assert_eq!(code(&out), 2, "stderr: {}", stderr(&out));
+    assert!(
+        stderr(&out).contains("fleetreach fleet sync"),
+        "{}",
+        stderr(&out)
+    );
+}
+
+#[test]
+fn invalid_sources_are_config_errors() {
+    for (toml, needle) in [
+        (
+            "[[source]]\nkind = \"gitlab\"\norg = \"x\"\n",
+            "kind `gitlab`",
+        ),
+        ("[[source]]\nkind = \"github\"\n", "needs `org`"),
+        ("[[source]]\nkind = \"git\"\n", "needs `urls`"),
+        (
+            "[[source]]\nkind = \"git\"\nurls = [\"git@github.com:a/b.git\"]\n",
+            "must be https://",
+        ),
+        (
+            "[[source]]\nkind = \"git\"\nurls = [\"https://x/a/b\"]\ncheckout = \"half\"\n",
+            "checkout `half`",
+        ),
+    ] {
+        let path = temp_fleet("invalid", toml);
+        let out = run(&["scan", "-c", path.to_str().unwrap(), "--db", &db()]);
+        assert_eq!(code(&out), 2, "{toml}");
+        assert!(stderr(&out).contains(needle), "{toml}: {}", stderr(&out));
+    }
+}
+
+// ---- fleet sources (spec 06), offline cases ----
+
+fn write_fleet(tag: &str, body: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("fleetreach-src-{tag}-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("fleet.toml");
+    std::fs::write(&path, body).unwrap();
+    path
+}
+
+#[test]
+fn never_synced_source_repos_are_gaps_not_clean() {
+    let path = write_fleet(
+        "unsynced",
+        "[[source]]\nkind = \"git\"\nurls = [\"https://example.com/acme/api.git\"]\n",
+    );
+    let out = run(&["fleet", "list", "-c", path.to_str().unwrap()]);
+    assert_eq!(code(&out), 0, "stderr: {}", stderr(&out));
+    assert!(stdout(&out).contains("acme/api") && stdout(&out).contains("MISSING"));
+
+    let out = run(&["scan", "-c", path.to_str().unwrap(), "--db", &db()]);
+    assert_eq!(code(&out), 2, "stderr: {}", stderr(&out));
+    assert!(
+        stderr(&out).contains("fleetreach fleet sync"),
+        "{}",
+        stderr(&out)
     );
 }

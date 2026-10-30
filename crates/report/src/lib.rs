@@ -37,10 +37,10 @@
 //! #         schema_version: 1,
 //! #         provenance: Provenance { tool_version: "0".into(), rustsec_crate_version: "0".into(),
 //! #             db_commit: None, db_timestamp: None, host_os: "linux".into(),
-//! #             host_arch: "x86_64".into(), generated_at: "t".into() },
+//! #             host_arch: "x86_64".into(), generated_at: "t".into(), osv: vec![], sources: vec![] },
 //! #         summary: Summary { repos_scanned: 1, repos_errored: 0, vuln_count: 1, warn_count: 0,
 //! #             max_severity: Severity::High, stale_ignores: vec![] },
-//! #         vulnerabilities: vec![vuln], warnings: vec![], outcomes: vec![] }
+//! #         vulnerabilities: vec![vuln], warnings: vec![], outcomes: vec![], coverage: vec![] }
 //! # }
 //! // Render the fleet report as a plain-text table (no color for piped output).
 //! let table = to_table(&report(), false);
@@ -1395,6 +1395,15 @@ pub fn summary_line(report: &FleetReport) -> String {
     if !s.stale_ignores.is_empty() {
         let ignores: Vec<String> = s.stale_ignores.iter().map(|i| sanitize_cell(i)).collect();
         line.push_str(&format!(" Stale ignores: {}.", ignores.join(", ")));
+    }
+    if !report.coverage.is_empty() {
+        let repos: std::collections::BTreeSet<&str> =
+            report.coverage.iter().map(|g| g.repo.0.as_str()).collect();
+        line.push_str(&format!(
+            " Incomplete coverage: {} source(s) in {} repo(s).",
+            report.coverage.len(),
+            repos.len()
+        ));
     }
     line
 }
