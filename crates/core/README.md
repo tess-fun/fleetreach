@@ -43,6 +43,7 @@ let occurrence = Occurrence::InRepo {
     dependency_path: vec![],
     active: None,
     source: Default::default(),
+    scope: Default::default(),
 };
 assert!(occurrence.is_vulnerable()); // installed is below the patched range
 ```

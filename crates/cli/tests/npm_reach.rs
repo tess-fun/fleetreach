@@ -52,6 +52,7 @@ fn npm_finding(id: &str, package: &str) -> VulnFinding {
             dependency_path: vec![],
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         }],
     }
 }

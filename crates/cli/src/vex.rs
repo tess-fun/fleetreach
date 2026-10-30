@@ -617,6 +617,7 @@ mod tests {
                 dependency_path: vec![],
                 active: None,
                 source: Default::default(),
+                scope: Default::default(),
             }],
             affected_functions: vec!["foo::bad".into()],
             reachable: None,

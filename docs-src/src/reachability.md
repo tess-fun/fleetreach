@@ -29,6 +29,28 @@ additionally marks a package `NotReachable` when no import path reaches it. That
 negative is best-effort sound (a dynamic `require(expr)` it can't see may make it
 wrong), which is why it is a separate opt-in.
 
+### Python import graph
+
+PyPI gets the same kind of package import graph. It reads every `import` in your
+source and, when the repo holds a virtualenv (any directory with a
+`pyvenv.cfg`, such as `.venv`), in every installed distribution, mapping module
+names to distributions through their `*.dist-info/RECORD` (so `import yaml` is
+PyYAML and `google.cloud.storage` is google-cloud-storage). A reached
+distribution is `Reachable` with a witness chain such as
+`fastapi → starlette → python-multipart`, found even when the import is optional
+or comes from a dependency that is not on the lockfile's reported path. A
+distribution that loads plugins through entry points reaches every distribution
+that registers one.
+
+It is positive-only: an unreached distribution stays `Unknown`. Python imports
+dynamically often enough, and large applications load so much of their
+dependencies, that an import-level "not reachable" would rarely be both true and
+useful. Without a virtualenv, a direct dependency your code imports still gets a
+one-step witness.
+
+The table shows the chain in the Reach column (`imported via a → b → c`) for npm
+and Python alike.
+
 ## Static (`--reachability=static`)
 
 `--reachability=static` is a **sound** MIR call-graph analysis that proves

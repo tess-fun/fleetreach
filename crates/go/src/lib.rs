@@ -200,6 +200,7 @@ fn build_finding(
             dependency_path: Vec::new(),
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         }],
         affected_functions: osv.map(affected_symbols).unwrap_or_default(),
         reachable: None,

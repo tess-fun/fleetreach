@@ -14,6 +14,7 @@ pub mod diff;
 pub mod enrich;
 pub mod npm_reach;
 pub mod orchestrate;
+pub mod py_reach;
 pub mod reach;
 pub mod resolve;
 pub mod scan;
@@ -21,8 +22,8 @@ pub mod static_reach;
 pub mod vex;
 
 pub use assemble::{
-    assemble, build_report, combine_baseline, drop_phantom, exit_code, retain_min_epss, retain_new,
-    retain_reachable, Assembled, GateConfig, SuppressedOccurrence, Suppression,
+    assemble, build_report, combine_baseline, drop_dev, drop_phantom, exit_code, retain_min_epss,
+    retain_new, retain_reachable, Assembled, GateConfig, SuppressedOccurrence, Suppression,
 };
 pub use config::{Config, ConfigError};
 pub use orchestrate::{scan_fleet, ScanData, Toolchain};

@@ -78,6 +78,7 @@ how to opt a repo out of the multi-ecosystem scan.
 | `--enrich` | Add CISA KEV + FIRST EPSS, re-rank by real-world risk. |
 | `--why <pkg>` | Show how a package gets into the tree, fleet-wide. |
 | `--resolve-features` | Mark phantom (never-built) optional dependencies. |
+| `--ignore-dev-deps` | Drop findings on dev/build-only packages (marked `(dev only)` in the table). |
 | `--reachability[=heuristic\|static]` | Reachability analysis (see [Reachability](./reachability.md)). |
 
 Run `fleetreach scan --help` for the complete list.

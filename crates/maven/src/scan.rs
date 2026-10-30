@@ -89,6 +89,7 @@ fn match_advisory(
             installed: to_semver(version),
             patched,
             direct: pkg.direct,
+            dev: false,
             dependency_path: Vec::new(),
             repo,
             reach_reason: "package-level scan (no toolchain): version match only",

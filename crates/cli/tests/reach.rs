@@ -51,6 +51,7 @@ fn finding(id: &str, repo: &str) -> VulnFinding {
             dependency_path: vec![],
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         }],
     }
 }
@@ -153,6 +154,7 @@ fn tier_c(
             dependency_path: vec![],
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         }],
     }
 }

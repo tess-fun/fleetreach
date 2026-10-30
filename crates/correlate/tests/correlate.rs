@@ -63,6 +63,7 @@ fn arb_vuln() -> impl Strategy<Value = VulnFinding> {
                 dependency_path: vec![],
                 active: None,
                 source: Default::default(),
+                scope: Default::default(),
             }],
         })
 }
@@ -95,6 +96,7 @@ fn arb_warn() -> impl Strategy<Value = WarnFinding> {
                 dependency_path: vec![],
                 active: None,
                 source: Default::default(),
+                scope: Default::default(),
             }],
         })
 }
@@ -192,6 +194,7 @@ fn version_divergent_occurrences_keep_independent_verdicts() {
             dependency_path: vec![],
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         }],
     };
 
@@ -244,6 +247,7 @@ fn identical_occurrences_are_deduplicated() {
             dependency_path: vec![],
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         }],
     };
 

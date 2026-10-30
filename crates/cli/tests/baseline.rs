@@ -45,6 +45,7 @@ fn vuln(id: &str) -> VulnFinding {
             dependency_path: vec![],
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         }],
     }
 }
@@ -100,6 +101,7 @@ fn drop_phantom_removes_unbuilt_keeps_built_and_unknown() {
         dependency_path: vec![],
         active,
         source: Default::default(),
+        scope: Default::default(),
     };
     let finding = |id: &str, active: Option<bool>| VulnFinding {
         advisory_id: id.into(),

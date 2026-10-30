@@ -227,7 +227,9 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use crate::semver::{Version, VersionReq};
-use crate::{DependencyKind, Ecosystem, Occurrence, Reachability, RepoId, Severity, VulnFinding};
+use crate::{
+    DepScope, DependencyKind, Ecosystem, Occurrence, Reachability, RepoId, Severity, VulnFinding,
+};
 
 /// One advisory's facts for a single affected package, version type `V`. The range bounds
 /// and enumerated `versions` are parsed once at load (see [`load`]).
@@ -744,6 +746,9 @@ pub struct TierCFinding<'a> {
     pub patched: Vec<VersionReq>,
     /// Whether the package is a direct dependency.
     pub direct: bool,
+    /// Whether the package is reachable only through dev/build dependency groups; `false`
+    /// where the feeder's lockfile does not record scope (the conservative default).
+    pub dev: bool,
     /// A representative introducer chain `[root, …, package]`; empty when the feeder cannot
     /// compute a dependency graph.
     pub dependency_path: Vec<String>,
@@ -781,6 +786,11 @@ impl TierCFinding<'_> {
                 dependency_path: self.dependency_path,
                 active: None,
                 source: Default::default(),
+                scope: if self.dev {
+                    DepScope::Dev
+                } else {
+                    DepScope::Runtime
+                },
             }],
             affected_functions: Vec::new(),
             reachable: None,
@@ -1043,6 +1053,7 @@ mod tests {
             dependency_path: Vec::new(),
             repo: &repo,
             reach_reason: "test",
+            dev: false,
         }
         .build()
     }

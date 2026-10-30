@@ -32,6 +32,7 @@ fn occ(repo: &str) -> Occurrence {
         dependency_path: vec![],
         active: None,
         source: Default::default(),
+        scope: Default::default(),
     }
 }
 

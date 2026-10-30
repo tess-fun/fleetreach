@@ -153,6 +153,38 @@ fn polyglot_repo_scans_every_ecosystem_and_nested_lockfiles() {
 }
 
 #[test]
+fn dev_only_finding_is_marked_and_can_be_ignored() {
+    let base = |extra: &[&str]| {
+        let mut args = vec!["scan", "-c"];
+        let c = cfg("fleet-npm-dev.toml");
+        let d = db();
+        let u = file_url("npm-osv");
+        args.extend_from_slice(&[&c, "--db", &d, "--npm-vuln-db", &u]);
+        args.extend_from_slice(extra);
+        run(&args)
+    };
+    let out = base(&["-f", "json", "-q"]);
+    assert_eq!(
+        code(&out),
+        1,
+        "a dev finding still gates by default: {}",
+        stderr(&out)
+    );
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(
+        value["vulnerabilities"][0]["occurrences"][0]["scope"],
+        "dev"
+    );
+
+    let table = stdout(&base(&[]));
+    assert!(table.contains("(dev only)"), "{table}");
+
+    let out = base(&["--ignore-dev-deps"]);
+    assert_eq!(code(&out), 0, "dropped -> clean; stderr: {}", stderr(&out));
+    assert!(stderr(&out).contains("dev/build-only"), "{}", stderr(&out));
+}
+
+#[test]
 fn nested_lockfile_without_glob_is_an_honest_gap() {
     let out = run(&[
         "scan",

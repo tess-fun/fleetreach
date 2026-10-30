@@ -72,6 +72,27 @@ pub enum DependencyKind {
     Transitive,
 }
 
+/// Which part of the project a package serves. A `Dev` package is reachable only through
+/// development/build dependency groups (npm `devDependencies`, uv/poetry dev groups, Pipfile
+/// `[dev-packages]`, composer `require-dev`), so it is not shipped in the runtime artifact.
+/// Additive — defaults to [`Runtime`](DepScope::Runtime), which is also the conservative
+/// answer whenever the lockfile does not say.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DepScope {
+    #[default]
+    Runtime,
+    Dev,
+}
+
+impl DepScope {
+    /// Whether this is the default runtime scope — used to omit the field from JSON in the
+    /// common case, keeping `schema_version: 1` output byte-identical.
+    pub fn is_runtime(&self) -> bool {
+        matches!(self, DepScope::Runtime)
+    }
+}
+
 /// Where a vulnerable package resolves *from* — which registry, git remote, or
 /// local path. This is the identity a VEX subcomponent PURL must carry (spec
 /// §4.1): a crates.io dep is the bare `pkg:cargo/<name>@<ver>` PURL, but a git or
@@ -147,6 +168,10 @@ pub enum Occurrence {
         /// crates.io case, so `schema_version: 1` output is unaffected.
         #[serde(default, skip_serializing_if = "DepSource::is_crates_io")]
         source: DepSource,
+        /// Runtime or dev/build-only (see [`DepScope`]). Additive — omitted from JSON for
+        /// the runtime default, so `schema_version: 1` output is unaffected.
+        #[serde(default, skip_serializing_if = "DepScope::is_runtime")]
+        scope: DepScope,
     },
     Toolchain {
         /// e.g. `"stable 1.xx"` — there is no repo to pin a toolchain advisory to.
@@ -179,6 +204,7 @@ impl Occurrence {
     ///     dependency_path: vec![],
     ///     active: None,
     ///     source: Default::default(),
+    ///     scope: Default::default(),
     /// };
     /// assert!(at(1, 1, 9).is_vulnerable());  // below the fix
     /// assert!(!at(1, 2, 0).is_vulnerable()); // at the fix

@@ -72,3 +72,13 @@ With `--resolve-features` (needs the repo's buildable source), each finding is
 marked built vs. a phantom `Cargo.lock`-only optional dependency that is never
 compiled; the table flags those with `⚠ not in default build`. Default scans
 stay lockfile-only and portable.
+
+## Dev and build dependencies
+
+Where the lockfile records it, each finding says whether the package is only
+installed for development: npm `"dev": true`, uv dependency groups, poetry
+`groups`/`category`, Pipfile `[dev-packages]`, and composer `packages-dev`. A
+package counts as dev only if no runtime dependency (including extras) reaches
+it. The table marks those `(dev only)`, JSON carries `"scope": "dev"`, and
+`--ignore-dev-deps` drops them. A dev finding still gates by default: a
+vulnerable linter or test runner runs in CI with your credentials.

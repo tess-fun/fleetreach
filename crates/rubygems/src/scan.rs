@@ -96,6 +96,7 @@ fn match_advisory(
             installed: to_semver(version),
             patched,
             direct: gem.direct,
+            dev: false,
             dependency_path: dependency_path.to_vec(),
             repo,
             reach_reason: "package-level scan (no toolchain): version match only",

@@ -589,6 +589,7 @@ mod tests {
             dependency_path: vec![],
             active,
             source: Default::default(),
+            scope: Default::default(),
         }
     }
 

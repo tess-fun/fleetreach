@@ -202,6 +202,7 @@ fn match_module(
             dependency_path: Vec::new(),
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         }],
         affected_functions: affected.symbols(module),
         reachable: None,

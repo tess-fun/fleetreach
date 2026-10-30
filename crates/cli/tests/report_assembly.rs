@@ -45,6 +45,7 @@ fn vuln(id: &str, severity: Severity, repo: &str) -> VulnFinding {
             dependency_path: vec![],
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         }],
     }
 }
@@ -63,6 +64,7 @@ fn warn(id: &str, repo: &str) -> WarnFinding {
             dependency_path: vec![],
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         }],
     }
 }
@@ -245,6 +247,7 @@ fn repo_scoped_suppression_removes_only_that_repos_occurrence() {
             dependency_path: vec![],
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         });
     }
     let scan = ScanData {

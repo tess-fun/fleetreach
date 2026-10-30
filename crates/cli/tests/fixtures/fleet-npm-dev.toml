@@ -1,0 +1,4 @@
+# lodash is a devDependency only: the finding is scope "dev".
+[[repo]]
+id = "npm-dev"
+path = "repos/npm-dev"

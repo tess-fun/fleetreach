@@ -274,6 +274,7 @@ mod tests {
                     dependency_path: vec![],
                     active: None,
                     source: Default::default(),
+                    scope: Default::default(),
                 })
                 .collect(),
             affected_functions: funcs.iter().map(|s| (*s).into()).collect(),

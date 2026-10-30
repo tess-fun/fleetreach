@@ -6,12 +6,12 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
-use fleetreach_core::{FleetReport, Severity};
+use fleetreach_core::{Ecosystem, FleetReport, Severity};
 use fleetreach_report as report;
 use fleetreach_scan::{routes_to, AdvisoryDb};
 
 use crate::assemble::{
-    assemble, combine_baseline, drop_phantom, exit_code, retain_min_epss, retain_new,
+    assemble, combine_baseline, drop_dev, drop_phantom, exit_code, retain_min_epss, retain_new,
     retain_reachable, Assembled, GateConfig, SuppressedOccurrence, Suppression,
 };
 use crate::cli::{fail, usage_fail, BuildSandbox, Format, ReachMode, SeverityArg, VexScopeArg};
@@ -22,7 +22,7 @@ use crate::orchestrate::{
     discover_lockfiles, scan_fleet, GhActionsScan, GoScan, HexScan, JuliaScan, MavenScan, NpmScan,
     NuGetScan, PackagistScan, PyPiScan, RubyGemsScan, SwiftScan,
 };
-use crate::{npm_reach, reach, resolve, static_reach, vex};
+use crate::{npm_reach, py_reach, reach, resolve, static_reach, vex};
 
 #[derive(Parser)]
 pub(crate) struct ScanArgs {
@@ -59,6 +59,12 @@ pub(crate) struct ScanArgs {
         help = "suppress findings on phantom (unbuilt optional) deps; implies --resolve-features"
     )]
     ignore_phantom: bool,
+    #[arg(
+        long,
+        help = "suppress findings on dev/build-only deps (npm devDependencies, uv/poetry dev \
+                groups, Pipfile dev-packages, composer require-dev)"
+    )]
+    ignore_dev_deps: bool,
 
     // exploit-risk enrichment (CISA KEV + FIRST EPSS)
     #[arg(long, help = "enrich findings with CISA KEV + EPSS (network)")]
@@ -543,6 +549,14 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         }
     }
 
+    // 5a1. Suppress dev/build-only findings, if requested.
+    if args.ignore_dev_deps {
+        let dropped = drop_dev(&mut fleet_report);
+        if dropped > 0 && !args.quiet {
+            eprintln!("suppressed {dropped} finding(s) on dev/build-only packages");
+        }
+    }
+
     // 5a2. Exploit-risk enrichment (KEV + EPSS), opt-in. Annotate, optionally
     //      filter by EPSS, then re-rank by exploit risk (the action queue).
     let enrich_requested = args.enrich
@@ -600,7 +614,13 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
     if let Some(mode) = reach_mode {
         match mode {
             ReachMode::Heuristic => {
-                reach::assess(&mut fleet_report, &config);
+                // npm and PyPI are assessed by their import-graph engines below, which
+                // resolve first-party imports themselves, so the grep skips them.
+                reach::assess_except(
+                    &mut fleet_report,
+                    &config,
+                    &[Ecosystem::Npm, Ecosystem::Pypi],
+                );
                 // npm gets the richer module-import-graph engine (transitive reachability +
                 // a witness chain; sound-positive, with an opt-in best-effort NotReachable),
                 // overriding the grep heuristic for npm findings.
@@ -611,6 +631,9 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
                         prune: args.npm_prune_unreachable,
                     },
                 );
+                // PyPI likewise gets a package import graph over the repo's virtualenv(s):
+                // transitive reachability with a witness chain, positive-only.
+                py_reach::assess(&mut fleet_report, &config);
             }
             ReachMode::Static => {
                 // Static reachability COMPILES each repo, which runs its build

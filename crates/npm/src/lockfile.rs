@@ -21,6 +21,9 @@ pub struct InstalledPackage {
     pub name: String,
     pub version: String,
     pub direct: bool,
+    /// Installed only for development (`"dev": true` on every copy in the lockfile): npm
+    /// marks a package dev when no production dependency path reaches it.
+    pub dev: bool,
 }
 
 #[derive(Deserialize)]
@@ -54,11 +57,16 @@ struct PackageEntry {
     /// against the registry advisory DB.
     #[serde(default)]
     link: bool,
+    /// npm's own marker: reachable only through `devDependencies`.
+    #[serde(default)]
+    dev: bool,
 }
 
 #[derive(Deserialize)]
 struct DependencyEntry {
     version: Option<String>,
+    #[serde(default)]
+    dev: bool,
     #[serde(default)]
     dependencies: BTreeMap<String, DependencyEntry>,
 }
@@ -125,11 +133,13 @@ fn dependency_graph(lock: &Lockfile) -> DepGraph {
 
 fn installed_from(lock: &Lockfile) -> Vec<InstalledPackage> {
     // `direct` may be discovered as true on a later occurrence, so collect into a map
-    // keyed by (name, version) and OR the flag in.
-    let mut found: BTreeMap<(String, String), bool> = BTreeMap::new();
-    let mut add = |name: String, version: String, direct: bool| {
-        let entry = found.entry((name, version)).or_insert(false);
-        *entry = *entry || direct;
+    // keyed by (name, version) and OR the flag in. `dev` is the reverse: a copy that is not
+    // dev means the package ships, so AND it.
+    let mut found: BTreeMap<(String, String), (bool, bool)> = BTreeMap::new();
+    let mut add = |name: String, version: String, direct: bool, dev: bool| {
+        let entry = found.entry((name, version)).or_insert((false, true));
+        entry.0 = entry.0 || direct;
+        entry.1 = entry.1 && dev;
     };
 
     if !lock.packages.is_empty() {
@@ -152,7 +162,7 @@ fn installed_from(lock: &Lockfile) -> Vec<InstalledPackage> {
             // check, that nested copy would be mislabeled direct and get a "fixable in
             // your manifest" hint it does not deserve.
             let is_direct = is_top_level(path) && direct.contains(name);
-            add(name.to_string(), version.to_string(), is_direct);
+            add(name.to_string(), version.to_string(), is_direct, entry.dev);
         }
     } else {
         // lockfileVersion 1: top-level entries are direct, nested ones transitive.
@@ -161,10 +171,11 @@ fn installed_from(lock: &Lockfile) -> Vec<InstalledPackage> {
 
     found
         .into_iter()
-        .map(|((name, version), direct)| InstalledPackage {
+        .map(|((name, version), (direct, dev))| InstalledPackage {
             name,
             version,
             direct,
+            dev,
         })
         .collect()
 }
@@ -207,11 +218,11 @@ fn is_top_level(path: &str) -> bool {
 fn collect_v1(
     deps: &BTreeMap<String, DependencyEntry>,
     direct: bool,
-    add: &mut impl FnMut(String, String, bool),
+    add: &mut impl FnMut(String, String, bool, bool),
 ) {
     for (name, entry) in deps {
         if let Some(version) = entry.version.as_deref() {
-            add(name.clone(), version.to_string(), direct);
+            add(name.clone(), version.to_string(), direct, entry.dev);
         }
         collect_v1(&entry.dependencies, false, add);
     }
@@ -226,6 +237,42 @@ mod tests {
         pkgs.iter()
             .map(|p| (p.name.as_str(), p.version.as_str(), p.direct))
             .collect()
+    }
+
+    #[test]
+    fn dev_only_when_every_copy_is_dev() {
+        // mocha is dev-only; debug is installed for dev at the top level but a production
+        // dependency nests the same version, so it ships and is not dev.
+        let lock = r#"{
+          "lockfileVersion": 3,
+          "packages": {
+            "": { "dependencies": { "express": "^4" }, "devDependencies": { "mocha": "^10" } },
+            "node_modules/express": { "version": "4.18.0" },
+            "node_modules/mocha": { "version": "10.2.0", "dev": true },
+            "node_modules/debug": { "version": "4.3.4", "dev": true },
+            "node_modules/express/node_modules/debug": { "version": "4.3.4" }
+          }
+        }"#;
+        let (pkgs, _) = parse_lockfile(lock).unwrap();
+        let dev = |n: &str| pkgs.iter().find(|p| p.name == n).unwrap().dev;
+        assert!(dev("mocha"));
+        assert!(!dev("debug"));
+        assert!(!dev("express"));
+    }
+
+    #[test]
+    fn v1_dev_flag_is_read() {
+        let lock = r#"{
+          "lockfileVersion": 1,
+          "dependencies": {
+            "mocha": { "version": "10.2.0", "dev": true },
+            "lodash": { "version": "4.17.20" }
+          }
+        }"#;
+        let (pkgs, _) = parse_lockfile(lock).unwrap();
+        let dev = |n: &str| pkgs.iter().find(|p| p.name == n).unwrap().dev;
+        assert!(dev("mocha"));
+        assert!(!dev("lodash"));
     }
 
     #[test]

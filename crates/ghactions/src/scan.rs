@@ -122,6 +122,7 @@ fn match_advisory(
             patched,
             // A workflow references an action directly.
             direct: true,
+            dev: false,
             dependency_path: Vec::new(),
             repo,
             reach_reason: "workflow scan (no toolchain): action version match only",

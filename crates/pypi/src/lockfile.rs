@@ -35,6 +35,9 @@ pub struct InstalledPackage {
     pub name: String,
     pub version: String,
     pub direct: bool,
+    /// Installed only for development: reached from a dev dependency group (uv/poetry) or
+    /// Pipfile `[dev-packages]`, and from no runtime dependency.
+    pub dev: bool,
 }
 
 /// Which Python lockfile a repo uses.
@@ -117,7 +120,10 @@ fn uv_graph(lock_text: &str) -> Result<DepGraph, toml::de::Error> {
         } else {
             &pkg.name
         };
-        graph.add_edges(from, pkg.dependencies.iter().map(|d| d.name.clone()));
+        graph.add_edges(from, pkg.runtime_deps().map(|d| d.name.clone()));
+        if pkg.source.is_project() {
+            graph.add_edges(from, pkg.dev_deps().map(|d| d.name.clone()));
+        }
     }
     Ok(graph)
 }
@@ -139,20 +145,23 @@ fn poetry_graph(lock_text: &str, direct: &BTreeSet<String>) -> Result<DepGraph, 
 }
 
 /// Collapse duplicate `(name, version)` rows into one, with `direct` winning if any
-/// occurrence was direct, and sort for deterministic output.
+/// occurrence was direct and `dev` only if every occurrence was dev, and sort for
+/// deterministic output.
 fn dedupe(pkgs: Vec<InstalledPackage>) -> Vec<InstalledPackage> {
-    let mut by_key: std::collections::BTreeMap<(String, String), bool> =
+    let mut by_key: std::collections::BTreeMap<(String, String), (bool, bool)> =
         std::collections::BTreeMap::new();
     for p in pkgs {
-        let e = by_key.entry((p.name, p.version)).or_insert(false);
-        *e = *e || p.direct;
+        let e = by_key.entry((p.name, p.version)).or_insert((false, true));
+        e.0 = e.0 || p.direct;
+        e.1 = e.1 && p.dev;
     }
     by_key
         .into_iter()
-        .map(|((name, version), direct)| InstalledPackage {
+        .map(|((name, version), (direct, dev))| InstalledPackage {
             name,
             version,
             direct,
+            dev,
         })
         .collect()
 }
@@ -173,6 +182,26 @@ struct UvPackage {
     source: UvSource,
     #[serde(default)]
     dependencies: Vec<UvDep>,
+    /// Resolved extras (`extra name -> deps`); installed when the extra is requested, so
+    /// counted as runtime.
+    #[serde(default, rename = "optional-dependencies")]
+    optional_dependencies: BTreeMap<String, Vec<UvDep>>,
+    /// Resolved dependency groups (`group -> deps`) of a project package, e.g. `dev`.
+    #[serde(default, rename = "dev-dependencies")]
+    dev_dependencies: BTreeMap<String, Vec<UvDep>>,
+}
+
+impl UvPackage {
+    /// The edges every install of this package can follow: its dependencies plus its extras.
+    fn runtime_deps(&self) -> impl Iterator<Item = &UvDep> {
+        self.dependencies
+            .iter()
+            .chain(self.optional_dependencies.values().flatten())
+    }
+
+    fn dev_deps(&self) -> impl Iterator<Item = &UvDep> {
+        self.dev_dependencies.values().flatten()
+    }
 }
 
 #[derive(Deserialize, Default)]
@@ -196,35 +225,63 @@ struct UvDep {
     name: String,
 }
 
-/// Parse `uv.lock`. The direct set is the union of the `dependencies` of every project
-/// package (`source = { virtual | editable }`); those project packages are themselves
-/// skipped (not registry artifacts). All other `[[package]]` entries are installed
-/// dependencies.
+/// Parse `uv.lock`. The direct set is the union of the dependencies, extras and dependency
+/// groups of every project package (`source = { virtual | editable }`); those project packages
+/// are themselves skipped (not registry artifacts). All other `[[package]]` entries are
+/// installed dependencies. A package is `dev` when a project's dependency group reaches it and
+/// no project's dependencies or extras do.
 pub fn parse_uv(lock_text: &str) -> Result<Vec<InstalledPackage>, toml::de::Error> {
     let lock: UvLock = toml::from_str(lock_text)?;
+    let norm = |d: &UvDep| normalize_name(&d.name);
     let mut direct: BTreeSet<String> = BTreeSet::new();
+    let (mut runtime_roots, mut dev_roots) = (Vec::new(), Vec::new());
+    // Name-level edges: uv may lock several versions of one name (forks), which share a node.
+    let mut edges: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for pkg in &lock.package {
         if pkg.source.is_project() {
-            for dep in &pkg.dependencies {
-                direct.insert(normalize_name(&dep.name));
-            }
+            runtime_roots.extend(pkg.runtime_deps().map(norm));
+            dev_roots.extend(pkg.dev_deps().map(norm));
+        } else {
+            edges
+                .entry(normalize_name(&pkg.name))
+                .or_default()
+                .extend(pkg.runtime_deps().map(norm));
         }
     }
+    direct.extend(runtime_roots.iter().cloned());
+    direct.extend(dev_roots.iter().cloned());
+    let runtime = reach(&edges, runtime_roots);
+    let dev_reach = reach(&edges, dev_roots);
     let pkgs = lock
         .package
         .into_iter()
         .filter(|p| !p.source.is_project())
         .filter_map(|p| {
             let version = p.version?;
-            let is_direct = direct.contains(&normalize_name(&p.name));
+            let key = normalize_name(&p.name);
             Some(InstalledPackage {
+                direct: direct.contains(&key),
+                dev: dev_reach.contains(&key) && !runtime.contains(&key),
                 name: p.name,
                 version,
-                direct: is_direct,
             })
         })
         .collect();
     Ok(pkgs)
+}
+
+/// Every name reachable from `roots` over `edges` (roots included).
+fn reach(edges: &BTreeMap<String, BTreeSet<String>>, roots: Vec<String>) -> BTreeSet<String> {
+    let mut seen = BTreeSet::new();
+    let mut todo = roots;
+    while let Some(name) = todo.pop() {
+        if seen.insert(name.clone()) {
+            if let Some(next) = edges.get(&name) {
+                todo.extend(next.iter().filter(|n| !seen.contains(*n)).cloned());
+            }
+        }
+    }
+    seen
 }
 
 // ---- poetry.lock (TOML) ----
@@ -244,6 +301,20 @@ struct PoetryPackage {
     /// the `dependency_path` graph.
     #[serde(default)]
     dependencies: BTreeMap<String, toml::Value>,
+    /// Poetry < 1.5: `"main"` or `"dev"`.
+    #[serde(default)]
+    category: Option<String>,
+    /// Poetry 2: the dependency groups that pull this package in (`["main", "dev"]`).
+    #[serde(default)]
+    groups: Vec<String>,
+}
+
+impl PoetryPackage {
+    /// Installed only for a non-main group: poetry records which groups need each package.
+    fn is_dev(&self) -> bool {
+        self.category.as_deref() == Some("dev")
+            || (!self.groups.is_empty() && !self.groups.iter().any(|g| g == "main"))
+    }
 }
 
 /// Parse `poetry.lock`. Every `[[package]]` is an installed dependency; `direct` is set
@@ -258,10 +329,12 @@ pub fn parse_poetry(
         .into_iter()
         .map(|p| {
             let is_direct = direct.contains(&normalize_name(&p.name));
+            let dev = p.is_dev();
             InstalledPackage {
                 name: p.name,
                 version: p.version,
                 direct: is_direct,
+                dev,
             }
         })
         .collect())
@@ -346,6 +419,7 @@ pub fn parse_pipfile_lock(
     direct: &BTreeSet<String>,
 ) -> Result<Vec<InstalledPackage>, serde_json::Error> {
     let lock: PipfileLock = serde_json::from_str(lock_text)?;
+    let runtime: BTreeSet<String> = lock.default.keys().map(|n| normalize_name(n)).collect();
     let mut out = Vec::new();
     for (name, entry) in lock.default.into_iter().chain(lock.develop) {
         let Some(raw) = entry.version else { continue };
@@ -353,11 +427,12 @@ pub fn parse_pipfile_lock(
         if version.is_empty() {
             continue;
         }
-        let is_direct = direct.contains(&normalize_name(&name));
+        let key = normalize_name(&name);
         out.push(InstalledPackage {
+            direct: direct.contains(&key),
+            dev: !runtime.contains(&key),
             name,
             version,
-            direct: is_direct,
         });
     }
     Ok(out)
@@ -522,14 +597,116 @@ optional = false
                 name: "x".into(),
                 version: "1.0".into(),
                 direct: false,
+                dev: false,
             },
             InstalledPackage {
                 name: "x".into(),
                 version: "1.0".into(),
                 direct: true,
+                dev: false,
             },
         ]);
         assert_eq!(rows(&pkgs), vec![("x", "1.0", true)]);
+    }
+
+    #[test]
+    fn uv_dev_groups_and_extras() {
+        // app: requests (runtime) + [cli] extra -> click (runtime); dev group -> pytest -> pluggy.
+        // urllib3 is reached from both requests and pytest, so it ships.
+        let lock = r#"
+[[package]]
+name = "app"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [{ name = "requests" }]
+
+[package.optional-dependencies]
+cli = [{ name = "click" }]
+
+[package.dev-dependencies]
+dev = [{ name = "pytest" }]
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [{ name = "urllib3" }]
+
+[[package]]
+name = "click"
+version = "8.1.7"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "pytest"
+version = "8.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [{ name = "pluggy" }, { name = "urllib3" }]
+
+[[package]]
+name = "pluggy"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "urllib3"
+version = "2.2.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+        let pkgs = parse_uv(lock).unwrap();
+        let get = |n: &str| pkgs.iter().find(|p| p.name == n).unwrap();
+        assert!(!get("requests").dev && get("requests").direct);
+        assert!(
+            !get("click").dev && get("click").direct,
+            "extras are runtime"
+        );
+        assert!(
+            get("pytest").dev && get("pytest").direct,
+            "dev group deps are direct"
+        );
+        assert!(get("pluggy").dev && !get("pluggy").direct);
+        assert!(!get("urllib3").dev, "reached at runtime too");
+        // The dev group and extras now have provenance paths.
+        let graph = uv_graph(lock).unwrap();
+        assert_eq!(graph.chain_to("pluggy"), vec!["app", "pytest", "pluggy"]);
+        assert_eq!(graph.chain_to("click"), vec!["app", "click"]);
+    }
+
+    #[test]
+    fn poetry_groups_and_category_mark_dev() {
+        let lock = r#"
+[[package]]
+name = "requests"
+version = "2.31.0"
+groups = ["main", "dev"]
+
+[[package]]
+name = "pytest"
+version = "8.0.0"
+groups = ["dev"]
+
+[[package]]
+name = "black"
+version = "24.1.0"
+category = "dev"
+"#;
+        let pkgs = parse_poetry(lock, &BTreeSet::new()).unwrap();
+        let dev = |n: &str| pkgs.iter().find(|p| p.name == n).unwrap().dev;
+        assert!(!dev("requests"));
+        assert!(dev("pytest"));
+        assert!(dev("black"));
+    }
+
+    #[test]
+    fn pipfile_develop_only_is_dev() {
+        let lock = r#"{
+          "default": { "requests": { "version": "==2.31.0" } },
+          "develop": { "pytest": { "version": "==8.0.0" }, "requests": { "version": "==2.31.0" } }
+        }"#;
+        let pkgs = dedupe(parse_pipfile_lock(lock, &BTreeSet::new()).unwrap());
+        let dev = |n: &str| pkgs.iter().find(|p| p.name == n).unwrap().dev;
+        assert!(dev("pytest"));
+        assert!(!dev("requests"));
     }
 
     #[test]

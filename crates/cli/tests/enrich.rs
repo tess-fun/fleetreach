@@ -34,6 +34,7 @@ fn vuln(id: &str, cve: &str, severity: Severity) -> VulnFinding {
             dependency_path: vec![],
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         }],
         affected_functions: vec![],
         reachable: None,

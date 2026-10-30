@@ -297,6 +297,7 @@ fn map_vulnerability(
         dependency_path,
         active: None,
         source: dep_source(&vuln.package),
+        scope: Default::default(),
     };
     // Functions/types the advisory marks vulnerable at this installed version.
     let affected_functions = vuln
@@ -323,6 +324,7 @@ fn map_warning(repo: &RepoId, warning: &rustsec::Warning, tree: Option<&Tree>) -
         dependency_path,
         active: None,
         source: dep_source(&warning.package),
+        scope: Default::default(),
     };
     warn_finding(
         warning.advisory.as_ref().map(|m| m.id.to_string()),

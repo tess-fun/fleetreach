@@ -61,6 +61,7 @@ fn a_vuln() -> VulnFinding {
             dependency_path: vec![],
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         }],
     }
 }
@@ -95,6 +96,7 @@ fn impact_and_fix_first_sanitize_untrusted_cells() {
         dependency_path: vec![],
         active: None,
         source: Default::default(),
+        scope: Default::default(),
     }];
     let r = report(vec![v]);
     for out in [
@@ -313,6 +315,7 @@ fn impact_ranks_by_repos_affected() {
         dependency_path: vec![],
         active: None,
         source: Default::default(),
+        scope: Default::default(),
     });
     let mut narrow = a_vuln();
     narrow.advisory_id = "RUSTSEC-NARROW".into();
@@ -337,6 +340,7 @@ fn blast_splits_direct_and_transitive_with_fix_hint() {
             dependency_path: vec![],
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         }
     }
     fn vuln(id: &str, occs: Vec<Occurrence>) -> VulnFinding {
@@ -395,6 +399,7 @@ fn packages_roll_up_advisories_per_dependency() {
             dependency_path: vec![],
             active: None,
             source: Default::default(),
+            scope: Default::default(),
         }
     }
     fn vuln(id: &str, occs: Vec<Occurrence>) -> VulnFinding {
@@ -456,6 +461,7 @@ fn fix_first_ranks_severity_over_blast_radius() {
                 dependency_path: vec![],
                 active: None,
                 source: Default::default(),
+                scope: Default::default(),
             })
             .collect()
     };
@@ -522,6 +528,7 @@ fn fixable(repo: &str, pkg: &str, installed: &str, fixed: &str) -> Occurrence {
         dependency_path: vec![],
         active: None,
         source: Default::default(),
+        scope: Default::default(),
     }
 }
 
@@ -655,4 +662,39 @@ fn remediation_json_round_trips() {
     assert_eq!(parsed[0]["package"], "foo");
     assert_eq!(parsed[0]["action"]["type"], "upgrade");
     assert_eq!(parsed[0]["action"]["to"], "1.2.0");
+}
+
+#[test]
+fn table_shows_the_reach_witness_chain() {
+    let mut v = a_vuln();
+    v.reachable = Some(true);
+    v.reachability = Some(Reachability {
+        verdict: ReachVerdict::Reachable {
+            witness: vec![
+                "fastapi".into(),
+                "starlette".into(),
+                "python-\u{1b}[31mmultipart".into(),
+            ],
+        },
+        config: "import-graph".into(),
+        engine: "fleetreach-pypi-imports".into(),
+        targets: vec![],
+        witness: None,
+    });
+    let t = to_table(&report(vec![v]), false);
+    assert!(
+        t.contains("imported via fastapi → starlette → python-"),
+        "{t}"
+    );
+    assert!(!t.contains('\u{1b}'), "witness steps are sanitized: {t}");
+}
+
+#[test]
+fn table_marks_dev_only_occurrences() {
+    let mut v = a_vuln();
+    if let Occurrence::InRepo { scope, .. } = &mut v.occurrences[0] {
+        *scope = fleetreach_core::DepScope::Dev;
+    }
+    let t = to_table(&report(vec![v]), false);
+    assert!(t.contains("(dev only)"), "{t}");
 }

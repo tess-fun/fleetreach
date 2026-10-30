@@ -37,6 +37,7 @@ fn arb_occurrence() -> impl Strategy<Value = Occurrence> {
         dependency_path: vec![],
         active: None,
         source: Default::default(),
+        scope: Default::default(),
     })
 }
 

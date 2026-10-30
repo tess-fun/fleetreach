@@ -7,8 +7,8 @@
 use std::collections::BTreeSet;
 
 use fleetreach_core::{
-    max_severity_of, FleetReport, Occurrence, Provenance, RepoId, RepoOutcome, ScanStatus,
-    Severity, Summary,
+    max_severity_of, DepScope, FleetReport, Occurrence, Provenance, RepoId, RepoOutcome,
+    ScanStatus, Severity, Summary,
 };
 
 /// Drop occurrences known to be phantom — a `Cargo.lock`-only optional dependency
@@ -17,21 +17,40 @@ use fleetreach_core::{
 /// Returns the number of findings removed entirely. Occurrences with unknown
 /// build status (`active: None`) are always kept (fail-closed).
 pub fn drop_phantom(report: &mut FleetReport) -> usize {
-    fn is_phantom(occurrence: &Occurrence) -> bool {
+    drop_occurrences(report, |o| {
         matches!(
-            occurrence,
+            o,
             Occurrence::InRepo {
                 active: Some(false),
                 ..
             }
         )
-    }
+    })
+}
 
+/// Drop occurrences on dev/build-only packages (`scope: dev`, from the lockfile's dev
+/// groups) and remove any finding left with no occurrences, like [`drop_phantom`]. A
+/// package whose scope the lockfile does not record is runtime, so it is always kept.
+pub fn drop_dev(report: &mut FleetReport) -> usize {
+    drop_occurrences(report, |o| {
+        matches!(
+            o,
+            Occurrence::InRepo {
+                scope: DepScope::Dev,
+                ..
+            }
+        )
+    })
+}
+
+/// Remove every occurrence matching `drop`, then every finding left without one.
+/// Recomputes summary counts and returns the number of findings removed entirely.
+fn drop_occurrences(report: &mut FleetReport, drop: impl Fn(&Occurrence) -> bool) -> usize {
     for v in &mut report.vulnerabilities {
-        v.occurrences.retain(|o| !is_phantom(o));
+        v.occurrences.retain(|o| !drop(o));
     }
     for w in &mut report.warnings {
-        w.occurrences.retain(|o| !is_phantom(o));
+        w.occurrences.retain(|o| !drop(o));
     }
 
     let before = report.vulnerabilities.len() + report.warnings.len();

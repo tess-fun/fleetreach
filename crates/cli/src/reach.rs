@@ -38,7 +38,17 @@ use crate::config::Config;
 
 /// Annotate each vulnerability's `reachable` from the source-presence heuristic.
 pub fn assess(report: &mut FleetReport, config: &Config) {
+    assess_except(report, config, &[]);
+}
+
+/// [`assess`], skipping the `skip` ecosystems: those an import-graph engine assesses
+/// afterwards, whose verdict replaces this grep's. The grep re-reads the repo's source for
+/// every finding, so on a large fleet the skipped work is most of the run.
+pub fn assess_except(report: &mut FleetReport, config: &Config, skip: &[Ecosystem]) {
     for finding in &mut report.vulnerabilities {
+        if skip.contains(&finding.ecosystem) {
+            continue;
+        }
         if finding.ecosystem.is_cargo() {
             assess_cargo_symbols(finding, config);
         } else if let Some(scan) = import_scanner(finding.ecosystem) {

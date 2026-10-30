@@ -32,7 +32,7 @@
 //! #         occurrences: vec![Occurrence::InRepo {
 //! #             repo: RepoId("app".into()), package: "foo".into(), installed: Version::new(1, 0, 0),
 //! #             patched: vec![], dependency_kind: DependencyKind::Direct,
-//! #             dependency_path: vec![], active: None, source: Default::default() }] };
+//! #             dependency_path: vec![], active: None, source: Default::default(), scope: Default::default() }] };
 //! #     FleetReport {
 //! #         schema_version: 1,
 //! #         provenance: Provenance { tool_version: "0".into(), rustsec_crate_version: "0".into(),
@@ -58,7 +58,7 @@ use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, Table};
 use fleetreach_core::{
     remediations, Action, DependencyKind, Ecosystem, Exploitability, FleetReport, Occurrence,
-    ReachTier, RemediationItem, Severity, VulnFinding, WarnFinding,
+    ReachTier, ReachVerdict, Reachability, RemediationItem, Severity, VulnFinding, WarnFinding,
 };
 use serde::Serialize;
 
@@ -1425,7 +1425,7 @@ fn vuln_table(vulns: &[VulnFinding], color: bool) -> String {
             row.push(risk_cell(&v.exploit, color));
         }
         if reach_checked {
-            row.push(Cell::new(reach_label(v.reachable)));
+            row.push(Cell::new(reach_cell(v)));
         }
         row.push(Cell::new(sanitize_cell(&v.advisory_id)));
         row.push(Cell::new(title_with_functions(v)));
@@ -1433,6 +1433,41 @@ fn vuln_table(vulns: &[VulnFinding], color: bool) -> String {
         table.add_row(row);
     }
     table.to_string()
+}
+
+/// The Reach cell: the heuristic label, or — when an engine found a path — the witness chain
+/// that shows how the vulnerable package is reached (`imported via fastapi → starlette →
+/// python-multipart`), shortened in the middle when long.
+fn reach_cell(v: &VulnFinding) -> String {
+    let Some(Reachability {
+        verdict: ReachVerdict::Reachable { witness },
+        config,
+        ..
+    }) = &v.reachability
+    else {
+        return reach_label(v.reachable).to_string();
+    };
+    if witness.is_empty() {
+        return reach_label(v.reachable).to_string();
+    }
+    let steps: Vec<String> = witness.iter().map(|s| sanitize_cell(s)).collect();
+    let chain = if steps.len() > 5 {
+        format!(
+            "{} → {} → … → {} → {}",
+            steps[0],
+            steps[1],
+            steps[steps.len() - 2],
+            steps[steps.len() - 1]
+        )
+    } else {
+        steps.join(" → ")
+    };
+    let verb = if config == "import-graph" {
+        "imported"
+    } else {
+        "reachable"
+    };
+    format!("{verb} via {chain}")
 }
 
 /// Honest labels for the source-presence heuristic — never "(un)reachable".
@@ -1547,6 +1582,7 @@ fn locations(occurrences: &[Occurrence]) -> String {
                 dependency_kind,
                 dependency_path,
                 active,
+                scope,
                 ..
             } => {
                 // The upgrade target — the lower bound of the patched range —
@@ -1561,9 +1597,15 @@ fn locations(occurrences: &[Occurrence]) -> String {
                 } else {
                     ""
                 };
+                // Lockfile dev groups: installed for development, not shipped.
+                let dev = if scope.is_runtime() {
+                    ""
+                } else {
+                    " (dev only)"
+                };
                 // repo id and package name are untrusted (fleet.toml / Cargo.lock).
                 format!(
-                    "{}/{}@{installed}{upgrade}{}{phantom}",
+                    "{}/{}@{installed}{upgrade}{}{phantom}{dev}",
                     sanitize_cell(&repo.0),
                     sanitize_cell(package),
                     dependency_hint(*dependency_kind, dependency_path)

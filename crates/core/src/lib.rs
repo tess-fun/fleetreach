@@ -32,6 +32,7 @@
 //!     dependency_path: vec![],
 //!     active: None,
 //!     source: Default::default(),
+//!     scope: Default::default(),
 //! };
 //! assert!(occurrence.is_vulnerable()); // installed is below the patched range
 //! ```
@@ -50,8 +51,8 @@ mod severity;
 
 pub use depgraph::DepGraph;
 pub use finding::{
-    DepSource, DependencyKind, Ecosystem, Exploitability, Occurrence, ReachVerdict, Reachability,
-    RepoId, VulnFinding, WarnFinding, WarnKind,
+    DepScope, DepSource, DependencyKind, Ecosystem, Exploitability, Occurrence, ReachVerdict,
+    Reachability, RepoId, VulnFinding, WarnFinding, WarnKind,
 };
 pub use outcome::{RepoOutcome, ScanStatus};
 pub use remediation::{remediations, Action, ReachTier, RemediationItem};

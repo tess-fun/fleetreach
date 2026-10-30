@@ -103,6 +103,7 @@ fn match_advisory(
             installed: to_semver(version),
             patched,
             direct: pkg.direct,
+            dev: pkg.dev,
             dependency_path: dependency_path.to_vec(),
             repo,
             reach_reason: "package-level scan (no toolchain): version match only",
@@ -150,6 +151,7 @@ mod tests {
             name: name.to_string(),
             version: version.to_string(),
             direct,
+            dev: false,
         }
     }
 

@@ -33,6 +33,9 @@ pub struct InstalledPackage {
     pub name: String,
     pub version: String,
     pub direct: bool,
+    /// Listed only under `packages-dev`: Composer installs it for development (`require-dev`
+    /// and what only those need), not with `--no-dev`.
+    pub dev: bool,
 }
 
 #[derive(Deserialize)]
@@ -86,13 +89,15 @@ pub fn installed_packages(
     let packages = lock
         .packages
         .iter()
-        .chain(&lock.packages_dev)
-        .map(|p| {
+        .map(|p| (p, false))
+        .chain(lock.packages_dev.iter().map(|p| (p, true)))
+        .map(|(p, dev)| {
             let name = p.name.to_ascii_lowercase();
             InstalledPackage {
                 direct: direct.contains(&name),
                 name,
                 version: p.version.clone(),
+                dev,
             }
         })
         .collect();
@@ -143,19 +148,22 @@ fn manifest_info(composer_json: &str) -> (String, BTreeSet<String>) {
 }
 
 /// Collapse duplicate `(name, version)` rows into one, with `direct` winning if any
-/// occurrence was direct, and sort for deterministic output.
+/// occurrence was direct and `dev` only if every occurrence was dev, and sort for
+/// deterministic output.
 fn dedupe(packages: Vec<InstalledPackage>) -> Vec<InstalledPackage> {
-    let mut by_key: BTreeMap<(String, String), bool> = BTreeMap::new();
+    let mut by_key: BTreeMap<(String, String), (bool, bool)> = BTreeMap::new();
     for p in packages {
-        let e = by_key.entry((p.name, p.version)).or_insert(false);
-        *e = *e || p.direct;
+        let e = by_key.entry((p.name, p.version)).or_insert((false, true));
+        e.0 = e.0 || p.direct;
+        e.1 = e.1 && p.dev;
     }
     by_key
         .into_iter()
-        .map(|((name, version), direct)| InstalledPackage {
+        .map(|((name, version), (direct, dev))| InstalledPackage {
             name,
             version,
             direct,
+            dev,
         })
         .collect()
 }
@@ -258,13 +266,27 @@ mod tests {
                 name: "a/b".into(),
                 version: "1.0".into(),
                 direct: false,
+                dev: false,
             },
             InstalledPackage {
                 name: "a/b".into(),
                 version: "1.0".into(),
                 direct: true,
+                dev: false,
             },
         ]);
         assert_eq!(rows(&pkgs), vec![("a/b", "1.0", true)]);
+    }
+
+    #[test]
+    fn packages_dev_are_dev() {
+        let lock = r#"{
+          "packages": [ { "name": "monolog/monolog", "version": "3.5.0" } ],
+          "packages-dev": [ { "name": "phpunit/phpunit", "version": "10.5.0" } ]
+        }"#;
+        let (pkgs, _) = installed_packages(lock, None).unwrap();
+        let dev = |n: &str| pkgs.iter().find(|p| p.name == n).unwrap().dev;
+        assert!(!dev("monolog/monolog"));
+        assert!(dev("phpunit/phpunit"));
     }
 }

@@ -6,7 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Python reachability with witness chains.** `--reachability` now builds a package import
+  graph for PyPI over the repo's virtualenv(s), resolving module names through each
+  distribution's `RECORD` and following plugin entry points. A reached package is
+  `Reachable` with the chain that loads it (e.g. `fastapi → starlette → python-multipart`);
+  an unreached one stays `Unknown` (never `NotReachable`).
+- **Witness chains in the table.** The Reach column shows how a package is reached
+  (`imported via a → b → c`) for the npm and Python import graphs and the static engine.
+- **Dev/build-only scope.** Findings record `"scope": "dev"` when the lockfile installs the
+  package only for development (npm `dev`, uv dependency groups, poetry groups/category,
+  Pipfile `develop`, composer `packages-dev`); the table marks them `(dev only)` and
+  `--ignore-dev-deps` drops them.
+
 ### Fixed
+
+- uv.lock dependency groups and extras were not read, so packages pulled in only by them had
+  no dependency path and were never marked direct.
 
 - **Polyglot and monorepo repos were only partly scanned, silently.** A repo was scanned as
   the first ecosystem found at its root, and `glob` only discovered `Cargo.lock`s, so a
