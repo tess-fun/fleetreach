@@ -1,5 +1,5 @@
 name: "fleetreach"
-description: "Fleet-wide Rust dependency advisory audit — uploads findings to GitHub code scanning (SARIF)."
+description: "Fleet-wide dependency advisory audit across 12 ecosystems; uploads findings to GitHub code scanning (SARIF)."
 branding:
   icon: "shield"
   color: "orange"
@@ -21,16 +21,33 @@ inputs:
     description: "Upload the SARIF to GitHub code scanning."
     required: false
     default: "true"
+  version:
+    description: "fleetreach version to install (e.g. '1.2.0'), or 'latest'. A prebuilt release binary is used when one exists for the runner; otherwise it is built with cargo."
+    required: false
+    default: "latest"
 
 runs:
   using: "composite"
   steps:
     - name: Install fleetreach
       shell: bash
-      # `network` enables advisory-DB fetch + KEV/EPSS/NVD enrichment, which a CI
-      # consumer needs (it pulls a rustls TLS stack — fine for the Action image;
-      # the default crate build stays pure-Rust). See M-5.
-      run: cargo install --locked --features network --git https://github.com/tess-fun/fleetreach fleetreach-cli
+      env:
+        FLEETREACH_VERSION: ${{ inputs.version }}
+        FLEETREACH_INSTALL_DIR: ${{ runner.temp }}/fleetreach-bin
+      # Prefer the prebuilt, checksum-verified release binary (seconds). Fall back to building
+      # with cargo (minutes) on runners without one, such as Windows, or before the first
+      # release with binaries. Both carry the `network` feature (OSV sync, enrichment).
+      run: |
+        if [ "$RUNNER_OS" != "Windows" ] && sh "${{ github.action_path }}/scripts/install.sh"; then
+          echo "$FLEETREACH_INSTALL_DIR" >> "$GITHUB_PATH"
+        else
+          echo "no prebuilt binary for this runner; building with cargo"
+          if [ "$FLEETREACH_VERSION" = "latest" ]; then
+            cargo install --locked --features network fleetreach-cli
+          else
+            cargo install --locked --features network fleetreach-cli --version "$FLEETREACH_VERSION"
+          fi
+        fi
 
     - name: Generate a default fleet.toml (scan this repo) if none provided
       if: ${{ inputs.config == '' }}

@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Prebuilt binaries, Homebrew and a container image.** Each tagged release now builds
+  `fleetreach` (with the `network` feature) for Linux x86-64/ARM64, macOS Apple silicon/Intel
+  and Windows x86-64, attaches the archives with `SHA256SUMS` and signed build provenance,
+  publishes `ghcr.io/tess-fun/fleetreach` for linux/amd64 and linux/arm64, and renders a
+  Homebrew formula. `scripts/install.sh` installs the right archive after checking its
+  SHA-256. The GitHub Action installs the prebuilt binary (seconds) instead of compiling from
+  source, with a new `version` input; it still builds with cargo where no binary exists.
 - **OSV exports without per-ecosystem flags.** Network builds fetch exactly the osv.dev
   exports a fleet needs into `~/.cache/fleetreach/osv/` and keep them fresh (conditional
   requests, atomic install, never replacing a good copy with a failed download). One

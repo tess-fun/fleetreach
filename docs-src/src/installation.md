@@ -1,5 +1,48 @@
 # Installation
 
+## Prebuilt binaries
+
+Every [GitHub release](https://github.com/tess-fun/fleetreach/releases) carries binaries
+built with the `network` feature for:
+
+| Platform | Archive |
+|----------|---------|
+| Linux x86-64 (glibc 2.35+) | `fleetreach-<version>-x86_64-unknown-linux-gnu.tar.gz` |
+| Linux ARM64 (glibc 2.35+) | `fleetreach-<version>-aarch64-unknown-linux-gnu.tar.gz` |
+| macOS Apple silicon | `fleetreach-<version>-aarch64-apple-darwin.tar.gz` |
+| macOS Intel | `fleetreach-<version>-x86_64-apple-darwin.tar.gz` |
+| Windows x86-64 | `fleetreach-<version>-x86_64-pc-windows-msvc.zip` |
+
+Each release also has a `SHA256SUMS` file and signed build-provenance attestations
+(`gh attestation verify <archive> --repo tess-fun/fleetreach`).
+
+The install script picks the right archive, checks its SHA-256 and installs it to
+`~/.local/bin` (override with `--to <dir>` or `FLEETREACH_INSTALL_DIR`; pin a version with
+`--version <x.y.z>`):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/tess-fun/fleetreach/main/scripts/install.sh | sh
+```
+
+## Homebrew
+
+```sh
+brew install tess-fun/tap/fleetreach
+```
+
+## Container image
+
+`ghcr.io/tess-fun/fleetreach` (linux/amd64 and linux/arm64) includes `git` for fleet
+sources and runs as a non-root user. Mount your fleet on `/work` and a volume on `/cache` so
+OSV exports, checkouts and NVD answers persist between runs:
+
+```sh
+docker run --rm -v "$PWD:/work" -v fleetreach-cache:/cache \
+  ghcr.io/tess-fun/fleetreach scan -c fleet.toml
+```
+
+## From crates.io
+
 ```sh
 cargo install fleetreach-cli --features network
 ```

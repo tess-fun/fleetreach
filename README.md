@@ -53,9 +53,26 @@ tools above fit better. If you want one command that answers "what is my
 
 ## Installation
 
+Prebuilt binaries for Linux, macOS and Windows (x86-64 and ARM where available) are attached
+to every [GitHub release](https://github.com/tess-fun/fleetreach/releases), with a
+`SHA256SUMS` file and signed build provenance. They include the `network` feature.
+
 ```sh
+# Linux or macOS: download, verify the checksum, install to ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/tess-fun/fleetreach/main/scripts/install.sh | sh
+
+# Homebrew
+brew install tess-fun/tap/fleetreach
+
+# Container image (mount a volume on /cache to keep downloads between runs)
+docker run --rm -v "$PWD:/work" -v fleetreach-cache:/cache ghcr.io/tess-fun/fleetreach scan -c fleet.toml
+
+# From crates.io
 cargo install fleetreach-cli --features network   # the `fleetreach` binary, with DB fetch + enrichment
 ```
+
+Verify a downloaded archive's provenance with
+`gh attestation verify <archive> --repo tess-fun/fleetreach`.
 
 The default build is **pure-Rust** (no vendored-C TLS stack): it has no network
 support and expects a local advisory-db clone via `--db <PATH>`. The opt-in
