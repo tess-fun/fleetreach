@@ -9,7 +9,7 @@
 //! else requirements files, and compares versions against OSV `ECOSYSTEM` ranges, running no
 //! Python tool and no package build, so it is **safe by construction**: no untrusted-build
 //! consent and no sandbox. A requirements file is not always a resolved set, so
-//! [`scan_offline_with_coverage`] reports which ones were read with less than full coverage
+//! `scan_offline_with_coverage` reports which ones were read with less than full coverage
 //! (unpinned requirements, pins with no sign of a resolver).
 //!
 //! Two things are Python-specific. Versions are [PEP 440] (epochs, `.post`/`.dev`,
