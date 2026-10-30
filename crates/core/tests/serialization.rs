@@ -18,6 +18,8 @@ fn provenance_serializes_absent_db_fields_as_null() {
         host_os: "linux".into(),
         host_arch: "x86_64".into(),
         generated_at: "2026-06-24T00:00:00Z".into(),
+        osv: Vec::new(),
+        sources: Vec::new(),
     };
     let v = serde_json::to_value(&provenance).unwrap();
     // Honest absence: null, never an empty string.

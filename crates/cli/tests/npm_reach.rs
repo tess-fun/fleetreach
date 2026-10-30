@@ -27,6 +27,8 @@ fn provenance() -> Provenance {
         host_os: "x".into(),
         host_arch: "x".into(),
         generated_at: "2026-06-28T00:00:00Z".into(),
+        osv: Vec::new(),
+        sources: Vec::new(),
     }
 }
 
@@ -89,7 +91,7 @@ fn import_graph_resolves_direct_transitive_and_prune() {
     // and node_modules but imported by nobody.
     let scan = ScanData {
         skipped_unparseable: 0,
-        unsupported_lockfiles: Vec::new(),
+        coverage: Vec::new(),
         vulnerabilities: vec![
             npm_finding("LODASH", "lodash"),
             npm_finding("MINIMIST", "minimist"),
@@ -144,7 +146,7 @@ fn script_run_tools_are_entry_points() {
     // so it and what it imports are reachable, and prune must not mark them NotReachable.
     let scan = ScanData {
         skipped_unparseable: 0,
-        unsupported_lockfiles: Vec::new(),
+        coverage: Vec::new(),
         vulnerabilities: vec![
             npm_finding("RUNNER", "test-runner"),
             npm_finding("RUNNER-DEP", "runner-dep"),

@@ -86,6 +86,11 @@ The two `critical 9.8`s are tied by CVSS, but EPSS breaks the tie. Gate with
 `--fail-on-kev` or `--min-epss 0.5`; both feeds can be supplied offline via
 `--kev-file` / `--epss-file`.
 
+Findings whose advisory carries no severity get a CVSS score from NVD. Without an API key
+NVD allows about one request every 6 seconds, so set `NVD_API_KEY` (free from NVD) to cut
+that roughly 8x; answers are cached per CVE under `~/.cache/fleetreach/nvd/`, so later runs
+only ask about new CVEs.
+
 ## Provenance: `--why`
 
 Every finding shows whether the flagged package is a direct or transitive

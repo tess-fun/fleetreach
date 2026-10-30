@@ -8,9 +8,23 @@ uses `govulncheck` (plus a toolchain-free fallback); the other ten are
 
 Every non-Rust ecosystem is scanned the same way: fleetreach reads the lockfile
 (the full transitive tree, already pinned to exact versions) and matches each
-package against an **OSV mirror** passed as `--<ecosystem>-vuln-db=file://<path>`
-— point it at the osv.dev export `all.zip` (read directly, no unzip needed) or a
-directory of unzipped records.
+package against the osv.dev export for its ecosystem (`all.zip`, read directly).
+
+Where the export comes from, per ecosystem:
+
+1. `--<ecosystem>-vuln-db=file://<path>` (or its env var), if given.
+2. `--osv-dir <dir>`, `FLEETREACH_OSV_DIR` or `[settings.osv] dir`: a directory laid
+   out like the osv.dev bucket, `<dir>/<Ecosystem>/all.zip` (OSV-Scanner's offline
+   layout too).
+3. The default cache, `~/.cache/fleetreach/osv/`, which network builds keep fresh
+   (re-checked every 6 hours, `[settings.osv] refresh`; turned off by `--offline` or
+   `FLEETREACH_OSV_SYNC=off`).
+
+`fleetreach db sync` fetches exports ahead of time (`--all`, `--ecosystems`, or the
+ecosystems in `fleet.toml`; `--osv-dir` to build an air-gapped mirror), and
+`fleetreach db status` shows what is present and how old it is. `--max-db-age` checks
+every export used, from the upstream `Last-Modified` recorded at download or the file's
+mtime.
 
 It runs no package manager and no install/build scripts, so it is **safe by
 construction** and needs no `--allow-untrusted-builds`. Without a mirror the repo
@@ -20,7 +34,7 @@ band or a CVSS vector; direct vs transitive comes from the lockfile; findings ar
 
 | Ecosystem | Lockfile(s) | Flag | Version semantics |
 |-----------|-------------|------|-------------------|
-| npm | `package-lock.json` | `--npm-vuln-db` | SemVer |
+| npm | `package-lock.json` / `pnpm-lock.yaml` (v6, v9) / `yarn.lock` (v1, berry) | `--npm-vuln-db` | SemVer |
 | PyPI | `uv.lock` / `poetry.lock` / `Pipfile.lock` | `--pypi-vuln-db` | PEP 440 (PEP 503 names) |
 | RubyGems | `Gemfile.lock` | `--rubygems-vuln-db` | `Gem::Version` |
 | Packagist | `composer.lock` | `--packagist-vuln-db` | Composer `version_compare` |

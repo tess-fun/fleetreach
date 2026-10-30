@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{RepoOutcome, Severity, VulnFinding, WarnFinding};
+use crate::{Ecosystem, RepoId, RepoOutcome, Severity, VulnFinding, WarnFinding};
 
 /// Pinned from day one so machine consumers can branch on the wire format.
 /// v2 enrichment is additive and must not bump this.
@@ -16,6 +16,56 @@ pub struct FleetReport {
     pub vulnerabilities: Vec<VulnFinding>,
     pub warnings: Vec<WarnFinding>,
     pub outcomes: Vec<RepoOutcome>,
+    /// Sources that were read but not as a full resolved dependency graph (spec 00, C1).
+    /// A repo listed here is still `scanned`; its findings are real, but packages outside
+    /// what was read were never matched. Empty (and omitted) when everything was full.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub coverage: Vec<CoverageGap>,
+}
+
+/// Where a repo discovered by a fleet source (spec 06) was checked out from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RepoSource {
+    pub repo: RepoId,
+    pub url: String,
+    pub commit: String,
+}
+
+/// How much of a source's dependency graph a scan could see (spec 00, C1).
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
+#[serde(rename_all = "kebab-case")]
+pub enum Coverage {
+    /// The resolved transitive closure with exact versions (a lockfile).
+    #[default]
+    Full,
+    /// Declared (direct) dependencies only, e.g. a `pom.xml` without a resolved graph.
+    DirectOnly,
+    /// Some of the graph could not be read; `reason` names what.
+    Partial,
+}
+
+impl Coverage {
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Coverage::Full => "full",
+            Coverage::DirectOnly => "direct-only",
+            Coverage::Partial => "partial",
+        }
+    }
+}
+
+/// One source whose coverage was less than [`Coverage::Full`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CoverageGap {
+    pub repo: RepoId,
+    /// The source file, relative to the repo root.
+    pub source: String,
+    pub ecosystem: Ecosystem,
+    pub level: Coverage,
+    pub reason: String,
 }
 
 /// Everything needed to reproduce a stored report by re-running with the same
@@ -34,6 +84,32 @@ pub struct Provenance {
     pub host_arch: String,
     /// RFC3339.
     pub generated_at: String,
+    /// The osv.dev exports the toolchain-free feeders matched against, one per ecosystem
+    /// used. Empty (and omitted) for a Rust/Go-only run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub osv: Vec<OsvProvenance>,
+    /// Repos discovered by fleet sources (spec 06): where each was cloned from and the
+    /// commit scanned, so the report is reproducible. Empty (and omitted) without sources.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<RepoSource>,
+}
+
+/// Where one ecosystem's OSV export came from and how old it was, so a clean verdict
+/// shows the data it rested on.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OsvProvenance {
+    /// The osv.dev ecosystem name (`npm`, `PyPI`, ...).
+    pub ecosystem: String,
+    /// `flag`, `dir` or `cache`.
+    pub source: String,
+    pub path: String,
+    /// The upstream `Last-Modified` recorded at download; `null` when unknown.
+    pub upstream_modified: Option<String>,
+    /// RFC3339 time of the last successful sync; `null` for exports fleetreach did not fetch.
+    pub fetched_at: Option<String>,
+    pub sha256: Option<String>,
+    /// What the age is measured from: `upstream`, `mtime` or `unknown`.
+    pub age_basis: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

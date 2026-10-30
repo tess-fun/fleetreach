@@ -72,6 +72,8 @@ fn config() -> Config {
         ignores: vec![],
         vex: Default::default(),
         vex_assertions: vec![],
+        osv: Default::default(),
+        sources: Vec::new(),
     }
 }
 

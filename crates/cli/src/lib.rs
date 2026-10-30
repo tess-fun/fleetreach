@@ -10,14 +10,17 @@ pub mod assemble;
 pub mod cli;
 pub mod config;
 pub mod db;
+pub mod db_cmd;
 pub mod diff;
 pub mod enrich;
 pub mod npm_reach;
 pub mod orchestrate;
+pub mod osvdb;
 pub mod py_reach;
 pub mod reach;
 pub mod resolve;
 pub mod scan;
+pub mod sources;
 pub mod static_reach;
 pub mod vex;
 

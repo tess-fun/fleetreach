@@ -85,6 +85,12 @@ fleetreach scan -c fleet.toml -f packages-json    # the packages rollup as JSON
 fleetreach scan -c fleet.toml -f remediation-json # the fix queue as JSON
 fleetreach scan --why serde            # how does `serde` get into the tree?
 
+fleetreach db sync                     # fetch the OSV exports the fleet needs (network build)
+fleetreach db status                   # what is cached, and how old
+fleetreach fleet sync                  # clone/refresh repos named by [[source]] entries
+fleetreach scan -c fleet.toml --sync   # sync sources, then scan
+fleetreach scan -c fleet.toml --osv-dir ./osv  # air-gapped: one dir of osv.dev exports
+fleetreach scan -c fleet.toml --require-full-coverage  # exit 2 if any source was only partly read
 fleetreach scan -c fleet.toml --npm-vuln-db file://./npm-osv  # also audit npm repos
 fleetreach scan -c fleet.toml --pypi-vuln-db file://./pypi-osv # also audit Python repos
 fleetreach scan -c fleet.toml --packagist-vuln-db file://./packagist-osv # also audit PHP/Composer repos
@@ -272,6 +278,28 @@ id     = "RUSTSEC-2020-0071"
 reason = "dev-dependency only, not in any shipped path"   # REQUIRED, non-empty
 ```
 
+Instead of listing local clones, a `[[source]]` discovers repos from a GitHub organization
+(or user) or a list of https URLs. `fleetreach fleet sync` (or `scan --sync`) keeps a cheap
+checkout of each under `~/.cache/fleetreach/checkouts/`: a shallow, blob-less, sparse clone
+holding only the lockfiles and manifests the feeders read. Each report records the commit
+scanned. A listing that fails stops the run, and a repo that cannot be cloned is an errored
+gap.
+
+```toml
+[[source]]
+kind     = "github"                 # or "git" with urls = ["https://..."]
+org      = "acme"                   # an organization or a user
+include  = ["svc-*"]                # globs on the repo name
+exclude  = ["*-sandbox"]
+topics   = ["production"]           # all must be present
+checkout = "lockfiles"              # or "full" (needed for reachability)
+# api_url = "https://ghe.example.com/api/v3", token_env = "GHE_TOKEN"
+```
+
+`GITHUB_TOKEN` or `GH_TOKEN` is used when set (needed for private repos and higher rate
+limits). `git` runs with hooks, submodules and the `file://` transport disabled, and the
+token is passed in an environment-supplied header, never on the command line.
+
 A repo with a `go.mod` (and no `Cargo.lock`) is scanned by `govulncheck` and folds
 into the same fleet report, so a mixed Rust+Go fleet yields one unified, blast-radius
 and reachability-aware remediation queue. Because govulncheck compiles the module, Go
@@ -290,19 +318,24 @@ its matching has been validated differentially against govulncheck on real modul
 
 Every other ecosystem is scanned the same **toolchain-free** way: `fleetreach` reads the
 lockfile (the full transitive tree, already pinned to exact versions) and matches each
-package against an **OSV mirror** passed as `--<ecosystem>-vuln-db=file://<path>`, pointed
-at the osv.dev export `all.zip` (per ecosystem at
-`https://osv-vulnerabilities.storage.googleapis.com/<Ecosystem>/all.zip`, read directly with
-no unzip needed) or a directory of unzipped records. It runs no package manager and no
+package against the osv.dev export for its ecosystem (`all.zip`, read directly with no unzip
+needed). Network builds fetch exactly the exports your fleet needs into
+`~/.cache/fleetreach/osv/` and keep them fresh, so a polyglot fleet needs no database flags.
+For air-gapped use, `fleetreach db sync --all --osv-dir <dir>` on a connected host builds a
+directory laid out like the osv.dev bucket (`<dir>/<Ecosystem>/all.zip`, also OSV-Scanner's
+offline layout), and `--osv-dir <dir>` scans against it. A per-ecosystem
+`--<ecosystem>-vuln-db=file://<path>` still overrides either. `fleetreach db status` shows
+what is cached and how old it is, and `--max-db-age` applies to every OSV export as it does
+to the RustSec DB. It runs no package manager and no
 install or build scripts, so like the Go module-level mode it is safe by construction and
-needs no `--allow-untrusted-builds`; without a mirror the repo is an honest errored gap,
+needs no `--allow-untrusted-builds`; without an export the repo is an honest errored gap,
 never silently skipped. Severity comes from the GHSA band or a CVSS vector, direct versus
 transitive comes from the lockfile, and findings are `unknown` reachability unless a
 reachability mode runs.
 
 | Ecosystem | Lockfile(s) | Flag | Version semantics |
 |-----------|-------------|------|-------------------|
-| npm | `package-lock.json` | `--npm-vuln-db` | SemVer |
+| npm | `package-lock.json` / `pnpm-lock.yaml` / `yarn.lock` (v1 and berry) | `--npm-vuln-db` | SemVer |
 | PyPI | `uv.lock` / `poetry.lock` / `Pipfile.lock` | `--pypi-vuln-db` | PEP 440 (PEP 503 names) |
 | RubyGems | `Gemfile.lock` | `--rubygems-vuln-db` | `Gem::Version` |
 | Packagist | `composer.lock` | `--packagist-vuln-db` | Composer `version_compare` |
@@ -353,6 +386,11 @@ known-exploited list renders as `KEV epss NN%` in the `Risk` column.
 Gate on it with `--fail-on-kev` (fail if anything is actively exploited) or
 `--min-epss 0.5`. Both feeds can be supplied offline via `--kev-file` /
 `--epss-file`.
+
+Findings whose advisory carries no severity get a CVSS score from NVD. Without an API key
+NVD allows about one request every 6 seconds, so set `NVD_API_KEY` (free from NVD) to cut
+that roughly 8x; answers are cached per CVE under `~/.cache/fleetreach/nvd/`, so later runs
+only ask about new CVEs.
 
 Every finding shows its **dependency provenance**: whether the flagged package
 is a direct or transitive dependency, and the chain that pulls it in:

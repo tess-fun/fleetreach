@@ -168,8 +168,12 @@ fn analyze(repo_dir: &Path) -> Analysis {
     graph.add_edges(ENTRY, first_party_imports(repo_dir));
 
     let node_modules = repo_dir.join("node_modules");
-    let has_node_modules = node_modules.is_dir();
-    if has_node_modules {
+    let present = node_modules.is_dir();
+    // pnpm keeps every transitive package under `node_modules/.pnpm`, which the walk below
+    // does not follow: the graph is then missing edges, so it can still prove `Reachable` but
+    // must never be trusted for a `NotReachable` (spec 02). Only a flat npm/yarn layout counts.
+    let has_node_modules = present && !node_modules.join(".pnpm").is_dir();
+    if present {
         // Executables the project's scripts run are entry points like first-party imports.
         let bins = bin_owners(&node_modules);
         graph.add_edges(

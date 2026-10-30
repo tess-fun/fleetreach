@@ -50,6 +50,8 @@ fn empty_report() -> fleetreach_core::FleetReport {
             host_os: "linux".into(),
             host_arch: "x86_64".into(),
             generated_at: "t".into(),
+            osv: Vec::new(),
+            sources: Vec::new(),
         },
         summary: fleetreach_core::Summary {
             repos_scanned: 1,
@@ -62,6 +64,7 @@ fn empty_report() -> fleetreach_core::FleetReport {
         vulnerabilities: vec![],
         warnings: vec![],
         outcomes: vec![],
+        coverage: Vec::new(),
     }
 }
 

@@ -224,6 +224,7 @@ pub fn assemble(
             vulnerabilities: correlated.vulnerabilities,
             warnings: correlated.warnings,
             outcomes: scan.outcomes,
+            coverage: scan.coverage,
         },
         suppressed,
     }

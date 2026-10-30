@@ -199,6 +199,8 @@ fn summary_max_severity_is_refreshed_after_enrichment_backfill() {
             host_os: String::new(),
             host_arch: String::new(),
             generated_at: String::new(),
+            osv: Vec::new(),
+            sources: Vec::new(),
         },
         summary: Summary {
             repos_scanned: 1,
@@ -211,6 +213,7 @@ fn summary_max_severity_is_refreshed_after_enrichment_backfill() {
         vulnerabilities: vec![vuln("R1", "CVE-2022-0778", Severity::Unknown)],
         warnings: vec![],
         outcomes: vec![],
+        coverage: Vec::new(),
     };
 
     let enrichment = Enrichment {

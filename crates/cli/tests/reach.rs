@@ -26,6 +26,8 @@ fn provenance() -> Provenance {
         host_os: "linux".into(),
         host_arch: "x86_64".into(),
         generated_at: "2026-06-24T00:00:00Z".into(),
+        osv: Vec::new(),
+        sources: Vec::new(),
     }
 }
 
@@ -76,7 +78,7 @@ fn config() -> Config {
 fn assess_flags_source_presence_per_repo() {
     let scan = ScanData {
         skipped_unparseable: 0,
-        unsupported_lockfiles: Vec::new(),
+        coverage: Vec::new(),
         vulnerabilities: vec![finding("R-USES", "uses"), finding("R-CLEAN", "clean")],
         warnings: vec![],
         outcomes: vec![
@@ -206,7 +208,7 @@ fn hex_and_github_actions_reachability() {
     use DependencyKind::Direct;
     let scan = ScanData {
         skipped_unparseable: 0,
-        unsupported_lockfiles: Vec::new(),
+        coverage: Vec::new(),
         vulnerabilities: vec![
             // Hex: package `plug` -> module `Plug`, used in app.ex
             tier_c("HEX-USED", Ecosystem::Hex, "hex", "plug", Direct),
@@ -258,7 +260,7 @@ fn name_mapping_ecosystems_detect_imports_securely() {
     use DependencyKind::{Direct, Transitive};
     let scan = ScanData {
         skipped_unparseable: 0,
-        unsupported_lockfiles: Vec::new(),
+        coverage: Vec::new(),
         vulnerabilities: vec![
             // imported direct deps -> Some(true) via the per-ecosystem name heuristic
             tier_c("PY-USED", Ecosystem::Pypi, "pypi", "requests", Direct),
@@ -332,7 +334,7 @@ fn tier_c_import_presence_is_secure() {
     use DependencyKind::{Direct, Transitive};
     let scan = ScanData {
         skipped_unparseable: 0,
-        unsupported_lockfiles: Vec::new(),
+        coverage: Vec::new(),
         vulnerabilities: vec![
             // imported direct deps -> Some(true)
             tier_c("NPM-USED", Ecosystem::Npm, "npm", "lodash", Direct),

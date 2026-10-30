@@ -7,6 +7,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use fleetreach_core::Severity;
 use fleetreach_report as report;
 
+use crate::db_cmd::{DbStatusArgs, DbSyncArgs, FleetListArgs, FleetSyncArgs};
 use crate::diff::DiffArgs;
 use crate::scan::ScanArgs;
 use crate::vex::{VexCheckArgs, VexVerifyArgs};
@@ -34,6 +35,28 @@ enum Commands {
     /// Operate on OpenVEX documents (drift gate, witness verification).
     #[command(subcommand)]
     Vex(VexCommand),
+    /// Manage the osv.dev exports the toolchain-free ecosystems match against.
+    #[command(subcommand)]
+    Db(DbCommand),
+    /// Discover and check out the repos named by `[[source]]` entries.
+    #[command(subcommand)]
+    Fleet(FleetCommand),
+}
+
+#[derive(Subcommand)]
+enum FleetCommand {
+    /// List every source afresh and clone or refresh its checkouts.
+    Sync(FleetSyncArgs),
+    /// Print the repos the fleet resolves to (no network).
+    List(FleetListArgs),
+}
+
+#[derive(Subcommand)]
+enum DbCommand {
+    /// Fetch or refresh the exports the fleet needs (or --all / --ecosystems).
+    Sync(DbSyncArgs),
+    /// Show which exports are present and how old they are.
+    Status(DbStatusArgs),
 }
 
 #[derive(Subcommand)]
@@ -51,6 +74,10 @@ pub fn dispatch(cli: Cli) -> u8 {
         Commands::Diff(args) => crate::diff::run_diff(args),
         Commands::Vex(VexCommand::Check(args)) => crate::vex::run_vex_check(args),
         Commands::Vex(VexCommand::Verify(args)) => crate::vex::run_vex_verify(args),
+        Commands::Db(DbCommand::Sync(args)) => crate::db_cmd::run_db_sync(args),
+        Commands::Db(DbCommand::Status(args)) => crate::db_cmd::run_db_status(args),
+        Commands::Fleet(FleetCommand::Sync(args)) => crate::db_cmd::run_fleet_sync(args),
+        Commands::Fleet(FleetCommand::List(args)) => crate::db_cmd::run_fleet_list(args),
     }
 }
 

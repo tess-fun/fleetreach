@@ -270,23 +270,111 @@ mod net {
     /// requests out; an `NVD_API_KEY` env var raises the limit.
     pub(super) fn fetch_nvd_scores(cves: &[String]) -> BTreeMap<String, f32> {
         let mut out = BTreeMap::new();
-        let api_key = std::env::var("NVD_API_KEY").ok();
-        let cve_ids: Vec<&String> = cves.iter().filter(|c| super::is_valid_cve(c)).collect();
-        for (i, cve) in cve_ids.iter().enumerate() {
-            // Stay under NVD's anonymous rate limit (5 requests / 30s); a key lifts
-            // it to 50, so a shorter delay suffices.
+        let api_key = std::env::var("NVD_API_KEY").ok().filter(|k| !k.is_empty());
+        let cache = crate::osvdb::private_subdir("nvd");
+        let mut pending: Vec<&String> = Vec::new();
+        for cve in cves.iter().filter(|c| super::is_valid_cve(c)) {
+            match cache.as_deref().and_then(|dir| cached_score(dir, cve)) {
+                Some(Some(score)) => {
+                    out.insert(cve.clone(), score);
+                }
+                Some(None) => {} // recently looked up: NVD has no score for it
+                None => pending.push(cve),
+            }
+        }
+        // Stay under NVD's anonymous rate limit (5 requests / 30s); a key lifts it to 50, so
+        // a shorter delay suffices. Only real requests wait; cache hits are free.
+        let delay = if api_key.is_some() { 700 } else { 6000 };
+        if api_key.is_none() && pending.len() > 3 {
+            eprintln!(
+                "note: looking up {} CVE(s) on NVD without NVD_API_KEY takes about {}s \
+                 (set NVD_API_KEY to cut that ~8x; results are cached)",
+                pending.len(),
+                pending.len() * 6
+            );
+        }
+        for (i, cve) in pending.iter().enumerate() {
             if i > 0 {
-                let delay = if api_key.is_some() { 700 } else { 6000 };
                 std::thread::sleep(Duration::from_millis(delay));
             }
             let url = format!("{NVD_API}?cveId={cve}");
+            // A failed request is not cached, so the next run retries it.
             if let Ok(body) = nvd_get(&url, api_key.as_deref()) {
-                if let Some(score) = parse_nvd_score(&body, cve) {
+                let score = parse_nvd_score(&body, cve);
+                if let Some(dir) = cache.as_deref() {
+                    store_score(dir, cve, score);
+                }
+                if let Some(score) = score {
                     out.insert((*cve).clone(), score);
                 }
             }
         }
         out
+    }
+
+    /// How long a cached NVD answer is trusted: scores rarely change; "no score yet" often
+    /// does (NVD's analysis backlog), so it is re-asked sooner.
+    const SCORE_TTL: u64 = 7 * 86_400;
+    const MISSING_TTL: u64 = 86_400;
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct CachedScore {
+        score: Option<f32>,
+        fetched_unix: u64,
+    }
+
+    fn now_unix() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs())
+    }
+
+    /// `Some(answer)` for a fresh cache entry, `None` to ask NVD.
+    fn cached_score(dir: &std::path::Path, cve: &str) -> Option<Option<f32>> {
+        let text = std::fs::read_to_string(dir.join(format!("{cve}.json"))).ok()?;
+        let entry: CachedScore = serde_json::from_str(&text).ok()?;
+        let ttl = if entry.score.is_some() {
+            SCORE_TTL
+        } else {
+            MISSING_TTL
+        };
+        (now_unix().saturating_sub(entry.fetched_unix) < ttl).then_some(entry.score)
+    }
+
+    fn store_score(dir: &std::path::Path, cve: &str, score: Option<f32>) {
+        if crate::osvdb::create_private_dir(dir).is_err() {
+            return;
+        }
+        let entry = CachedScore {
+            score,
+            fetched_unix: now_unix(),
+        };
+        if let Ok(json) = serde_json::to_string(&entry) {
+            let _ = std::fs::write(dir.join(format!("{cve}.json")), json);
+        }
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn nvd_cache_round_trips_and_expires_misses_sooner() {
+        let dir = std::env::temp_dir().join(format!("fr-nvd-{}", std::process::id()));
+        store_score(&dir, "CVE-2022-0778", Some(7.5));
+        store_score(&dir, "CVE-2099-0001", None);
+        assert_eq!(cached_score(&dir, "CVE-2022-0778"), Some(Some(7.5)));
+        assert_eq!(cached_score(&dir, "CVE-2099-0001"), Some(None));
+        assert_eq!(cached_score(&dir, "CVE-2000-1111"), None);
+        let stale = CachedScore {
+            score: None,
+            fetched_unix: now_unix() - MISSING_TTL - 1,
+        };
+        let json = serde_json::to_string(&stale).unwrap_or_default();
+        let _ = std::fs::write(dir.join("CVE-2099-0001.json"), json);
+        assert_eq!(
+            cached_score(&dir, "CVE-2099-0001"),
+            None,
+            "a stale miss is re-asked"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn nvd_get(url: &str, api_key: Option<&str>) -> Result<String, String> {

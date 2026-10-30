@@ -13,7 +13,8 @@ use std::path::{Path, PathBuf};
 
 use fleetreach_core::semver::Version;
 use fleetreach_core::{
-    Ecosystem, Occurrence, RepoId, RepoOutcome, ScanStatus, VulnFinding, WarnFinding,
+    Coverage, CoverageGap, Ecosystem, Occurrence, RepoId, RepoOutcome, ScanStatus, VulnFinding,
+    WarnFinding,
 };
 use fleetreach_ghactions::{ghactions_db_path, GhActionsDb, GhaError};
 use fleetreach_go::{GoDb, GoError, SandboxPolicy};
@@ -43,10 +44,10 @@ pub struct ScanData {
     /// version string did not parse (see [`fleetreach_core::osv::TierCScan`]). Surfaced as a
     /// diagnostic so the skip is visible; never an error.
     pub skipped_unparseable: u32,
-    /// Lockfiles in a format no feeder reads (`yarn.lock`, `pnpm-lock.yaml`, `bun.lock`), as
-    /// `repo: path`, found where no readable lockfile sits beside them. Their packages went
-    /// unscanned; surfaced as a diagnostic so the gap is visible rather than silent.
-    pub unsupported_lockfiles: Vec<String>,
+    /// Sources read with less than full coverage (spec 00, C1): lockfiles in a format no
+    /// feeder reads (their packages went unscanned) and manifests that only declare direct
+    /// dependencies. Carried into the report so the weakness is visible, never silent.
+    pub coverage: Vec<CoverageGap>,
 }
 
 /// An installed toolchain to additionally scan against `Collection::Rust`.
@@ -360,8 +361,8 @@ pub fn scan_fleet(
         data.warnings.extend(result.warnings);
         data.outcomes.push(result.outcome);
         data.skipped_unparseable += result.skipped_unparseable;
-        data.unsupported_lockfiles
-            .extend(plan.unsupported.iter().cloned());
+        data.coverage.extend(plan.unsupported.iter().cloned());
+        data.coverage.extend(result.coverage);
     }
 
     // Toolchain advisories are global — no repo, scanned once.
@@ -374,6 +375,20 @@ pub fn scan_fleet(
     data
 }
 
+/// The ecosystems present anywhere in the fleet, sorted. Planning only walks directories, so
+/// this is cheap; it decides which OSV exports a run needs before any is loaded or fetched.
+pub fn fleet_ecosystems(config: &Config) -> Vec<Ecosystem> {
+    let found: BTreeSet<Ecosystem> = config
+        .repos
+        .par_iter()
+        .map(plan_repo)
+        .collect::<Vec<_>>()
+        .iter()
+        .flat_map(|p| p.units.iter().map(|u| u.ecosystem))
+        .collect();
+    found.into_iter().collect()
+}
+
 /// The findings and outcome for a single repo, returned by the parallel map so
 /// the caller can merge them in deterministic (config) order.
 struct RepoResult {
@@ -383,6 +398,9 @@ struct RepoResult {
     /// Installed packages skipped because their version did not parse (Tier-C only; 0
     /// otherwise). Summed across the fleet and surfaced as a diagnostic.
     skipped_unparseable: u32,
+    /// Sources this unit read with less than full coverage; `source` is relative to the
+    /// unit's directory until [`merge_units`] prefixes it.
+    coverage: Vec<CoverageGap>,
 }
 
 impl RepoResult {
@@ -404,7 +422,14 @@ impl RepoResult {
             warnings,
             outcome,
             skipped_unparseable: 0,
+            coverage: Vec::new(),
         }
+    }
+
+    /// Record a source read with less than full coverage.
+    fn with_coverage(mut self, gap: CoverageGap) -> Self {
+        self.coverage.push(gap);
+        self
     }
 
     /// Record the count of packages skipped for an unparseable version (Tier-C feeders).
@@ -423,6 +448,7 @@ impl RepoResult {
                 status: ScanStatus::Errored { reason },
             },
             skipped_unparseable: 0,
+            coverage: Vec::new(),
         }
     }
 }
@@ -443,12 +469,12 @@ struct RepoPlan {
     /// Directory-walk errors: an unreadable subdirectory may hide a lockfile, so the repo
     /// cannot be called clean.
     walk_errors: Vec<String>,
-    /// `repo: path` of lockfiles in formats no feeder reads.
-    unsupported: Vec<String>,
+    /// Lockfiles in formats no feeder reads, as coverage gaps.
+    unsupported: Vec<CoverageGap>,
 }
 
 /// Lockfile formats fleetreach cannot read; reported when no readable lockfile sits beside them.
-const UNSUPPORTED_LOCKFILES: &[&str] = &["yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb"];
+const UNSUPPORTED_LOCKFILES: &[&str] = &["bun.lock", "bun.lockb"];
 
 /// Directories never searched for lockfiles: installed third-party packages and VCS metadata
 /// are not the project's own dependency set.
@@ -531,8 +557,16 @@ fn plan_repo(repo: &Repo) -> RepoPlan {
                 if files.contains(*name) {
                     let path = dir.join(name);
                     let rel = path.strip_prefix(&repo.path).unwrap_or(&path);
-                    plan.unsupported
-                        .push(format!("{}: {}", repo.id, rel.display()));
+                    plan.unsupported.push(CoverageGap {
+                        repo: repo.id.clone(),
+                        source: rel.display().to_string(),
+                        ecosystem: Ecosystem::Npm,
+                        level: Coverage::Partial,
+                        reason: format!(
+                            "{name} is a lockfile format fleetreach cannot read; its packages \
+                             were not scanned"
+                        ),
+                    });
                 }
             }
         }
@@ -575,7 +609,7 @@ fn dir_ecosystems(dir: &Path, files: &BTreeSet<String>, is_root: bool) -> Vec<Ec
     if has("go.mod") {
         found.push(Ecosystem::Go);
     }
-    if has("package-lock.json") {
+    if fleetreach_npm::LOCKFILES.iter().any(|name| has(name)) {
         found.push(Ecosystem::Npm);
     }
     if fleetreach_pypi::detect(dir).is_some() {
@@ -615,6 +649,7 @@ fn merge_units<'a>(
     let mut vulnerabilities = Vec::new();
     let mut warnings = Vec::new();
     let mut skipped_unparseable = 0;
+    let mut coverage = Vec::new();
     let mut reasons: Vec<String> = plan
         .walk_errors
         .iter()
@@ -624,6 +659,12 @@ fn merge_units<'a>(
         vulnerabilities.extend(result.vulnerabilities);
         warnings.extend(result.warnings);
         skipped_unparseable += result.skipped_unparseable;
+        coverage.extend(result.coverage.into_iter().map(|mut gap| {
+            if !unit.rel_dir.is_empty() {
+                gap.source = format!("{}/{}", unit.rel_dir, gap.source);
+            }
+            gap
+        }));
         if let ScanStatus::Errored { reason } = result.outcome.status {
             reasons.push(if unit.rel_dir.is_empty() {
                 reason
@@ -650,6 +691,7 @@ fn merge_units<'a>(
             status,
         },
         skipped_unparseable,
+        coverage,
     }
 }
 
@@ -743,6 +785,7 @@ fn scan_unit(
             vulnerabilities,
             warnings,
             skipped_unparseable: 0,
+            coverage: Vec::new(),
         },
         None => RepoResult::scanned(&repo.id, vulnerabilities, warnings),
     }
@@ -803,8 +846,8 @@ fn scan_npm_repo(repo: &Repo, npm_db: Option<&Result<NpmDb, NpmError>>) -> RepoR
         Some(Err(e)) => return errored(format!("npm OSV DB: {e}")),
         None => {
             return errored(
-                "npm repo (package-lock.json): no OSV DB mirror for the toolchain-free \
-                 matcher (pass --npm-vuln-db=file://<dir>, e.g. an unzipped osv.dev npm export)"
+                "npm repo (package-lock.json/pnpm-lock.yaml/yarn.lock): no OSV DB mirror for the toolchain-free \
+                 matcher (pass --osv-dir=<dir> or --npm-vuln-db=file://<dir>, e.g. an unzipped osv.dev npm export)"
                     .to_string(),
             )
         }
@@ -830,7 +873,7 @@ fn scan_pypi_repo(repo: &Repo, pypi_db: Option<&Result<PyPiDb, PyPiError>>) -> R
         None => {
             return errored(
                 "PyPI repo (uv.lock/poetry.lock/Pipfile.lock): no OSV DB mirror for the \
-                 toolchain-free matcher (pass --pypi-vuln-db=file://<path>, e.g. the osv.dev \
+                 toolchain-free matcher (pass --osv-dir=<dir> or --pypi-vuln-db=file://<path>, e.g. the osv.dev \
                  PyPI export all.zip or an unzipped directory)"
                     .to_string(),
             )
@@ -860,7 +903,7 @@ fn scan_rubygems_repo(
         None => {
             return errored(
                 "RubyGems repo (Gemfile.lock): no OSV DB mirror for the toolchain-free \
-                 matcher (pass --rubygems-vuln-db=file://<path>, e.g. the osv.dev RubyGems \
+                 matcher (pass --osv-dir=<dir> or --rubygems-vuln-db=file://<path>, e.g. the osv.dev RubyGems \
                  export all.zip or an unzipped directory)"
                     .to_string(),
             )
@@ -890,7 +933,7 @@ fn scan_packagist_repo(
         None => {
             return errored(
                 "Packagist repo (composer.lock): no OSV DB mirror for the toolchain-free \
-                 matcher (pass --packagist-vuln-db=file://<path>, e.g. the osv.dev Packagist \
+                 matcher (pass --osv-dir=<dir> or --packagist-vuln-db=file://<path>, e.g. the osv.dev Packagist \
                  export all.zip or an unzipped directory)"
                     .to_string(),
             )
@@ -917,7 +960,7 @@ fn scan_nuget_repo(repo: &Repo, nuget_db: Option<&Result<NuGetDb, NuGetError>>) 
         None => {
             return errored(
                 "NuGet repo (packages.lock.json): no OSV DB mirror for the toolchain-free \
-                 matcher (pass --nuget-vuln-db=file://<path>, e.g. the osv.dev NuGet export \
+                 matcher (pass --osv-dir=<dir> or --nuget-vuln-db=file://<path>, e.g. the osv.dev NuGet export \
                  all.zip or an unzipped directory)"
                     .to_string(),
             )
@@ -943,7 +986,7 @@ fn scan_julia_repo(repo: &Repo, julia_db: Option<&Result<JuliaDb, JuliaError>>) 
         None => {
             return errored(
                 "Julia repo (Manifest.toml): no OSV DB mirror for the toolchain-free matcher \
-                 (pass --julia-vuln-db=file://<path>, e.g. the osv.dev Julia export all.zip or \
+                 (pass --osv-dir=<dir> or --julia-vuln-db=file://<path>, e.g. the osv.dev Julia export all.zip or \
                  an unzipped directory)"
                     .to_string(),
             )
@@ -969,7 +1012,7 @@ fn scan_swift_repo(repo: &Repo, swift_db: Option<&Result<SwiftDb, SwiftError>>) 
             Some(Err(e)) => return errored(format!("Swift OSV DB: {e}")),
             None => return errored(
                 "Swift repo (Package.resolved): no OSV DB mirror for the toolchain-free matcher \
-                 (pass --swift-vuln-db=file://<path>, e.g. the osv.dev SwiftURL export all.zip \
+                 (pass --osv-dir=<dir> or --swift-vuln-db=file://<path>, e.g. the osv.dev SwiftURL export all.zip \
                  or an unzipped directory)"
                     .to_string(),
             ),
@@ -994,7 +1037,7 @@ fn scan_hex_repo(repo: &Repo, hex_db: Option<&Result<HexDb, HexError>>) -> RepoR
         None => {
             return errored(
                 "Hex repo (mix.lock): no OSV DB mirror for the toolchain-free matcher (pass \
-                 --hex-vuln-db=file://<path>, e.g. the osv.dev Hex export all.zip or an \
+                 --osv-dir=<dir> or --hex-vuln-db=file://<path>, e.g. the osv.dev Hex export all.zip or an \
                  unzipped directory)"
                     .to_string(),
             )
@@ -1020,12 +1063,28 @@ fn scan_maven_repo(repo: &Repo, maven_db: Option<&Result<MavenDb, MavenError>>) 
             Some(Err(e)) => return errored(format!("Maven OSV DB: {e}")),
             None => return errored(
                 "Maven repo (gradle.lockfile/pom.xml): no OSV DB mirror for the toolchain-free \
-                 matcher (pass --maven-vuln-db=file://<path>, e.g. the osv.dev Maven export \
+                 matcher (pass --osv-dir=<dir> or --maven-vuln-db=file://<path>, e.g. the osv.dev Maven export \
                  all.zip or an unzipped directory)"
                     .to_string(),
             ),
         };
+    // The Maven matcher reads `gradle.lockfile` when present (the resolved closure) and falls
+    // back to `pom.xml`, which declares direct dependencies only: say so (C1) rather than let
+    // the transitive blind spot pass as a full scan.
+    let direct_only = !repo.path.join("gradle.lockfile").is_file();
     match fleetreach_maven::scan_offline(&repo.path, db, &repo.id) {
+        Ok(scan) if direct_only => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
+            .with_skipped(scan.skipped_unparseable)
+            .with_coverage(CoverageGap {
+                repo: repo.id.clone(),
+                source: "pom.xml".to_string(),
+                ecosystem: Ecosystem::Maven,
+                level: Coverage::DirectOnly,
+                reason: "pom.xml declares direct dependencies only; transitive dependencies \
+                         were not resolved (enable Gradle dependency locking, or wait for \
+                         Maven resolution)"
+                    .to_string(),
+            }),
         Ok(scan) => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
             .with_skipped(scan.skipped_unparseable),
         Err(e) => errored(format!("maven tier-c scan: {e}")),
@@ -1049,7 +1108,7 @@ fn scan_ghactions_repo(
         None => {
             return errored(
                 "GitHub Actions repo (.github/workflows): no OSV DB mirror for the \
-                 toolchain-free matcher (pass --ghactions-vuln-db=file://<path>, e.g. the \
+                 toolchain-free matcher (pass --osv-dir=<dir> or --ghactions-vuln-db=file://<path>, e.g. the \
                  osv.dev GitHub Actions export all.zip or an unzipped directory)"
                     .to_string(),
             )

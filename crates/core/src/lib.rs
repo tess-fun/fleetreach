@@ -56,7 +56,10 @@ pub use finding::{
 };
 pub use outcome::{RepoOutcome, ScanStatus};
 pub use remediation::{remediations, Action, ReachTier, RemediationItem};
-pub use report::{max_severity_of, FleetReport, Provenance, Summary, SCHEMA_VERSION};
+pub use report::{
+    max_severity_of, Coverage, CoverageGap, FleetReport, OsvProvenance, Provenance, RepoSource,
+    Summary, SCHEMA_VERSION,
+};
 pub use severity::Severity;
 
 /// Re-exported so every downstream crate links the *same* `semver`, matching
