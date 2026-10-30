@@ -30,9 +30,9 @@ jobs:
           # glibc 2.35 baseline (Ubuntu 22.04) so the binary runs on most current distros.
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04 }
           - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm }
-          - { target: aarch64-apple-darwin, os: macos-14 }
+          - { target: aarch64-apple-darwin, os: macos-15 }
           # Cross-compiled from Apple silicon; the Apple toolchain targets x86_64 natively.
-          - { target: x86_64-apple-darwin, os: macos-14 }
+          - { target: x86_64-apple-darwin, os: macos-15 }
           - { target: x86_64-pc-windows-msvc, os: windows-latest }
     steps:
       - uses: actions/checkout@v4

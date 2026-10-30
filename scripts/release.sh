@@ -36,8 +36,6 @@ if [ -z "$DRY" ]; then
     || { echo "!! not logged in to crates.io — run: cargo login <token>"; exit 1; }
 fi
 [ "$OLD" != "$NEW" ] || { echo "!! version is already $NEW"; exit 1; }
-grep -q "## \[$NEW\]\|## $NEW" CHANGELOG.md 2>/dev/null \
-  || echo ">> reminder: CHANGELOG.md has no '## [$NEW]' entry yet (optional, but nice to add)."
 
 # --- bump versions ---
 # 1) the single [workspace.package] version (first `version = "OLD"` in the root manifest)
@@ -47,6 +45,14 @@ perl -i -pe 's/(fleetreach-[a-z]+ = \{ path = "\.\.\/[a-z]+", version = ")[^"]+(
 
 # 3) the site footer's version stamp (missed by hand in 1.0.1)
 perl -i -pe 's/(fleetreach )\Q'"$OLD"'\E(<\/div>)/${1}'"$NEW"'${2}/' site/index.html
+
+# 4) the CHANGELOG: release whatever sits under [Unreleased] as [NEW] (missed by hand in 1.2.0),
+#    leaving an empty [Unreleased] and moving its compare link forward.
+if ! grep -q "^## \[$NEW\]" CHANGELOG.md; then
+  perl -i -pe 's/^## \[Unreleased\]$/## [Unreleased]\n\n## ['"$NEW"'] - '"$(date +%F)"'/;
+    s{^\[Unreleased\]: (.*)/compare/v\Q'"$OLD"'\E\.\.\.HEAD$}{[Unreleased]: $1/compare/v'"$NEW"'...HEAD\n['"$NEW"']: $1/compare/v'"$OLD"'...v'"$NEW"'}' CHANGELOG.md
+fi
+grep -q "^## \[$NEW\]" CHANGELOG.md || echo ">> reminder: CHANGELOG.md has no '## [$NEW]' entry (no [Unreleased] section to release)."
 
 # refresh the lockfile to the new versions
 cargo update --workspace --quiet
@@ -59,14 +65,14 @@ cargo test --workspace
 
 if [ "$DRY" = "--dry-run" ]; then
   echo ">> dry run OK — would publish: ${ORDER[*]/#/fleetreach-}"
-  git checkout -- Cargo.toml Cargo.lock crates/*/Cargo.toml crates/reach-driver/Cargo.lock site/index.html
+  git checkout -- Cargo.toml Cargo.lock crates/*/Cargo.toml crates/reach-driver/Cargo.lock site/index.html CHANGELOG.md
   echo ">> reverted version bump."
   exit 0
 fi
 
 # --- confirm (irreversible) ---
 printf ">> About to TAG v%s and PUBLISH 17 crates to crates.io. This is permanent. Continue? [y/N] " "$NEW"
-read -r ans; [ "$ans" = "y" ] || [ "$ans" = "Y" ] || { echo ">> aborted; reverting bump"; git checkout -- Cargo.toml Cargo.lock crates/*/Cargo.toml crates/reach-driver/Cargo.lock site/index.html; exit 1; }
+read -r ans; [ "$ans" = "y" ] || [ "$ans" = "Y" ] || { echo ">> aborted; reverting bump"; git checkout -- Cargo.toml Cargo.lock crates/*/Cargo.toml crates/reach-driver/Cargo.lock site/index.html CHANGELOG.md; exit 1; }
 
 # --- commit + tag ---
 git add -A
