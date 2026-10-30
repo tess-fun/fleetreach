@@ -1,0 +1,4 @@
+# The npm lockfile sits below the root and `glob` is off: an honest gap, never clean.
+[[repo]]
+id = "npm-nested"
+path = "repos/npm-nested"

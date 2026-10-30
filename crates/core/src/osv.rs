@@ -216,7 +216,7 @@ pub fn affected_fixed<V: Ord + Clone>(
 // the wire schema, the parallel dir/zip reader, the by-package index, and the parse-once
 // range building all live here, once — the place where a missed case is a false-clean.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, Cursor, Read as _};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -438,6 +438,12 @@ pub fn advisories_from<V>(osv: OsvRecord, spec: &Spec<V>) -> Vec<(String, Adviso
 where
     V: Ord + Clone,
 {
+    // A withdrawn record is a retraction: OSV keeps it in the export so consumers can drop
+    // what they already reported, but it must never match. Only the rustsec path checked this
+    // before, so every OSV feeder reported retracted advisories.
+    if osv.withdrawn.is_some() {
+        return Vec::new();
+    }
     let (severity, cvss_score) = (spec.severity)(&osv);
     osv.affected
         .iter()
@@ -580,23 +586,137 @@ pub fn advisory_url(id: &str) -> String {
 /// id. Tier-C findings always carry exactly one `InRepo` occurrence.
 #[must_use]
 pub fn occ_package(v: &VulnFinding) -> &str {
+    occ_key(v).0
+}
+
+/// The `(package, installed version)` of a finding's first occurrence.
+fn occ_key(v: &VulnFinding) -> (&str, Option<&Version>) {
     match v.occurrences.first() {
-        Some(Occurrence::InRepo { package, .. }) => package,
-        _ => "",
+        Some(Occurrence::InRepo {
+            package, installed, ..
+        }) => (package, Some(installed)),
+        _ => ("", None),
     }
 }
 
-/// Sort by `(advisory id, package)` and dedup on that pair — the deterministic ordering every
-/// feeder emits. The same package+version can resolve many times in a lockfile, but a
-/// multi-package advisory legitimately yields one finding per *distinct* package, so the dedup
-/// key is the pair, not the advisory alone.
+/// Sort by `(advisory id, package, installed version)` and dedup on that triple — the
+/// deterministic ordering every feeder emits. The same package+version can resolve many times
+/// in a lockfile, but a multi-package advisory legitimately yields one finding per *distinct*
+/// package, and a lockfile can hold the same package at several versions (npm nests a
+/// conflicting copy under its dependent), each of which needs its own fix, so the version is
+/// part of the key. Advisories that are the same vulnerability under different ids are then
+/// collapsed by [`collapse_alias_duplicates`].
 pub fn sort_dedup_findings(out: &mut Vec<VulnFinding>) {
     out.sort_by(|a, b| {
         a.advisory_id
             .cmp(&b.advisory_id)
-            .then_with(|| occ_package(a).cmp(occ_package(b)))
+            .then_with(|| occ_key(a).cmp(&occ_key(b)))
     });
-    out.dedup_by(|a, b| a.advisory_id == b.advisory_id && occ_package(a) == occ_package(b));
+    out.dedup_by(|a, b| a.advisory_id == b.advisory_id && occ_key(a) == occ_key(b));
+    collapse_alias_duplicates(out);
+}
+
+/// Merge findings on the same package+version that are one vulnerability published under
+/// several ids. osv.dev carries, e.g., both a `PYSEC-` and a `GHSA-` record for most PyPI
+/// vulnerabilities, each listing the other (or a shared CVE) in `aliases`; reporting both
+/// double-counts. Findings whose `{id} + aliases` sets overlap (transitively) are one cluster.
+/// The kept id is chosen from the records alone ([`representative_rank`]) so every repo picks
+/// the same one; the others' ids move into its `aliases` (so ignores and VEX naming any of them
+/// still apply) and it takes the cluster's worst severity and highest CVSS score.
+pub fn collapse_alias_duplicates(out: &mut Vec<VulnFinding>) {
+    let mut groups: BTreeMap<(&str, Option<&Version>), Vec<usize>> = BTreeMap::new();
+    for (i, finding) in out.iter().enumerate() {
+        groups.entry(occ_key(finding)).or_default().push(i);
+    }
+
+    // (kept index, absorbed indices) per multi-member cluster.
+    let mut merges: Vec<(usize, Vec<usize>)> = Vec::new();
+    for members in groups.values().filter(|m| m.len() > 1) {
+        let ids: Vec<BTreeSet<&str>> = members
+            .iter()
+            .map(|&i| {
+                std::iter::once(out[i].advisory_id.as_str())
+                    .chain(out[i].aliases.iter().map(String::as_str))
+                    .collect()
+            })
+            .collect();
+        let mut parent: Vec<usize> = (0..members.len()).collect();
+        for a in 0..members.len() {
+            for b in a + 1..members.len() {
+                if !ids[a].is_disjoint(&ids[b]) {
+                    let (ra, rb) = (find_root(&mut parent, a), find_root(&mut parent, b));
+                    if ra != rb {
+                        parent[rb] = ra;
+                    }
+                }
+            }
+        }
+        let mut clusters: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        for (a, &member) in members.iter().enumerate() {
+            clusters
+                .entry(find_root(&mut parent, a))
+                .or_default()
+                .push(member);
+        }
+        for cluster in clusters.into_values().filter(|c| c.len() > 1) {
+            let Some(&kept) = cluster
+                .iter()
+                .min_by(|&&x, &&y| representative_rank(&out[x]).cmp(&representative_rank(&out[y])))
+            else {
+                continue;
+            };
+            merges.push((kept, cluster.into_iter().filter(|&i| i != kept).collect()));
+        }
+    }
+
+    let mut absorbed = vec![false; out.len()];
+    for (kept, others) in merges {
+        let mut aliases: BTreeSet<String> = out[kept].aliases.iter().cloned().collect();
+        let (mut severity, mut cvss) = (out[kept].severity, out[kept].cvss_score);
+        for &i in &others {
+            absorbed[i] = true;
+            aliases.insert(out[i].advisory_id.clone());
+            aliases.extend(out[i].aliases.iter().cloned());
+            severity = severity.max(out[i].severity);
+            cvss = match (cvss, out[i].cvss_score) {
+                (Some(a), Some(b)) => Some(a.max(b)),
+                (a, b) => a.or(b),
+            };
+        }
+        aliases.remove(&out[kept].advisory_id);
+        let finding = &mut out[kept];
+        finding.aliases = aliases.into_iter().collect();
+        finding.severity = severity;
+        finding.cvss_score = cvss;
+    }
+    let mut i = 0;
+    out.retain(|_| {
+        let keep = !absorbed[i];
+        i += 1;
+        keep
+    });
+}
+
+/// Which id of an alias cluster is reported (lowest wins): a GHSA (the curated record with a
+/// severity band and summary) over any other id, and anything over a GitHub "Duplicate
+/// Advisory" record; ties go to the smaller id, so the choice is deterministic.
+fn representative_rank(v: &VulnFinding) -> (u8, &str) {
+    let duplicate = v.title.starts_with("Duplicate Advisory");
+    let rank = match (duplicate, v.advisory_id.starts_with("GHSA-")) {
+        (true, _) => 2,
+        (false, true) => 0,
+        (false, false) => 1,
+    };
+    (rank, v.advisory_id.as_str())
+}
+
+/// Union-find root with path halving.
+fn find_root(parent: &mut [usize], mut x: usize) -> usize {
+    while parent[x] != x {
+        parent[x] = parent[parent[x]];
+        x = parent[x];
+    }
+    x
 }
 
 /// The inputs a feeder supplies to build one Tier-C [`VulnFinding`]. The version-matching
@@ -678,6 +798,8 @@ pub struct OsvRecord {
     pub id: String,
     pub aliases: Option<Vec<String>>,
     pub summary: Option<String>,
+    /// Set (to the retraction timestamp) when the advisory was withdrawn.
+    pub withdrawn: Option<String>,
     #[serde(default)]
     pub affected: Vec<Affected>,
     #[serde(default)]
@@ -896,5 +1018,139 @@ mod tests {
             |_, _| false,
         );
         assert_eq!(never, Match::NotAffected);
+    }
+
+    fn finding(
+        id: &str,
+        aliases: &[&str],
+        title: &str,
+        severity: Severity,
+        package: &str,
+        installed: &str,
+    ) -> VulnFinding {
+        let repo = RepoId("r".into());
+        TierCFinding {
+            ecosystem: Ecosystem::Npm,
+            advisory_id: id.into(),
+            aliases: aliases.iter().map(|a| a.to_string()).collect(),
+            title: title.into(),
+            severity,
+            cvss_score: None,
+            package: package.into(),
+            installed: v(installed),
+            patched: Vec::new(),
+            direct: false,
+            dependency_path: Vec::new(),
+            repo: &repo,
+            reach_reason: "test",
+        }
+        .build()
+    }
+
+    fn keys(out: &[VulnFinding]) -> Vec<(String, String)> {
+        out.iter()
+            .map(|f| match f.occurrences.first() {
+                Some(Occurrence::InRepo { installed, .. }) => {
+                    (f.advisory_id.clone(), installed.to_string())
+                }
+                _ => (f.advisory_id.clone(), String::new()),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn dedup_keeps_each_vulnerable_version() {
+        // npm nests a conflicting copy (`resources/node_modules/core@2.5.1`) beside the
+        // top-level `core@1.30.1`; both are vulnerable and need separate fixes.
+        let mut out = vec![
+            finding("GHSA-a", &[], "t", Severity::High, "core", "2.5.1"),
+            finding("GHSA-a", &[], "t", Severity::High, "core", "1.30.1"),
+            finding("GHSA-a", &[], "t", Severity::High, "core", "2.5.1"),
+        ];
+        sort_dedup_findings(&mut out);
+        assert_eq!(
+            keys(&out),
+            vec![
+                ("GHSA-a".to_string(), "1.30.1".to_string()),
+                ("GHSA-a".to_string(), "2.5.1".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn alias_duplicates_collapse_to_one_finding() {
+        // The PyPI shape: a PYSEC and a GHSA record for one bug, linked through aliases (here
+        // transitively, via a shared CVE and a GitHub "Duplicate Advisory").
+        let mut out = vec![
+            finding(
+                "PYSEC-2026-1",
+                &["CVE-2026-1", "GHSA-b"],
+                "PYSEC-2026-1",
+                Severity::Unknown,
+                "pillow",
+                "12.3.0",
+            ),
+            finding(
+                "GHSA-b",
+                &["CVE-2026-1"],
+                "Heap overflow",
+                Severity::High,
+                "pillow",
+                "12.3.0",
+            ),
+            finding(
+                "GHSA-a",
+                &["CVE-2026-1"],
+                "Duplicate Advisory: Heap overflow",
+                Severity::Critical,
+                "pillow",
+                "12.3.0",
+            ),
+            finding(
+                "GHSA-z",
+                &["CVE-2026-9"],
+                "Unrelated",
+                Severity::Low,
+                "pillow",
+                "12.3.0",
+            ),
+        ];
+        sort_dedup_findings(&mut out);
+        assert_eq!(
+            keys(&out),
+            vec![
+                ("GHSA-b".to_string(), "12.3.0".to_string()),
+                ("GHSA-z".to_string(), "12.3.0".to_string()),
+            ]
+        );
+        let kept = &out[0];
+        assert_eq!(kept.aliases, vec!["CVE-2026-1", "GHSA-a", "PYSEC-2026-1"]);
+        assert_eq!(
+            kept.severity,
+            Severity::Critical,
+            "takes the cluster's worst band"
+        );
+        assert_eq!(kept.title, "Heap overflow");
+    }
+
+    #[test]
+    fn alias_collapse_is_per_package_version() {
+        // The same pair on two different installed versions stays two findings each: the
+        // collapse never merges across versions or packages.
+        let mut out = vec![
+            finding("PYSEC-1", &["GHSA-x"], "p", Severity::High, "a", "1.0.0"),
+            finding("GHSA-x", &["PYSEC-1"], "g", Severity::High, "a", "1.0.0"),
+            finding("GHSA-x", &["PYSEC-1"], "g", Severity::High, "a", "2.0.0"),
+            finding("PYSEC-1", &["GHSA-x"], "p", Severity::High, "b", "1.0.0"),
+        ];
+        sort_dedup_findings(&mut out);
+        assert_eq!(
+            keys(&out),
+            vec![
+                ("GHSA-x".to_string(), "1.0.0".to_string()),
+                ("GHSA-x".to_string(), "2.0.0".to_string()),
+                ("PYSEC-1".to_string(), "1.0.0".to_string()),
+            ]
+        );
     }
 }

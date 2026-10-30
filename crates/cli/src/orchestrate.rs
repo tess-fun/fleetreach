@@ -43,6 +43,10 @@ pub struct ScanData {
     /// version string did not parse (see [`fleetreach_core::osv::TierCScan`]). Surfaced as a
     /// diagnostic so the skip is visible; never an error.
     pub skipped_unparseable: u32,
+    /// Lockfiles in a format no feeder reads (`yarn.lock`, `pnpm-lock.yaml`, `bun.lock`), as
+    /// `repo: path`, found where no readable lockfile sits beside them. Their packages went
+    /// unscanned; surfaced as a diagnostic so the gap is visible rather than silent.
+    pub unsupported_lockfiles: Vec<String>,
 }
 
 /// An installed toolchain to additionally scan against `Collection::Rust`.
@@ -174,15 +178,20 @@ pub fn scan_fleet(
 ) -> ScanData {
     let mut data = ScanData::default();
 
+    // Plan every repo up front: which ecosystems it holds and where. The plans decide which
+    // OSV DBs are worth loading, then drive the per-repo scan.
+    let plans: Vec<RepoPlan> = config.repos.par_iter().map(plan_repo).collect();
+    let has = |eco: Ecosystem| {
+        plans
+            .iter()
+            .any(|p| p.units.iter().any(|u| u.ecosystem == eco))
+    };
+
     // The npm OSV DB has no prebuilt index, so it is loaded ONCE here (not per repo)
     // and shared read-only across the parallel walk. Only loaded when the fleet
     // actually has an npm repo and a `file://` mirror was given; a load failure is
     // carried as the `Err` so every npm repo degrades to an honest gap with the reason.
-    let npm_db: Option<Result<NpmDb, NpmError>> = if config
-        .repos
-        .iter()
-        .any(|r| effective_ecosystem(r) == Ecosystem::Npm)
-    {
+    let npm_db: Option<Result<NpmDb, NpmError>> = if has(Ecosystem::Npm) {
         npm.vuln_db
             .and_then(npm_db_path)
             .map(|root| NpmDb::load(&root))
@@ -194,12 +203,7 @@ pub fn scan_fleet(
     // advisories it references) and shared, instead of being re-read and re-parsed per
     // repo — profiling showed that re-parse dominated a large Go fleet. Only when Tier-C
     // will actually run: no govulncheck (toolchain path), a `file://` mirror, a Go repo.
-    let go_db: Option<Result<GoDb, GoError>> = if go.govulncheck.is_none()
-        && config
-            .repos
-            .iter()
-            .any(|r| effective_ecosystem(r) == Ecosystem::Go)
-    {
+    let go_db: Option<Result<GoDb, GoError>> = if go.govulncheck.is_none() && has(Ecosystem::Go) {
         go.vuln_db
             .and_then(fleetreach_go::offline_db_path)
             .map(|root| GoDb::load(&root))
@@ -211,11 +215,7 @@ pub fn scan_fleet(
     // read-only across the walk. Only when the fleet has a PyPI repo and a `file://`
     // mirror was given; a load failure is carried as the `Err` so every PyPI repo
     // degrades to an honest gap with the reason.
-    let pypi_db: Option<Result<PyPiDb, PyPiError>> = if config
-        .repos
-        .iter()
-        .any(|r| effective_ecosystem(r) == Ecosystem::Pypi)
-    {
+    let pypi_db: Option<Result<PyPiDb, PyPiError>> = if has(Ecosystem::Pypi) {
         pypi.vuln_db
             .and_then(pypi_db_path)
             .map(|root| PyPiDb::load(&root))
@@ -227,11 +227,7 @@ pub fn scan_fleet(
     // shared read-only across the walk. Only when the fleet has a RubyGems repo and a
     // `file://` mirror was given; a load failure is carried as the `Err` so every RubyGems
     // repo degrades to an honest gap with the reason.
-    let rubygems_db: Option<Result<RubyGemsDb, RubyGemsError>> = if config
-        .repos
-        .iter()
-        .any(|r| effective_ecosystem(r) == Ecosystem::RubyGems)
-    {
+    let rubygems_db: Option<Result<RubyGemsDb, RubyGemsError>> = if has(Ecosystem::RubyGems) {
         rubygems
             .vuln_db
             .and_then(rubygems_db_path)
@@ -244,11 +240,7 @@ pub fn scan_fleet(
     // ONCE and shared read-only across the walk. Only when the fleet has a Packagist repo and
     // a `file://` mirror was given; a load failure is carried as the `Err` so every Packagist
     // repo degrades to an honest gap with the reason.
-    let packagist_db: Option<Result<PackagistDb, PackagistError>> = if config
-        .repos
-        .iter()
-        .any(|r| effective_ecosystem(r) == Ecosystem::Packagist)
-    {
+    let packagist_db: Option<Result<PackagistDb, PackagistError>> = if has(Ecosystem::Packagist) {
         packagist
             .vuln_db
             .and_then(packagist_db_path)
@@ -261,11 +253,7 @@ pub fn scan_fleet(
     // ONCE and shared read-only across the walk. Only when the fleet has a NuGet repo and a
     // `file://` mirror was given; a load failure is carried as the `Err` so every NuGet repo
     // degrades to an honest gap with the reason.
-    let nuget_db: Option<Result<NuGetDb, NuGetError>> = if config
-        .repos
-        .iter()
-        .any(|r| effective_ecosystem(r) == Ecosystem::NuGet)
-    {
+    let nuget_db: Option<Result<NuGetDb, NuGetError>> = if has(Ecosystem::NuGet) {
         nuget
             .vuln_db
             .and_then(nuget_db_path)
@@ -278,11 +266,7 @@ pub fn scan_fleet(
     // ONCE and shared read-only across the walk. Only when the fleet has a Julia repo and a
     // `file://` mirror was given; a load failure is carried as the `Err` so every Julia repo
     // degrades to an honest gap with the reason.
-    let julia_db: Option<Result<JuliaDb, JuliaError>> = if config
-        .repos
-        .iter()
-        .any(|r| effective_ecosystem(r) == Ecosystem::Julia)
-    {
+    let julia_db: Option<Result<JuliaDb, JuliaError>> = if has(Ecosystem::Julia) {
         julia
             .vuln_db
             .and_then(julia_db_path)
@@ -295,11 +279,7 @@ pub fn scan_fleet(
     // ONCE and shared read-only across the walk. Only when the fleet has a Swift repo and a
     // `file://` mirror was given; a load failure is carried as the `Err` so every Swift repo
     // degrades to an honest gap with the reason.
-    let swift_db: Option<Result<SwiftDb, SwiftError>> = if config
-        .repos
-        .iter()
-        .any(|r| effective_ecosystem(r) == Ecosystem::Swift)
-    {
+    let swift_db: Option<Result<SwiftDb, SwiftError>> = if has(Ecosystem::Swift) {
         swift
             .vuln_db
             .and_then(swift_db_path)
@@ -312,11 +292,7 @@ pub fn scan_fleet(
     // ONCE and shared read-only across the walk. Only when the fleet has a Hex repo and a
     // `file://` mirror was given; a load failure is carried as the `Err` so every Hex repo
     // degrades to an honest gap with the reason.
-    let hex_db: Option<Result<HexDb, HexError>> = if config
-        .repos
-        .iter()
-        .any(|r| effective_ecosystem(r) == Ecosystem::Hex)
-    {
+    let hex_db: Option<Result<HexDb, HexError>> = if has(Ecosystem::Hex) {
         hex.vuln_db
             .and_then(hex_db_path)
             .map(|root| HexDb::load(&root))
@@ -328,11 +304,7 @@ pub fn scan_fleet(
     // loaded ONCE and shared read-only across the walk. Only when the fleet has a workflow repo
     // and a `file://` mirror was given; a load failure is carried as the `Err` so every such
     // repo degrades to an honest gap with the reason.
-    let ghactions_db: Option<Result<GhActionsDb, GhaError>> = if config
-        .repos
-        .iter()
-        .any(|r| effective_ecosystem(r) == Ecosystem::GitHubActions)
-    {
+    let ghactions_db: Option<Result<GhActionsDb, GhaError>> = if has(Ecosystem::GitHubActions) {
         ghactions
             .vuln_db
             .and_then(ghactions_db_path)
@@ -345,11 +317,7 @@ pub fn scan_fleet(
     // ONCE and shared read-only across the walk. Only when the fleet has a Java repo and a
     // `file://` mirror was given; a load failure is carried as the `Err` so every Maven repo
     // degrades to an honest gap with the reason.
-    let maven_db: Option<Result<MavenDb, MavenError>> = if config
-        .repos
-        .iter()
-        .any(|r| effective_ecosystem(r) == Ecosystem::Maven)
-    {
+    let maven_db: Option<Result<MavenDb, MavenError>> = if has(Ecosystem::Maven) {
         maven
             .vuln_db
             .and_then(maven_db_path)
@@ -362,35 +330,38 @@ pub fn scan_fleet(
     // per-repo scan (dominated by lockfile parsing) fans out across cores. Results
     // are collected in config order and merged serially, so the assembled output
     // is byte-identical to a serial scan regardless of completion order.
-    let per_repo: Vec<RepoResult> = config
-        .repos
+    let scan_unit_with = |unit: &ScanUnit| {
+        scan_unit(
+            db,
+            &unit.repo,
+            unit.ecosystem,
+            host_triple,
+            go,
+            npm_db.as_ref(),
+            go_db.as_ref(),
+            pypi_db.as_ref(),
+            rubygems_db.as_ref(),
+            packagist_db.as_ref(),
+            nuget_db.as_ref(),
+            julia_db.as_ref(),
+            swift_db.as_ref(),
+            hex_db.as_ref(),
+            ghactions_db.as_ref(),
+            maven_db.as_ref(),
+        )
+    };
+    let per_repo: Vec<RepoResult> = plans
         .par_iter()
-        .map(|repo| {
-            scan_one_repo(
-                db,
-                repo,
-                host_triple,
-                go,
-                npm_db.as_ref(),
-                go_db.as_ref(),
-                pypi_db.as_ref(),
-                rubygems_db.as_ref(),
-                packagist_db.as_ref(),
-                nuget_db.as_ref(),
-                julia_db.as_ref(),
-                swift_db.as_ref(),
-                hex_db.as_ref(),
-                ghactions_db.as_ref(),
-                maven_db.as_ref(),
-            )
-        })
+        .map(|plan| merge_units(plan, plan.units.iter().map(|u| (u, scan_unit_with(u)))))
         .collect();
 
-    for result in per_repo {
+    for (plan, result) in plans.iter().zip(per_repo) {
         data.vulnerabilities.extend(result.vulnerabilities);
         data.warnings.extend(result.warnings);
         data.outcomes.push(result.outcome);
         data.skipped_unparseable += result.skipped_unparseable;
+        data.unsupported_lockfiles
+            .extend(plan.unsupported.iter().cloned());
     }
 
     // Toolchain advisories are global — no repo, scanned once.
@@ -456,64 +427,241 @@ impl RepoResult {
     }
 }
 
-/// The ecosystem a repo is scanned as: an explicit `fleet.toml` override, else
-/// auto-detected from its manifests. Rust-first — a `Cargo.lock` wins, so only a
-/// `go.mod`-without-`Cargo.lock` repo auto-detects as Go.
-fn effective_ecosystem(repo: &Repo) -> Ecosystem {
-    if let Some(eco) = repo.ecosystem {
-        return eco;
-    }
-    if repo.path.join("Cargo.lock").is_file() {
-        return Ecosystem::Cargo;
-    }
-    if repo.path.join("go.mod").is_file() {
-        return Ecosystem::Go;
-    }
-    if repo.path.join("package-lock.json").is_file() {
-        return Ecosystem::Npm;
-    }
-    if fleetreach_pypi::detect(&repo.path).is_some() {
-        return Ecosystem::Pypi;
-    }
-    if repo.path.join("Gemfile.lock").is_file() {
-        return Ecosystem::RubyGems;
-    }
-    if repo.path.join("composer.lock").is_file() {
-        return Ecosystem::Packagist;
-    }
-    if repo.path.join("packages.lock.json").is_file() {
-        return Ecosystem::NuGet;
-    }
-    if repo.path.join("Manifest.toml").is_file() {
-        return Ecosystem::Julia;
-    }
-    if repo.path.join("Package.resolved").is_file() {
-        return Ecosystem::Swift;
-    }
-    if repo.path.join("mix.lock").is_file() {
-        return Ecosystem::Hex;
-    }
-    if repo.path.join("gradle.lockfile").is_file() || repo.path.join("pom.xml").is_file() {
-        return Ecosystem::Maven;
-    }
-    // GitHub Actions is checked LAST: a package repo with a `.github/workflows/` dir is scanned
-    // for its package ecosystem above; only a workflow-only repo (or an explicit
-    // `ecosystem = "githubactions"`) routes here.
-    if repo.path.join(".github").join("workflows").is_dir() {
-        return Ecosystem::GitHubActions;
-    }
-    Ecosystem::Cargo
+/// One thing to scan in a repo: an ecosystem and the repo narrowed to the directory holding its
+/// lockfile (`rel_dir`, empty for the root). Cargo is the exception: its unit is the whole repo,
+/// because the Cargo path discovers its own `Cargo.lock`s (honouring `glob`).
+struct ScanUnit {
+    ecosystem: Ecosystem,
+    repo: Repo,
+    rel_dir: String,
 }
 
-/// Scan one repo, dispatching on its ecosystem. Pure (no shared mutable state) so
-/// it runs safely in parallel across repos; the only shared input is the
-/// read-only `db`.
+/// Everything found to scan in one repo, plus what could not be.
+struct RepoPlan {
+    id: RepoId,
+    units: Vec<ScanUnit>,
+    /// Directory-walk errors: an unreadable subdirectory may hide a lockfile, so the repo
+    /// cannot be called clean.
+    walk_errors: Vec<String>,
+    /// `repo: path` of lockfiles in formats no feeder reads.
+    unsupported: Vec<String>,
+}
+
+/// Lockfile formats fleetreach cannot read; reported when no readable lockfile sits beside them.
+const UNSUPPORTED_LOCKFILES: &[&str] = &["yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb"];
+
+/// Directories never searched for lockfiles: installed third-party packages and VCS metadata
+/// are not the project's own dependency set.
+const SKIPPED_DIRS: &[&str] = &["node_modules", ".git"];
+
+/// Decide what to scan in `repo`.
+///
+/// An explicit `ecosystem` scans exactly that, as before. Otherwise every ecosystem is
+/// detected in the root and, with `glob = true`, in every directory whose lockfile lies within
+/// `glob_max_depth` (the same bound the `Cargo.lock` glob uses), so a polyglot repo or a
+/// monorepo whose lockfiles live below the root is scanned in full instead of as its first
+/// detected ecosystem. GitHub Actions is scanned only when nothing else is found, and a repo
+/// with nothing at all falls back to Cargo, whose "no Cargo.lock found" is the honest gap.
+fn plan_repo(repo: &Repo) -> RepoPlan {
+    let unit = |ecosystem: Ecosystem, dir: &Path| {
+        let rel_dir = dir
+            .strip_prefix(&repo.path)
+            .unwrap_or(dir)
+            .display()
+            .to_string();
+        let narrowed = if ecosystem == Ecosystem::Cargo {
+            repo.clone()
+        } else {
+            Repo {
+                path: dir.to_path_buf(),
+                glob: false,
+                ecosystem: Some(ecosystem),
+                ..repo.clone()
+            }
+        };
+        ScanUnit {
+            ecosystem,
+            repo: narrowed,
+            rel_dir,
+        }
+    };
+    let mut plan = RepoPlan {
+        id: repo.id.clone(),
+        units: Vec::new(),
+        walk_errors: Vec::new(),
+        unsupported: Vec::new(),
+    };
+
+    if let Some(eco) = repo.ecosystem {
+        plan.units.push(ScanUnit {
+            ecosystem: eco,
+            repo: repo.clone(),
+            rel_dir: String::new(),
+        });
+        return plan;
+    }
+
+    if !discover_lockfiles(repo).0.is_empty() {
+        plan.units.push(unit(Ecosystem::Cargo, &repo.path));
+    }
+
+    let mut dirs = vec![repo.path.clone()];
+    if repo.glob && repo.glob_max_depth > 1 {
+        let walk = WalkDir::new(&repo.path)
+            .min_depth(1)
+            .max_depth(repo.glob_max_depth - 1)
+            .sort_by_file_name()
+            .into_iter()
+            .filter_entry(|e| {
+                !(e.file_type().is_dir() && SKIPPED_DIRS.iter().any(|s| e.file_name() == *s))
+            });
+        for entry in walk {
+            match entry {
+                Ok(e) if e.file_type().is_dir() => dirs.push(e.into_path()),
+                Ok(_) => {}
+                Err(e) => plan.walk_errors.push(e.to_string()),
+            }
+        }
+    }
+    for dir in &dirs {
+        let files = file_names(dir);
+        let found = dir_ecosystems(dir, &files, dir == &repo.path);
+        if !found.contains(&Ecosystem::Npm) {
+            for name in UNSUPPORTED_LOCKFILES {
+                if files.contains(*name) {
+                    let path = dir.join(name);
+                    let rel = path.strip_prefix(&repo.path).unwrap_or(&path);
+                    plan.unsupported
+                        .push(format!("{}: {}", repo.id, rel.display()));
+                }
+            }
+        }
+        for eco in found {
+            plan.units.push(unit(eco, dir));
+        }
+    }
+
+    if plan.units.is_empty() {
+        let eco = if repo.path.join(".github").join("workflows").is_dir() {
+            Ecosystem::GitHubActions
+        } else {
+            Ecosystem::Cargo
+        };
+        plan.units.push(unit(eco, &repo.path));
+    }
+    plan
+}
+
+/// The exact names of the regular files directly in `dir` (empty if it cannot be read; an
+/// unreadable subdirectory is already a walk error). Matching names exactly, rather than probing
+/// `dir.join(name).is_file()`, keeps a case-insensitive filesystem (macOS) from taking Flox's
+/// `manifest.toml` for Julia's `Manifest.toml`.
+fn file_names(dir: &Path) -> BTreeSet<String> {
+    std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter_map(|e| e.file_name().into_string().ok())
+        .collect()
+}
+
+/// The non-Cargo ecosystems whose lockfile (or manifest) is among `files`, the file names in
+/// `dir`. `pom.xml` counts only at the repo root: a nested one is usually a module of a
+/// multi-module build, not a standalone dependency set.
+fn dir_ecosystems(dir: &Path, files: &BTreeSet<String>, is_root: bool) -> Vec<Ecosystem> {
+    let has = |name: &str| files.contains(name);
+    let mut found = Vec::new();
+    if has("go.mod") {
+        found.push(Ecosystem::Go);
+    }
+    if has("package-lock.json") {
+        found.push(Ecosystem::Npm);
+    }
+    if fleetreach_pypi::detect(dir).is_some() {
+        found.push(Ecosystem::Pypi);
+    }
+    if has("Gemfile.lock") {
+        found.push(Ecosystem::RubyGems);
+    }
+    if has("composer.lock") {
+        found.push(Ecosystem::Packagist);
+    }
+    if has("packages.lock.json") {
+        found.push(Ecosystem::NuGet);
+    }
+    if has("Manifest.toml") {
+        found.push(Ecosystem::Julia);
+    }
+    if has("Package.resolved") {
+        found.push(Ecosystem::Swift);
+    }
+    if has("mix.lock") {
+        found.push(Ecosystem::Hex);
+    }
+    if has("gradle.lockfile") || (is_root && has("pom.xml")) {
+        found.push(Ecosystem::Maven);
+    }
+    found
+}
+
+/// Fold a repo's per-unit results into one: findings concatenated, and the repo errored
+/// (keeping every finding gathered) if any unit errored or the walk was incomplete, with each
+/// reason prefixed by the directory it came from.
+fn merge_units<'a>(
+    plan: &RepoPlan,
+    results: impl Iterator<Item = (&'a ScanUnit, RepoResult)>,
+) -> RepoResult {
+    let mut vulnerabilities = Vec::new();
+    let mut warnings = Vec::new();
+    let mut skipped_unparseable = 0;
+    let mut reasons: Vec<String> = plan
+        .walk_errors
+        .iter()
+        .map(|e| format!("could not fully walk the repo: {e}"))
+        .collect();
+    for (unit, result) in results {
+        vulnerabilities.extend(result.vulnerabilities);
+        warnings.extend(result.warnings);
+        skipped_unparseable += result.skipped_unparseable;
+        if let ScanStatus::Errored { reason } = result.outcome.status {
+            reasons.push(if unit.rel_dir.is_empty() {
+                reason
+            } else {
+                format!("{}: {reason}", unit.rel_dir)
+            });
+        }
+    }
+    let status = if reasons.is_empty() {
+        ScanStatus::Scanned {
+            vulns: vulnerabilities.len(),
+            warnings: warnings.len(),
+        }
+    } else {
+        ScanStatus::Errored {
+            reason: reasons.join("; "),
+        }
+    };
+    RepoResult {
+        vulnerabilities,
+        warnings,
+        outcome: RepoOutcome {
+            repo: plan.id.clone(),
+            status,
+        },
+        skipped_unparseable,
+    }
+}
+
+/// Scan one unit, dispatching on its ecosystem. Pure (no shared mutable state) so it runs
+/// safely in parallel across repos; the only shared input is the read-only `db`.
 // One once-loaded OSV DB per Tier-C ecosystem is threaded in as its own argument; see the
 // note on `scan_fleet` for why the lint is allowed rather than bundled away.
 #[allow(clippy::too_many_arguments)]
-fn scan_one_repo(
+fn scan_unit(
     db: &AdvisoryDb,
     repo: &Repo,
+    ecosystem: Ecosystem,
     host_triple: Option<&str>,
     go: &GoScan,
     npm_db: Option<&Result<NpmDb, NpmError>>,
@@ -528,7 +676,7 @@ fn scan_one_repo(
     ghactions_db: Option<&Result<GhActionsDb, GhaError>>,
     maven_db: Option<&Result<MavenDb, MavenError>>,
 ) -> RepoResult {
-    match effective_ecosystem(repo) {
+    match ecosystem {
         Ecosystem::Go => return scan_go_repo(repo, go, go_db),
         Ecosystem::Npm => return scan_npm_repo(repo, npm_db),
         Ecosystem::Pypi => return scan_pypi_repo(repo, pypi_db),

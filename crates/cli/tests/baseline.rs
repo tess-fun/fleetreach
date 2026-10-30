@@ -52,6 +52,7 @@ fn vuln(id: &str) -> VulnFinding {
 fn report_with(ids: &[&str]) -> fleetreach_core::FleetReport {
     let scan = ScanData {
         skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
         vulnerabilities: ids.iter().map(|id| vuln(id)).collect(),
         warnings: vec![],
         outcomes: vec![RepoOutcome {
@@ -117,6 +118,7 @@ fn drop_phantom_removes_unbuilt_keeps_built_and_unknown() {
 
     let scan = ScanData {
         skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
         vulnerabilities: vec![
             finding("RUSTSEC-PHANTOM", Some(false)),
             finding("RUSTSEC-BUILT", Some(true)),

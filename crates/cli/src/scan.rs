@@ -497,6 +497,20 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         );
     }
 
+    // Lockfiles no feeder reads (yarn/pnpm/bun) mean packages that were never matched. The
+    // repo still scans what it can, so this is a visible note rather than an errored gap,
+    // which no flag could ever clear.
+    if !scan.unsupported_lockfiles.is_empty() {
+        eprintln!(
+            "note: {} lockfile(s) in a format fleetreach cannot read were not scanned \
+             (generate a package-lock.json, or set `ecosystem` to scope the repo):",
+            scan.unsupported_lockfiles.len()
+        );
+        for path in &scan.unsupported_lockfiles {
+            eprintln!("  {}", fleetreach_report::sanitize_cell(path));
+        }
+    }
+
     // 5. Assemble. Ignores + vex_assertions suppress findings; the removed
     //    occurrences are captured for VEX promotion (used only by `-f vex`).
     let provenance = build_provenance(&db.meta());

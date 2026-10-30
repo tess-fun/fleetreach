@@ -277,6 +277,22 @@ mod tests {
     }
 
     #[test]
+    fn withdrawn_advisory_never_indexes() {
+        // A retracted record (osv.dev keeps it in the export with `withdrawn` set) must
+        // match nothing, even though its range would cover every version.
+        let json = r#"{
+          "id": "GHSA-test-0002",
+          "withdrawn": "2026-10-23T12:53:02Z",
+          "affected": [
+            { "package": { "ecosystem": "npm", "name": "braces" },
+              "ranges": [ { "type": "SEMVER", "events": [ {"introduced":"0"}, {"last_affected":"3.0.3"} ] } ] }
+          ]
+        }"#;
+        let osv: OsvRecord = serde_json::from_str(json).unwrap();
+        assert!(osv::advisories_from(osv, &spec()).is_empty());
+    }
+
+    #[test]
     fn npm_db_path_only_file_urls() {
         assert_eq!(
             npm_db_path("file:///opt/npmdb"),

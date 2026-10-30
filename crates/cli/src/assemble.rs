@@ -253,7 +253,7 @@ fn apply_suppressions(
     correlated.vulnerabilities.retain_mut(|v| {
         let mut kept: Vec<Occurrence> = Vec::with_capacity(v.occurrences.len());
         for occ in std::mem::take(&mut v.occurrences) {
-            match matching_suppression(suppressions, &v.advisory_id, &occ) {
+            match matching_suppression(suppressions, &v.advisory_id, &v.aliases, &occ) {
                 Some(s) => {
                     matched.insert(s.id.clone());
                     suppressed.push(SuppressedOccurrence {
@@ -292,11 +292,14 @@ fn apply_suppressions(
     (correlated, stale, suppressed)
 }
 
-/// The first suppression that applies to `occ` of `advisory_id`: ids must match,
-/// and a repo-scoped suppression matches only an in-repo occurrence of that repo.
+/// The first suppression that applies to `occ` of `advisory_id`: the suppression must name
+/// the advisory id or one of its aliases (a feeder may report a PYSEC/GHSA pair under the
+/// other id, keeping the absorbed one as an alias), and a repo-scoped suppression matches only
+/// an in-repo occurrence of that repo.
 fn matching_suppression<'a>(
     suppressions: &'a [Suppression],
     advisory_id: &str,
+    aliases: &[String],
     occ: &Occurrence,
 ) -> Option<&'a Suppression> {
     let repo = match occ {
@@ -304,7 +307,7 @@ fn matching_suppression<'a>(
         Occurrence::Toolchain { .. } => None,
     };
     suppressions.iter().find(|s| {
-        s.id == advisory_id
+        (s.id == advisory_id || aliases.contains(&s.id))
             && match &s.repo {
                 None => true,
                 Some(scoped) => repo == Some(scoped),

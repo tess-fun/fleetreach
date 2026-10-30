@@ -82,7 +82,10 @@ impl GoDb {
             // that fails to parse is a corrupt mirror → hard error, never a silent drop.
             if let Ok(body) = std::fs::read_to_string(&path) {
                 let osv: Osv = serde_json::from_str(&body).map_err(|e| GoError::db(&path, e))?;
-                advisories.insert(id.clone(), osv);
+                // A withdrawn advisory is a retraction and must never match.
+                if osv.withdrawn.is_none() {
+                    advisories.insert(id.clone(), osv);
+                }
             }
         }
         Ok(GoDb { index, advisories })
@@ -341,6 +344,7 @@ struct Osv {
     id: String,
     aliases: Option<Vec<String>>,
     summary: Option<String>,
+    withdrawn: Option<String>,
     #[serde(default)]
     affected: Vec<Affected>,
 }

@@ -94,6 +94,7 @@ fn gate(fail_on: Severity, fail_on_warnings: bool) -> GateConfig {
 fn clean_fleet_exits_zero() {
     let scan = ScanData {
         skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
         vulnerabilities: vec![],
         warnings: vec![],
         outcomes: vec![scanned("a", 0, 0), scanned("b", 0, 0)],
@@ -107,6 +108,7 @@ fn clean_fleet_exits_zero() {
 fn vuln_at_or_above_fail_on_exits_one() {
     let scan = ScanData {
         skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
         vulnerabilities: vec![vuln("RUSTSEC-1", Severity::High, "a")],
         warnings: vec![],
         outcomes: vec![scanned("a", 1, 0)],
@@ -121,6 +123,7 @@ fn vuln_at_or_above_fail_on_exits_one() {
 fn errored_repo_forces_two_even_with_no_findings() {
     let scan = ScanData {
         skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
         vulnerabilities: vec![],
         warnings: vec![],
         outcomes: vec![scanned("a", 0, 0), errored("b")],
@@ -135,6 +138,7 @@ fn zero_repos_scanned_exits_two() {
     // An empty fleet is untrustworthy: we read nothing, so we cannot claim clean.
     let scan = ScanData {
         skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
         vulnerabilities: vec![],
         warnings: vec![],
         outcomes: vec![],
@@ -148,6 +152,7 @@ fn zero_repos_scanned_exits_two() {
 fn unknown_severity_vuln_is_fail_closed() {
     let scan = ScanData {
         skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
         vulnerabilities: vec![vuln("RUSTSEC-1", Severity::Unknown, "a")],
         warnings: vec![],
         outcomes: vec![scanned("a", 1, 0)],
@@ -161,6 +166,7 @@ fn unknown_severity_vuln_is_fail_closed() {
 fn warnings_only_gate_when_opted_in() {
     let scan = ScanData {
         skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
         vulnerabilities: vec![],
         warnings: vec![warn("RUSTSEC-W", "a")],
         outcomes: vec![scanned("a", 0, 1)],
@@ -174,6 +180,7 @@ fn warnings_only_gate_when_opted_in() {
 fn ignores_suppress_findings_and_report_stale() {
     let scan = ScanData {
         skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
         vulnerabilities: vec![vuln("RUSTSEC-PRESENT", Severity::High, "a")],
         warnings: vec![],
         outcomes: vec![scanned("a", 1, 0)],
@@ -200,6 +207,29 @@ fn ignores_suppress_findings_and_report_stale() {
 }
 
 #[test]
+fn ignore_naming_an_alias_suppresses_the_finding() {
+    // A feeder reports a PYSEC/GHSA pair under the GHSA id with the PYSEC id as an alias;
+    // an ignore written against the PYSEC id must still apply, and is not stale.
+    let mut v = vuln("GHSA-kept", Severity::High, "a");
+    v.aliases = vec!["CVE-2026-1".into(), "PYSEC-2026-1".into()];
+    let scan = ScanData {
+        skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
+        vulnerabilities: vec![v],
+        warnings: vec![],
+        outcomes: vec![scanned("a", 1, 0)],
+    };
+    let ignores = vec![Ignore {
+        id: "PYSEC-2026-1".into(),
+        reason: "not exposed".into(),
+    }];
+    let report = build_report(scan, &ignores, None, provenance());
+
+    assert_eq!(report.vulnerabilities.len(), 0, "alias id suppresses");
+    assert!(report.summary.stale_ignores.is_empty());
+}
+
+#[test]
 fn repo_scoped_suppression_removes_only_that_repos_occurrence() {
     use fleetreach_cli::assemble::{assemble, Suppression};
 
@@ -219,6 +249,7 @@ fn repo_scoped_suppression_removes_only_that_repos_occurrence() {
     }
     let scan = ScanData {
         skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
         vulnerabilities: vec![v],
         warnings: vec![],
         outcomes: vec![scanned("a", 1, 0), scanned("b", 1, 0)],
@@ -252,6 +283,7 @@ fn repo_scoped_suppression_removes_only_that_repos_occurrence() {
 fn min_severity_filters_below_threshold_but_keeps_unknown() {
     let scan = ScanData {
         skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
         vulnerabilities: vec![
             vuln("RUSTSEC-LOW", Severity::Low, "a"),
             vuln("RUSTSEC-HIGH", Severity::High, "a"),
@@ -276,6 +308,7 @@ fn min_severity_filters_below_threshold_but_keeps_unknown() {
 fn assembly_is_byte_identical_across_runs() {
     let make = || ScanData {
         skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
         vulnerabilities: vec![
             vuln("RUSTSEC-2", Severity::Low, "z"),
             vuln("RUSTSEC-1", Severity::High, "a"),
@@ -295,6 +328,7 @@ fn assembly_is_byte_identical_across_runs() {
 fn json_matches_the_schema_shape() {
     let scan = ScanData {
         skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
         vulnerabilities: vec![vuln("RUSTSEC-1", Severity::High, "a")],
         warnings: vec![],
         outcomes: vec![scanned("a", 1, 0)],

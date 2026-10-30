@@ -12,7 +12,7 @@ path = "../core-lib"            # repo root; the lockfile is located within
 [[repo]]
 id             = "services"
 path           = "../services"
-glob           = true           # discover **/Cargo.lock under the tree
+glob           = true           # also scan lockfiles below the root
 glob_max_depth = 4              # bounded; default 3
 
 [[repo]]
@@ -36,7 +36,7 @@ reason = "dev-dependency only, not in any shipped path"   # REQUIRED, non-empty
 |-------|---------|
 | `id` | Stable identifier used in the report. |
 | `path` | Repo root (the lockfile is located within). |
-| `glob` | Discover every lockfile under the tree. |
+| `glob` | Also scan lockfiles below the repo root (every ecosystem). |
 | `glob_max_depth` | How deep `glob` descends (default 3). |
 | `ecosystem` | Override auto-detection (`cargo`, `go`, `npm`, `pypi`, `rubygems`, `packagist`, `nuget`, `julia`, `swift`, `hex`, `maven`, `githubactions`). |
 
@@ -46,11 +46,24 @@ Each `[[settings.ignore]]` requires a non-empty `reason` — an ignore without a
 justification is rejected. A stale ignore (one that no longer matches anything)
 is surfaced, so the ignore list cannot rot silently.
 
-## Auto-detection order
+## Auto-detection
 
-When `ecosystem` is omitted, fleetreach is Rust-first: a `Cargo.lock` wins, then
-`go.mod`, then `package-lock.json`, then a Python lockfile, and so on. Set
-`ecosystem` explicitly only to override that order.
+When `ecosystem` is omitted, fleetreach scans **every** ecosystem it finds, so a
+polyglot repo (say a `Cargo.lock` beside a `package-lock.json` and a
+`composer.lock`) is scanned in full. Without `glob` it looks only at the repo
+root; with `glob = true` it also scans each lockfile below the root, within
+`glob_max_depth`, which covers monorepos whose lockfiles live in subdirectories.
+`node_modules` and `.git` are never searched. A nested `pom.xml` is treated as a
+module of the root build and not scanned on its own, and GitHub Actions workflows
+are scanned only when the repo has no package ecosystem.
+
+Every discovered lockfile must be scannable: one whose ecosystem has no OSV
+mirror (or, for Go, no govulncheck) makes the repo an errored gap, as it would
+for a single-ecosystem repo. Lockfiles in formats fleetreach cannot read
+(`yarn.lock`, `pnpm-lock.yaml`, `bun.lock`) are listed in a note on stderr.
+
+Set `ecosystem` to scan exactly one ecosystem at the repo root, which is also
+how to opt a repo out of the multi-ecosystem scan.
 
 ## Key flags
 

@@ -100,6 +100,72 @@ fn npm_repo_without_a_mirror_is_an_honest_gap() {
     );
 }
 
+#[test]
+fn polyglot_repo_scans_every_ecosystem_and_nested_lockfiles() {
+    // `polyglot` has a root Cargo.lock and an npm lockfile in `web/`; `npm-nested` has its
+    // only lockfile below the root (the vscode shape). Root-only, first-match detection
+    // scanned just the Cargo.lock and called `npm-nested` a Rust repo with nothing in it.
+    let out = run(&[
+        "scan",
+        "-c",
+        &cfg("fleet-polyglot.toml"),
+        "--db",
+        &db(),
+        "--npm-vuln-db",
+        &file_url("npm-osv"),
+        "-f",
+        "json",
+        "-q",
+    ]);
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(value["summary"]["repos_errored"], 0, "{value}");
+    let hits: Vec<(String, String)> = value["vulnerabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|v| {
+            v["occurrences"].as_array().unwrap().iter().map(|o| {
+                (
+                    o["repo"].as_str().unwrap().to_string(),
+                    o["package"].as_str().unwrap().to_string(),
+                )
+            })
+        })
+        .collect();
+    assert!(
+        hits.contains(&("polyglot".into(), "lodash".into())),
+        "{hits:?}"
+    );
+    assert!(
+        hits.contains(&("npm-nested".into(), "lodash".into())),
+        "{hits:?}"
+    );
+    assert!(
+        hits.iter().any(|(r, p)| r == "polyglot" && p != "lodash"),
+        "the root Cargo.lock is still scanned: {hits:?}"
+    );
+    // `.flox/env/manifest.toml` (Flox, lowercase) is not a Julia `Manifest.toml`, even on a
+    // case-insensitive filesystem; misdetecting it would error the repo (no Julia mirror).
+    // The unreadable yarn.lock is named, not silently skipped.
+    let err = stderr(&out);
+    assert!(err.contains("polyglot: legacy-ui/yarn.lock"), "{err}");
+}
+
+#[test]
+fn nested_lockfile_without_glob_is_an_honest_gap() {
+    let out = run(&[
+        "scan",
+        "-c",
+        &cfg("fleet-npm-nested-noglob.toml"),
+        "--db",
+        &db(),
+        "--npm-vuln-db",
+        &file_url("npm-osv"),
+    ]);
+    assert_eq!(code(&out), 2, "never clean; stderr: {}", stderr(&out));
+}
+
 // ---- `diff` subcommand ----
 
 #[test]

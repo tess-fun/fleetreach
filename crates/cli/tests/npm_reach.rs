@@ -88,6 +88,7 @@ fn import_graph_resolves_direct_transitive_and_prune() {
     // and node_modules but imported by nobody.
     let scan = ScanData {
         skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
         vulnerabilities: vec![
             npm_finding("LODASH", "lodash"),
             npm_finding("MINIMIST", "minimist"),

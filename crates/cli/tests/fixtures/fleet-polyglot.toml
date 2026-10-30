@@ -1,0 +1,10 @@
+# Polyglot / monorepo shapes: lockfiles of several ecosystems, and lockfiles below the root.
+[[repo]]
+id = "polyglot"
+path = "repos/polyglot"
+glob = true
+
+[[repo]]
+id = "npm-nested"
+path = "repos/npm-nested"
+glob = true

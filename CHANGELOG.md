@@ -6,6 +6,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Polyglot and monorepo repos were only partly scanned, silently.** A repo was scanned as
+  the first ecosystem found at its root, and `glob` only discovered `Cargo.lock`s, so a
+  `package-lock.json` beside a `Cargo.lock`, or any lockfile in a subdirectory, was never
+  read. A repo with no root lockfile (e.g. vscode, whose 14 npm lockfiles are all nested)
+  was reported clean. fleetreach now scans every ecosystem at the root and, with
+  `glob = true`, every lockfile below it. On 13 large open-source repos this surfaced 394
+  missed findings (13 critical). Discovered lockfiles whose ecosystem has no OSV mirror now
+  make the repo an errored gap; set `ecosystem` to scope a repo to one ecosystem.
+  `yarn.lock`/`pnpm-lock.yaml`/`bun.lock` files, which no feeder reads, are now listed in a
+  note instead of being ignored.
+- **Withdrawn OSV advisories were reported.** Only the Rust path honoured `withdrawn`; all
+  OSV feeders (and the Go offline matcher) now drop retracted advisories.
+- **A second vulnerable version of a package was dropped.** The OSV feeders deduplicated
+  findings on (advisory, package), so when a lockfile held two vulnerable versions (npm nests
+  a conflicting copy) only one was reported and its fix left the other in place. The
+  installed version is now part of the key.
+- **One vulnerability reported under several ids.** osv.dev publishes, e.g., both a `PYSEC-`
+  and a `GHSA-` record for most PyPI vulnerabilities; both were reported, inflating counts by
+  about 28% on real fleets. Findings on the same package version whose ids or aliases overlap
+  are now one finding: the GHSA id is kept, the others become aliases, and it takes the worst
+  severity. Ignores and VEX assertions now also match an advisory's aliases, so an ignore
+  naming the absorbed id keeps working.
+
 ## [1.0.3] - 2026-10-30
 
 ### Security

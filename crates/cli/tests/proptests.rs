@@ -119,7 +119,7 @@ proptest! {
         warns in prop::collection::vec(arb_warn(), 0..15),
         outcomes in prop::collection::vec(arb_outcome(), 0..8),
     ) {
-        let make = || ScanData { skipped_unparseable: 0,
+        let make = || ScanData { skipped_unparseable: 0, unsupported_lockfiles: Vec::new(),
             vulnerabilities: vulns.clone(),
             warnings: warns.clone(),
             outcomes: outcomes.clone(),
