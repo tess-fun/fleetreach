@@ -1,0 +1,1 @@
+{ "name": "app", "scripts": { "test": "TZ=UTC test-runner --run && npm run lint", "lint": "npx acme-lint src" } }

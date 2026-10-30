@@ -136,3 +136,45 @@ fn import_graph_resolves_direct_transitive_and_prune() {
         ReachVerdict::Reachable { .. }
     ));
 }
+
+#[test]
+fn script_run_tools_are_entry_points() {
+    // package.json scripts run `test-runner` (bin given as a string) and `acme-lint` (an object
+    // bin of the scoped @acme/linter). Nothing imports either, but each runs when its script does,
+    // so it and what it imports are reachable, and prune must not mark them NotReachable.
+    let scan = ScanData {
+        skipped_unparseable: 0,
+        unsupported_lockfiles: Vec::new(),
+        vulnerabilities: vec![
+            npm_finding("RUNNER", "test-runner"),
+            npm_finding("RUNNER-DEP", "runner-dep"),
+            npm_finding("LINT-DEP", "lint-dep"),
+            npm_finding("QS", "qs"),
+        ],
+        warnings: vec![],
+        outcomes: vec![],
+    };
+    let mut report = build_report(scan, &[], None, provenance());
+    npm_reach::assess(&mut report, &config(), &Options { prune: true });
+
+    assert_eq!(
+        verdict_of(&report, "RUNNER"),
+        &ReachVerdict::Reachable {
+            witness: vec!["test-runner".into()]
+        }
+    );
+    assert_eq!(
+        verdict_of(&report, "RUNNER-DEP"),
+        &ReachVerdict::Reachable {
+            witness: vec!["test-runner".into(), "runner-dep".into()]
+        }
+    );
+    assert_eq!(
+        verdict_of(&report, "LINT-DEP"),
+        &ReachVerdict::Reachable {
+            witness: vec!["@acme/linter".into(), "lint-dep".into()]
+        }
+    );
+    // A package neither imported nor run by a script is still pruned.
+    assert_eq!(verdict_of(&report, "QS"), &ReachVerdict::NotReachable);
+}

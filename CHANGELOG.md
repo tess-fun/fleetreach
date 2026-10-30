@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`--npm-prune-unreachable` pruned tools the project runs.** The npm import graph only started
+  from imports, so a package run as a command (vitest, jest, stylelint, eslint from a
+  `package.json` script or a CI workflow step) and everything it loads came out `NotReachable`;
+  on matomo all 18 npm findings were, including a critical Vitest advisory. Executables named in
+  `scripts` and `.github/workflows` are now resolved through each installed package's `bin` and
+  treated as entry points, with witness chains such as `vitest → vite → esbuild`.
+
 ## [1.1.0] - 2026-10-30
 
 ### Added

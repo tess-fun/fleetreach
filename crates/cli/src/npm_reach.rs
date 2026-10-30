@@ -15,6 +15,12 @@
 //!
 //! - entry points are **over-approximated** to every first-party file (any file may run), so a
 //!   dependency used only by a test/script is still `Reachable`, never falsely pruned;
+//! - a package whose executable the project runs (a `package.json` script such as
+//!   `"test": "vitest run"`, or a CI workflow step such as `npx stylelint`, resolved through each
+//!   installed package's `bin`) is an entry point too: a tool like vitest, jest or stylelint is
+//!   never imported, but runs whenever the command does, along with all it imports. A tool
+//!   started from elsewhere (a Makefile, another ecosystem's build) stays invisible, which is part
+//!   of why the negative is opt-in;
 //! - package→package edges are taken from *actual parsed import specifiers* (precise, so the
 //!   prune has teeth) — the documented trade for the dynamic-import blind spot.
 //!
@@ -164,6 +170,14 @@ fn analyze(repo_dir: &Path) -> Analysis {
     let node_modules = repo_dir.join("node_modules");
     let has_node_modules = node_modules.is_dir();
     if has_node_modules {
+        // Executables the project's scripts run are entry points like first-party imports.
+        let bins = bin_owners(&node_modules);
+        graph.add_edges(
+            ENTRY,
+            command_words(repo_dir)
+                .iter()
+                .filter_map(|word| bins.get(word).cloned()),
+        );
         for (pkg, deps) in package_graph(&node_modules) {
             graph.add_edges(&pkg, deps);
         }
@@ -221,6 +235,73 @@ fn package_graph(node_modules: &Path) -> BTreeMap<String, BTreeSet<String>> {
         graph.entry(name).or_default().extend(deps);
     }
     graph
+}
+
+/// Every word of every command the project runs: its `package.json` `scripts`, and its CI
+/// workflows (`.github/workflows/*.yml`, where `npx stylelint …` style steps live) — the
+/// candidate executable names. Shell operators and quotes split words, and a path
+/// (`./node_modules/.bin/jest`) keeps its last component. Arguments, env assignments and the
+/// rest of a workflow's YAML come along too; they only match if some installed package ships an
+/// executable of that name, which over-approximates (safe).
+fn command_words(repo_dir: &Path) -> BTreeSet<String> {
+    let mut commands: Vec<String> = Vec::new();
+    if let Some(scripts) = std::fs::read_to_string(repo_dir.join("package.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|manifest| manifest.get("scripts").and_then(|s| s.as_object()).cloned())
+    {
+        commands.extend(
+            scripts
+                .values()
+                .filter_map(|c| c.as_str().map(str::to_string)),
+        );
+    }
+    if let Ok(entries) = std::fs::read_dir(repo_dir.join(".github").join("workflows")) {
+        for entry in entries.flatten() {
+            if has_ext(&entry.path(), &["yml", "yaml"]) {
+                commands.extend(std::fs::read_to_string(entry.path()).ok());
+            }
+        }
+    }
+    commands
+        .iter()
+        .flat_map(|cmd| {
+            cmd.split(|c: char| c.is_whitespace() || ";&|()`'\"".contains(c))
+                .filter(|w| !w.is_empty())
+                .map(|w| w.rsplit('/').next().unwrap_or(w).to_string())
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// Executable name → the installed package that provides it, from each package's `bin` field:
+/// a string names the executable after the package (its unscoped name), an object lists them.
+fn bin_owners(node_modules: &Path) -> BTreeMap<String, String> {
+    let mut owners = BTreeMap::new();
+    for pkg_dir in package_dirs(node_modules) {
+        let Some(name) = package_name_of(node_modules, &pkg_dir) else {
+            continue;
+        };
+        let Ok(text) = std::fs::read_to_string(pkg_dir.join("package.json")) else {
+            continue;
+        };
+        let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
+        match manifest.get("bin") {
+            Some(serde_json::Value::String(_)) => {
+                let bin = name.rsplit('/').next().unwrap_or(&name).to_string();
+                owners.insert(bin, name.clone());
+            }
+            Some(serde_json::Value::Object(map)) => {
+                for bin in map.keys() {
+                    owners.insert(bin.clone(), name.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    owners
 }
 
 /// The top-level package directories under `node_modules` (`foo`, `@scope/bar`), skipping
@@ -376,6 +457,40 @@ mod tests {
         assert!(!pkgs
             .iter()
             .any(|p| p.contains("local") || p.contains("util")));
+    }
+
+    #[test]
+    fn command_words_split_scripts_and_workflows_into_executable_candidates() {
+        let dir = std::env::temp_dir().join(format!("fr-npm-scripts-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("package.json"),
+            r#"{ "scripts": {
+                "test": "TZ=UTC vitest run && npm run lint",
+                "lint": "npx eslint 'js/**' | tee out.txt",
+                "css": "./node_modules/.bin/stylelint css/**;(prettier --check .)"
+            } }"#,
+        )
+        .unwrap();
+        std::fs::create_dir_all(dir.join(".github/workflows")).unwrap();
+        std::fs::write(
+            dir.join(".github/workflows/ci.yml"),
+            "jobs:\n  lint:\n    steps:\n      - run: npx tsc --noEmit\n",
+        )
+        .unwrap();
+        let words = command_words(&dir);
+        for want in [
+            "vitest",
+            "npx",
+            "eslint",
+            "stylelint",
+            "prettier",
+            "tee",
+            "tsc",
+        ] {
+            assert!(words.contains(want), "missing {want}: {words:?}");
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

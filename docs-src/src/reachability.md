@@ -24,10 +24,14 @@ All 12 ecosystems produce a reachability signal this way.
 Under `--reachability`, npm uses a build-free *module import graph* instead of
 the flat grep: it parses every `require`/`import` in your source (and, when
 `node_modules` is present, in each installed package), then reports a vulnerable
-package as `Reachable` with a witness import-chain. `--npm-prune-unreachable`
-additionally marks a package `NotReachable` when no import path reaches it. That
-negative is best-effort sound (a dynamic `require(expr)` it can't see may make it
-wrong), which is why it is a separate opt-in.
+package as `Reachable` with a witness import-chain. Tools the project runs count
+as entry points too: a package whose executable appears in a `package.json`
+script or a `.github/workflows` step (`"test": "vitest run"`, `npx stylelint`)
+is reached, along with everything it imports, even though nothing imports it.
+`--npm-prune-unreachable` additionally marks a package `NotReachable` when no
+import path or command reaches it. That negative is best-effort sound (a dynamic
+`require(expr)`, or a tool started from a Makefile or another ecosystem's build,
+can make it wrong), which is why it is a separate opt-in.
 
 ### Python import graph
 
