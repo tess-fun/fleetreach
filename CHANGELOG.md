@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-30
+
+### Security
+
+- `Cargo.lock` refreshed: `webpki-roots` and `webpki-root-certs` 1.0.9 -> 1.0.11 and
+  `rustls-webpki` 0.103.15 -> 0.103.16, clearing RUSTSEC-2026-0381, RUSTSEC-2026-0383 and
+  RUSTSEC-2026-0382 (bundled roots and path validation still trusted the distrusted emSign
+  intermediates). All fixes were semver-compatible; no manifest changes.
+
 ### Changed
 
 - Dependency majors: `comfy-table` 8, `sha2` 0.11, `toml` 1, `cvss` 3, and `ureq` 3 (the opt-in
@@ -433,7 +442,8 @@ Initial release. Fleet-wide Rust dependency advisory audit built on `rustsec`.
   targets on the two untrusted-byte surfaces (`fleet.toml`, lockfile content);
   black-box tests over the compiled binary's exit-code and stream contract.
 
-[Unreleased]: https://github.com/tess-fun/fleetreach/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/tess-fun/fleetreach/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/tess-fun/fleetreach/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/tess-fun/fleetreach/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/tess-fun/fleetreach/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/tess-fun/fleetreach/releases/tag/v1.0.0
