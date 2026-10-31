@@ -1,4 +1,9 @@
-# fleetreach
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/fleetreach-logo-inverse.svg">
+    <img alt="fleetreach" src="assets/brand/fleetreach-logo.svg" height="48">
+  </picture>
+</h1>
 
 [![crates.io](https://img.shields.io/crates/v/fleetreach-cli.svg)](https://crates.io/crates/fleetreach-cli)
 [![CI](https://github.com/tess-fun/fleetreach/actions/workflows/ci.yml/badge.svg)](https://github.com/tess-fun/fleetreach/actions/workflows/ci.yml)

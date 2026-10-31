@@ -9,9 +9,16 @@
 <meta property="og:description" content="See how far every vulnerability reaches across your fleet — one CLI, 12 ecosystems, no server." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://tess-fun.github.io/fleetreach/" />
+<meta property="og:image" content="https://tess-fun.github.io/fleetreach/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" href="favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
 :root{
   --bg:#0a0c10; --bg-2:#0f131a; --surface:#12161f; --surface-2:#161b26;
@@ -35,8 +42,8 @@ code,pre{font-family:var(--mono)}
 /* nav */
 nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(10px);background:rgba(10,12,16,.72);border-bottom:1px solid var(--border)}
 .nav-in{max-width:var(--max);margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
-.brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:17px;letter-spacing:-.01em}
-.brand .dot{width:22px;height:22px;border-radius:6px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#1a0d06;font-family:var(--mono);font-weight:500;font-size:14px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:18px;letter-spacing:-.02em}
+.brand svg{width:26px;height:26px;flex:none}
 .nav-links{display:flex;align-items:center;gap:6px}
 .nav-links a{color:var(--text-2);font-size:14px;padding:7px 12px;border-radius:7px;white-space:nowrap}
 @media(max-width:720px){.nav-links a:not(.gh){display:none}}
@@ -118,7 +125,7 @@ footer{border-top:1px solid var(--border);padding:40px 0;margin-top:24px}
 
 <nav>
   <div class="nav-in">
-    <a href="#" class="brand"><span class="dot">f</span>fleetreach</a>
+    <a href="#" class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke-linecap="round" stroke-width="4.4" stroke="currentColor"><path d="M12 12 32 32 53 48 30 58"/></g><path d="M9 53 55 11" stroke="var(--accent)" stroke-width="5.6" stroke-linecap="round"/><g fill="currentColor"><circle cx="12" cy="12" r="5.6"/><circle cx="53" cy="48" r="5.6"/><circle cx="30" cy="58" r="5.6"/></g><g fill="var(--accent)"><circle cx="9" cy="53" r="5.6"/><circle cx="55" cy="11" r="5.6"/><circle cx="32" cy="32" r="8.6"/></g></svg>fleetreach</a>
     <div class="nav-links">
       <a href="#how">How it works</a>
       <a href="#compare">Compare</a>
