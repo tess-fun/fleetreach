@@ -151,6 +151,13 @@ fn parse_kev(body: &str) -> Result<BTreeSet<String>, String> {
 /// crafted alias like `CVE-1&inject=1`. Only the network feature builds the request
 /// URLs, so this is gated with it.
 #[cfg(feature = "network")]
+/// GET `url`, with a 404 as `Ok(None)` rather than an error (for per-record lookups where a
+/// missing record is an answer, not a failure).
+#[cfg(feature = "network")]
+pub(crate) fn http_get_optional(url: &str) -> Result<Option<String>, String> {
+    net::http_get_optional(url)
+}
+
 pub(crate) fn is_valid_cve(s: &str) -> bool {
     let Some(rest) = s.strip_prefix("CVE-") else {
         return false;
@@ -224,6 +231,18 @@ mod net {
             .body_mut()
             .read_to_string()
             .map_err(|e| format!("reading {url}: {e}"))
+    }
+
+    pub(super) fn http_get_optional(url: &str) -> Result<Option<String>, String> {
+        match agent().get(url).call() {
+            Ok(mut response) => response
+                .body_mut()
+                .read_to_string()
+                .map(Some)
+                .map_err(|e| format!("reading {url}: {e}")),
+            Err(ureq::Error::StatusCode(404)) => Ok(None),
+            Err(e) => Err(format!("GET {url}: {e}")),
+        }
     }
 
     pub(super) fn fetch_epss(cves: &[String]) -> Result<BTreeMap<String, f32>, String> {

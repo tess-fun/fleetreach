@@ -22,6 +22,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   phantom dependency lowers a decision to `defer`. `[settings.ssvc] poc_epss` optionally
   counts a high EPSS as a public proof of concept.
 - Findings carry the advisory's `cvss_vector` (additive JSON field).
+- **SSVC, continued** (spec 08). CISA Vulnrichment supplies CISA's own Exploitation and
+  Automatable per CVE where it has assessed one (fetched under `--enrich`, cached a day, or
+  read from a clone with `--vulnrichment-dir`); it only ever raises Exploitation.
+  `[settings.ssvc] table` loads your own decision table in CERT/CC's CSV layout, validated to
+  cover all 72 combinations and recorded as `custom:<sha256>`. `impact`, `blast` and
+  `packages` (and `packages-json`) show the most urgent outcome and a reach weighted by it
+  (`[settings.ssvc] weights`, default 8/4/2/0), and rank by it. `[[source]]` takes the same
+  context fields for every repo it discovers.
 
 ## [1.4.0] - 2026-10-31
 

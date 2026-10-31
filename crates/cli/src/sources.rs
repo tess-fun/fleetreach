@@ -97,6 +97,11 @@ pub struct Source {
     pub glob: bool,
     pub glob_max_depth: usize,
     pub token_env: Option<String>,
+    /// Exposure and impact context (spec 08) for every repo this source discovers; a
+    /// `[[repo]]` with the same id is explicit and keeps its own. Not part of the listing
+    /// cache key: context does not change which repos are listed.
+    #[serde(skip)]
+    pub context: crate::config::ContextFields,
 }
 
 impl Source {
@@ -162,6 +167,8 @@ pub struct Materialized {
     /// Repos that exist in a listing but could not be cloned/refreshed: errored gaps.
     pub failed: Vec<(RepoId, String)>,
     pub provenance: Vec<RepoSource>,
+    /// The source's context for each discovered repo, when the source sets any.
+    pub context: Vec<(RepoId, crate::config::ContextFields)>,
 }
 
 /// Case-insensitive glob with `*` (any run) and `?` (one character), as Renovate's
@@ -328,6 +335,9 @@ pub fn materialize(config: &Config, sync: bool, quiet: bool) -> Result<Materiali
                         url: listed.clone_url.clone(),
                         commit,
                     });
+                    if !source.context.is_empty() {
+                        out.context.push((id.clone(), source.context.clone()));
+                    }
                     out.repos.push(Repo {
                         id,
                         path,
@@ -845,6 +855,7 @@ mod tests {
             glob: true,
             glob_max_depth: 3,
             token_env: None,
+            context: Default::default(),
         };
         let repo = |id: &str, archived: bool, fork: bool, topics: &[&str]| Listed {
             id: id.into(),

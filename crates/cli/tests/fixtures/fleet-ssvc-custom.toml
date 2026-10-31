@@ -1,0 +1,11 @@
+# Spec 08: a custom decision table that never says `immediate`, and custom weights.
+[settings.ssvc]
+table = "ssvc-no-immediate.csv"
+weights = { immediate = 10, out-of-cycle = 5, scheduled = 1, defer = 0 }
+
+[[repo]]
+id = "payments"
+path = "repos/repo-vuln"
+exposure = "open"
+mission_impact = "mission-failure"
+safety_impact = "negligible"

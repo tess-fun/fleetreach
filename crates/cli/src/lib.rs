@@ -34,6 +34,7 @@ pub mod ssvc;
 pub mod static_reach;
 pub mod typosquat;
 pub mod vex;
+pub mod vulnrichment;
 
 pub use assemble::{
     assemble, build_report, combine_baseline, drop_dev, drop_phantom, exit_code, retain_min_epss,

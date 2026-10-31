@@ -107,6 +107,8 @@ fn static_engine_annotates_a_dependency_finding_reachable() {
         context: Default::default(),
         context_defaults: None,
         ssvc_poc_epss: None,
+        ssvc_table: Default::default(),
+        ssvc_weights: Default::default(),
     };
 
     assess(
@@ -208,6 +210,8 @@ fn uninstantiated_generic_dependency_fn_is_not_reachable() {
         context: Default::default(),
         context_defaults: None,
         ssvc_poc_epss: None,
+        ssvc_table: Default::default(),
+        ssvc_weights: Default::default(),
     };
 
     assess(

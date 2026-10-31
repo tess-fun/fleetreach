@@ -96,6 +96,13 @@ struct RawSource {
     glob: Option<bool>,
     glob_max_depth: Option<usize>,
     token_env: Option<String>,
+    // Context (spec 08) for every discovered repo; inline for `deny_unknown_fields`.
+    exposure: Option<Exposure>,
+    mission_impact: Option<MissionImpact>,
+    safety_impact: Option<SafetyImpact>,
+    owner: Option<String>,
+    #[serde(default)]
+    tags: Vec<String>,
 }
 
 /// The `[fleet]` table carries no fields yet; `deny_unknown_fields` rejects
@@ -169,6 +176,19 @@ struct RawContextSettings {
 struct RawSsvc {
     /// EPSS at or above this counts as Exploitation `public-poc`. Off by default.
     poc_epss: Option<f32>,
+    /// A custom decision table (CSV), relative to the config file.
+    table: Option<String>,
+    /// How much a repo at each outcome counts in the fleet views' weighted reach.
+    weights: Option<RawWeights>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+struct RawWeights {
+    immediate: u32,
+    out_of_cycle: u32,
+    scheduled: u32,
+    defer: u32,
 }
 
 /// The accepted `ecosystem = "..."` strings, mapped onto [`Ecosystem`]. `rust` is
@@ -348,6 +368,10 @@ pub struct Config {
     pub context_defaults: Option<ContextFields>,
     /// `[settings.ssvc] poc_epss`.
     pub ssvc_poc_epss: Option<f32>,
+    /// `[settings.ssvc] table`, else the published deployer table.
+    pub ssvc_table: fleetreach_core::ssvc::DecisionTable,
+    /// `[settings.ssvc] weights`, else the spec's 8 / 4 / 2 / 0.
+    pub ssvc_weights: std::collections::BTreeMap<fleetreach_core::ssvc::Outcome, u32>,
 }
 
 /// Validated exposure and impact context (spec 08).
@@ -367,7 +391,8 @@ impl ContextFields {
         self.exposure.is_some() || self.mission_impact.is_some() || self.safety_impact.is_some()
     }
 
-    fn is_empty(&self) -> bool {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
         *self == ContextFields::default()
     }
 }
@@ -678,6 +703,13 @@ impl Config {
                 glob: src.glob.unwrap_or(true),
                 glob_max_depth: src.glob_max_depth.unwrap_or(DEFAULT_GLOB_MAX_DEPTH),
                 token_env: src.token_env,
+                context: ContextFields::from(RawContext {
+                    exposure: src.exposure,
+                    mission_impact: src.mission_impact,
+                    safety_impact: src.safety_impact,
+                    owner: src.owner,
+                    tags: src.tags,
+                }),
             });
         }
 
@@ -689,6 +721,39 @@ impl Config {
                 )))
             }
             p => p,
+        };
+        let ssvc_table = match &raw.settings.ssvc.table {
+            None => fleetreach_core::ssvc::DecisionTable::deployer(),
+            Some(rel) => {
+                use sha2::{Digest, Sha256};
+                let path = base_dir.join(rel);
+                let text = std::fs::read_to_string(&path).map_err(|e| {
+                    ConfigError::InvalidSsvc(format!("table `{}`: {e}", path.display()))
+                })?;
+                let digest: String = Sha256::digest(text.as_bytes())
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect();
+                fleetreach_core::ssvc::DecisionTable::from_csv(&text, format!("custom:{digest}"))
+                    .map_err(|e| ConfigError::InvalidSsvc(format!("table `{rel}`: {e}")))?
+            }
+        };
+        let ssvc_weights = {
+            use fleetreach_core::ssvc::Outcome;
+            let w = raw.settings.ssvc.weights.unwrap_or(RawWeights {
+                immediate: 8,
+                out_of_cycle: 4,
+                scheduled: 2,
+                defer: 0,
+            });
+            [
+                (Outcome::Immediate, w.immediate),
+                (Outcome::OutOfCycle, w.out_of_cycle),
+                (Outcome::Scheduled, w.scheduled),
+                (Outcome::Defer, w.defer),
+            ]
+            .into_iter()
+            .collect()
         };
 
         Ok(Config {
@@ -704,6 +769,8 @@ impl Config {
             context,
             context_defaults: raw.settings.context.defaults.map(ContextFields::from),
             ssvc_poc_epss,
+            ssvc_table,
+            ssvc_weights,
         })
     }
 }

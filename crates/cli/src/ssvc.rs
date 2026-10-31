@@ -15,33 +15,40 @@
 
 use std::collections::BTreeMap;
 
-use fleetreach_core::ssvc::{
-    self, Exploitation, Exposure, MissionImpact, Outcome, SafetyImpact, DEPLOYER_TABLE,
-};
+use fleetreach_core::ssvc::{self, Exploitation, Exposure, MissionImpact, Outcome, SafetyImpact};
 use fleetreach_core::{
     FleetReport, Occurrence, ReachVerdict, RepoContext, RepoId, SsvcDecision, SsvcReport,
     VulnFinding,
 };
 
 use crate::config::{Config, ContextFields};
+use crate::vulnrichment::Vulnrichment;
 
 /// What the scan knows about exploitation, beyond the per-finding KEV/EPSS fields.
 #[derive(Debug, Clone, Copy)]
-pub struct Inputs {
+pub struct Inputs<'a> {
     /// KEV/EPSS enrichment ran, so a finding without a KEV entry is genuinely not in KEV.
     pub exploitation_known: bool,
     /// `[settings.ssvc] poc_epss`: EPSS at or above this counts as a public proof of concept.
     pub poc_epss: Option<f32>,
+    /// CISA's own SSVC assessments, by CVE (empty when not looked up).
+    pub cisa: &'a Vulnrichment,
+}
+
+/// Whether SSVC is on for this config: defaults exist, or a repo sets a decision point.
+#[must_use]
+pub fn enabled(config: &Config) -> bool {
+    config.context_defaults.is_some()
+        || config
+            .context
+            .values()
+            .any(ContextFields::has_decision_points)
 }
 
 /// Fill `report.context` and `report.ssvc` from the config. Does nothing when no repo has any
 /// context and no defaults are configured.
 pub fn annotate(report: &mut FleetReport, config: &Config, inputs: Inputs) {
-    let enabled = config.context_defaults.is_some()
-        || config
-            .context
-            .values()
-            .any(ContextFields::has_decision_points);
+    let enabled = enabled(config);
     let contexts: BTreeMap<RepoId, RepoContext> = config
         .repos
         .iter()
@@ -59,8 +66,9 @@ pub fn annotate(report: &mut FleetReport, config: &Config, inputs: Inputs) {
     }
     if !inputs.exploitation_known {
         report.ssvc = Some(SsvcReport {
-            table: DEPLOYER_TABLE.to_string(),
+            table: config.ssvc_table.id.clone(),
             decisions: Vec::new(),
+            weights: config.ssvc_weights.clone(),
             not_computed: Some(
                 "no exploitation data: run with --enrich, or --kev-file offline".to_string(),
             ),
@@ -71,7 +79,7 @@ pub fn annotate(report: &mut FleetReport, config: &Config, inputs: Inputs) {
         .vulnerabilities
         .iter()
         .flat_map(|v| v.occurrences.iter().map(move |occ| (v, occ)))
-        .filter_map(|(v, occ)| decide(v, occ, &contexts, inputs))
+        .filter_map(|(v, occ)| decide(v, occ, &contexts, &config.ssvc_table, inputs))
         .collect();
     decisions.sort_by(|a, b| {
         b.outcome
@@ -81,8 +89,9 @@ pub fn annotate(report: &mut FleetReport, config: &Config, inputs: Inputs) {
             .then_with(|| a.package.cmp(&b.package))
     });
     report.ssvc = Some(SsvcReport {
-        table: DEPLOYER_TABLE.to_string(),
+        table: config.ssvc_table.id.clone(),
         decisions,
+        weights: config.ssvc_weights.clone(),
         not_computed: None,
     });
 }
@@ -124,6 +133,7 @@ fn decide(
     v: &VulnFinding,
     occ: &Occurrence,
     contexts: &BTreeMap<RepoId, RepoContext>,
+    decisions: &ssvc::DecisionTable,
     inputs: Inputs,
 ) -> Option<SsvcDecision> {
     let Occurrence::InRepo {
@@ -143,7 +153,10 @@ fn decide(
     let (exposure, mission, safety) = (ctx.exposure?, ctx.mission_impact?, ctx.safety_impact?);
 
     let mut why: Vec<String> = Vec::new();
-    let exploitation = if v.exploit.kev {
+    let cisa = std::iter::once(&v.advisory_id)
+        .chain(&v.aliases)
+        .find_map(|id| inputs.cisa.get(id));
+    let mut exploitation = if v.exploit.kev {
         why.push("in CISA KEV".to_string());
         Exploitation::Active
     } else if let (Some(epss), Some(min)) = (v.exploit.epss, inputs.poc_epss) {
@@ -156,15 +169,40 @@ fn decide(
     } else {
         Exploitation::None
     };
-    let automatable = ssvc::automatable(v.cvss_vector.as_deref());
-    if v.cvss_vector.is_none() {
-        why.push("no CVSS vector, automatable assumed".to_string());
+    // CISA's assessment can only raise Exploitation: a KEV entry stays `active`.
+    if let Some(cisa_e) = cisa.and_then(|c| c.exploitation) {
+        if cisa_e > exploitation {
+            why.push(format!(
+                "CISA Vulnrichment: exploitation {}",
+                e_label(cisa_e)
+            ));
+            exploitation = cisa_e;
+        }
     }
+    let automatable = match cisa.and_then(|c| c.automatable) {
+        Some(a) => {
+            why.push(format!(
+                "CISA Vulnrichment: automatable {}",
+                if a == ssvc::Automatable::Yes {
+                    "yes"
+                } else {
+                    "no"
+                }
+            ));
+            a
+        }
+        None => {
+            if v.cvss_vector.is_none() {
+                why.push("no CVSS vector, automatable assumed".to_string());
+            }
+            ssvc::automatable(v.cvss_vector.as_deref())
+        }
+    };
     if ctx.fail_closed {
         why.push("repo context incomplete, most urgent values used".to_string());
     }
     let human_impact = ssvc::human_impact(safety, mission);
-    let table = ssvc::deployer_outcome(exploitation, exposure, automatable, human_impact);
+    let table = decisions.outcome(exploitation, exposure, automatable, human_impact);
 
     let not_running = if *active == Some(false) {
         Some("not_built: optional dependency is never compiled")
@@ -198,6 +236,14 @@ fn decide(
         rationale: why.join("; "),
         owner: ctx.owner.clone(),
     })
+}
+
+fn e_label(e: Exploitation) -> &'static str {
+    match e {
+        Exploitation::None => "none",
+        Exploitation::PublicPoc => "public-poc",
+        Exploitation::Active => "active",
+    }
 }
 
 /// Whether any decision is at or above `threshold` (the `--fail-on-ssvc` gate).
@@ -265,9 +311,12 @@ mod tests {
         safety_impact = "negligible"
     "#;
 
-    const KNOWN: Inputs = Inputs {
+    static NO_CISA: Vulnrichment = Vulnrichment::new();
+
+    const KNOWN: Inputs<'static> = Inputs {
         exploitation_known: true,
         poc_epss: None,
+        cisa: &NO_CISA,
     };
 
     fn decide_one(cfg: &str, report: &mut FleetReport, inputs: Inputs) -> SsvcDecision {
@@ -335,8 +384,8 @@ mod tests {
         let d = decide_one(OPEN, &mut epss(), KNOWN);
         assert_eq!(d.exploitation, Exploitation::None);
         let inputs = Inputs {
-            exploitation_known: true,
             poc_epss: Some(0.5),
+            ..KNOWN
         };
         let d = decide_one(OPEN, &mut epss(), inputs);
         assert_eq!(d.exploitation, Exploitation::PublicPoc);

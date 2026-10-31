@@ -61,6 +61,8 @@ pub struct SsvcReport {
     pub table: String,
     /// Sorted most urgent first, then advisory, repo and package.
     pub decisions: Vec<SsvcDecision>,
+    /// How much a repo at each outcome counts in the fleet views' weighted reach.
+    pub weights: std::collections::BTreeMap<Outcome, u32>,
     /// Why no decisions were computed, when they were not (for example, no exploitation
     /// data because the scan ran without `--enrich` or `--kev-file`).
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -852,27 +852,36 @@ pub fn to_impact(report: &FleetReport, color: bool) -> String {
     if rows.is_empty() {
         return "No advisories found.".to_string();
     }
-    // Most repos first; ties broken by severity desc (warnings last), then id.
+    // With SSVC decisions, the reach weighted by each repo's outcome leads (spec 08); then
+    // most repos first; ties broken by severity desc (warnings last), then id.
+    let decided = ssvc::decided(report);
+    let weighted = |id: &str| ssvc::weighted_reach(report, |d| d.advisory_id == id);
     rows.sort_by(|a, b| {
-        b.repos
-            .len()
-            .cmp(&a.repos.len())
+        weighted(b.id)
+            .1
+            .cmp(&weighted(a.id).1)
+            .then(b.repos.len().cmp(&a.repos.len()))
             .then(b.severity.cmp(&a.severity))
             .then(a.id.cmp(b.id))
     });
 
-    let mut table = styled_table(
-        color,
-        vec!["Repos", "Severity", "Advisory", "Affected", "Title"],
-    );
+    let mut header = vec!["Repos", "Severity", "Advisory", "Affected", "Title"];
+    if decided {
+        header.splice(1..1, ["SSVC", "Weighted"]);
+    }
+    let mut table = styled_table(color, header);
     for r in &rows {
-        table.add_row(vec![
+        let mut row = vec![
             Cell::new(impact_count(r.repos.len(), r.toolchain)),
             advisory_sev_cell(&r.label, r.kev, r.severity, color),
             Cell::new(sanitize_cell(r.id)),
             Cell::new(affected_list(&r.repos, r.toolchain)),
             Cell::new(truncate(&sanitize_cell(r.title), 40)),
-        ]);
+        ];
+        if decided {
+            row.splice(1..1, ssvc_cells(weighted(r.id)));
+        }
+        table.add_row(row);
     }
     table.to_string()
 }
@@ -939,29 +948,34 @@ pub fn to_blast(report: &FleetReport, color: bool) -> String {
     if rows.is_empty() {
         return "No advisories found.".to_string();
     }
-    // Most repos first; ties broken by severity desc (warnings last), then id — the
-    // same ordering as `to_impact`, so the two views agree on rank.
+    // Weighted reach when decided, then most repos first; ties broken by severity desc
+    // (warnings last), then id: the same ordering as `to_impact`, so the two views agree.
+    let decided = ssvc::decided(report);
+    let weighted = |id: &str| ssvc::weighted_reach(report, |d| d.advisory_id == id);
     rows.sort_by(|a, b| {
-        b.total
-            .cmp(&a.total)
+        weighted(b.id)
+            .1
+            .cmp(&weighted(a.id).1)
+            .then(b.total.cmp(&a.total))
             .then(b.severity.cmp(&a.severity))
             .then(a.id.cmp(b.id))
     });
 
-    let mut table = styled_table(
-        color,
-        vec![
-            "Repos",
-            "Direct",
-            "Transitive",
-            "Fix",
-            "Severity",
-            "Advisory",
-            "Title",
-        ],
-    );
+    let mut header = vec![
+        "Repos",
+        "Direct",
+        "Transitive",
+        "Fix",
+        "Severity",
+        "Advisory",
+        "Title",
+    ];
+    if decided {
+        header.splice(1..1, ["SSVC", "Weighted"]);
+    }
+    let mut table = styled_table(color, header);
     for r in &rows {
-        table.add_row(vec![
+        let mut row = vec![
             Cell::new(r.total),
             Cell::new(r.direct),
             Cell::new(r.transitive),
@@ -969,9 +983,22 @@ pub fn to_blast(report: &FleetReport, color: bool) -> String {
             advisory_sev_cell(&r.label, r.kev, r.severity, color),
             Cell::new(sanitize_cell(r.id)),
             Cell::new(truncate(&sanitize_cell(r.title), 40)),
-        ]);
+        ];
+        if decided {
+            row.splice(1..1, ssvc_cells(weighted(r.id)));
+        }
+        table.add_row(row);
     }
     table.to_string()
+}
+
+/// The `SSVC` and `Weighted` cells of the fleet views: the most urgent outcome and the
+/// outcome-weighted reach.
+fn ssvc_cells((outcome, weight): (Option<fleetreach_core::ssvc::Outcome>, u32)) -> [Cell; 2] {
+    [
+        Cell::new(outcome.map_or("-", |o| o.label())),
+        Cell::new(weight),
+    ]
 }
 
 /// The remediation strategy implied by an advisory's direct/transitive split:
@@ -1016,6 +1043,12 @@ pub struct PackageImpact {
     /// The highest EPSS (exploit probability) among the affecting advisories.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_epss: Option<f32>,
+    /// The most urgent SSVC outcome across the package's repos (spec 08), when decided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_outcome: Option<fleetreach_core::ssvc::Outcome>,
+    /// Reach weighted by each repo's SSVC outcome, when decided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weighted_reach: Option<u32>,
 }
 
 /// Roll every vulnerability up to its `(ecosystem, package)`, aggregating fleet reach,
@@ -1061,9 +1094,15 @@ fn package_impacts(report: &FleetReport) -> Vec<PackageImpact> {
         }
     }
 
+    let decided = ssvc::decided(report);
     let mut rows: Vec<PackageImpact> = map
         .into_iter()
         .map(|((ecosystem, package), a)| {
+            // Matching on the advisory as well keeps a same-named package in another
+            // ecosystem out of the count.
+            let (max_outcome, weight) = ssvc::weighted_reach(report, |d| {
+                d.package == package && a.advisories.contains(d.advisory_id.as_str())
+            });
             let repos = a.repos.len();
             let direct = a.direct.len();
             let transitive = repos - direct;
@@ -1078,13 +1117,17 @@ fn package_impacts(report: &FleetReport) -> Vec<PackageImpact> {
                 fix: fix_strategy(direct, transitive),
                 kev: a.kev,
                 max_epss: a.max_epss,
+                max_outcome: decided.then_some(max_outcome).flatten(),
+                weighted_reach: decided.then_some(weight),
             }
         })
         .collect();
-    // Biggest fleet liability first: reach, then severity, then advisory count, then name.
+    // Biggest fleet liability first: weighted reach when decided, then reach, then
+    // severity, then advisory count, then name.
     rows.sort_by(|x, y| {
-        y.repos
-            .cmp(&x.repos)
+        y.weighted_reach
+            .cmp(&x.weighted_reach)
+            .then(y.repos.cmp(&x.repos))
             .then(y.max_severity.cmp(&x.max_severity))
             .then(y.advisories.cmp(&x.advisories))
             .then(x.package.cmp(&y.package))
@@ -1104,19 +1147,21 @@ pub fn to_packages(report: &FleetReport, color: bool) -> String {
         return "No vulnerable dependencies found.".to_string();
     }
 
-    let mut table = styled_table(
-        color,
-        vec![
-            "Repos",
-            "Direct",
-            "Transitive",
-            "Advisories",
-            "Severity",
-            "Fix",
-            "Exploit",
-            "Package",
-        ],
-    );
+    let decided = rows.iter().any(|r| r.weighted_reach.is_some());
+    let mut header = vec![
+        "Repos",
+        "Direct",
+        "Transitive",
+        "Advisories",
+        "Severity",
+        "Fix",
+        "Exploit",
+        "Package",
+    ];
+    if decided {
+        header.splice(1..1, ["SSVC", "Weighted"]);
+    }
+    let mut table = styled_table(color, header);
     for r in &rows {
         let sev_label = format!("{:?}", r.max_severity).to_lowercase();
         let sev_cell = maybe_color(
@@ -1131,7 +1176,7 @@ pub fn to_packages(report: &FleetReport, color: bool) -> String {
                 format!("{other:?}").to_lowercase()
             ),
         };
-        table.add_row(vec![
+        let mut row = vec![
             Cell::new(r.repos),
             Cell::new(r.direct),
             Cell::new(r.transitive),
@@ -1140,7 +1185,14 @@ pub fn to_packages(report: &FleetReport, color: bool) -> String {
             Cell::new(r.fix),
             Cell::new(exploit_cell(r.kev, r.max_epss.unwrap_or(-1.0))),
             Cell::new(pkg),
-        ]);
+        ];
+        if decided {
+            row.splice(
+                1..1,
+                ssvc_cells((r.max_outcome, r.weighted_reach.unwrap_or(0))),
+            );
+        }
+        table.add_row(row);
     }
     table.to_string()
 }

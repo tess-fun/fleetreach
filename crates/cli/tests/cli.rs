@@ -1838,3 +1838,84 @@ fn context_values_must_be_ssvc_names() {
         stderr(&out)
     );
 }
+
+#[test]
+fn custom_ssvc_table_and_weights_are_used_and_recorded() {
+    let fleet = cfg("fleet-ssvc-custom.toml");
+    let (db, kev) = (db(), cfg("kev.json"));
+    let out = run(&[
+        "scan",
+        "-c",
+        &fleet,
+        "--db",
+        &db,
+        "--kev-file",
+        &kev,
+        "-f",
+        "json",
+    ]);
+    let v: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert!(v["ssvc"]["table"].as_str().unwrap().starts_with("custom:"));
+    assert_eq!(v["ssvc"]["decisions"][0]["outcome"], "out-of-cycle");
+    assert_eq!(v["ssvc"]["weights"]["out-of-cycle"], 5);
+    let out = run(&[
+        "scan",
+        "-c",
+        &fleet,
+        "--db",
+        &db,
+        "--kev-file",
+        &kev,
+        "-f",
+        "packages-json",
+    ]);
+    let p: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(p[0]["weighted_reach"], 5);
+    assert_eq!(p[0]["max_outcome"], "out-of-cycle");
+}
+
+#[test]
+fn fleet_views_weight_reach_by_outcome() {
+    let kev = cfg("kev.json");
+    // payments and legacy decide `immediate` (8 each), intranet `scheduled` (2).
+    for view in ["impact", "blast", "packages"] {
+        let text = stdout(&ssvc_scan(&["--kev-file", &kev, "-f", view, "-q"]));
+        assert!(text.contains("Weighted"), "{view}: {text}");
+        assert!(text.contains("┆ 18 "), "{view}: {text}");
+    }
+    // Without decisions the views are unchanged.
+    let text = stdout(&ssvc_scan(&["-f", "impact", "-q"]));
+    assert!(!text.contains("Weighted"));
+}
+
+#[test]
+fn vulnrichment_dir_supplies_cisas_assessment() {
+    let (kev, dir) = (cfg("kev-empty.json"), cfg("vulnrichment"));
+    let out = ssvc_scan(&["--kev-file", &kev, "--vulnrichment-dir", &dir, "-f", "json"]);
+    let v: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    let payments = v["ssvc"]["decisions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|d| d["repo"] == "payments")
+        .unwrap()
+        .clone();
+    // Not in KEV, but CISA says exploitation is active and the attack is not automatable.
+    assert_eq!(payments["vector"], "E:A/X:O/A:N/HI:VH");
+    assert_eq!(payments["outcome"], "immediate");
+    assert!(payments["rationale"]
+        .as_str()
+        .unwrap()
+        .contains("CISA Vulnrichment"));
+    // Without it, the same scan decides from the empty KEV and the CVSS vector.
+    let out = ssvc_scan(&["--kev-file", &kev, "-f", "json"]);
+    let v: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    let vector = v["ssvc"]["decisions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|d| d["repo"] == "payments")
+        .unwrap()["vector"]
+        .clone();
+    assert_eq!(vector, "E:N/X:O/A:Y/HI:VH");
+}

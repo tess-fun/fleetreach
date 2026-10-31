@@ -119,6 +119,12 @@ pub(crate) struct ScanArgs {
         help = "fail if any SSVC decision is at or above OUTCOME (needs repo context in fleet.toml; implies --enrich)"
     )]
     fail_on_ssvc: Option<OutcomeArg>,
+    #[arg(
+        long,
+        value_name = "DIR",
+        help = "a local clone of github.com/cisagov/vulnrichment, for CISA's SSVC Exploitation and Automatable per CVE (with --enrich they are fetched from GitHub instead, cached)"
+    )]
+    vulnrichment_dir: Option<PathBuf>,
 
     #[arg(
         long,
@@ -431,6 +437,12 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         Err(e) => return fail(&e),
     };
     config.repos.extend(materialized.repos.iter().cloned());
+    for (id, context) in &materialized.context {
+        config
+            .context
+            .entry(id.clone())
+            .or_insert_with(|| context.clone());
+    }
     if config.repos.is_empty() && !materialized.failed.is_empty() {
         for (repo, reason) in &materialized.failed {
             eprintln!("error: {repo}: {reason}");
@@ -861,13 +873,32 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             !fleet_report.vulnerabilities.is_empty() || !fleet_report.warnings.is_empty();
     }
 
-    // 5c. Exposure context and SSVC decisions (spec 08), on what is left to report.
+    // 5c. Exposure context and SSVC decisions (spec 08), on what is left to report. CISA's
+    //     own assessments (Vulnrichment) are looked up only when there is something to decide.
+    let cisa = if crate::ssvc::enabled(&config) && exploitation_known {
+        let cves: Vec<String> = fleet_report
+            .vulnerabilities
+            .iter()
+            .flat_map(|v| std::iter::once(&v.advisory_id).chain(&v.aliases))
+            .filter(|id| crate::enrich::is_valid_cve(id))
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        match &args.vulnrichment_dir {
+            Some(dir) => crate::vulnrichment::from_dir(dir, &cves),
+            None => vulnrichment_fetch(&cves, args.kev_file.is_some() || args.epss_file.is_some()),
+        }
+    } else {
+        Default::default()
+    };
     crate::ssvc::annotate(
         &mut fleet_report,
         &config,
         crate::ssvc::Inputs {
             exploitation_known,
             poc_epss: config.ssvc_poc_epss,
+            cisa: &cisa,
         },
     );
     if let Some(threshold) = args.fail_on_ssvc {
@@ -1005,6 +1036,21 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         return 2;
     }
     code
+}
+
+/// CISA Vulnrichment over the network, only on the network enrichment path: the offline
+/// `--kev-file` path sends nothing anywhere.
+#[cfg(feature = "network")]
+fn vulnrichment_fetch(cves: &[String], offline_enrich: bool) -> crate::vulnrichment::Vulnrichment {
+    if offline_enrich {
+        return Default::default();
+    }
+    crate::vulnrichment::fetch(cves)
+}
+
+#[cfg(not(feature = "network"))]
+fn vulnrichment_fetch(_: &[String], _: bool) -> crate::vulnrichment::Vulnrichment {
+    Default::default()
 }
 
 /// Resolve `-f vex` parameters from flags + `settings.vex` + the report, failing

@@ -45,6 +45,36 @@ pub(crate) fn max_outcome(
         .max()
 }
 
+/// Whether the report carries any SSVC decision (the views add their SSVC columns then).
+pub(crate) fn decided(report: &FleetReport) -> bool {
+    report
+        .ssvc
+        .as_ref()
+        .is_some_and(|s| !s.decisions.is_empty())
+}
+
+/// The most urgent outcome among the decisions `keep` selects, and the weighted reach: each
+/// repo counts once, at the weight of its most urgent outcome (spec 08: a repo deciding
+/// `immediate` counts 8, `defer` 0, unless `[settings.ssvc] weights` says otherwise).
+pub(crate) fn weighted_reach(
+    report: &FleetReport,
+    keep: impl Fn(&SsvcDecision) -> bool,
+) -> (Option<Outcome>, u32) {
+    let Some(ssvc) = &report.ssvc else {
+        return (None, 0);
+    };
+    let mut per_repo: BTreeMap<&str, Outcome> = BTreeMap::new();
+    for d in ssvc.decisions.iter().filter(|d| keep(d)) {
+        let slot = per_repo.entry(d.repo.0.as_str()).or_insert(d.outcome);
+        *slot = (*slot).max(d.outcome);
+    }
+    let weight = per_repo
+        .values()
+        .map(|o| ssvc.weights.get(o).copied().unwrap_or(0))
+        .sum();
+    (per_repo.values().copied().max(), weight)
+}
+
 /// The SARIF level for an outcome: act now is an error, plan it is a warning, defer is a note.
 pub(crate) fn sarif_level(outcome: Outcome) -> &'static str {
     match outcome {

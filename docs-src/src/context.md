@@ -49,12 +49,23 @@ named in a note. Missing context never lowers a priority.
 
 `owner` and `tags` alone do not turn SSVC on; they feed the `owners` view.
 
+The same fields work on a `[[source]]`, for every repo a GitHub or GitLab org, group or URL
+list discovers. A `[[repo]]` with the same id keeps its own:
+
+```toml
+[[source]]
+kind = "github"
+org = "acme"
+exposure = "controlled"
+owner = "platform"
+```
+
 ## How each decision is made
 
 | Decision point | Source |
 |----------------|--------|
-| Exploitation | `active` if the advisory is in CISA KEV. `public-poc` if its EPSS is at least `[settings.ssvc] poc_epss` (off by default; EPSS is a proxy, not evidence). Otherwise `none`. |
-| Automatable | `yes` when the advisory's CVSS vector is network, low complexity, no privileges and no user interaction (`AV:N/AC:L/PR:N/UI:N`, and `AT:N` for CVSS 4). No vector counts as `yes`. |
+| Exploitation | `active` if the advisory is in CISA KEV. Raised to CISA's own assessment when [Vulnrichment](#cisa-vulnrichment) has one. `public-poc` if its EPSS is at least `[settings.ssvc] poc_epss` (off by default; EPSS is a proxy, not evidence). Otherwise `none`. |
+| Automatable | CISA's assessment when Vulnrichment has one. Otherwise `yes` when the advisory's CVSS vector is network, low complexity, no privileges and no user interaction (`AV:N/AC:L/PR:N/UI:N`, and `AT:N` for CVSS 4). No vector counts as `yes`. |
 | System Exposure | the repo's `exposure`. |
 | Human Impact | SSVC's table over `safety_impact` and `mission_impact`. |
 
@@ -62,6 +73,36 @@ The four points go through the published deployer table `ssvc:DT_DP:1.0.0`, whic
 row by row against CERT/CC's data. Exploitation needs the KEV catalog, so decisions need
 `--enrich` (or `--kev-file` offline). Without it fleetreach decides nothing and says so,
 rather than guessing `none`.
+
+### CISA Vulnrichment
+
+CISA publishes its own SSVC assessment for many CVEs at
+[cisagov/vulnrichment](https://github.com/cisagov/vulnrichment). Where one exists it is
+better evidence than the proxies above, so fleetreach uses it: CISA's Exploitation can raise
+the value (never lower it below a KEV `active`), and CISA's Automatable replaces the one read
+from the CVSS vector. The reason column says when CISA's value decided.
+
+With `--enrich` the records are fetched from GitHub (each CVE id is sent, as EPSS already
+sends them to FIRST) and cached for a day under `~/.cache/fleetreach/vulnrichment/`. Offline,
+point `--vulnrichment-dir` at a clone of the repository. The offline `--kev-file` path sends
+nothing anywhere.
+
+### Your own decision table
+
+SSVC fixes the decision points and their values, and expects each organization to choose its
+own outcomes. Copy CERT/CC's
+[deployer table CSV](https://github.com/CERTCC/SSVC/blob/main/data/csv/ssvc/deployer_patch_application_priority_1_0_0.csv),
+change the last column, and point fleetreach at it:
+
+```toml
+[settings.ssvc]
+table = "ssvc-deployer.csv"       # relative to fleet.toml
+```
+
+The header must name the Exploitation, System Exposure, Automatable and Human Impact columns,
+the outcome is the last column, and all 72 combinations must be listed exactly once, so no
+finding can be left undecided. The report records the table as `custom:<sha256>`, so a gate
+result traces back to the exact file.
 
 A sound signal that the vulnerable code cannot run (a phantom optional dependency, or a
 `NotReachable` [reachability](./reachability.md) verdict) forces `defer`. These are the same
@@ -78,7 +119,17 @@ fleetreach scan -c fleet.toml --enrich -f owners     # the fix queue, one sectio
 The `ssvc` view lists each repo and package with its outcome, the decision vector
 (`E:A/X:O/A:Y/HI:VH` reads Exploitation active, Exposure open, Automatable yes, Human Impact
 very high) and the reason. With decisions present, `fix-first` and `remediation` gain an SSVC
-column and sort by it first. SARIF results carry the outcome as a property and take their
+column and sort by it first, and `impact`, `blast` and `packages` gain the most urgent outcome
+and a **weighted reach**: each affected repo counts at the weight of its outcome, 8 for
+`immediate`, 4 for `out-of-cycle`, 2 for `scheduled` and 0 for `defer`, and the views rank by
+it first. A dependency in two internet-facing repos then outranks one in five internal tools.
+Change the weights with:
+
+```toml
+[settings.ssvc]
+weights = { immediate = 10, out-of-cycle = 5, scheduled = 1, defer = 0 }
+```
+ SARIF results carry the outcome as a property and take their
 level from it: `immediate` and `out-of-cycle` are errors, `scheduled` a warning, `defer` a
 note. In JSON, `context` lists each repo's resolved context and `ssvc.decisions` every
 decision.

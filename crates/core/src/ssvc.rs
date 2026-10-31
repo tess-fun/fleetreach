@@ -155,16 +155,148 @@ pub fn deployer_outcome(
     automatable: Automatable,
     human_impact: HumanImpact,
 ) -> Outcome {
-    let row = exploitation as usize * 24
-        + exposure as usize * 8
-        + automatable as usize * 4
-        + human_impact as usize;
-    match DEPLOYER_ROWS[row] {
-        b'D' => Outcome::Defer,
-        b'S' => Outcome::Scheduled,
-        b'O' => Outcome::OutOfCycle,
-        _ => Outcome::Immediate,
+    DecisionTable::deployer().outcome(exploitation, exposure, automatable, human_impact)
+}
+
+/// A deployer decision table: the published `ssvc:DT_DP:1.0.0`, or an organization's own
+/// remapping of the same four inputs to outcomes (SSVC keeps the decision points fixed and
+/// expects the outcomes to be customized).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecisionTable {
+    /// Recorded in the report, so a gate result is traceable to the table that made it.
+    pub id: String,
+    rows: [Outcome; 72],
+}
+
+impl Default for DecisionTable {
+    fn default() -> Self {
+        Self::deployer()
     }
+}
+
+impl DecisionTable {
+    /// The published example table, `ssvc:DT_DP:1.0.0`.
+    #[must_use]
+    pub fn deployer() -> Self {
+        let mut rows = [Outcome::Defer; 72];
+        for (i, row) in rows.iter_mut().enumerate() {
+            *row = match DEPLOYER_ROWS[i] {
+                b'D' => Outcome::Defer,
+                b'S' => Outcome::Scheduled,
+                b'O' => Outcome::OutOfCycle,
+                _ => Outcome::Immediate,
+            };
+        }
+        DecisionTable {
+            id: DEPLOYER_TABLE.to_string(),
+            rows,
+        }
+    }
+
+    /// Parse a CSV in CERT/CC's published layout: a header row naming the columns, which must
+    /// include `Exploitation`, `System Exposure` (or `Exposure`), `Automatable` and
+    /// `Human Impact`; the outcome is the last column. A leading `row` column and version
+    /// suffixes in the header (`Exploitation v1.1.0`) are fine. Values use SSVC's names,
+    /// with spaces or dashes (`public poc`, `out-of-cycle`). Every one of the 72 combinations
+    /// must appear exactly once, so a table can never leave a finding undecided.
+    ///
+    /// # Errors
+    ///
+    /// A missing column, an unknown value, or a duplicate or missing combination.
+    pub fn from_csv(text: &str, id: impl Into<String>) -> Result<Self, String> {
+        let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
+        let header = lines.next().ok_or("the table is empty")?;
+        let columns: Vec<String> = split_csv(header)
+            .iter()
+            .map(|c| c.to_ascii_lowercase())
+            .collect();
+        let find = |names: &[&str]| {
+            columns
+                .iter()
+                .position(|c| names.iter().any(|n| c.starts_with(n)))
+                .ok_or_else(|| format!("no `{}` column in the header", names[0]))
+        };
+        let e_col = find(&["exploitation"])?;
+        let x_col = find(&["system exposure", "exposure"])?;
+        let a_col = find(&["automatable"])?;
+        let h_col = find(&["human impact"])?;
+        let o_col = columns.len() - 1;
+        if [e_col, x_col, a_col, h_col].contains(&o_col) {
+            return Err("the last column must be the outcome".to_string());
+        }
+        let mut rows: [Option<Outcome>; 72] = [None; 72];
+        for (n, line) in lines.enumerate() {
+            let fields = split_csv(line);
+            let at = |col: usize| {
+                fields
+                    .get(col)
+                    .map(|f| f.trim().to_ascii_lowercase().replace(' ', "-"))
+                    .ok_or_else(|| format!("row {}: too few columns", n + 1))
+            };
+            let value = |col: usize, names: &[&str]| -> Result<usize, String> {
+                let v = at(col)?;
+                names.iter().position(|name| *name == v).ok_or_else(|| {
+                    format!("row {}: `{v}` is not one of {}", n + 1, names.join(", "))
+                })
+            };
+            let e = value(e_col, &["none", "public-poc", "active"])?;
+            let x = value(x_col, &["small", "controlled", "open"])?;
+            let a = value(a_col, &["no", "yes"])?;
+            let h = value(h_col, &["low", "medium", "high", "very-high"])?;
+            let outcome = Outcome::parse(&at(o_col)?).ok_or_else(|| {
+                format!(
+                    "row {}: outcome `{}` is not one of defer, scheduled, out-of-cycle, immediate",
+                    n + 1,
+                    fields.get(o_col).map_or("", |f| f.trim())
+                )
+            })?;
+            let slot = &mut rows[e * 24 + x * 8 + a * 4 + h];
+            if slot.replace(outcome).is_some() {
+                return Err(format!("row {}: this combination is already listed", n + 1));
+            }
+        }
+        let missing = rows.iter().filter(|r| r.is_none()).count();
+        if missing > 0 {
+            return Err(format!(
+                "{missing} of the 72 combinations are missing; every one must be listed"
+            ));
+        }
+        Ok(DecisionTable {
+            id: id.into(),
+            rows: rows.map(|r| r.unwrap_or(Outcome::Immediate)),
+        })
+    }
+
+    /// The outcome for one set of decision points.
+    #[must_use]
+    pub fn outcome(
+        &self,
+        exploitation: Exploitation,
+        exposure: Exposure,
+        automatable: Automatable,
+        human_impact: HumanImpact,
+    ) -> Outcome {
+        self.rows[exploitation as usize * 24
+            + exposure as usize * 8
+            + automatable as usize * 4
+            + human_impact as usize]
+    }
+}
+
+/// Split one CSV line, honoring double-quoted fields (CERT/CC quote the outcome header).
+fn split_csv(line: &str) -> Vec<String> {
+    let mut fields = Vec::new();
+    let mut field = String::new();
+    let mut quoted = false;
+    for c in line.chars() {
+        match c {
+            '"' => quoted = !quoted,
+            ',' if !quoted => fields.push(std::mem::take(&mut field)),
+            _ => field.push(c),
+        }
+    }
+    fields.push(field);
+    fields
 }
 
 /// Automatable from a CVSS vector: `yes` when the attack is network-borne, low complexity,
@@ -348,6 +480,59 @@ catastrophic,mission failure,very high";
             let got = deployer_outcome(parse(f[0]), parse(f[1]), parse(f[2]), parse(f[3]));
             assert_eq!(got, parse::<Outcome>(f[4]), "row `{row}`");
         }
+    }
+
+    #[test]
+    fn a_csv_in_the_published_layout_round_trips() {
+        let csv = format!(
+            "row,Exploitation v1.1.0,System Exposure v1.0.1,Automatable v2.0.0,Human Impact v2.0.2,\"Defer, Scheduled, Out-of-Cycle, Immediate v1.0.0\"\n{}",
+            PUBLISHED_DEPLOYER
+                .lines()
+                .enumerate()
+                .map(|(i, l)| format!("{i},{l}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        let table = DecisionTable::from_csv(&csv, "custom").unwrap();
+        assert_eq!(table.rows, DecisionTable::deployer().rows);
+        assert_eq!(table.id, "custom");
+    }
+
+    #[test]
+    fn a_custom_csv_must_cover_every_combination_once() {
+        let header = "exploitation,exposure,automatable,human impact,outcome\n";
+        let all = PUBLISHED_DEPLOYER.replace("immediate", "out-of-cycle");
+        let stricter = DecisionTable::from_csv(&format!("{header}{all}"), "c").unwrap();
+        assert_eq!(
+            stricter.outcome(
+                Exploitation::Active,
+                Exposure::Open,
+                Automatable::Yes,
+                HumanImpact::VeryHigh
+            ),
+            Outcome::OutOfCycle
+        );
+        let short: String = PUBLISHED_DEPLOYER
+            .lines()
+            .skip(1)
+            .collect::<Vec<_>>()
+            .join("\n");
+        let err = DecisionTable::from_csv(&format!("{header}{short}"), "c").unwrap_err();
+        assert!(
+            err.contains("1 of the 72 combinations are missing"),
+            "{err}"
+        );
+        let dup = format!("{header}{PUBLISHED_DEPLOYER}\nnone,small,no,low,defer");
+        let err = DecisionTable::from_csv(&dup, "c").unwrap_err();
+        assert!(err.contains("already listed"), "{err}");
+        let bad = format!(
+            "{header}{}",
+            PUBLISHED_DEPLOYER.replacen("defer", "later", 1)
+        );
+        let err = DecisionTable::from_csv(&bad, "c").unwrap_err();
+        assert!(err.contains("outcome `later`"), "{err}");
+        let err = DecisionTable::from_csv("exploitation,automatable,outcome\n", "c").unwrap_err();
+        assert!(err.contains("no `system exposure` column"), "{err}");
     }
 
     #[test]

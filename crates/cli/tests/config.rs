@@ -431,3 +431,37 @@ fn rejects_unknown_justification_label() {
         ConfigError::InvalidVexJustification { id, .. } if id == "RUSTSEC-2020-0071"
     ));
 }
+
+#[test]
+fn source_context_applies_to_discovered_repos() {
+    use fleetreach_core::ssvc::Exposure;
+    let cfg = parse(
+        r#"
+        [[source]]
+        kind = "git"
+        urls = ["https://example.com/a/b.git"]
+        exposure = "open"
+        owner = "platform"
+        "#,
+    )
+    .unwrap();
+    assert_eq!(cfg.sources[0].context.exposure, Some(Exposure::Open));
+    assert_eq!(cfg.sources[0].context.owner.as_deref(), Some("platform"));
+}
+
+#[test]
+fn custom_ssvc_table_is_validated_and_fingerprinted() {
+    let cfg = parse("[settings.ssvc]\ntable = \"ssvc-no-immediate.csv\"\n").unwrap();
+    assert!(
+        cfg.ssvc_table.id.starts_with("custom:"),
+        "{}",
+        cfg.ssvc_table.id
+    );
+    let err = parse("[settings.ssvc]\ntable = \"kev.json\"\n").unwrap_err();
+    assert!(
+        err.to_string().contains("settings.ssvc: table `kev.json`"),
+        "{err}"
+    );
+    let err = parse("[settings.ssvc]\npoc_epss = 1.5\n").unwrap_err();
+    assert!(err.to_string().contains("between 0 and 1"), "{err}");
+}
