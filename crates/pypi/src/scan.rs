@@ -63,11 +63,27 @@ pub fn scan_offline_with_coverage(
     let installed = dedupe(source.packages);
     let graph = source.graph;
 
+    let mut scan = scan_installed(&installed, &graph, db, repo);
+    scan.skipped_unparseable += source.non_registry;
+    Ok(PyPiScan {
+        scan,
+        coverage: source.coverage,
+    })
+}
+
+/// Match packages that were already read (from an SBOM, say) against the DB, exactly as
+/// [`scan_offline`] does for the repo's own files; `graph` supplies dependency paths.
+pub fn scan_installed(
+    installed: &[InstalledPackage],
+    graph: &DepGraph,
+    db: &PyPiDb,
+    repo: &RepoId,
+) -> TierCScan {
     let mut out: Vec<VulnFinding> = Vec::new();
     // Editable, VCS, URL and path requirements: not registry releases, so skipping them does
     // not hide a PyPI advisory.
-    let mut skipped_unparseable = source.non_registry;
-    for pkg in &installed {
+    let mut skipped_unparseable = 0u32;
+    for pkg in installed {
         let Some(version) = parse_pypi_version(&pkg.version) else {
             // A non-PEP-440 resolved version (a VCS/URL/local-path pin) cannot be matched
             // against the registry advisory DB. Skipping it does not hide a PyPI advisory
@@ -85,13 +101,10 @@ pub fn scan_offline_with_coverage(
         }
     }
     sort_dedup_findings(&mut out);
-    Ok(PyPiScan {
-        scan: TierCScan {
-            findings: out,
-            skipped_unparseable,
-        },
-        coverage: source.coverage,
-    })
+    TierCScan {
+        findings: out,
+        skipped_unparseable,
+    }
 }
 
 /// Whether `dir` holds anything the PyPI feeder reads: a lockfile, a `pylock.toml`, or a

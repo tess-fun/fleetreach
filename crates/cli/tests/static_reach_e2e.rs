@@ -103,6 +103,7 @@ fn static_engine_annotates_a_dependency_finding_reachable() {
         sources: Vec::new(),
         licenses: None,
         signal_registries: Vec::new(),
+        sboms: Default::default(),
     };
 
     assess(
@@ -200,6 +201,7 @@ fn uninstantiated_generic_dependency_fn_is_not_reachable() {
         sources: Vec::new(),
         licenses: None,
         signal_registries: Vec::new(),
+        sboms: Default::default(),
     };
 
     assess(

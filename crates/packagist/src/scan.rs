@@ -11,7 +11,7 @@ use std::path::Path;
 
 use fleetreach_core::osv::{sort_dedup_findings, Match, TierCFinding, TierCScan};
 use fleetreach_core::semver::VersionReq;
-use fleetreach_core::{Ecosystem, RepoId, VulnFinding};
+use fleetreach_core::{DepGraph, Ecosystem, RepoId, VulnFinding};
 
 use crate::db::{affected_fixed, Advisory, PackagistDb};
 use crate::error::PackagistError;
@@ -42,9 +42,20 @@ pub fn scan_offline(
     let (installed, graph) = installed_packages(&lock_text, composer_json.as_deref())
         .map_err(|e| PackagistError::db(&lock_path, e))?;
 
+    Ok(scan_installed(&installed, &graph, db, repo))
+}
+
+/// Match packages that were already read (from an SBOM, say) against the DB, exactly as
+/// [`scan_offline`] does for a lockfile; `graph` supplies dependency paths.
+pub fn scan_installed(
+    installed: &[InstalledPackage],
+    graph: &DepGraph,
+    db: &PackagistDb,
+    repo: &RepoId,
+) -> TierCScan {
     let mut out: Vec<VulnFinding> = Vec::new();
     let mut skipped_unparseable = 0u32;
-    for pkg in &installed {
+    for pkg in installed {
         let Some(version) = parse_composer_version(&pkg.version) else {
             // A non-release pin (a `dev-<branch>` VCS reference) cannot be matched against
             // the registry advisory DB. Skipping it does not hide a Packagist advisory (the
@@ -62,10 +73,10 @@ pub fn scan_offline(
         }
     }
     sort_dedup_findings(&mut out);
-    Ok(TierCScan {
+    TierCScan {
         findings: out,
         skipped_unparseable,
-    })
+    }
 }
 
 /// Build a finding if `adv` lists `pkg` as affected at `version` (a Composer version).

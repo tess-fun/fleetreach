@@ -52,4 +52,4 @@ pub use error::{DbError, SwiftError};
 /// The OSV version-match outcome, shared with the other ecosystem feeders.
 pub use fleetreach_core::osv::Match;
 pub use lockfile::{installed_packages, normalize_package_url, InstalledPackage};
-pub use scan::{parse_swift_version, scan_offline};
+pub use scan::{parse_swift_version, scan_installed, scan_offline};

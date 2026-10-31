@@ -53,5 +53,5 @@ pub use error::{DbError, JuliaError};
 /// The OSV version-match outcome, shared with the other ecosystem feeders.
 pub use fleetreach_core::osv::Match;
 pub use lockfile::{installed_packages, InstalledPackage};
-pub use scan::scan_offline;
+pub use scan::{scan_installed, scan_offline};
 pub use version::{parse_julia_version, to_semver, Version};

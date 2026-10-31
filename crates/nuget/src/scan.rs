@@ -77,9 +77,24 @@ pub fn scan_offline_with_coverage(
     repo: &RepoId,
 ) -> Result<NuGetScan, NuGetError> {
     let (installed, graph, coverage) = read_sources(repo_dir)?;
+    let scan = scan_installed(&installed, &graph, db, repo);
+    Ok(NuGetScan {
+        scan,
+        coverage,
+    })
+}
+
+/// Match packages that were already read (from an SBOM, say) against the DB, exactly as
+/// [`scan_offline`] does for the repo's own files; `graph` supplies dependency paths.
+pub fn scan_installed(
+    installed: &[InstalledPackage],
+    graph: &DepGraph,
+    db: &NuGetDb,
+    repo: &RepoId,
+) -> TierCScan {
     let mut out: Vec<VulnFinding> = Vec::new();
     let mut skipped_unparseable = 0u32;
-    for pkg in &installed {
+    for pkg in installed {
         let Some(version) = parse_nuget_version(&pkg.version) else {
             // A non-release pin (a project/floating reference that slipped through) has no
             // registry artifact to match. Skipping it does not hide a NuGet advisory.
@@ -96,13 +111,10 @@ pub fn scan_offline_with_coverage(
         }
     }
     sort_dedup_findings(&mut out);
-    Ok(NuGetScan {
-        scan: TierCScan {
-            findings: out,
-            skipped_unparseable,
-        },
-        coverage,
-    })
+    TierCScan {
+        findings: out,
+        skipped_unparseable,
+    }
 }
 
 /// Every package the directory's preferred NuGet source declares, for SBOM output: the same

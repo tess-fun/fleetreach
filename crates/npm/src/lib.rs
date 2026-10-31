@@ -51,4 +51,4 @@ pub use error::{DbError, NpmError};
 /// The OSV version-match outcome, shared with the other ecosystem feeders.
 pub use fleetreach_core::osv::Match;
 pub use lockfile::{installed_packages, InstalledPackage};
-pub use scan::{parse_npm_version, read_lockfile, scan_offline, LOCKFILES};
+pub use scan::{parse_npm_version, read_lockfile, scan_installed, scan_offline, LOCKFILES};

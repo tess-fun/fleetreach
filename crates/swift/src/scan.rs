@@ -11,7 +11,7 @@ use std::path::Path;
 
 use fleetreach_core::osv::{sort_dedup_findings, Match, TierCFinding, TierCScan};
 use fleetreach_core::semver::{Version, VersionReq};
-use fleetreach_core::{Ecosystem, RepoId, VulnFinding};
+use fleetreach_core::{DepGraph, Ecosystem, RepoId, VulnFinding};
 
 use crate::db::{affected_fixed, Advisory, SwiftDb};
 use crate::error::SwiftError;
@@ -40,9 +40,20 @@ pub fn scan_offline(repo_dir: &Path, db: &SwiftDb, repo: &RepoId) -> Result<Tier
     let installed = installed_packages(&resolved, package_swift.as_deref())
         .map_err(|e| SwiftError::db(&resolved_path, e))?;
 
+    Ok(scan_installed(&installed, &DepGraph::default(), db, repo))
+}
+
+/// Match packages that were already read (from an SBOM, say) against the DB, exactly as
+/// [`scan_offline`] does for a lockfile; `graph` supplies dependency paths.
+pub fn scan_installed(
+    installed: &[InstalledPackage],
+    _graph: &DepGraph,
+    db: &SwiftDb,
+    repo: &RepoId,
+) -> TierCScan {
     let mut out: Vec<VulnFinding> = Vec::new();
     let mut skipped_unparseable = 0u32;
-    for pkg in &installed {
+    for pkg in installed {
         let Some(version) = parse_swift_version(&pkg.version) else {
             skipped_unparseable += 1;
             continue;
@@ -54,10 +65,10 @@ pub fn scan_offline(repo_dir: &Path, db: &SwiftDb, repo: &RepoId) -> Result<Tier
         }
     }
     sort_dedup_findings(&mut out);
-    Ok(TierCScan {
+    TierCScan {
         findings: out,
         skipped_unparseable,
-    })
+    }
 }
 
 /// Build a finding if `adv` lists `pkg` as affected at `version` (a SemVer version).

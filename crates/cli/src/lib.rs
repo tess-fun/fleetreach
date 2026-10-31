@@ -26,6 +26,7 @@ pub mod py_reach;
 pub mod reach;
 pub mod resolve;
 pub mod sbom;
+pub mod sbom_input;
 pub mod scan;
 pub mod signals;
 pub mod sources;

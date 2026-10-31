@@ -55,5 +55,5 @@ pub use error::{DbError, RubyGemsError};
 /// The OSV version-match outcome, shared with the other ecosystem feeders.
 pub use fleetreach_core::osv::Match;
 pub use lockfile::{dependency_graph, installed_gems, InstalledGem};
-pub use scan::scan_offline;
+pub use scan::{scan_installed, scan_offline};
 pub use version::{parse_rubygems_version, to_semver, Version};

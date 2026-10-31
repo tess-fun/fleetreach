@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **SBOMs as a scan input.** `[[repo]] sbom = "build/bom.json"` scans a CycloneDX (1.4 to
+  1.6) or SPDX 2.3 JSON document instead of the repo's lockfiles, for builds fleetreach cannot
+  read. Components are routed by purl to the ecosystem matchers (each feeder gained a public
+  `scan_installed`), with direct dependencies and paths from the document's graph. Coverage is
+  full only when CycloneDX asserts completeness; unscannable components are named. An SBOM
+  from `fleetreach sbom` scans back to identical findings.
+
 - **Fix pull requests.** `fix apply --push` pushes each verified `fleetreach/*` branch, and
   `--open-pr [--draft]` opens a pull request for it with `gh`, or updates the open one on a
   re-run. The description lists the advisories, flags breaking jumps, states the

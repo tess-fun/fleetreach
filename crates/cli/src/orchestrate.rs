@@ -183,7 +183,14 @@ pub fn scan_fleet(
 
     // Plan every repo up front: which ecosystems it holds and where. The plans decide which
     // OSV DBs are worth loading, then drive the per-repo scan.
-    let plans: Vec<RepoPlan> = config.repos.par_iter().map(plan_repo).collect();
+    let plans: Vec<RepoPlan> = config
+        .repos
+        .par_iter()
+        .map(|repo| match config.sboms.get(&repo.id) {
+            Some(path) => sbom_plan(repo, path),
+            None => plan_repo(repo),
+        })
+        .collect();
     let has = |eco: Ecosystem| {
         plans
             .iter()
@@ -334,6 +341,24 @@ pub fn scan_fleet(
     // are collected in config order and merged serially, so the assembled output
     // is byte-identical to a serial scan regardless of completion order.
     let scan_unit_with = |unit: &ScanUnit| {
+        if let Some(sbom) = &unit.sbom {
+            return scan_sbom_unit(
+                &unit.repo,
+                unit.ecosystem,
+                sbom,
+                &SbomDbs {
+                    npm: npm_db.as_ref(),
+                    pypi: pypi_db.as_ref(),
+                    rubygems: rubygems_db.as_ref(),
+                    packagist: packagist_db.as_ref(),
+                    nuget: nuget_db.as_ref(),
+                    julia: julia_db.as_ref(),
+                    swift: swift_db.as_ref(),
+                    hex: hex_db.as_ref(),
+                    maven: maven_db.as_ref(),
+                },
+            );
+        }
         scan_unit(
             db,
             &unit.repo,
@@ -463,6 +488,8 @@ pub(crate) struct ScanUnit {
     pub(crate) ecosystem: Ecosystem,
     pub(crate) repo: Repo,
     pub(crate) rel_dir: String,
+    /// Packages from the repo's SBOM (`[[repo]] sbom`) instead of its lockfiles.
+    pub(crate) sbom: Option<std::sync::Arc<Result<crate::sbom_input::SbomInput, String>>>,
 }
 
 /// Everything found to scan in one repo, plus what could not be.
@@ -474,6 +501,250 @@ pub(crate) struct RepoPlan {
     pub(crate) walk_errors: Vec<String>,
     /// Lockfiles in formats no feeder reads, as coverage gaps.
     pub(crate) unsupported: Vec<CoverageGap>,
+}
+
+/// The plan of a repo scanned from its SBOM: one unit per ecosystem the SBOM holds, plus a
+/// coverage gap when the SBOM does not assert completeness or lists packages no matcher takes.
+fn sbom_plan(repo: &Repo, path: &Path) -> RepoPlan {
+    let source = path
+        .strip_prefix(&repo.path)
+        .unwrap_or(path)
+        .display()
+        .to_string();
+    let read = crate::sbom_input::read(path);
+    let mut plan = RepoPlan {
+        id: repo.id.clone(),
+        units: Vec::new(),
+        walk_errors: Vec::new(),
+        unsupported: Vec::new(),
+    };
+    let gap = |reason: String| CoverageGap {
+        repo: repo.id.clone(),
+        source: source.clone(),
+        ecosystem: Ecosystem::Cargo,
+        level: Coverage::Partial,
+        reason,
+    };
+    let ecosystems: Vec<Ecosystem> = match &read {
+        Ok(input) => {
+            if !input.complete {
+                plan.unsupported.push(gap(
+                    "the SBOM does not assert it is complete (a CycloneDX composition of its root \
+                     with aggregate complete); packages it omits were not scanned"
+                        .to_string(),
+                ));
+            }
+            if !input.unrouted.is_empty() {
+                plan.unsupported.push(gap(format!(
+                    "components not scanned from an SBOM: {}",
+                    input.unrouted.join(", ")
+                )));
+            }
+            input.packages.keys().copied().collect()
+        }
+        Err(_) => Vec::new(),
+    };
+    let shared = std::sync::Arc::new(read);
+    // An unreadable or empty SBOM still gets a unit, which reports it.
+    for ecosystem in if ecosystems.is_empty() {
+        vec![Ecosystem::Cargo]
+    } else {
+        ecosystems
+    } {
+        plan.units.push(ScanUnit {
+            ecosystem,
+            repo: repo.clone(),
+            rel_dir: String::new(),
+            sbom: Some(shared.clone()),
+        });
+    }
+    plan
+}
+
+/// The once-loaded OSV DBs an SBOM unit may need.
+struct SbomDbs<'a> {
+    npm: Option<&'a Result<NpmDb, NpmError>>,
+    pypi: Option<&'a Result<PyPiDb, PyPiError>>,
+    rubygems: Option<&'a Result<RubyGemsDb, RubyGemsError>>,
+    packagist: Option<&'a Result<PackagistDb, PackagistError>>,
+    nuget: Option<&'a Result<NuGetDb, NuGetError>>,
+    julia: Option<&'a Result<JuliaDb, JuliaError>>,
+    swift: Option<&'a Result<SwiftDb, SwiftError>>,
+    hex: Option<&'a Result<HexDb, HexError>>,
+    maven: Option<&'a Result<MavenDb, MavenError>>,
+}
+
+/// Scan one ecosystem's packages from an SBOM with that ecosystem's matcher.
+fn scan_sbom_unit(
+    repo: &Repo,
+    ecosystem: Ecosystem,
+    sbom: &Result<crate::sbom_input::SbomInput, String>,
+    dbs: &SbomDbs,
+) -> RepoResult {
+    let errored = |reason: String| RepoResult::errored(&repo.id, reason);
+    let input = match sbom {
+        Ok(input) => input,
+        Err(e) => return errored(format!("sbom: {e}")),
+    };
+    let Some(pkgs) = input.packages.get(&ecosystem) else {
+        return errored("sbom: no component has a package URL fleetreach can scan".to_string());
+    };
+    fn db<D, E: std::fmt::Display>(
+        db: Option<&Result<D, E>>,
+        ecosystem: Ecosystem,
+    ) -> Result<&D, String> {
+        match db {
+            Some(Ok(db)) => Ok(db),
+            Some(Err(e)) => Err(format!("{ecosystem:?} OSV DB: {e}")),
+            None => Err(format!(
+                "sbom lists {ecosystem:?} packages but no OSV export is available for them (run \
+                 `fleetreach db sync`, or pass --osv-dir)"
+            )),
+        }
+    }
+    let g = &input.graph;
+    let scan = (|| -> Result<fleetreach_core::osv::TierCScan, String> {
+        Ok(match ecosystem {
+            Ecosystem::Npm => fleetreach_npm::scan_installed(
+                &pkgs
+                    .iter()
+                    .map(|p| fleetreach_npm::InstalledPackage {
+                        name: p.name.clone(),
+                        version: p.version.clone(),
+                        direct: p.direct,
+                        dev: p.dev,
+                    })
+                    .collect::<Vec<_>>(),
+                g,
+                db(dbs.npm, ecosystem)?,
+                &repo.id,
+            ),
+            Ecosystem::Pypi => fleetreach_pypi::scan_installed(
+                &pkgs
+                    .iter()
+                    .map(|p| fleetreach_pypi::InstalledPackage {
+                        name: p.name.clone(),
+                        version: p.version.clone(),
+                        direct: p.direct,
+                        dev: p.dev,
+                    })
+                    .collect::<Vec<_>>(),
+                g,
+                db(dbs.pypi, ecosystem)?,
+                &repo.id,
+            ),
+            Ecosystem::Packagist => fleetreach_packagist::scan_installed(
+                &pkgs
+                    .iter()
+                    .map(|p| fleetreach_packagist::InstalledPackage {
+                        name: p.name.clone(),
+                        version: p.version.clone(),
+                        direct: p.direct,
+                        dev: p.dev,
+                    })
+                    .collect::<Vec<_>>(),
+                g,
+                db(dbs.packagist, ecosystem)?,
+                &repo.id,
+            ),
+            Ecosystem::RubyGems => fleetreach_rubygems::scan_installed(
+                &pkgs
+                    .iter()
+                    .map(|p| fleetreach_rubygems::InstalledGem {
+                        name: p.name.clone(),
+                        version: p.version.clone(),
+                        direct: p.direct,
+                    })
+                    .collect::<Vec<_>>(),
+                g,
+                db(dbs.rubygems, ecosystem)?,
+                &repo.id,
+            ),
+            Ecosystem::NuGet => fleetreach_nuget::scan_installed(
+                &pkgs
+                    .iter()
+                    .map(|p| fleetreach_nuget::InstalledPackage {
+                        name: p.name.clone(),
+                        version: p.version.clone(),
+                        direct: p.direct,
+                    })
+                    .collect::<Vec<_>>(),
+                g,
+                db(dbs.nuget, ecosystem)?,
+                &repo.id,
+            ),
+            Ecosystem::Julia => fleetreach_julia::scan_installed(
+                &pkgs
+                    .iter()
+                    .map(|p| fleetreach_julia::InstalledPackage {
+                        name: p.name.clone(),
+                        version: p.version.clone(),
+                        direct: p.direct,
+                    })
+                    .collect::<Vec<_>>(),
+                g,
+                db(dbs.julia, ecosystem)?,
+                &repo.id,
+            ),
+            Ecosystem::Swift => fleetreach_swift::scan_installed(
+                &pkgs
+                    .iter()
+                    .map(|p| fleetreach_swift::InstalledPackage {
+                        name: p.name.clone(),
+                        version: p.version.clone(),
+                        direct: p.direct,
+                    })
+                    .collect::<Vec<_>>(),
+                g,
+                db(dbs.swift, ecosystem)?,
+                &repo.id,
+            ),
+            Ecosystem::Hex => fleetreach_hex::scan_installed(
+                &pkgs
+                    .iter()
+                    .map(|p| fleetreach_hex::InstalledPackage {
+                        name: p.name.clone(),
+                        version: p.version.clone(),
+                        direct: p.direct,
+                    })
+                    .collect::<Vec<_>>(),
+                g,
+                db(dbs.hex, ecosystem)?,
+                &repo.id,
+            ),
+            Ecosystem::Maven => {
+                let resolution = fleetreach_maven::Resolution {
+                    packages: pkgs
+                        .iter()
+                        .map(|p| fleetreach_maven::ResolvedDep {
+                            name: p.name.clone(),
+                            version: p.version.clone(),
+                            direct: p.direct,
+                            dev: p.dev,
+                            scope: if p.dev {
+                                "test".into()
+                            } else {
+                                "compile".into()
+                            },
+                        })
+                        .collect(),
+                    graph: g.clone(),
+                    missing: Vec::new(),
+                };
+                fleetreach_maven::scan_resolution(&resolution, db(dbs.maven, ecosystem)?, &repo.id)
+            }
+            other => {
+                return Err(format!(
+                    "sbom: {other:?} packages are not scanned from an SBOM"
+                ))
+            }
+        })
+    })();
+    match scan {
+        Ok(scan) => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
+            .with_skipped(scan.skipped_unparseable),
+        Err(e) => errored(e),
+    }
 }
 
 /// Lockfile formats fleetreach cannot read; reported when no readable lockfile sits beside them.
@@ -512,6 +783,7 @@ pub(crate) fn plan_repo(repo: &Repo) -> RepoPlan {
             ecosystem,
             repo: narrowed,
             rel_dir,
+            sbom: None,
         }
     };
     let mut plan = RepoPlan {
@@ -526,6 +798,7 @@ pub(crate) fn plan_repo(repo: &Repo) -> RepoPlan {
             ecosystem: eco,
             repo: repo.clone(),
             rel_dir: String::new(),
+            sbom: None,
         });
         return plan;
     }

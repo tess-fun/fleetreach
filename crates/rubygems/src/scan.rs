@@ -11,7 +11,7 @@ use std::path::Path;
 
 use fleetreach_core::osv::{sort_dedup_findings, Match, TierCFinding, TierCScan};
 use fleetreach_core::semver::VersionReq;
-use fleetreach_core::{Ecosystem, RepoId, VulnFinding};
+use fleetreach_core::{DepGraph, Ecosystem, RepoId, VulnFinding};
 
 use crate::db::{affected_fixed, Advisory, RubyGemsDb};
 use crate::error::RubyGemsError;
@@ -36,9 +36,20 @@ pub fn scan_offline(
     let installed = installed_gems(&body);
     let graph = dependency_graph(&body);
 
+    Ok(scan_installed(&installed, &graph, db, repo))
+}
+
+/// Match packages that were already read (from an SBOM, say) against the DB, exactly as
+/// [`scan_offline`] does for a lockfile; `graph` supplies dependency paths.
+pub fn scan_installed(
+    installed: &[InstalledGem],
+    graph: &DepGraph,
+    db: &RubyGemsDb,
+    repo: &RepoId,
+) -> TierCScan {
     let mut out: Vec<VulnFinding> = Vec::new();
     let mut skipped_unparseable = 0u32;
-    for gem in &installed {
+    for gem in installed {
         let Some(version) = parse_rubygems_version(&gem.version) else {
             // A non-Gem::Version pin (a git-ref or path resolution that slipped through)
             // cannot be matched against the registry advisory DB. Skipping it does not hide
@@ -55,10 +66,10 @@ pub fn scan_offline(
         }
     }
     sort_dedup_findings(&mut out);
-    Ok(TierCScan {
+    TierCScan {
         findings: out,
         skipped_unparseable,
-    })
+    }
 }
 
 /// Build a finding if `adv` lists `gem` as affected at `version` (a `Gem::Version`).

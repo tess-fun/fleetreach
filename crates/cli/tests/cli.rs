@@ -745,6 +745,61 @@ fn license_policy_rejects_unknown_ids() {
     );
 }
 
+/// `(advisory, repo, package, version, path)` of every finding in a JSON report.
+fn finding_keys(report: &serde_json::Value) -> Vec<(String, String, String, String, String)> {
+    let mut keys: Vec<_> = report["vulnerabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|v| {
+            v["occurrences"].as_array().unwrap().iter().map(move |o| {
+                (
+                    v["advisory_id"].as_str().unwrap().to_string(),
+                    o["repo"].as_str().unwrap().to_string(),
+                    o["package"].as_str().unwrap().to_string(),
+                    o["installed"].as_str().unwrap().to_string(),
+                    o["dependency_path"].to_string(),
+                )
+            })
+        })
+        .collect();
+    keys.sort();
+    keys
+}
+
+#[test]
+fn an_sbom_written_by_fleetreach_scans_back_to_the_same_findings() {
+    for (fleet, repo, flag, osv) in [
+        ("fleet-py.toml", "py-req", "--pypi-vuln-db", "pypi-osv"),
+        ("fleet-dotnet.toml", "dotnet-restored", "--nuget-vuln-db", "nuget-osv"),
+    ] {
+        let tmp = std::env::temp_dir().join(format!("fleetreach-sbom-in-{repo}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        // 1. Scan the lockfiles directly, and write the SBOM.
+        let direct = run(&["scan", "-q", "-c", &cfg(fleet), "--db", &db(), flag, &file_url(osv), "-f", "json"]);
+        let direct: serde_json::Value = serde_json::from_str(&stdout(&direct)).unwrap();
+        let out = run(&["sbom", "-q", "-c", &cfg(fleet), "-o", tmp.to_str().unwrap()]);
+        assert_eq!(code(&out), 0, "{}", stderr(&out));
+        // 2. Scan the SBOM instead.
+        let repo_path = manifest().join("tests/fixtures/repos").join(repo);
+        let bom = tmp.join(format!("{repo}.cdx.json"));
+        let fleet_from_sbom = tmp.join("fleet.toml");
+        std::fs::write(
+            &fleet_from_sbom,
+            format!("[[repo]]\nid = {repo:?}\npath = {repo_path:?}\nsbom = {bom:?}\n"),
+        )
+        .unwrap();
+        let from_sbom = run(&[
+            "scan", "-q", "-c", fleet_from_sbom.to_str().unwrap(), "--db", &db(), flag, &file_url(osv), "-f", "json",
+        ]);
+        let from_sbom: serde_json::Value = serde_json::from_str(&stdout(&from_sbom)).unwrap();
+        let want: Vec<_> = finding_keys(&direct).into_iter().filter(|k| k.1 == repo).collect();
+        assert!(!want.is_empty(), "{repo}: the direct scan should find something");
+        assert_eq!(finding_keys(&from_sbom), want, "{repo}: SBOM round trip");
+    }
+}
+
 #[test]
 fn incomplete_coverage_is_reported_and_can_gate() {
     let args = |extra: &[&'static str]| {

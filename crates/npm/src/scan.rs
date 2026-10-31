@@ -31,9 +31,20 @@ use crate::lockfile::{parse_lockfile, InstalledPackage};
 pub fn scan_offline(repo_dir: &Path, db: &NpmDb, repo: &RepoId) -> Result<TierCScan, NpmError> {
     let (installed, graph) = read_lockfile(repo_dir)?;
 
+    Ok(scan_installed(&installed, &graph, db, repo))
+}
+
+/// Match packages that were already read (from an SBOM, say) against the DB, exactly as
+/// [`scan_offline`] does for a lockfile; `graph` supplies dependency paths.
+pub fn scan_installed(
+    installed: &[InstalledPackage],
+    graph: &DepGraph,
+    db: &NpmDb,
+    repo: &RepoId,
+) -> TierCScan {
     let mut out: Vec<VulnFinding> = Vec::new();
     let mut skipped_unparseable = 0u32;
-    for pkg in &installed {
+    for pkg in installed {
         let Some(version) = parse_npm_version(&pkg.version) else {
             // A non-SemVer resolved version (a git/url/file dependency pin) cannot be
             // matched against the registry advisory DB. Skipping it does not hide a
@@ -52,10 +63,10 @@ pub fn scan_offline(repo_dir: &Path, db: &NpmDb, repo: &RepoId) -> Result<TierCS
         }
     }
     sort_dedup_findings(&mut out);
-    Ok(TierCScan {
+    TierCScan {
         findings: out,
         skipped_unparseable,
-    })
+    }
 }
 
 /// The lockfiles the npm feeder reads. When several sit in one directory (a migration left

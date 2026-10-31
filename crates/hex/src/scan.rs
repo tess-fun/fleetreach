@@ -10,7 +10,7 @@ use std::path::Path;
 
 use fleetreach_core::osv::{sort_dedup_findings, Match, TierCFinding, TierCScan};
 use fleetreach_core::semver::{Version, VersionReq};
-use fleetreach_core::{Ecosystem, RepoId, VulnFinding};
+use fleetreach_core::{DepGraph, Ecosystem, RepoId, VulnFinding};
 
 use crate::db::{affected_fixed, Advisory, HexDb};
 use crate::error::HexError;
@@ -35,9 +35,20 @@ pub fn scan_offline(repo_dir: &Path, db: &HexDb, repo: &RepoId) -> Result<TierCS
     let lock_text = std::fs::read_to_string(&lock_path).map_err(|e| HexError::db(&lock_path, e))?;
     let (installed, graph) = installed_packages(&lock_text);
 
+    Ok(scan_installed(&installed, &graph, db, repo))
+}
+
+/// Match packages that were already read (from an SBOM, say) against the DB, exactly as
+/// [`scan_offline`] does for a lockfile; `graph` supplies dependency paths.
+pub fn scan_installed(
+    installed: &[InstalledPackage],
+    graph: &DepGraph,
+    db: &HexDb,
+    repo: &RepoId,
+) -> TierCScan {
     let mut out: Vec<VulnFinding> = Vec::new();
     let mut skipped_unparseable = 0u32;
-    for pkg in &installed {
+    for pkg in installed {
         let Some(version) = parse_hex_version(&pkg.version) else {
             skipped_unparseable += 1;
             continue;
@@ -51,10 +62,10 @@ pub fn scan_offline(repo_dir: &Path, db: &HexDb, repo: &RepoId) -> Result<TierCS
         }
     }
     sort_dedup_findings(&mut out);
-    Ok(TierCScan {
+    TierCScan {
         findings: out,
         skipped_unparseable,
-    })
+    }
 }
 
 /// Build a finding if `adv` lists `pkg` as affected at `version` (a SemVer version).

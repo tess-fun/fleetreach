@@ -62,5 +62,8 @@ pub use error::{DbError, PyPiError};
 pub use fleetreach_core::osv::Match;
 pub use lockfile::{detect, installed_packages, InstalledPackage, LockfileKind};
 pub use requirements::SourceCoverage;
-pub use scan::{has_python_sources, inventory, scan_offline, scan_offline_with_coverage, PyPiScan};
+pub use scan::{
+    has_python_sources, inventory, scan_installed, scan_offline, scan_offline_with_coverage,
+    PyPiScan,
+};
 pub use version::{normalize_name, parse_pypi_version, to_semver, Version};

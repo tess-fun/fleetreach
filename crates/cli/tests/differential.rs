@@ -76,6 +76,7 @@ fn config() -> Config {
         sources: Vec::new(),
         licenses: None,
         signal_registries: Vec::new(),
+        sboms: Default::default(),
     }
 }
 

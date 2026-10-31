@@ -111,6 +111,9 @@ struct RawRepo {
     glob_max_depth: Option<usize>,
     /// Optional explicit product `@id` for `-f vex` (§4.3 step 1). An IRI/PURL.
     vex_product_id: Option<String>,
+    /// An SBOM (CycloneDX or SPDX JSON) to scan instead of the repo's lockfiles, relative to
+    /// the config file.
+    sbom: Option<String>,
     /// Optional ecosystem override (`cargo`/`rust`/`go`/`npm`/`pypi`/`rubygems`/`packagist`/
     /// `nuget`/`julia`/`swift`/`hex`/`maven`/`githubactions`).
     /// Absent = auto-detect from the repo's manifests at scan time.
@@ -282,6 +285,8 @@ pub struct Config {
     pub licenses: Option<crate::licenses::Policy>,
     /// `[settings.signals] registries`: hosts allowed besides the public registries.
     pub signal_registries: Vec<String>,
+    /// `[[repo]] sbom`: repos scanned from an SBOM instead of their lockfiles.
+    pub sboms: std::collections::BTreeMap<RepoId, PathBuf>,
 }
 
 /// Validated `[settings.osv]` (spec 01).
@@ -421,6 +426,7 @@ impl Config {
         let FleetTable {} = raw.fleet; // touch the field so it is not dead
 
         let mut repos = Vec::with_capacity(raw.repo.len());
+        let mut sboms = std::collections::BTreeMap::new();
         let mut seen = std::collections::BTreeSet::new();
         for r in raw.repo {
             if !seen.insert(r.id.clone()) {
@@ -438,6 +444,9 @@ impl Config {
                     repo: r.id,
                     path: resolved.display().to_string(),
                 });
+            }
+            if let Some(sbom) = &r.sbom {
+                sboms.insert(RepoId(r.id.clone()), base_dir.join(sbom));
             }
             repos.push(Repo {
                 id: RepoId(r.id),
@@ -589,6 +598,7 @@ impl Config {
             sources,
             licenses,
             signal_registries: raw.settings.signals.registries,
+            sboms,
         })
     }
 }

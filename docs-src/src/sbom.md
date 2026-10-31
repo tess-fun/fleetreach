@@ -48,8 +48,28 @@ for bom in boms/*.cdx.json; do
 done
 ```
 
+## SBOMs as input
+
+Where fleetreach cannot read a build (Gradle without dependency locking, Bazel, in-house
+tooling) but the build writes an SBOM, point the repo at it:
+
+```toml
+[[repo]]
+id   = "android-app"
+path = "../android-app"
+sbom = "build/reports/bom.json"   # CycloneDX 1.4-1.6 or SPDX 2.3 JSON, relative to fleet.toml
+```
+
+The SBOM replaces lockfile discovery for that repo. Each component is routed by its package
+URL to the matcher of its ecosystem (npm, PyPI, RubyGems, Composer, NuGet, Maven, Hex, Julia,
+Swift); direct dependencies are the ones the document's root depends on, and the dependency
+graph gives the usual paths. Coverage is full only when a CycloneDX document asserts its root
+is `complete`; an SPDX document cannot say so and is always partial. Components without a
+purl, or of a type read from its lockfile instead (`cargo`, `golang`), are named in the
+coverage note, never silently dropped. An SBOM written by `fleetreach sbom` scans back to the
+same findings as the lockfiles it came from.
+
 ## Not yet
 
-Embedding the scan's vulnerabilities and fleetreach's machine-sound `not_affected`
-verdicts in the BOM (CycloneDX `vulnerabilities[]`), SPDX output, and SBOMs as a scan
-input are planned (spec 05).
+Embedding the scan's vulnerabilities and machine-sound `not_affected` verdicts in the BOM
+(CycloneDX `vulnerabilities[]`) and SPDX output are planned (spec 05).
