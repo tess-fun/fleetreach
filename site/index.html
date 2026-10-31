@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>fleetreach — fleet-wide dependency security audit</title>
+<title>fleetreach: fleet-wide dependency security audit</title>
 <meta name="description" content="See how far every vulnerability reaches across your fleet. fleetreach audits many repos in one pass and ranks what to patch by blast radius. 12 ecosystems, one CLI, no server." />
 <meta property="og:title" content="fleetreach" />
-<meta property="og:description" content="See how far every vulnerability reaches across your fleet — one CLI, 12 ecosystems, no server." />
+<meta property="og:description" content="See how far every vulnerability reaches across your fleet. One CLI, 12 ecosystems, no server." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://tess-fun.github.io/fleetreach/" />
 <meta property="og:image" content="https://tess-fun.github.io/fleetreach/og-image.png" />
@@ -58,6 +58,8 @@ h1{font-size:clamp(34px,5.5vw,60px);line-height:1.06;letter-spacing:-.03em;font-
 h1 .g{color:var(--accent)}
 .sub{font-size:clamp(16px,2.2vw,20px);color:var(--text-2);max-width:60ch;margin:24px auto 0;line-height:1.6}
 .cmd{display:inline-flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border-2);border-radius:11px;padding:12px 16px;margin:34px auto 0;font-family:var(--mono);font-size:14px}
+.cmd{max-width:100%}.cmd code{min-width:0;overflow-x:auto;white-space:nowrap}
+.alt{margin-top:12px;color:var(--text-2);font-size:13px}.alt a{color:var(--text);text-decoration:underline;text-underline-offset:3px}.alt code{font-family:var(--mono);font-size:12px}
 .cmd .p{color:var(--text-3)}
 .cmd button{background:none;border:none;color:var(--text-3);cursor:pointer;font-size:15px;display:flex;padding:2px;border-radius:5px}
 .cmd button:hover{color:var(--accent)}
@@ -140,11 +142,12 @@ footer{border-top:1px solid var(--border);padding:40px 0;margin-top:24px}
 <header class="hero wrap">
   <span class="eyebrow"><span class="pulse"></span> open source · rust · 12 ecosystems</span>
   <h1>See how far every vulnerability <span class="g">reaches</span> across your fleet.</h1>
-  <p class="sub">fleetreach audits many repos in one pass and ranks what to patch by blast radius into a fix-this-first queue. Twelve ecosystems, sound Rust reachability, one binary — no server, no SBOM pipeline.</p>
+  <p class="sub">fleetreach audits many repos in one pass and ranks what to patch by blast radius into a fix-this-first queue. Twelve ecosystems, reachability for Rust and Python, one binary. No server to run.</p>
   <div class="cmd">
-    <code><span class="p">$ </span><span id="cmd">cargo install fleetreach-cli --features network</span></code>
+    <code><span class="p">$ </span><span id="cmd">curl -fsSL https://raw.githubusercontent.com/tess-fun/fleetreach/main/scripts/install.sh | sh</span></code>
     <button id="copy" aria-label="Copy install command"><i class="ti ti-copy"></i><span class="sr">copy</span></button>
   </div>
+  <p class="alt">Linux and macOS, checksum-verified. Also: <code>brew install tess-fun/tap/fleetreach</code> · <a href="https://github.com/tess-fun/fleetreach/releases/latest">Windows binaries</a> · <a href="docs/installation.html">container image</a> · <code>cargo install fleetreach-cli --features network</code></p>
   <div class="cta">
     <a class="btn primary" href="docs/">Get started <i class="ti ti-arrow-right"></i></a>
     <a class="btn ghost" href="https://github.com/tess-fun/fleetreach"><i class="ti ti-brand-github"></i> Star on GitHub</a>
@@ -162,7 +165,7 @@ footer{border-top:1px solid var(--border);padding:40px 0;margin-top:24px}
 1      1       0           <span class="a">manifest</span>  <span class="r">critical 9.8</span>  RUSTSEC-2021-0003   SmallVec::insert_many overflow
 1      0       1           <span class="am">upstream</span>  medium 6.2    RUSTSEC-2020-0071   Potential segfault in time</pre>
   </div>
-  <p class="lead" style="margin-top:18px">The lead row is a <em>medium</em>, not the critical — it is the one advisory present in two repos, so a single bump clears both. And the split tells you <em>how</em>: a transitive-only hit needs an upstream bump, not a manifest edit. That ranking is what repo-by-repo scanning can't give you.</p>
+  <p class="lead" style="margin-top:18px">The lead row is a <em>medium</em>, not the critical: it is the one advisory present in two repos, so a single bump clears both. And the split tells you <em>how</em>: a transitive-only hit needs an upstream bump, not a manifest edit. That ranking is what repo-by-repo scanning can't give you.</p>
 </section>
 
 <section class="wrap">
@@ -170,11 +173,14 @@ footer{border-top:1px solid var(--border);padding:40px 0;margin-top:24px}
   <h2>Everything you need to triage a whole portfolio.</h2>
   <div class="grid">
     <div class="card"><div class="ic"><i class="ti ti-radar-2"></i></div><h3>Blast radius</h3><p>Rank advisories by how many repos one fix clears, split direct vs transitive with a fix-path hint.</p></div>
-    <div class="card"><div class="ic"><i class="ti ti-list-check"></i></div><h3>Remediation queue</h3><p>A batched, sequenced list of exact dependency bumps — low-churn first, breaking jumps flagged.</p></div>
+    <div class="card"><div class="ic"><i class="ti ti-list-check"></i></div><h3>Remediation queue</h3><p>A batched, sequenced list of exact dependency bumps: low-churn first, breaking jumps flagged.</p></div>
     <div class="card"><div class="ic"><i class="ti ti-route"></i></div><h3>Provenance, fleet-wide</h3><p><code>--why serde</code> answers "who pulls this in?" across every repo at once, no <code>cargo tree</code> spelunking.</p></div>
-    <div class="card"><div class="ic"><i class="ti ti-binary-tree"></i></div><h3>Sound reachability</h3><p>For Rust, a MIR call-graph analysis proves whether a vulnerable function is actually callable.</p></div>
-    <div class="card"><div class="ic"><i class="ti ti-stack-2"></i></div><h3>Twelve ecosystems</h3><p>Rust, Go, npm, PyPI, RubyGems, Packagist, NuGet, Julia, Swift, Hex, Maven, GitHub Actions.</p></div>
-    <div class="card"><div class="ic"><i class="ti ti-shield-lock"></i></div><h3>Fail-closed</h3><p>A gap it cannot scan is never reported clean. A falsely-clean report is the worst possible output.</p></div>
+    <div class="card"><div class="ic"><i class="ti ti-binary-tree"></i></div><h3>Reachability with evidence</h3><p>For Rust, a MIR call-graph analysis proves whether a vulnerable function is callable. For Python and npm, an import graph shows the chain that loads the package.</p></div>
+    <div class="card"><div class="ic"><i class="ti ti-stack-2"></i></div><h3>Twelve ecosystems</h3><p>Rust, Go, npm, PyPI, RubyGems, Packagist, NuGet, Julia, Swift, Hex, Maven, GitHub Actions. Including pnpm and yarn, uv and requirements files, and .NET projects without a lockfile.</p></div>
+    <div class="card"><div class="ic"><i class="ti ti-building-community"></i></div><h3>Finds your repos</h3><p>Name a GitHub organization or user and filter by name, topic, fork or archived. fleetreach keeps sparse clones holding only the lockfiles and manifests.</p></div>
+    <div class="card"><div class="ic"><i class="ti ti-database"></i></div><h3>Advisory data, handled</h3><p>Network builds fetch only the osv.dev exports your fleet needs and keep them fresh. Air-gapped? Point <code>--osv-dir</code> at one directory.</p></div>
+    <div class="card"><div class="ic"><i class="ti ti-shield-lock"></i></div><h3>Fail-closed</h3><p>A gap it cannot scan is never reported clean. Partly read sources are labelled, and <code>--require-full-coverage</code> fails the run on them.</p></div>
+    <div class="card"><div class="ic"><i class="ti ti-file-export"></i></div><h3>Standard outputs</h3><p>Table, JSON, SARIF for code scanning, and OpenVEX. <code>fleetreach sbom</code> writes a CycloneDX 1.6 SBOM per repo.</p></div>
   </div>
 </section>
 
@@ -185,13 +191,14 @@ footer{border-top:1px solid var(--border);padding:40px 0;margin-top:24px}
     <table>
       <thead><tr><th>Tool</th><th>Scans</th><th>Answers</th><th>Reachability</th><th>Shape</th></tr></thead>
       <tbody>
-        <tr><td class="rowname me">fleetreach</td><td>many repos, one pass</td><td class="w" style="color:var(--text)">which fix clears the most repos, ranked</td><td class="yes">sound (Rust)</td><td>single binary</td></tr>
-        <tr><td class="rowname">osv-scanner · Trivy · Grype</td><td>one project</td><td>"is this project vulnerable?"</td><td class="no">experimental / none</td><td>binary</td></tr>
+        <tr><td class="rowname me">fleetreach</td><td>many repos, one pass</td><td class="w" style="color:var(--text)">which fix clears the most repos, ranked</td><td class="yes">sound (Rust), import graph (Python, npm)</td><td>single binary</td></tr>
+        <tr><td class="rowname">osv-scanner</td><td>one project</td><td>"is this project vulnerable?"</td><td class="no">Go call analysis; Rust experimental</td><td>binary</td></tr>
+        <tr><td class="rowname">Trivy · Grype</td><td>one project or image</td><td>"is this project vulnerable?"</td><td class="no">none</td><td>binary</td></tr>
         <tr><td class="rowname">OWASP Dependency-Track</td><td>a portfolio</td><td>similar, but as a platform</td><td class="no">no</td><td>a server you run</td></tr>
       </tbody>
     </table>
   </div>
-  <p class="lead" style="margin-top:20px">Want container scanning, a hosted dashboard, or single-repo CI checks? Those tools fit better. Want one command that answers "what is my <em>fleet's</em> dependency risk, and what do I fix first" — that's this.</p>
+  <p class="lead" style="margin-top:20px">Want container scanning, a hosted dashboard, or single-repo CI checks? Those tools fit better. Want one command that answers "what is my <em>fleet's</em> dependency risk, and what do I fix first"? That's this.</p>
 </section>
 
 <section class="wrap">
@@ -199,26 +206,23 @@ footer{border-top:1px solid var(--border);padding:40px 0;margin-top:24px}
     <div>
       <div class="kick">Quickstart</div>
       <h2>Point it at a <code style="font-size:.7em;background:var(--bg-2);padding:2px 8px;border-radius:6px;color:var(--accent-2)">fleet.toml</code>. Get one report.</h2>
-      <p class="lead">List your repos once. fleetreach reads each lockfile, correlates across the fleet, and emits a ranked, CI-pipeable report — table, JSON, SARIF, or OpenVEX. Mixed Rust + Go + npm + … folds into one queue.</p>
+      <p class="lead">Name an organization or list repo paths. fleetreach reads each lockfile, correlates across the fleet, and emits one ranked, CI-pipeable report. Mixed Rust, Go, npm, Python and the rest fold into one queue.</p>
       <div class="cta" style="justify-content:flex-start;margin-top:26px">
         <a class="btn primary" href="docs/">Read the docs <i class="ti ti-arrow-right"></i></a>
       </div>
     </div>
     <div class="term">
       <div class="term-bar"><i></i><i></i><i></i><span class="t">fleet.toml</span></div>
-      <pre><span class="hd">[[repo]]</span>
+      <pre><span class="hd">[[source]]</span>  <span class="hd"># every repo in a GitHub org</span>
+kind    = <span class="tl">"github"</span>
+org     = <span class="tl">"acme"</span>
+include = [<span class="tl">"svc-*"</span>]
+topics  = [<span class="tl">"production"</span>]
+
+<span class="hd">[[repo]]</span>    <span class="hd"># plus local checkouts</span>
 id   = <span class="tl">"core-lib"</span>
 path = <span class="tl">"../core-lib"</span>
-
-<span class="hd">[[repo]]</span>
-id   = <span class="tl">"services"</span>
-path = <span class="tl">"../services"</span>
-glob = <span class="a">true</span>   <span class="hd"># discover **/Cargo.lock</span>
-
-<span class="hd">[[repo]]</span>
-id        = <span class="tl">"web"</span>
-path      = <span class="tl">"../web"</span>
-ecosystem = <span class="tl">"npm"</span>  <span class="hd"># or auto-detected</span></pre>
+glob = <span class="a">true</span>   <span class="hd"># every lockfile below</span></pre>
     </div>
   </div>
 </section>
@@ -226,7 +230,7 @@ ecosystem = <span class="tl">"npm"</span>  <span class="hd"># or auto-detected</
 <section class="wrap">
   <div class="kick">Continuous</div>
   <h2>Drop it into CI in three lines.</h2>
-  <p class="lead">The bundled GitHub Action installs fleetreach, scans the repo, and uploads findings to the Security tab as SARIF.</p>
+  <p class="lead">The bundled GitHub Action installs the prebuilt binary in seconds, scans the repo, and uploads findings to the Security tab as SARIF.</p>
   <div class="term">
     <div class="term-bar"><i></i><i></i><i></i><span class="t">.github/workflows/audit.yml</span></div>
     <pre><span class="hd">- uses:</span> <span class="tl">tess-fun/fleetreach@v1</span>
