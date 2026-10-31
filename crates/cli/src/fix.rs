@@ -21,7 +21,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use clap::{Args, Subcommand};
+use clap::{Args, Subcommand, ValueEnum};
 use fleetreach_core::{remediations, Action, Ecosystem, FleetReport, Occurrence};
 use serde::{Deserialize, Serialize};
 
@@ -38,7 +38,8 @@ pub enum FixCommand {
     Plan(FixPlanArgs),
     /// Apply a plan's lock bumps on local branches, each verified by a re-scan.
     Apply(FixApplyArgs),
-    /// List each repo's fleetreach pull requests and their state (via `gh`).
+    /// List each repo's fleetreach pull or merge requests and their state (via `gh` or
+    /// `glab`).
     Status(FixStatusArgs),
 }
 
@@ -47,6 +48,62 @@ pub struct FixStatusArgs {
     /// fleet.toml naming the repos
     #[arg(short, long, default_value = "./fleet.toml")]
     config: PathBuf,
+    /// Where the repos are hosted; `auto` reads each repo's `origin` remote
+    #[arg(long, value_enum, default_value_t = ForgeArg::Auto)]
+    forge: ForgeArg,
+}
+
+/// `--forge`: which CLI opens and lists the requests.
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ForgeArg {
+    /// GitLab when the `origin` host names GitLab, GitHub otherwise
+    Auto,
+    /// GitHub pull requests through `gh`
+    Github,
+    /// GitLab merge requests through `glab`
+    Gitlab,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Forge {
+    GitHub,
+    GitLab,
+}
+
+impl ForgeArg {
+    /// The forge for the repo checked out at `dir`.
+    fn resolve(self, dir: &Path) -> Forge {
+        match self {
+            ForgeArg::Github => Forge::GitHub,
+            ForgeArg::Gitlab => Forge::GitLab,
+            ForgeArg::Auto => git(dir, &["remote", "get-url", "origin"])
+                .ok()
+                .and_then(|url| remote_host(&url))
+                .filter(|host| host.contains("gitlab"))
+                .map_or(Forge::GitHub, |_| Forge::GitLab),
+        }
+    }
+}
+
+/// The host of a git remote: `https://gitlab.com/a/b.git` and `git@gitlab.com:a/b.git` both
+/// give `gitlab.com`. `None` for a local path.
+fn remote_host(url: &str) -> Option<String> {
+    let authority = match url.split_once("://") {
+        // `scheme://[user[:pass]@]host[:port]/path`
+        Some((_, rest)) => rest
+            .split('/')
+            .next()?
+            .rsplit('@')
+            .next()?
+            .split(':')
+            .next()?,
+        // scp-like `[user@]host:path`
+        None if !url.starts_with('/') && url.contains(':') => {
+            url.split(':').next()?.rsplit('@').next()?
+        }
+        None => return None,
+    };
+    (!authority.is_empty()).then(|| authority.to_ascii_lowercase())
 }
 
 #[derive(Args)]
@@ -81,12 +138,16 @@ pub struct FixApplyArgs {
     /// unverified ones are never pushed)
     #[arg(long)]
     push: bool,
-    /// Open (or update) a pull request for each pushed branch with `gh`; implies --push
+    /// Open (or update) a pull request for each pushed branch with `gh`, or a GitLab merge
+    /// request with `glab`; implies --push
     #[arg(long)]
     open_pr: bool,
-    /// Open pull requests as drafts
+    /// Open pull or merge requests as drafts
     #[arg(long)]
     draft: bool,
+    /// Where the repos are hosted; `auto` reads each repo's `origin` remote
+    #[arg(long, value_enum, default_value_t = ForgeArg::Auto)]
+    forge: ForgeArg,
     /// Flags for the verifying scan, after `--` (e.g. `-- --db ./advisory-db --osv-dir ./osv`)
     #[arg(last = true)]
     scan_args: Vec<String>,
@@ -575,40 +636,119 @@ fn publish(result: &mut Applied, edit: &Edit, repo: &Repo, plan: &Plan, args: &F
     }
     let title = format!("fix(deps): bump {} to {}", edit.package, edit.to);
     let body = pr_body(edit, plan);
-    let existing = run(Command::new("gh").current_dir(&top).args([
-        "pr", "list", "--head", &branch, "--state", "open", "--json", "url", "--jq", ".[0].url",
+    let (noun, opened) = match args.forge.resolve(&top) {
+        Forge::GitHub => (
+            "pull request",
+            github_request(&top, &branch, &title, &body, args.draft),
+        ),
+        Forge::GitLab => (
+            "merge request",
+            gitlab_request(&top, &branch, &title, &body, args.draft),
+        ),
+    };
+    match opened {
+        Ok((url, updated)) => {
+            let verb = if updated { "updated" } else { "opened" };
+            result.detail.push_str(&format!("; {noun} {verb}"));
+            result.pull_request = Some(url);
+        }
+        Err(e) => result.detail.push_str(&format!("; {noun} failed: {e}")),
+    }
+}
+
+/// Open the pull request for `branch`, or update the open one. The URL, and whether it
+/// already existed.
+fn github_request(
+    top: &Path,
+    branch: &str,
+    title: &str,
+    body: &str,
+    draft: bool,
+) -> Result<(String, bool), String> {
+    let existing = run(Command::new("gh").current_dir(top).args([
+        "pr", "list", "--head", branch, "--state", "open", "--json", "url", "--jq", ".[0].url",
     ]))
     .ok()
     .filter(|u| !u.is_empty());
-    let outcome = match &existing {
-        Some(url) => run(Command::new("gh")
-            .current_dir(&top)
-            .args(["pr", "edit", url, "--title", &title, "--body", &body]))
-        .map(|_| url.clone()),
-        None => {
-            let mut cmd = Command::new("gh");
-            cmd.current_dir(&top).args([
-                "pr", "create", "--head", &branch, "--title", &title, "--body", &body,
-            ]);
-            if args.draft {
-                cmd.arg("--draft");
-            }
-            run(&mut cmd).map(|out| out.lines().last().unwrap_or_default().to_string())
-        }
-    };
-    match outcome {
-        Ok(url) => {
-            result.detail.push_str(if existing.is_some() {
-                "; pull request updated"
-            } else {
-                "; pull request opened"
-            });
-            result.pull_request = Some(url);
-        }
-        Err(e) => result
-            .detail
-            .push_str(&format!("; pull request failed: {e}")),
+    if let Some(url) = existing {
+        run(Command::new("gh")
+            .current_dir(top)
+            .args(["pr", "edit", &url, "--title", title, "--body", body]))?;
+        return Ok((url, true));
     }
+    let mut cmd = Command::new("gh");
+    cmd.current_dir(top).args([
+        "pr", "create", "--head", branch, "--title", title, "--body", body,
+    ]);
+    if draft {
+        cmd.arg("--draft");
+    }
+    let out = run(&mut cmd)?;
+    Ok((out.lines().last().unwrap_or_default().to_string(), false))
+}
+
+/// The same with `glab`: the open merge request from `branch` is updated, or one is opened.
+/// `glab mr create` does not promise its output format, so the URL is read back from the
+/// list afterwards.
+fn gitlab_request(
+    top: &Path,
+    branch: &str,
+    title: &str,
+    body: &str,
+    draft: bool,
+) -> Result<(String, bool), String> {
+    let open_mr = || -> Option<(String, String)> {
+        let listed = run(Command::new("glab").current_dir(top).args([
+            "mr",
+            "list",
+            "--source-branch",
+            branch,
+            "--output",
+            "json",
+        ]))
+        .ok()?;
+        let mrs: serde_json::Value = serde_json::from_str(&listed).ok()?;
+        let mr = mrs.as_array()?.first()?;
+        Some((
+            mr["iid"].as_u64()?.to_string(),
+            mr["web_url"].as_str()?.to_string(),
+        ))
+    };
+    if let Some((iid, url)) = open_mr() {
+        run(Command::new("glab").current_dir(top).args([
+            "mr",
+            "update",
+            &iid,
+            "--title",
+            title,
+            "--description",
+            body,
+            "--yes",
+        ]))?;
+        return Ok((url, true));
+    }
+    let mut cmd = Command::new("glab");
+    cmd.current_dir(top).args([
+        "mr",
+        "create",
+        "--source-branch",
+        branch,
+        "--title",
+        title,
+        "--description",
+        body,
+        "--yes",
+    ]);
+    if draft {
+        cmd.arg("--draft");
+    }
+    let out = run(&mut cmd)?;
+    let url = open_mr().map(|(_, url)| url).or_else(|| {
+        out.split_whitespace()
+            .rfind(|w| w.starts_with("https://") || w.starts_with("http://"))
+            .map(str::to_string)
+    });
+    Ok((url.unwrap_or_default(), false))
 }
 
 /// The pull request description: what it fixes, how it was checked, and the campaign.
@@ -668,28 +808,11 @@ fn run_status(args: &FixStatusArgs) -> u8 {
     let mut rows = Vec::new();
     let mut failed = 0usize;
     for repo in &config.repos {
-        let listed = run(Command::new("gh").current_dir(&repo.path).args([
-            "pr",
-            "list",
-            "--state",
-            "all",
-            "--limit",
-            "200",
-            "--json",
-            "headRefName,state,url,title",
-        ]));
-        match listed
-            .and_then(|j| serde_json::from_str::<serde_json::Value>(&j).map_err(|e| e.to_string()))
-        {
-            Ok(prs) => {
-                for pr in prs.as_array().into_iter().flatten() {
-                    let head = pr["headRefName"].as_str().unwrap_or_default();
-                    if head.starts_with("fleetreach/") {
-                        rows.push(serde_json::json!({
-                            "repo": repo.id.0, "branch": head, "state": pr["state"],
-                            "title": pr["title"], "url": pr["url"],
-                        }));
-                    }
+        match list_requests(args.forge.resolve(&repo.path), &repo.path) {
+            Ok(requests) => {
+                for mut request in requests {
+                    request["repo"] = serde_json::json!(repo.id.0);
+                    rows.push(request);
                 }
             }
             Err(e) => {
@@ -703,6 +826,59 @@ fn run_status(args: &FixStatusArgs) -> u8 {
         Err(e) => return fail(&e.to_string()),
     }
     u8::from(failed > 0) * 2
+}
+
+/// Every `fleetreach/*` pull or merge request of the repo at `dir`, in any state, as
+/// `{branch, state, title, url}` (states as GitHub spells them: `OPEN`, `MERGED`, `CLOSED`).
+fn list_requests(forge: Forge, dir: &Path) -> Result<Vec<serde_json::Value>, String> {
+    let (listed, branch_key, url_key) = match forge {
+        Forge::GitHub => (
+            run(Command::new("gh").current_dir(dir).args([
+                "pr",
+                "list",
+                "--state",
+                "all",
+                "--limit",
+                "200",
+                "--json",
+                "headRefName,state,url,title",
+            ]))?,
+            "headRefName",
+            "url",
+        ),
+        Forge::GitLab => (
+            run(Command::new("glab").current_dir(dir).args([
+                "mr",
+                "list",
+                "--all",
+                "--per-page",
+                "100",
+                "--output",
+                "json",
+            ]))?,
+            "source_branch",
+            "web_url",
+        ),
+    };
+    let requests: serde_json::Value = serde_json::from_str(&listed).map_err(|e| e.to_string())?;
+    Ok(requests
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|r| {
+            let branch = r[branch_key].as_str()?;
+            branch.starts_with("fleetreach/").then(|| {
+                let state = match r["state"].as_str().unwrap_or_default() {
+                    "opened" => "OPEN".to_string(),
+                    other => other.to_ascii_uppercase(),
+                };
+                serde_json::json!({
+                    "branch": branch, "state": state, "title": r["title"], "url": r[url_key],
+                    "forge": match forge { Forge::GitHub => "github", Forge::GitLab => "gitlab" },
+                })
+            })
+        })
+        .collect())
 }
 
 fn branch_name(edit: &Edit) -> String {
@@ -1110,6 +1286,28 @@ mod tests {
             "46.0.1"
         )
         .is_none());
+    }
+
+    #[test]
+    fn remote_hosts_pick_the_forge() {
+        let host = |u: &str| remote_host(u);
+        assert_eq!(
+            host("https://gitlab.com/acme/app.git").as_deref(),
+            Some("gitlab.com")
+        );
+        assert_eq!(
+            host("git@gitlab.acme.io:team/app.git").as_deref(),
+            Some("gitlab.acme.io")
+        );
+        assert_eq!(
+            host("ssh://git@GitHub.com:22/acme/app").as_deref(),
+            Some("github.com")
+        );
+        assert_eq!(
+            host("https://user:tok@gitlab.com/a/b").as_deref(),
+            Some("gitlab.com")
+        );
+        assert_eq!(host("/srv/git/app.git"), None);
     }
 
     fn edit() -> Edit {

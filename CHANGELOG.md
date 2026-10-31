@@ -37,6 +37,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `risk_reasons` and `evidence` fields, and `fix plan` edits and pull request descriptions
   carry the risk. The JSON report gains `package_versions`: the versions of each vulnerable
   package that the fleet's lockfiles hold, and in which repos.
+- **`bun.lock` is read in full** (bun 1.2+, lockfile versions 0 and 1): workspaces, nested
+  copies resolved the way Node loads them, dev scope and dependency paths. Checked against
+  osv-scanner on opencode, midday, elysia and bun's own lockfile: the same 4,829 registry
+  packages. The binary `bun.lockb` is still reported as partial coverage.
+- **SPDX output and vulnerabilities in the SBOM** (spec 05). `fleetreach sbom -f spdx` writes
+  SPDX 2.3 JSON (purls, `DEPENDS_ON` and `DEV_DEPENDENCY_OF` relationships, coverage in
+  comments, a content-derived namespace). `--report report.json` embeds a saved scan's
+  findings: CycloneDX `vulnerabilities[]` with ratings, `affects`, KEV, EPSS and SSVC
+  properties and an `analysis` that is `not_affected` only for a sound verdict (static
+  `NotReachable`: `code_not_reachable`; phantom: `requires_dependency`), or SPDX `SECURITY`
+  advisory references. Both formats pass their official schemas, and an SPDX document scans
+  back to the same findings.
+- **GitLab merge requests** for `fix apply --open-pr` and `fix status`, through `glab`:
+  the open merge request from a `fleetreach/*` branch is updated, otherwise one is created.
+  The forge is read from each repo's `origin` host, or set with `--forge gitlab|github`.
+  `fix status` rows gain a `forge` field and GitLab states are reported as `OPEN`, `MERGED`
+  and `CLOSED`, like GitHub's.
 
 ## [1.4.0] - 2026-10-31
 

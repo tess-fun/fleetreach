@@ -1,6 +1,6 @@
 # Spec 02: yarn, pnpm and bun lockfiles
 
-Status: phases 1 and 3 plus yarn berry implemented (uncommitted); bun.lock pending · Gap: #2 (coverage) · CTEM stage: discovery · Effort: M
+Status: implemented (phases 1 and 3, yarn berry and bun.lock; bun.lockb stays a reported gap) · Gap: #2 (coverage) · CTEM stage: discovery · Effort: M
 
 ## Problem
 

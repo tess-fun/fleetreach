@@ -748,7 +748,7 @@ fn scan_sbom_unit(
 }
 
 /// Lockfile formats fleetreach cannot read; reported when no readable lockfile sits beside them.
-const UNSUPPORTED_LOCKFILES: &[&str] = &["bun.lock", "bun.lockb"];
+const UNSUPPORTED_LOCKFILES: &[&str] = &["bun.lockb"];
 
 /// Directories never searched for lockfiles: installed third-party packages and VCS metadata
 /// are not the project's own dependency set.
@@ -1123,7 +1123,7 @@ fn scan_npm_repo(repo: &Repo, npm_db: Option<&Result<NpmDb, NpmError>>) -> RepoR
         Some(Err(e)) => return errored(format!("npm OSV DB: {e}")),
         None => {
             return errored(
-                "npm repo (package-lock.json/pnpm-lock.yaml/yarn.lock): no OSV DB mirror for the toolchain-free \
+                "npm repo (package-lock.json/pnpm-lock.yaml/yarn.lock/bun.lock): no OSV DB mirror for the toolchain-free \
                  matcher (pass --osv-dir=<dir> or --npm-vuln-db=file://<dir>, e.g. an unzipped osv.dev npm export)"
                     .to_string(),
             )

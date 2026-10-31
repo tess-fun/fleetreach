@@ -1,0 +1,4 @@
+# A bun fleet: the repo auto-detects as npm from its bun.lock.
+[[repo]]
+id = "bun-demo"
+path = "repos/bun-demo"

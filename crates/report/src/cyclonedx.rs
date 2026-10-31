@@ -13,11 +13,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use fleetreach_core::inventory::{RepoInventory, ROOT};
-use fleetreach_core::{Coverage, Ecosystem};
+use fleetreach_core::{Coverage, Ecosystem, FleetReport, Occurrence, Severity, VulnFinding};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
-use crate::vex::purl;
+use crate::vex::{machine_status, purl, MachineStatus};
 
 /// The CycloneDX spec version written.
 pub const CYCLONEDX_SPEC_VERSION: &str = "1.6";
@@ -32,20 +32,51 @@ pub fn to_cyclonedx(
     tool_version: &str,
     timestamp: Option<&str>,
 ) -> Result<String, serde_json::Error> {
-    let root_ref = format!("repo:{}", inventory.repo.0);
+    render(inventory, None, tool_version, timestamp)
+}
 
-    // Components by purl, merged across sources: direct if any source says so, dev only if
-    // every source does, and the sources listed.
-    struct Merged {
-        name: String,
-        version: String,
-        ecosystem: String,
-        direct: bool,
-        dev: bool,
-        sources: BTreeSet<String>,
-        complete: bool,
-        license: Option<String>,
-    }
+/// [`to_cyclonedx`] plus a `vulnerabilities[]` section from `report`: this repo's findings,
+/// each pointing at the components it affects. The analysis state is `not_affected` only for
+/// a sound signal (a static `NotReachable` verdict, or a phantom dependency that is never
+/// compiled), the same rule the OpenVEX output follows; a reachable finding is
+/// `exploitable` and anything undecided `in_triage`.
+///
+/// # Errors
+///
+/// Only if serialization fails, which a `Value` tree does not.
+pub fn to_cyclonedx_with_vulns(
+    inventory: &RepoInventory,
+    report: &FleetReport,
+    tool_version: &str,
+    timestamp: Option<&str>,
+) -> Result<String, serde_json::Error> {
+    render(inventory, Some(report), tool_version, timestamp)
+}
+
+/// One package of a repo, merged across the repo's sources: direct if any source says so,
+/// dev only if every source does, and the sources listed.
+pub(crate) struct Merged {
+    pub name: String,
+    pub version: String,
+    pub ecosystem: Ecosystem,
+    pub direct: bool,
+    pub dev: bool,
+    pub sources: BTreeSet<String>,
+    pub complete: bool,
+    pub license: Option<String>,
+}
+
+/// A repo's packages by purl, its dependency edges by purl (the repo itself as `root_ref`),
+/// and whether every source was read in full.
+pub(crate) struct Merge {
+    pub root_ref: String,
+    pub components: BTreeMap<String, Merged>,
+    pub depends: BTreeMap<String, BTreeSet<String>>,
+    pub repo_complete: bool,
+}
+
+pub(crate) fn merge(inventory: &RepoInventory) -> Merge {
+    let root_ref = format!("repo:{}", inventory.repo.0);
     let mut components: BTreeMap<String, Merged> = BTreeMap::new();
     let mut depends: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     depends.entry(root_ref.clone()).or_default();
@@ -63,7 +94,7 @@ pub fn to_cyclonedx(
             let entry = components.entry(id.clone()).or_insert_with(|| Merged {
                 name: p.name.clone(),
                 version: p.version.clone(),
-                ecosystem: ecosystem_name(source.ecosystem),
+                ecosystem: source.ecosystem,
                 direct: false,
                 dev: true,
                 sources: BTreeSet::new(),
@@ -100,6 +131,254 @@ pub fn to_cyclonedx(
             }
         }
     }
+    let repo_complete = inventory.errors.is_empty()
+        && inventory
+            .sources
+            .iter()
+            .all(|s| s.coverage == Coverage::Full);
+    Merge {
+        root_ref,
+        components,
+        depends,
+        repo_complete,
+    }
+}
+
+/// What a scan found for one advisory in one repo, with the components it affects. One
+/// advisory can appear twice when its occurrences differ in state (one copy reachable,
+/// another a phantom).
+pub(crate) struct BomVuln<'a> {
+    pub finding: &'a VulnFinding,
+    pub state: VulnState,
+    pub refs: BTreeSet<String>,
+    /// The SSVC outcome for this repo, when the scan made decisions.
+    pub ssvc: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum VulnState {
+    Exploitable,
+    InTriage,
+    /// Sound: never compiled into the build.
+    NotPresent,
+    /// Sound: a static call graph proves no path to the vulnerable code.
+    NotReachable,
+}
+
+/// The findings of `report` in `inventory`'s repo, matched to the merged components by
+/// ecosystem, name and version (falling back to the finding's own purl when the report and
+/// the inventory disagree). Already-patched occurrences are left out.
+pub(crate) fn bom_vulns<'a>(
+    inventory: &RepoInventory,
+    merge: &Merge,
+    report: &'a FleetReport,
+) -> Vec<BomVuln<'a>> {
+    let mut by_package: BTreeMap<(Ecosystem, &str), Vec<(&str, &str)>> = BTreeMap::new();
+    for (id, c) in &merge.components {
+        by_package
+            .entry((c.ecosystem, c.name.as_str()))
+            .or_default()
+            .push((c.version.as_str(), id.as_str()));
+    }
+    let mut grouped: BTreeMap<(usize, VulnState), BTreeSet<String>> = BTreeMap::new();
+    for (i, v) in report.vulnerabilities.iter().enumerate() {
+        for occ in &v.occurrences {
+            let Occurrence::InRepo {
+                repo,
+                package,
+                installed,
+                source,
+                ..
+            } = occ
+            else {
+                continue;
+            };
+            if *repo != inventory.repo {
+                continue;
+            }
+            let state = match machine_status(v, occ) {
+                MachineStatus::Fixed => continue,
+                MachineStatus::NotAffected {
+                    justification: "component_not_present",
+                } => VulnState::NotPresent,
+                MachineStatus::NotAffected { .. } => VulnState::NotReachable,
+                MachineStatus::Affected => VulnState::Exploitable,
+                MachineStatus::UnderInvestigation { .. } => VulnState::InTriage,
+            };
+            let installed = installed.to_string();
+            let reference = by_package
+                .get(&(v.ecosystem, package.as_str()))
+                .and_then(|versions| {
+                    versions
+                        .iter()
+                        .find(|(version, _)| *version == installed)
+                        .or_else(|| {
+                            versions
+                                .iter()
+                                .find(|(version, _)| same_version(version, &installed))
+                        })
+                })
+                .map_or_else(
+                    || purl(v.ecosystem, package, &installed, source),
+                    |(_, id)| (*id).to_string(),
+                );
+            grouped.entry((i, state)).or_default().insert(reference);
+        }
+    }
+    let outcome = |advisory: &str| {
+        report.ssvc.as_ref().and_then(|s| {
+            s.decisions
+                .iter()
+                .filter(|d| d.advisory_id == advisory && d.repo == inventory.repo)
+                .map(|d| d.outcome)
+                .max()
+                .map(fleetreach_core::ssvc::Outcome::label)
+        })
+    };
+    let mut out: Vec<BomVuln<'a>> = grouped
+        .into_iter()
+        .map(|((i, state), refs)| {
+            let finding = &report.vulnerabilities[i];
+            BomVuln {
+                finding,
+                state,
+                refs,
+                ssvc: outcome(&finding.advisory_id),
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| (&a.finding.advisory_id, a.state).cmp(&(&b.finding.advisory_id, b.state)));
+    out
+}
+
+/// `1.2` and `1.2.0` are the same release: findings carry SemVer, lockfiles the raw string.
+fn same_version(raw: &str, semver: &str) -> bool {
+    let pad = |v: &str| {
+        let core: Vec<&str> = v.split(['-', '+']).next().unwrap_or(v).split('.').collect();
+        let rest = &v[v.find(['-', '+']).unwrap_or(v.len())..];
+        let mut parts: Vec<String> = core
+            .iter()
+            .map(|p| p.trim_start_matches('v').to_string())
+            .collect();
+        while parts.len() < 3 {
+            parts.push("0".to_string());
+        }
+        format!("{}{rest}", parts.join("."))
+    };
+    pad(raw) == semver
+}
+
+/// The link to an advisory's record.
+pub(crate) fn advisory_url(v: &VulnFinding) -> String {
+    v.url
+        .clone()
+        .unwrap_or_else(|| format!("https://osv.dev/vulnerability/{}", v.advisory_id))
+}
+
+fn vulnerability_value(v: &BomVuln<'_>, index: usize) -> Value {
+    let f = v.finding;
+    let mut rating = Map::new();
+    if let Some(score) = f.cvss_score {
+        // f32 to one decimal, so 9.8 is not written as 9.800000190734863.
+        rating.insert(
+            "score".into(),
+            json!((f64::from(score) * 10.0).round() / 10.0),
+        );
+    }
+    rating.insert("severity".into(), json!(severity_label(f.severity)));
+    if let Some(vector) = &f.cvss_vector {
+        let method = if vector.starts_with("CVSS:4") {
+            "CVSSv4"
+        } else if vector.starts_with("CVSS:3.1") {
+            "CVSSv31"
+        } else if vector.starts_with("CVSS:3") {
+            "CVSSv3"
+        } else {
+            "other"
+        };
+        rating.insert("method".into(), json!(method));
+        rating.insert("vector".into(), json!(vector));
+    }
+    let mut value = json!({
+        "bom-ref": format!("vuln:{}:{index}", f.advisory_id),
+        "id": f.advisory_id,
+        "source": { "name": "OSV", "url": advisory_url(f) },
+        "ratings": [Value::Object(rating)],
+        "description": f.title,
+        "affects": v.refs.iter().map(|r| json!({ "ref": r })).collect::<Vec<_>>(),
+    });
+    if !f.aliases.is_empty() {
+        value["references"] = f
+            .aliases
+            .iter()
+            .map(|a| {
+                json!({ "id": a, "source": { "name": "OSV", "url": format!("https://osv.dev/vulnerability/{a}") } })
+            })
+            .collect();
+    }
+    let (state, justification, detail) = match v.state {
+        VulnState::Exploitable => (
+            "exploitable",
+            None,
+            "a static call graph reaches the vulnerable code",
+        ),
+        VulnState::InTriage => ("in_triage", None, "no sound reachability verdict"),
+        VulnState::NotPresent => (
+            "not_affected",
+            Some("requires_dependency"),
+            "in the lockfile but not compiled into the analyzed build (feature-resolved)",
+        ),
+        VulnState::NotReachable => (
+            "not_affected",
+            Some("code_not_reachable"),
+            "a static call graph has no path to the vulnerable code",
+        ),
+    };
+    let mut analysis = json!({ "state": state, "detail": detail });
+    if let Some(j) = justification {
+        analysis["justification"] = json!(j);
+    }
+    value["analysis"] = analysis;
+    let mut properties = Vec::new();
+    if f.exploit.kev {
+        properties.push(json!({ "name": "fleetreach:kev", "value": "true" }));
+    }
+    if let Some(epss) = f.exploit.epss {
+        properties.push(json!({ "name": "fleetreach:epss", "value": format!("{epss}") }));
+    }
+    if let Some(outcome) = v.ssvc {
+        properties.push(json!({ "name": "fleetreach:ssvc", "value": outcome }));
+    }
+    if !properties.is_empty() {
+        value["properties"] = Value::Array(properties);
+    }
+    value
+}
+
+/// CycloneDX's severity names.
+fn severity_label(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Critical => "critical",
+        Severity::High => "high",
+        Severity::Medium => "medium",
+        Severity::Low => "low",
+        Severity::Unknown => "unknown",
+    }
+}
+
+fn render(
+    inventory: &RepoInventory,
+    report: Option<&FleetReport>,
+    tool_version: &str,
+    timestamp: Option<&str>,
+) -> Result<String, serde_json::Error> {
+    let merged = merge(inventory);
+    let Merge {
+        root_ref,
+        components,
+        depends,
+        repo_complete,
+    } = &merged;
 
     let component_values: Vec<Value> = components
         .iter()
@@ -112,7 +391,7 @@ pub fn to_cyclonedx(
                 "purl": id,
                 "scope": if c.dev { "excluded" } else { "required" },
                 "properties": [
-                    { "name": "fleetreach:ecosystem", "value": c.ecosystem },
+                    { "name": "fleetreach:ecosystem", "value": ecosystem_name(c.ecosystem) },
                     { "name": "fleetreach:direct", "value": c.direct.to_string() },
                     { "name": "fleetreach:source",
                       "value": c.sources.iter().cloned().collect::<Vec<_>>().join(", ") },
@@ -150,18 +429,13 @@ pub fn to_cyclonedx(
             }
             (yes, no)
         });
-    let repo_complete = inventory.errors.is_empty()
-        && inventory
-            .sources
-            .iter()
-            .all(|s| s.coverage == Coverage::Full);
     let mut compositions = Vec::new();
     let mut complete_refs: Vec<&String> = complete;
     let mut incomplete_refs: Vec<&String> = incomplete;
-    if repo_complete {
-        complete_refs.insert(0, &root_ref);
+    if *repo_complete {
+        complete_refs.insert(0, root_ref);
     } else {
-        incomplete_refs.insert(0, &root_ref);
+        incomplete_refs.insert(0, root_ref);
     }
     if !complete_refs.is_empty() {
         compositions.push(json!({ "aggregate": "complete", "assemblies": complete_refs, "dependencies": complete_refs }));
@@ -215,6 +489,14 @@ pub fn to_cyclonedx(
     bom.insert("components".into(), Value::Array(component_values));
     bom.insert("dependencies".into(), Value::Array(dependency_values));
     bom.insert("compositions".into(), Value::Array(compositions));
+    if let Some(report) = report {
+        let vulns: Vec<Value> = bom_vulns(inventory, &merged, report)
+            .iter()
+            .enumerate()
+            .map(|(i, v)| vulnerability_value(v, i))
+            .collect();
+        bom.insert("vulnerabilities".into(), Value::Array(vulns));
+    }
 
     // The serial number hashes the content (not the timestamp), so it is stable.
     let mut hashed = bom.clone();
@@ -230,7 +512,7 @@ pub fn to_cyclonedx(
 }
 
 /// The ecosystem's stable report name (`npm`, `pypi`, `github-actions`, ...).
-fn ecosystem_name(ecosystem: Ecosystem) -> String {
+pub(crate) fn ecosystem_name(ecosystem: Ecosystem) -> String {
     serde_json::to_value(ecosystem)
         .ok()
         .and_then(|v| v.as_str().map(str::to_string))
@@ -238,7 +520,7 @@ fn ecosystem_name(ecosystem: Ecosystem) -> String {
 }
 
 /// An RFC 9562 version-8 (custom) UUID from the first 16 bytes of a hash.
-fn uuid_v8(hash: &[u8]) -> String {
+pub(crate) fn uuid_v8(hash: &[u8]) -> String {
     let mut b = [0u8; 16];
     b.copy_from_slice(&hash[..16]);
     b[6] = (b[6] & 0x0f) | 0x80;

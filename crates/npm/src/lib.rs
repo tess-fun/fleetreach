@@ -36,6 +36,7 @@
 //!
 //! 1.89. An MSRV increase is treated as a minor-version bump.
 
+mod bun;
 mod db;
 mod error;
 mod lockfile;

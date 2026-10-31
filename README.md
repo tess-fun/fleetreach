@@ -17,7 +17,7 @@ unmaintained, unsound, notice; and advisories against the Rust toolchain
 itself). On top of that you get blast-radius analysis (which single fix clears
 the most repos, split direct versus transitive), a batched remediation queue,
 `--why` provenance across the fleet, drift tracking between scans, SARIF / JSON /
-OpenVEX output, and a CycloneDX SBOM per repo. One binary: no server to run, no SBOM
+OpenVEX output, and a CycloneDX or SPDX SBOM per repo. One binary: no server to run, no SBOM
 pipeline to wire up.
 
 It covers 12 ecosystems (Rust, Go, npm, PyPI, RubyGems, Packagist, NuGet, Julia,
@@ -116,7 +116,7 @@ fleetreach scan --why serde            # how does `serde` get into the tree?
 fleetreach db sync                     # fetch the OSV exports the fleet needs (network build)
 fleetreach db status                   # what is cached, and how old
 fleetreach fleet sync                  # clone/refresh repos named by [[source]] entries
-fleetreach sbom -c fleet.toml -o boms/ # one CycloneDX 1.6 SBOM per repo
+fleetreach sbom -c fleet.toml -o boms/ # one CycloneDX 1.6 (or -f spdx) SBOM per repo
 fleetreach licenses -c fleet.toml      # license inventory; policy violations with [settings.licenses]
 fleetreach fix plan -c fleet.toml --report report.json > plan.json  # the fix queue as edits
 fleetreach fix apply -c fleet.toml plan.json -- --db ./advisory-db  # verified local branches
@@ -399,7 +399,9 @@ unified, blast-radius-ranked remediation queue.
 `fleetreach sbom -c fleet.toml -o boms/` writes one CycloneDX 1.6 SBOM per repo from the
 same sources: a component per package with its purl, the lockfiles' dependency graph,
 dev-only packages as `scope: excluded`, and `compositions` that mark partly-read sources
-incomplete. The output is deterministic and ready to upload to Dependency-Track; see
+incomplete. `-f spdx` writes SPDX 2.3 instead, and `--report report.json` embeds a saved
+scan's findings (CycloneDX `vulnerabilities[]` with `not_affected` only for sound verdicts).
+The output is deterministic and ready to upload to Dependency-Track; see
 [SBOM output](https://tess-fun.github.io/fleetreach/docs/sbom.html).
 
 Key flags: `--db <PATH>` (use a local advisory-db clone), `--offline`,

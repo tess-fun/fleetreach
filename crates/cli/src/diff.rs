@@ -77,7 +77,7 @@ pub fn run_diff(args: DiffArgs) -> u8 {
 }
 
 /// Read and parse a saved fleet report, mapping IO/JSON failures to a message.
-fn read_report(path: &PathBuf) -> Result<FleetReport, String> {
+pub(crate) fn read_report(path: &PathBuf) -> Result<FleetReport, String> {
     let text = fs::read_to_string(path)
         .map_err(|e| format!("reading report `{}`: {e}", path.display()))?;
     serde_json::from_str(&text).map_err(|e| format!("parsing report `{}`: {e}", path.display()))

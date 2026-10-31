@@ -63,14 +63,14 @@ are scanned only when the repo has no package ecosystem.
 Every discovered lockfile must be scannable: one whose ecosystem has no OSV
 export (or, for Go, no govulncheck) makes the repo an errored gap, as it would
 for a single-ecosystem repo. When several npm-family lockfiles sit together
-(`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`), all are read.
+(`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`), all are read.
 
 ## Coverage
 
 A source that was read but not as a full resolved graph is reported with a
 coverage level: `direct-only` (a `pom.xml` without `gradle.lockfile`, which lists
-declared dependencies only) or `partial` (a `bun.lock`/`bun.lockb`, which no
-feeder reads yet). The repo still counts as scanned, the gaps are listed on
+declared dependencies only) or `partial` (bun's binary `bun.lockb`, which no
+feeder reads; `bun install --save-text-lockfile` writes the readable `bun.lock`). The repo still counts as scanned, the gaps are listed on
 stderr and in the JSON `coverage` array, and the summary line counts them.
 `--require-full-coverage` turns any of them into exit 2.
 

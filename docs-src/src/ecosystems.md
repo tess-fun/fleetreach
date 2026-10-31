@@ -34,7 +34,7 @@ band or a CVSS vector; direct vs transitive comes from the lockfile; findings ar
 
 | Ecosystem | Lockfile(s) | Flag | Version semantics |
 |-----------|-------------|------|-------------------|
-| npm | `package-lock.json` / `pnpm-lock.yaml` (v6, v9) / `yarn.lock` (v1, berry) | `--npm-vuln-db` | SemVer |
+| npm | `package-lock.json` / `pnpm-lock.yaml` (v6, v9) / `yarn.lock` (v1, berry) / `bun.lock` | `--npm-vuln-db` | SemVer |
 | PyPI | `uv.lock` / `poetry.lock` / `Pipfile.lock` / `pylock.toml` / `requirements*.txt` | `--pypi-vuln-db` | PEP 440 (PEP 503 names) |
 | RubyGems | `Gemfile.lock` | `--rubygems-vuln-db` | `Gem::Version` |
 | Packagist | `composer.lock` | `--packagist-vuln-db` | Composer `version_compare` |

@@ -1,15 +1,18 @@
 # SBOM output
 
-`fleetreach sbom` writes one [CycloneDX 1.6](https://cyclonedx.org/docs/1.6/json/) JSON
-SBOM per repo, from the same lockfiles and manifests `scan` reads, in every ecosystem:
+`fleetreach sbom` writes one [CycloneDX 1.6](https://cyclonedx.org/docs/1.6/json/) or
+[SPDX 2.3](https://spdx.github.io/spdx-spec/v2.3/) JSON SBOM per repo, from the same
+lockfiles and manifests `scan` reads, in every ecosystem:
 
 ```sh
-fleetreach sbom -c fleet.toml -o boms/          # boms/<repo-id>.cdx.json
-fleetreach sbom -c fleet.toml -o boms/ --sync   # refresh [[source]] checkouts first
+fleetreach sbom -c fleet.toml -o boms/            # boms/<repo-id>.cdx.json
+fleetreach sbom -c fleet.toml -o boms/ -f spdx    # boms/<repo-id>.spdx.json
+fleetreach sbom -c fleet.toml -o boms/ --sync     # refresh [[source]] checkouts first
 ```
 
 It needs no advisory database and no network (unless `--sync` refreshes fleet sources).
-A repo id `owner/name` becomes the file `owner__name.cdx.json`.
+A repo id `owner/name` becomes the file `owner__name.cdx.json`. Both formats pass their
+official JSON schemas.
 
 ## What each BOM holds
 
@@ -31,6 +34,43 @@ A repo id `owner/name` becomes the file `owner__name.cdx.json`.
 BOMs are deterministic: components and edges are sorted, and the `serialNumber` is a
 UUID derived from the content. Set `SOURCE_DATE_EPOCH` and two runs over the same
 lockfiles write byte-identical files.
+
+## SPDX
+
+`-f spdx` writes the same inventory as an SPDX 2.3 document: the repo is the package the
+document `DESCRIBES` (its `downloadLocation` the git remote at the commit read), each
+resolved package an SPDX package with its purl as a `PACKAGE-MANAGER` reference and its
+license when it is a valid SPDX expression, and the graph as `DEPENDS_ON` relationships, with
+`DEV_DEPENDENCY_OF` for a development-only direct dependency. SPDX 2.3 has no way to mark a
+document incomplete, so the coverage of each source, and any source read with less than full
+coverage, is written in the repo package's `comment` and the document's. The
+`documentNamespace` is derived from the content, so it is as stable as the CycloneDX serial
+number.
+
+## Vulnerabilities in the BOM
+
+```sh
+fleetreach scan -c fleet.toml -f json > report.json
+fleetreach sbom -c fleet.toml -o boms/ --report report.json
+```
+
+`--report` embeds a saved scan's findings for each repo. In CycloneDX they are
+`vulnerabilities[]`: the advisory id and link, aliases as references, a rating with the
+severity, the CVSS score and vector, `affects` pointing at the component, KEV, EPSS and the
+SSVC outcome as properties, and an `analysis`:
+
+| Scan result | `analysis.state` | `justification` |
+|-------------|------------------|-----------------|
+| static reachability found a path | `exploitable` | |
+| no sound verdict (most findings) | `in_triage` | |
+| static reachability proved no path | `not_affected` | `code_not_reachable` |
+| a phantom dependency, never compiled | `not_affected` | `requires_dependency` |
+
+Only the sound signals reach `not_affected`, the same rule the [OpenVEX](./views.md) output
+follows; human-asserted ignores are not included. Already-patched occurrences are left out.
+In SPDX, which has no vulnerability model before 3.0, each affected package gets a
+`SECURITY` / `advisory` external reference per finding, with the state, severity, KEV and
+SSVC outcome in its comment.
 
 ## Exit codes
 
@@ -69,7 +109,4 @@ purl, or of a type read from its lockfile instead (`cargo`, `golang`), are named
 coverage note, never silently dropped. An SBOM written by `fleetreach sbom` scans back to the
 same findings as the lockfiles it came from.
 
-## Not yet
-
-Embedding the scan's vulnerabilities and machine-sound `not_affected` verdicts in the BOM
-(CycloneDX `vulnerabilities[]`) and SPDX output are planned (spec 05).
+An SPDX document scans back to the same findings too, but as partial coverage.

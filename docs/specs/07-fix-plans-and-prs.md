@@ -1,6 +1,6 @@
 # Spec 07: Fix plans, verified patches and pull requests
 
-Status: draft · Gap: #4 (mobilization) · CTEM stage: validation, mobilization · Effort: L
+Status: implemented for Cargo, npm and GitHub Actions (plan, apply, verify, GitHub PRs via `gh` released in 1.4.0; GitLab MRs via `glab` unreleased) · Gap: #4 (mobilization) · CTEM stage: validation, mobilization · Effort: L
 
 ## Problem
 

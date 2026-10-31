@@ -72,7 +72,12 @@ pub fn scan_installed(
 /// The lockfiles the npm feeder reads. When several sit in one directory (a migration left
 /// a stale one behind) every one is read and the package sets are merged: a stale lockfile
 /// may add noise, but picking one could hide what the other installs.
-pub const LOCKFILES: [&str; 3] = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock"];
+pub const LOCKFILES: [&str; 4] = [
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lock",
+];
 
 /// Read every npm-family lockfile in `dir` into one installed-package set and graph. The
 /// graph (for `dependency_path`) comes from the first lockfile in [`LOCKFILES`] order.
@@ -80,7 +85,7 @@ pub const LOCKFILES: [&str; 3] = ["package-lock.json", "pnpm-lock.yaml", "yarn.l
 /// # Errors
 ///
 /// [`NpmError::Db`] if no lockfile can be read or `package-lock.json` is not valid JSON;
-/// [`NpmError::Lockfile`] if a pnpm or yarn lockfile is malformed or of an unsupported
+/// [`NpmError::Lockfile`] if a pnpm, yarn or bun lockfile is malformed or of an unsupported
 /// version. Any one failing fails the whole directory closed.
 pub fn read_lockfile(dir: &Path) -> Result<(Vec<InstalledPackage>, DepGraph), NpmError> {
     let present: Vec<std::path::PathBuf> = LOCKFILES
@@ -132,6 +137,7 @@ fn read_one(dir: &Path, path: &Path) -> Result<(Vec<InstalledPackage>, DepGraph)
         Some("yarn.lock") => Ok(crate::yarn::parse(&body, dir)
             .map_err(lockfile_err)?
             .into_parts()),
+        Some("bun.lock") => Ok(crate::bun::parse(&body).map_err(lockfile_err)?.into_parts()),
         _ => parse_lockfile(&body).map_err(|e| NpmError::db(path, e)),
     }
 }

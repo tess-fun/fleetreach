@@ -89,5 +89,13 @@ branches are never pushed, and only `fleetreach/*` branches are ever pushed (wit
 advisories, flags a breaking jump, states the verification, and names the other repos in the
 same campaign. Nothing is merged for you.
 
-`fix status` lists every repo's `fleetreach/*` pull requests with their state, title and
-link.
+On GitLab the same flags open **merge requests** with the GitLab CLI (`glab`, using your
+existing login, gitlab.com or self-managed): an open merge request from the branch is
+updated, otherwise one is created. The forge is picked per repo from the host of its
+`origin` remote (a host containing `gitlab` means GitLab, anything else GitHub); pass
+`--forge gitlab` or `--forge github` when the host does not say, such as a self-managed
+GitLab at `code.example.com`.
+
+`fix status` lists every repo's `fleetreach/*` pull or merge requests with their state
+(`OPEN`, `MERGED`, `CLOSED`, for both forges), title, link and forge. It takes the same
+`--forge`.

@@ -106,6 +106,36 @@ fn npm_repo_scans_against_osv_mirror() {
     assert_eq!(vuln["occurrences"][0]["package"], "lodash");
 }
 
+#[test]
+fn bun_lock_is_read_like_any_npm_lockfile() {
+    let out = run(&[
+        "scan",
+        "-c",
+        &cfg("fleet-bun.toml"),
+        "--db",
+        &db(),
+        "--npm-vuln-db",
+        &file_url("npm-osv"),
+        "-f",
+        "json",
+        "-q",
+    ]);
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(
+        value["vulnerabilities"][0]["advisory_id"],
+        "GHSA-p6mc-m468-83gw"
+    );
+    let occurrence = &value["vulnerabilities"][0]["occurrences"][0];
+    assert_eq!(occurrence["package"], "lodash");
+    assert_eq!(occurrence["dependency_kind"], "direct");
+    assert!(
+        value["coverage"].as_array().is_none_or(Vec::is_empty),
+        "{}",
+        value["coverage"]
+    );
+}
+
 /// Lay out a temp OSV directory the way osv.dev's bucket does, with the npm fixture records
 /// under `npm/`.
 fn osv_dir_with_npm(tag: &str) -> PathBuf {
@@ -483,6 +513,86 @@ fn sbom_writes_one_deterministic_cyclonedx_bom_per_repo() {
 }
 
 #[test]
+fn sbom_embeds_a_saved_scans_findings_in_both_formats() {
+    let tmp = std::env::temp_dir().join(format!("fleetreach-sbom-vulns-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).unwrap();
+    let scan = run(&[
+        "scan",
+        "-q",
+        "-c",
+        &cfg("fleet-vuln.toml"),
+        "--db",
+        &db(),
+        "-f",
+        "json",
+    ]);
+    let mut report: serde_json::Value = serde_json::from_str(&stdout(&scan)).unwrap();
+    let report_path = tmp.join("report.json");
+    let sbom = |format: &str, report: &serde_json::Value| {
+        std::fs::write(&report_path, report.to_string()).unwrap();
+        let out = run(&[
+            "sbom",
+            "-q",
+            "-c",
+            &cfg("fleet-vuln.toml"),
+            "-o",
+            tmp.to_str().unwrap(),
+            "-f",
+            format,
+            "--report",
+            report_path.to_str().unwrap(),
+        ]);
+        assert_eq!(code(&out), 0, "{}", stderr(&out));
+        let ext = if format == "spdx" { "spdx" } else { "cdx" };
+        let text = std::fs::read_to_string(tmp.join(format!("app.{ext}.json"))).unwrap();
+        serde_json::from_str::<serde_json::Value>(&text).unwrap()
+    };
+
+    let bom = sbom("cyclonedx", &report);
+    let vuln = &bom["vulnerabilities"][0];
+    assert_eq!(vuln["id"], "RUSTSEC-2099-0001");
+    assert_eq!(vuln["affects"][0]["ref"], "pkg:cargo/fixturevuln@1.0.0");
+    assert_eq!(vuln["ratings"][0]["score"], 9.8);
+    assert_eq!(vuln["ratings"][0]["severity"], "critical");
+    assert_eq!(vuln["analysis"]["state"], "in_triage");
+
+    let spdx = sbom("spdx", &report);
+    let package = spdx["packages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["name"] == "fixturevuln")
+        .unwrap();
+    let advisory = package["externalRefs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["referenceType"] == "advisory")
+        .unwrap();
+    assert_eq!(advisory["referenceCategory"], "SECURITY");
+    assert!(
+        advisory["comment"]
+            .as_str()
+            .unwrap()
+            .starts_with("RUSTSEC-2099-0001: in triage"),
+        "{advisory}"
+    );
+
+    // A sound static verdict is the only way to `not_affected`.
+    report["vulnerabilities"][0]["reachability"] = serde_json::json!({
+        "verdict": { "kind": "not_reachable" },
+        "config": "default",
+        "engine": "test",
+        "targets": [],
+    });
+    let bom = sbom("cyclonedx", &report);
+    let analysis = &bom["vulnerabilities"][0]["analysis"];
+    assert_eq!(analysis["state"], "not_affected");
+    assert_eq!(analysis["justification"], "code_not_reachable");
+}
+
+#[test]
 fn sbom_of_an_unreadable_source_exits_2() {
     let out_dir =
         std::env::temp_dir().join(format!("fleetreach-sbom-errored-{}", std::process::id()));
@@ -660,6 +770,113 @@ fn fix_plans_applies_and_verifies_a_lock_bump_on_a_branch() {
         "{message}"
     );
     assert!(!message.to_lowercase().contains("co-authored"), "{message}");
+
+    // 4. GitLab: push to `origin` and open a merge request with `glab` (a fake one here that
+    // records its arguments), then update it on a second run, and list it.
+    let origin = root.join("origin.git");
+    git_in(&root, &["init", "-q", "--bare", origin.to_str().unwrap()]);
+    git_in(
+        &repo,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let glab = bin.join("glab");
+    std::fs::write(
+        &glab,
+        r#"#!/bin/sh
+echo "$*" >> "$FAKE_GLAB_LOG"
+case "$1 $2" in
+  "mr list") cat "$FAKE_GLAB_STATE" 2>/dev/null || echo '[]' ;;
+  "mr create")
+    while [ $# -gt 0 ]; do [ "$1" = "--source-branch" ] && b="$2"; shift; done
+    printf '[{"iid":7,"web_url":"https://gitlab.example/acme/ci-repo/-/merge_requests/7","source_branch":"%s","state":"opened","title":"t"}]' "$b" > "$FAKE_GLAB_STATE"
+    echo "!7 created" ;;
+esac
+"#,
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&glab, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let log = root.join("glab.log");
+    let state = root.join("glab.json");
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let mut gl_env = env.clone();
+    gl_env.push(("PATH", std::ffi::OsStr::new(&path)));
+    gl_env.push(("FAKE_GLAB_LOG", log.as_os_str()));
+    gl_env.push(("FAKE_GLAB_STATE", state.as_os_str()));
+    let open_mr = || {
+        let out = run_env(
+            &[
+                "fix",
+                "apply",
+                "-q",
+                "-c",
+                &fleet,
+                plan_path.to_str().unwrap(),
+                "--open-pr",
+                "--forge",
+                "gitlab",
+                "--",
+                "--db",
+                &db,
+                "--ghactions-vuln-db",
+                &osv,
+            ],
+            &gl_env,
+        );
+        assert_eq!(code(&out), 0, "stderr: {}", stderr(&out));
+        let applied: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+        applied[0].clone()
+    };
+    let first = open_mr();
+    assert!(
+        first["detail"]
+            .as_str()
+            .unwrap()
+            .ends_with("pushed; merge request opened"),
+        "{first}"
+    );
+    assert_eq!(
+        first["pull_request"],
+        "https://gitlab.example/acme/ci-repo/-/merge_requests/7"
+    );
+    assert_eq!(
+        git_in(&origin, &["rev-parse", &branch]),
+        git_in(&repo, &["rev-parse", &branch])
+    );
+    let second = open_mr();
+    assert!(
+        second["detail"]
+            .as_str()
+            .unwrap()
+            .ends_with("merge request updated"),
+        "{second}"
+    );
+    let calls = std::fs::read_to_string(&log).unwrap();
+    assert!(
+        calls.contains(&format!("mr create --source-branch {branch} --title")),
+        "{calls}"
+    );
+    assert!(calls.contains("mr update 7 --title"), "{calls}");
+    assert!(calls.contains("--yes"), "{calls}");
+
+    let out = run_env(
+        &["fix", "status", "-c", &fleet, "--forge", "gitlab"],
+        &gl_env,
+    );
+    assert_eq!(code(&out), 0, "stderr: {}", stderr(&out));
+    let rows: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(rows[0]["state"], "OPEN", "{rows}");
+    assert_eq!(rows[0]["forge"], "gitlab");
+    assert_eq!(rows[0]["branch"], branch.as_str());
 }
 
 #[test]
@@ -769,7 +986,7 @@ fn finding_keys(report: &serde_json::Value) -> Vec<(String, String, String, Stri
 
 #[test]
 fn an_sbom_written_by_fleetreach_scans_back_to_the_same_findings() {
-    for (fleet, repo, flag, osv) in [
+    for ((fleet, repo, flag, osv), (format, ext)) in [
         ("fleet-py.toml", "py-req", "--pypi-vuln-db", "pypi-osv"),
         (
             "fleet-dotnet.toml",
@@ -777,9 +994,14 @@ fn an_sbom_written_by_fleetreach_scans_back_to_the_same_findings() {
             "--nuget-vuln-db",
             "nuget-osv",
         ),
-    ] {
-        let tmp =
-            std::env::temp_dir().join(format!("fleetreach-sbom-in-{repo}-{}", std::process::id()));
+    ]
+    .into_iter()
+    .flat_map(|case| [(case, ("cyclonedx", "cdx")), (case, ("spdx", "spdx"))])
+    {
+        let tmp = std::env::temp_dir().join(format!(
+            "fleetreach-sbom-in-{repo}-{ext}-{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         // 1. Scan the lockfiles directly, and write the SBOM.
@@ -796,11 +1018,20 @@ fn an_sbom_written_by_fleetreach_scans_back_to_the_same_findings() {
             "json",
         ]);
         let direct: serde_json::Value = serde_json::from_str(&stdout(&direct)).unwrap();
-        let out = run(&["sbom", "-q", "-c", &cfg(fleet), "-o", tmp.to_str().unwrap()]);
+        let out = run(&[
+            "sbom",
+            "-q",
+            "-c",
+            &cfg(fleet),
+            "-o",
+            tmp.to_str().unwrap(),
+            "-f",
+            format,
+        ]);
         assert_eq!(code(&out), 0, "{}", stderr(&out));
         // 2. Scan the SBOM instead.
         let repo_path = manifest().join("tests/fixtures/repos").join(repo);
-        let bom = tmp.join(format!("{repo}.cdx.json"));
+        let bom = tmp.join(format!("{repo}.{ext}.json"));
         let fleet_from_sbom = tmp.join("fleet.toml");
         std::fs::write(
             &fleet_from_sbom,
@@ -828,7 +1059,11 @@ fn an_sbom_written_by_fleetreach_scans_back_to_the_same_findings() {
             !want.is_empty(),
             "{repo}: the direct scan should find something"
         );
-        assert_eq!(finding_keys(&from_sbom), want, "{repo}: SBOM round trip");
+        assert_eq!(
+            finding_keys(&from_sbom),
+            want,
+            "{repo}: {format} round trip"
+        );
     }
 }
 

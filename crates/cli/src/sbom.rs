@@ -1,15 +1,16 @@
-//! `fleetreach sbom`: write one CycloneDX 1.6 JSON SBOM per repo (spec 05, phase 1).
+//! `fleetreach sbom`: write one CycloneDX 1.6 (or SPDX 2.3) JSON SBOM per repo (spec 05).
 //!
 //! Reads the same sources `scan` reads (lockfiles and manifests, every ecosystem), needs no
 //! advisory DB and no network unless `--sync` refreshes fleet sources. Exit `0` when every
 //! repo was read in full, `2` when any source could not be read (its BOM is still written,
 //! marked incomplete) or the run itself failed: a partial inventory is never presented as a
-//! complete one.
+//! complete one. `--report` embeds a saved scan's findings: CycloneDX `vulnerabilities[]`,
+//! or SPDX security references.
 
 use std::path::PathBuf;
 
-use clap::Args;
-use fleetreach_report::{sanitize_cell, to_cyclonedx};
+use clap::{Args, ValueEnum};
+use fleetreach_report::{sanitize_cell, to_cyclonedx, to_cyclonedx_with_vulns, to_spdx};
 
 use crate::cli::fail;
 use crate::config::Config;
@@ -21,9 +22,16 @@ pub struct SbomArgs {
     /// fleet.toml naming the repos
     #[arg(short, long, default_value = "./fleet.toml")]
     config: PathBuf,
-    /// Directory to write `<repo-id>.cdx.json` files into (created if missing)
+    /// Directory to write `<repo-id>.cdx.json` (or `.spdx.json`) files into (created if
+    /// missing)
     #[arg(short, long)]
     out_dir: PathBuf,
+    /// SBOM format
+    #[arg(short, long, value_enum, default_value_t = BomFormat::Cyclonedx)]
+    format: BomFormat,
+    /// Embed this saved scan's findings (`fleetreach scan -f json > report.json`)
+    #[arg(long)]
+    report: Option<PathBuf>,
     /// List `[[source]]` entries afresh and clone or refresh their checkouts first
     #[arg(long)]
     sync: bool,
@@ -35,7 +43,24 @@ pub struct SbomArgs {
     fetch_licenses: bool,
 }
 
+#[derive(Clone, Copy, ValueEnum)]
+enum BomFormat {
+    /// CycloneDX 1.6 JSON
+    Cyclonedx,
+    /// SPDX 2.3 JSON
+    Spdx,
+}
+
 pub fn run_sbom(args: SbomArgs) -> u8 {
+    let report = match args
+        .report
+        .as_ref()
+        .map(crate::diff::read_report)
+        .transpose()
+    {
+        Ok(r) => r,
+        Err(e) => return fail(&e),
+    };
     let mut config = match Config::load(&args.config) {
         Ok(c) => c,
         Err(e) => return fail(&e.to_string()),
@@ -76,13 +101,22 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
             inv.url = Some(p.url.clone());
             inv.commit = Some(p.commit.clone());
         }
-        let bom = match to_cyclonedx(&inv, env!("CARGO_PKG_VERSION"), Some(&timestamp)) {
+        let version = env!("CARGO_PKG_VERSION");
+        let (bom, extension) = match (args.format, &report) {
+            (BomFormat::Cyclonedx, None) => (to_cyclonedx(&inv, version, Some(&timestamp)), "cdx"),
+            (BomFormat::Cyclonedx, Some(r)) => (
+                to_cyclonedx_with_vulns(&inv, r, version, Some(&timestamp)),
+                "cdx",
+            ),
+            (BomFormat::Spdx, r) => (to_spdx(&inv, r.as_ref(), version, &timestamp), "spdx"),
+        };
+        let bom = match bom {
             Ok(bom) => bom,
             Err(e) => return fail(&format!("{}: {e}", repo.id)),
         };
         let file = args
             .out_dir
-            .join(format!("{}.cdx.json", file_stem(&repo.id.0)));
+            .join(format!("{}.{extension}.json", file_stem(&repo.id.0)));
         if let Err(e) = std::fs::write(&file, bom) {
             return fail(&format!("{}: {e}", file.display()));
         }

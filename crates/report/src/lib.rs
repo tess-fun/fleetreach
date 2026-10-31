@@ -64,9 +64,11 @@ use fleetreach_core::{
 use serde::Serialize;
 
 mod cyclonedx;
+mod spdx;
 mod ssvc;
 mod vex;
-pub use cyclonedx::{to_cyclonedx, CYCLONEDX_SPEC_VERSION};
+pub use cyclonedx::{to_cyclonedx, to_cyclonedx_with_vulns, CYCLONEDX_SPEC_VERSION};
+pub use spdx::{to_spdx, SPDX_VERSION};
 pub use ssvc::{to_owners, to_ssvc};
 pub use vex::{
     project, purl, to_vex, HumanAssertion, StatementView, VexParams, VexScope, OPENVEX_CONTEXT,

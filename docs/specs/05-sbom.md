@@ -1,6 +1,6 @@
 # Spec 05: SBOM output and input
 
-Status: draft · Gap: #5 (interop/compliance) · CTEM stage: discovery, interop · Effort: M
+Status: implemented (output and input released; SPDX output and `--report` vulnerabilities unreleased; component hashes, `sbom_discover` and XML not done) · Gap: #5 (interop/compliance) · CTEM stage: discovery, interop · Effort: M
 
 ## Problem
 
