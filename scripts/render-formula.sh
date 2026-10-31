@@ -49,8 +49,10 @@ class Fleetreach < Formula
     end
   end
 
-  # Fleet sources (\`[[source]]\`, \`fleetreach fleet sync\`) clone repos with git.
-  depends_on "git" => :recommended
+  # Fleet sources (\`[[source]]\`, \`fleetreach fleet sync\`) clone repos with the system git
+  # (macOS ships one; Homebrew on Linux requires one). No git dependency: Homebrew installs
+  # :recommended ones by default, and on platforms without a git bottle it builds git from
+  # source, pulling in a toolchain for a prebuilt binary.
 
   def install
     bin.install "fleetreach"
