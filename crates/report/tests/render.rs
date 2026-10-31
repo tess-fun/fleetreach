@@ -210,6 +210,47 @@ fn sarif_result_carries_dependency_kind() {
     assert_eq!(kind_of("RUSTSEC-2099-0001"), "transitive");
 }
 
+#[test]
+fn sarif_fingerprints_are_per_repo_and_package_and_survive_a_bump() {
+    // One advisory in two repos and two packages: four distinct alerts, although every
+    // result points at the same location.
+    let mut v = a_vuln();
+    v.occurrences = vec![
+        fixable("r1", "foo", "1.0.0", ">=2.0.0"),
+        fixable("r2", "foo", "1.0.0", ">=2.0.0"),
+        fixable("r1", "bar", "1.0.0", ">=2.0.0"),
+        fixable("r2", "bar", "1.0.0", ">=2.0.0"),
+    ];
+    let prints = |r: &FleetReport| -> Vec<String> {
+        sarif_value(r, &[])["runs"][0]["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|res| {
+                res["partialFingerprints"]["fleetreach/v1"]
+                    .as_str()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect()
+    };
+    let before = prints(&report(vec![v.clone()]));
+    let distinct: std::collections::BTreeSet<&String> = before.iter().collect();
+    assert_eq!(distinct.len(), 4, "{before:?}");
+
+    // A bump that does not fix it (1.0.0 -> 1.5.0) keeps the same alert identity.
+    v.occurrences = vec![fixable("r1", "foo", "1.5.0", ">=2.0.0")];
+    assert_eq!(prints(&report(vec![v])), vec![before[0].clone()]);
+
+    let run = sarif_value(&report(vec![a_vuln()]), &[]);
+    let fp = &run["runs"][0]["results"][0]["partialFingerprints"];
+    let line_hash = fp["primaryLocationLineHash"].as_str().unwrap();
+    assert_eq!(
+        line_hash,
+        format!("{}:1", fp["fleetreach/v1"].as_str().unwrap())
+    );
+}
+
 fn sarif_value(r: &FleetReport, approved: &[HumanAssertion]) -> serde_json::Value {
     let s = fleetreach_report::to_sarif(r, approved).unwrap();
     serde_json::from_str(&s).unwrap()

@@ -68,6 +68,10 @@ report-only.
 fleetreach can also emit and consume **OpenVEX** (`-f vex`) for cross-tool
 suppression with Grype and Trivy.
 
+Each result carries a stable `partialFingerprints` value derived from the advisory,
+ecosystem, repo and package (not the installed version), so code scanning tracks one alert
+per finding across scans, and an alert survives a bump that does not fix it.
+
 ## Resolving the real build
 
 With `--resolve-features` (needs the repo's buildable source), each finding is

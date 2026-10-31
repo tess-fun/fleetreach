@@ -135,6 +135,7 @@ pub fn to_sarif(
                 v.advisory_id.clone(),
                 sarif_level(v.severity),
                 &v.title,
+                &format!("{:?}", v.ecosystem),
                 occ,
                 suppression,
             ));
@@ -143,7 +144,14 @@ pub fn to_sarif(
     for w in &report.warnings {
         let id = warn_rule_id(w);
         for occ in &w.occurrences {
-            results.push(sarif_result(id.clone(), "warning", &w.title, occ, None));
+            results.push(sarif_result(
+                id.clone(),
+                "warning",
+                &w.title,
+                "Cargo",
+                occ,
+                None,
+            ));
         }
     }
     // Approved human assertions (§11), re-injected as suppressed results.
@@ -247,6 +255,25 @@ struct SarifResult {
     suppressions: Vec<SarifSuppression>,
     #[serde(skip_serializing_if = "Option::is_none")]
     properties: Option<SarifResultProps>,
+    /// Stable identity for the result across scans, so code scanning keeps one alert per
+    /// advisory, repo and package with its history instead of keying on the location (every
+    /// result points at the lockfile, so line-based fingerprints would merge them).
+    #[serde(rename = "partialFingerprints")]
+    partial_fingerprints: BTreeMap<&'static str, String>,
+}
+
+/// The fingerprints for a result identified by `parts` (advisory, repo, package, ...). The
+/// installed version is deliberately left out: an alert should survive a bump that does not
+/// fix it. `primaryLocationLineHash` is the key GitHub code scanning reads; our value
+/// replaces its line hash, which would be identical for every result here.
+fn fingerprints(parts: &[&str]) -> BTreeMap<&'static str, String> {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(parts.join("\u{1f}").as_bytes());
+    let hex: String = digest.iter().take(16).map(|b| format!("{b:02x}")).collect();
+    BTreeMap::from([
+        ("fleetreach/v1", hex.clone()),
+        ("primaryLocationLineHash", format!("{hex}:1")),
+    ])
 }
 
 /// Per-result property bag. `dependencyKind` lets a SARIF consumer distinguish a
@@ -305,6 +332,7 @@ fn human_sarif_result(a: &HumanAssertion) -> SarifResult {
             justification: format!("VEX not_affected: {reason}; approved_by {approver}"),
         }],
         properties: None,
+        partial_fingerprints: fingerprints(&["human", &a.advisory_id, &a.package]),
     }
 }
 
@@ -326,6 +354,7 @@ fn sarif_result(
     rule_id: String,
     level: &'static str,
     title: &str,
+    ecosystem: &str,
     occ: &Occurrence,
     suppression: Option<String>,
 ) -> SarifResult {
@@ -378,6 +407,13 @@ fn sarif_result(
         }),
         Occurrence::Toolchain { .. } => None,
     };
+    let partial_fingerprints = match occ {
+        Occurrence::InRepo { repo, package, .. } => {
+            fingerprints(&[&rule_id, ecosystem, &repo.0, package])
+        }
+        // The channel names the toolchain version, which an upgrade changes.
+        Occurrence::Toolchain { .. } => fingerprints(&[&rule_id, "toolchain"]),
+    };
     SarifResult {
         rule_id,
         level,
@@ -391,6 +427,7 @@ fn sarif_result(
             .into_iter()
             .collect(),
         properties,
+        partial_fingerprints,
     }
 }
 

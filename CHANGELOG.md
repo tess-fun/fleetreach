@@ -13,6 +13,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the same include/exclude globs, topics, archived and fork filters and sparse checkouts as
   GitHub. `GITLAB_TOKEN` (or `token_env`) authenticates private groups.
 
+- **Stable SARIF fingerprints.** Every result carries `partialFingerprints` keyed on the
+  advisory, ecosystem, repo and package (not the version), so GitHub code scanning keeps one
+  alert per finding with its history across scans and through bumps that do not fix it.
+  Before, every result pointed at the same lockfile location, so code scanning could merge
+  the same advisory across repos or packages into one alert.
+
 ### Changed
 
 - Repo ids from fleet sources keep the full namespace path of nested URLs
