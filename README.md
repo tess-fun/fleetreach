@@ -42,6 +42,8 @@ lightweight, CLI-native, **fleet-wide** auditing.
   *server you operate*: stand up the platform, ingest CycloneDX SBOMs, host a
   database and a web UI. `fleetreach` is a single binary you run from CI or a
   shell against a `fleet.toml`. No server, no SBOM pipeline, no state to host.
+  It also writes the CycloneDX SBOMs Dependency-Track ingests (`fleetreach sbom`), so the
+  two can be paired rather than chosen between.
 - **For Rust specifically.** It adds a *sound* static reachability mode (a MIR
   call-graph analysis with a witness chain) that most open-source scanners lack,
   on top of a fail-closed CI contract where a falsely-clean report is treated as
@@ -105,6 +107,7 @@ fleetreach scan --why serde            # how does `serde` get into the tree?
 fleetreach db sync                     # fetch the OSV exports the fleet needs (network build)
 fleetreach db status                   # what is cached, and how old
 fleetreach fleet sync                  # clone/refresh repos named by [[source]] entries
+fleetreach sbom -c fleet.toml -o boms/ # one CycloneDX 1.6 SBOM per repo
 fleetreach scan -c fleet.toml --sync   # sync sources, then scan
 fleetreach scan -c fleet.toml --osv-dir ./osv  # air-gapped: one dir of osv.dev exports
 fleetreach scan -c fleet.toml --require-full-coverage  # exit 2 if any source was only partly read

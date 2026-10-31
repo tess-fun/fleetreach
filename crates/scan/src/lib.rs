@@ -233,6 +233,63 @@ pub fn scan_lockfile(
     })
 }
 
+/// Every package in a `Cargo.lock`, for SBOM output. Workspace members and other path crates
+/// are the project itself, so they are not listed; what they depend on is direct. Edges are
+/// by crate name, as the lockfile records them.
+///
+/// # Errors
+///
+/// [`ScanError::Lockfile`] if the file cannot be read or parsed, failing closed.
+pub fn lockfile_inventory(
+    lockfile_path: &Path,
+) -> Result<fleetreach_core::inventory::SourceInventory, ScanError> {
+    use fleetreach_core::inventory::{Package as InvPackage, SourceInventory, ROOT};
+    let lockfile = Lockfile::load(lockfile_path).map_err(|e| ScanError::Lockfile {
+        path: lockfile_path.display().to_string(),
+        message: e.to_string(),
+    })?;
+    let local: std::collections::BTreeSet<&str> = lockfile
+        .packages
+        .iter()
+        .filter(|p| dep_source(p) == DepSource::Path)
+        .map(|p| p.name.as_str())
+        .collect();
+    let direct: std::collections::BTreeSet<&str> = lockfile
+        .packages
+        .iter()
+        .filter(|p| local.contains(p.name.as_str()))
+        .flat_map(|p| p.dependencies.iter().map(|d| d.name.as_str()))
+        .filter(|name| !local.contains(name))
+        .collect();
+    let mut edges = Vec::new();
+    let mut packages = Vec::new();
+    for package in &lockfile.packages {
+        let name = package.name.as_str();
+        let from = if local.contains(name) { ROOT } else { name };
+        for dep in &package.dependencies {
+            if !local.contains(dep.name.as_str()) {
+                edges.push((from.to_string(), dep.name.as_str().to_string()));
+            }
+        }
+        if !local.contains(name) {
+            packages.push(
+                InvPackage::new(
+                    name,
+                    package.version.to_string(),
+                    direct.contains(name),
+                    false,
+                )
+                .with_source(dep_source(package)),
+            );
+        }
+    }
+    edges.sort();
+    edges.dedup();
+    let mut inv = SourceInventory::new(fleetreach_core::Ecosystem::Cargo, "Cargo.lock", packages);
+    inv.edges = edges;
+    Ok(inv)
+}
+
 /// The toolchain advisory streams (`Collection::Rust`). These are global — a
 /// `std`/`rustc` soundness issue is not tied to any repo — so each finding's
 /// occurrence is [`Occurrence::Toolchain`].

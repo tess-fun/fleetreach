@@ -10,6 +10,7 @@
 
 use std::path::Path;
 
+use fleetreach_core::inventory::{Package, SourceInventory};
 use fleetreach_core::osv::{sort_dedup_findings, Match, TierCFinding, TierCScan};
 use fleetreach_core::semver::VersionReq;
 use fleetreach_core::{DepGraph, Ecosystem, RepoId, VulnFinding};
@@ -102,8 +103,30 @@ pub fn has_python_sources(dir: &Path) -> bool {
         || !requirements::requirements_files(dir).is_empty()
 }
 
+/// Every package the directory's preferred Python source declares, for SBOM output: the
+/// same source selection as [`scan_offline`], with its coverage.
+///
+/// # Errors
+///
+/// As [`scan_offline`].
+pub fn inventory(repo_dir: &Path) -> Result<SourceInventory, PyPiError> {
+    let source = read_sources(repo_dir)?;
+    let packages = dedupe(source.packages)
+        .into_iter()
+        .map(|p| Package::new(p.name, p.version, p.direct, p.dev))
+        .collect();
+    let mut inv =
+        SourceInventory::new(Ecosystem::Pypi, source.name, packages).with_graph(&source.graph);
+    for gap in source.coverage {
+        inv = inv.with_gap(gap.level, format!("{}: {}", gap.source, gap.reason));
+    }
+    Ok(inv)
+}
+
 /// What one directory's Python dependency sources hold.
 struct Sources {
+    /// The file (or files) read, for display.
+    name: String,
     packages: Vec<InstalledPackage>,
     graph: DepGraph,
     coverage: Vec<SourceCoverage>,
@@ -116,24 +139,37 @@ fn read_sources(repo_dir: &Path) -> Result<Sources, PyPiError> {
     if let Some((kind, lock_path)) = detect(repo_dir) {
         let (packages, graph) = installed_packages(kind, &lock_path, repo_dir)?;
         return Ok(Sources {
+            name: file_name(&lock_path),
             packages,
             graph,
             coverage: Vec::new(),
             non_registry: 0,
         });
     }
-    if !pylock::pylock_files(repo_dir).is_empty() {
+    let pylocks = pylock::pylock_files(repo_dir);
+    if !pylocks.is_empty() {
         let (packages, graph, non_registry) = pylock::read_dir(repo_dir)?;
         return Ok(Sources {
+            name: pylocks
+                .iter()
+                .map(|p| file_name(p))
+                .collect::<Vec<_>>()
+                .join(", "),
             packages,
             graph,
             coverage: Vec::new(),
             non_registry,
         });
     }
-    if !requirements::requirements_files(repo_dir).is_empty() {
+    let files = requirements::requirements_files(repo_dir);
+    if !files.is_empty() {
         let read = requirements::read_dir(repo_dir)?;
         return Ok(Sources {
+            name: files
+                .iter()
+                .map(|p| p.strip_prefix(repo_dir).unwrap_or(p).display().to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
             packages: read.packages,
             graph: read.graph,
             coverage: read.coverage,
@@ -148,6 +184,12 @@ fn read_sources(repo_dir: &Path) -> Result<Sources, PyPiError> {
              pylock.toml or requirements*.txt)",
         ),
     ))
+}
+
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 /// Build a finding if `adv` lists `pkg` as affected at `version` (a PEP 440 version).

@@ -62,9 +62,11 @@ use fleetreach_core::{
 };
 use serde::Serialize;
 
+mod cyclonedx;
 mod vex;
+pub use cyclonedx::{to_cyclonedx, CYCLONEDX_SPEC_VERSION};
 pub use vex::{
-    project, to_vex, HumanAssertion, StatementView, VexParams, VexScope, OPENVEX_CONTEXT,
+    project, purl, to_vex, HumanAssertion, StatementView, VexParams, VexScope, OPENVEX_CONTEXT,
 };
 
 /// The machine payload (§9). Pretty-printed; still clean through `jq`.

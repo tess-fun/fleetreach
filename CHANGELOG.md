@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`fleetreach sbom`: CycloneDX 1.6 SBOMs.** One BOM per repo from the same sources `scan`
+  reads, in all 12 ecosystems: a component per package with its purl (git dependencies keep
+  their remote and revision), dev-only packages as `scope: excluded`, the lockfiles'
+  dependency graph, and `compositions` that mark components from partly-read sources
+  `incomplete`. Deterministic (content-derived serial number, `SOURCE_DATE_EPOCH`); exit 2
+  if any source could not be read. Validated against the official CycloneDX 1.6 schema on
+  21 real repos (up to 13,291 packages), and against osv-scanner's package lists.
+
 - **Python without a lockfile.** The PyPI feeder now reads `pylock.toml` (PEP 751) and, when
   a repo has no Python lockfile at all, its requirements files (`requirements*.txt`,
   `*requirements.txt`, `requirements/*.txt`) with `-r` includes, `-c` constraints, hashes and

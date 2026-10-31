@@ -421,6 +421,88 @@ fn dotnet_repos_without_a_lockfile_scan_with_coverage_labels() {
 }
 
 #[test]
+fn sbom_writes_one_deterministic_cyclonedx_bom_per_repo() {
+    let out_dir = std::env::temp_dir().join(format!("fleetreach-sbom-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&out_dir);
+    let sbom = || {
+        run_env(
+            &[
+                "sbom",
+                "-q",
+                "-c",
+                &cfg("fleet-dotnet.toml"),
+                "-o",
+                out_dir.to_str().unwrap(),
+            ],
+            &[("SOURCE_DATE_EPOCH", std::ffi::OsStr::new("1793404800"))],
+        )
+    };
+    let out = sbom();
+    assert_eq!(code(&out), 0, "stderr: {}", stderr(&out));
+    let read =
+        |repo: &str| std::fs::read_to_string(out_dir.join(format!("{repo}.cdx.json"))).unwrap();
+    let first = read("dotnet-restored");
+    let bom: serde_json::Value = serde_json::from_str(&first).unwrap();
+    assert_eq!(bom["bomFormat"], "CycloneDX");
+    assert_eq!(bom["specVersion"], "1.6");
+    assert_eq!(bom["metadata"]["timestamp"], "2026-10-31T00:00:00Z");
+    let purls: Vec<&str> = bom["components"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["purl"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        purls,
+        vec![
+            "pkg:nuget/contoso.wrapper@1.0.0",
+            "pkg:nuget/newtonsoft.json@12.0.1"
+        ]
+    );
+    // The restore output is older than the project file, so the BOM says it is incomplete.
+    assert_eq!(bom["compositions"][0]["aggregate"], "incomplete", "{bom}");
+    let deps = bom["dependencies"].as_array().unwrap();
+    let wrapper = deps
+        .iter()
+        .find(|d| d["ref"] == "pkg:nuget/contoso.wrapper@1.0.0")
+        .unwrap();
+    assert_eq!(
+        wrapper["dependsOn"],
+        serde_json::json!(["pkg:nuget/newtonsoft.json@12.0.1"])
+    );
+    // packages.config is a full inventory.
+    let config: serde_json::Value = serde_json::from_str(&read("dotnet-config")).unwrap();
+    assert_eq!(
+        config["compositions"][0]["aggregate"], "complete",
+        "{config}"
+    );
+
+    // Byte-identical on a second run.
+    assert_eq!(code(&sbom()), 0);
+    assert_eq!(read("dotnet-restored"), first);
+}
+
+#[test]
+fn sbom_of_an_unreadable_source_exits_2() {
+    let out_dir =
+        std::env::temp_dir().join(format!("fleetreach-sbom-errored-{}", std::process::id()));
+    let out = run(&[
+        "sbom",
+        "-q",
+        "-c",
+        &cfg("fleet-errored.toml"),
+        "-o",
+        out_dir.to_str().unwrap(),
+    ]);
+    assert_eq!(code(&out), 2, "stderr: {}", stderr(&out));
+    assert!(
+        stderr(&out).contains("could not be read in full"),
+        "{}",
+        stderr(&out)
+    );
+}
+
+#[test]
 fn incomplete_coverage_is_reported_and_can_gate() {
     let args = |extra: &[&'static str]| {
         let mut v = vec![

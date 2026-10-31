@@ -9,6 +9,7 @@
 
 use std::path::Path;
 
+use fleetreach_core::inventory::{Package, SourceInventory};
 use fleetreach_core::osv::{sort_dedup_findings, Match, TierCFinding, TierCScan};
 use fleetreach_core::semver::VersionReq;
 use fleetreach_core::{Coverage, DepGraph, Ecosystem, RepoId, VulnFinding};
@@ -102,6 +103,40 @@ pub fn scan_offline_with_coverage(
         },
         coverage,
     })
+}
+
+/// Every package the directory's preferred NuGet source declares, for SBOM output: the same
+/// source selection as [`scan_offline`], with its coverage.
+///
+/// # Errors
+///
+/// As [`scan_offline`].
+pub fn inventory(repo_dir: &Path) -> Result<SourceInventory, NuGetError> {
+    let (installed, graph, coverage) = read_sources(repo_dir)?;
+    let name = if repo_dir.join("packages.lock.json").is_file() {
+        "packages.lock.json".to_string()
+    } else if repo_dir.join("obj").join("project.assets.json").is_file()
+        && !msbuild::project_files(repo_dir).is_empty()
+    {
+        "obj/project.assets.json".to_string()
+    } else if repo_dir.join("packages.config").is_file() {
+        "packages.config".to_string()
+    } else {
+        msbuild::project_files(repo_dir)
+            .iter()
+            .map(|p| file_name(p))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let packages = installed
+        .into_iter()
+        .map(|p| Package::new(p.name, p.version, p.direct, false))
+        .collect();
+    let mut inv = SourceInventory::new(Ecosystem::NuGet, name, packages).with_graph(&graph);
+    for gap in coverage {
+        inv = inv.with_gap(gap.level, format!("{}: {}", gap.source, gap.reason));
+    }
+    Ok(inv)
 }
 
 type Read = (Vec<InstalledPackage>, DepGraph, Vec<SourceCoverage>);

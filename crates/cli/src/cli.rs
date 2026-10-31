@@ -41,6 +41,8 @@ enum Commands {
     /// Discover and check out the repos named by `[[source]]` entries.
     #[command(subcommand)]
     Fleet(FleetCommand),
+    /// Write a CycloneDX 1.6 SBOM per repo from the same sources `scan` reads.
+    Sbom(crate::sbom::SbomArgs),
 }
 
 #[derive(Subcommand)]
@@ -78,6 +80,7 @@ pub fn dispatch(cli: Cli) -> u8 {
         Commands::Db(DbCommand::Status(args)) => crate::db_cmd::run_db_status(args),
         Commands::Fleet(FleetCommand::Sync(args)) => crate::db_cmd::run_fleet_sync(args),
         Commands::Fleet(FleetCommand::List(args)) => crate::db_cmd::run_fleet_list(args),
+        Commands::Sbom(args) => crate::sbom::run_sbom(args),
     }
 }
 

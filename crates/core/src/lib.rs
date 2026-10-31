@@ -43,6 +43,7 @@
 
 pub mod depgraph;
 mod finding;
+pub mod inventory;
 pub mod osv;
 mod outcome;
 mod remediation;

@@ -40,6 +40,18 @@ impl DepGraph {
         }
     }
 
+    /// The project the graph is rooted at.
+    pub fn root(&self) -> &str {
+        &self.root
+    }
+
+    /// Every `(from, to)` edge, sorted.
+    pub fn edges(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.edges
+            .iter()
+            .flat_map(|(from, tos)| tos.iter().map(move |to| (from.as_str(), to.as_str())))
+    }
+
     /// Whether the graph holds no edges (a flat lockfile with no resolvable tree).
     pub fn is_empty(&self) -> bool {
         self.edges.is_empty()

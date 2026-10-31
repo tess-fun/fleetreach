@@ -424,7 +424,7 @@ fn subcomponents(
     alias_rustbinary: bool,
 ) -> Vec<Component> {
     let path = purl_path(ecosystem, name);
-    let version = purl_encode(version);
+    let encoded_version = purl_encode(version);
     // §4.1: a non-crates.io dep is a *different artifact* than the registry crate of
     // the same name@version, so qualify its PURL with the source. crates.io (and a
     // local path, which has no canonical remote) stay the bare PURL — byte-identical to
@@ -432,17 +432,31 @@ fn subcomponents(
     // feeders carry no source, so they stay bare. Qualifier-matching by consumers is not
     // yet validated (see the module note); this only adds precision for the rare
     // git/alt-registry case.
-    let qualifier = purl_qualifier(source).unwrap_or_default();
     let mut out = vec![Component {
-        id: format!("pkg:{}/{path}@{version}{qualifier}", purl_type(ecosystem)),
+        id: purl(ecosystem, name, version, source),
     }];
     // The `pkg:rustbinary` alias is for Rust binary scanners only.
     if alias_rustbinary && ecosystem.is_cargo() {
         out.push(Component {
-            id: format!("pkg:rustbinary/{path}@{version}"),
+            id: format!("pkg:rustbinary/{path}@{encoded_version}"),
         });
     }
     out
+}
+
+/// The package URL of a package: `pkg:<type>/<name>@<version>`, with a `vcs_url` or
+/// `repository_url` qualifier for a git or alternate-registry Cargo dependency. Name and
+/// version come from untrusted lockfiles, so each segment is percent-encoded per the purl
+/// spec (no smuggled path or qualifier segments).
+#[must_use]
+pub fn purl(ecosystem: Ecosystem, name: &str, version: &str, source: &DepSource) -> String {
+    let qualifier = purl_qualifier(source).unwrap_or_default();
+    format!(
+        "pkg:{}/{}@{}{qualifier}",
+        purl_type(ecosystem),
+        purl_path(ecosystem, name),
+        purl_encode(version)
+    )
 }
 
 /// The PURL `type` for an ecosystem (the segment after `pkg:`), per the purl-spec / OSV

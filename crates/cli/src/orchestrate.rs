@@ -456,21 +456,21 @@ impl RepoResult {
 /// One thing to scan in a repo: an ecosystem and the repo narrowed to the directory holding its
 /// lockfile (`rel_dir`, empty for the root). Cargo is the exception: its unit is the whole repo,
 /// because the Cargo path discovers its own `Cargo.lock`s (honouring `glob`).
-struct ScanUnit {
-    ecosystem: Ecosystem,
-    repo: Repo,
-    rel_dir: String,
+pub(crate) struct ScanUnit {
+    pub(crate) ecosystem: Ecosystem,
+    pub(crate) repo: Repo,
+    pub(crate) rel_dir: String,
 }
 
 /// Everything found to scan in one repo, plus what could not be.
-struct RepoPlan {
+pub(crate) struct RepoPlan {
     id: RepoId,
-    units: Vec<ScanUnit>,
+    pub(crate) units: Vec<ScanUnit>,
     /// Directory-walk errors: an unreadable subdirectory may hide a lockfile, so the repo
     /// cannot be called clean.
-    walk_errors: Vec<String>,
+    pub(crate) walk_errors: Vec<String>,
     /// Lockfiles in formats no feeder reads, as coverage gaps.
-    unsupported: Vec<CoverageGap>,
+    pub(crate) unsupported: Vec<CoverageGap>,
 }
 
 /// Lockfile formats fleetreach cannot read; reported when no readable lockfile sits beside them.
@@ -488,7 +488,7 @@ const SKIPPED_DIRS: &[&str] = &["node_modules", ".git"];
 /// monorepo whose lockfiles live below the root is scanned in full instead of as its first
 /// detected ecosystem. GitHub Actions is scanned only when nothing else is found, and a repo
 /// with nothing at all falls back to Cargo, whose "no Cargo.lock found" is the honest gap.
-fn plan_repo(repo: &Repo) -> RepoPlan {
+pub(crate) fn plan_repo(repo: &Repo) -> RepoPlan {
     let unit = |ecosystem: Ecosystem, dir: &Path| {
         let rel_dir = dir
             .strip_prefix(&repo.path)
