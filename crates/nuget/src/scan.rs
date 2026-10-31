@@ -78,10 +78,7 @@ pub fn scan_offline_with_coverage(
 ) -> Result<NuGetScan, NuGetError> {
     let (installed, graph, coverage) = read_sources(repo_dir)?;
     let scan = scan_installed(&installed, &graph, db, repo);
-    Ok(NuGetScan {
-        scan,
-        coverage,
-    })
+    Ok(NuGetScan { scan, coverage })
 }
 
 /// Match packages that were already read (from an SBOM, say) against the DB, exactly as
