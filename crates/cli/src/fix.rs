@@ -38,6 +38,15 @@ pub enum FixCommand {
     Plan(FixPlanArgs),
     /// Apply a plan's lock bumps on local branches, each verified by a re-scan.
     Apply(FixApplyArgs),
+    /// List each repo's fleetreach pull requests and their state (via `gh`).
+    Status(FixStatusArgs),
+}
+
+#[derive(Args)]
+pub struct FixStatusArgs {
+    /// fleet.toml naming the repos
+    #[arg(short, long, default_value = "./fleet.toml")]
+    config: PathBuf,
 }
 
 #[derive(Args)]
@@ -68,6 +77,16 @@ pub struct FixApplyArgs {
     max_repos: usize,
     #[arg(short, long, help = "no progress output")]
     quiet: bool,
+    /// Push each verified branch to the repo's `origin` (only `fleetreach/*` branches;
+    /// unverified ones are never pushed)
+    #[arg(long)]
+    push: bool,
+    /// Open (or update) a pull request for each pushed branch with `gh`; implies --push
+    #[arg(long)]
+    open_pr: bool,
+    /// Open pull requests as drafts
+    #[arg(long)]
+    draft: bool,
     /// Flags for the verifying scan, after `--` (e.g. `-- --db ./advisory-db --osv-dir ./osv`)
     #[arg(last = true)]
     scan_args: Vec<String>,
@@ -77,6 +96,7 @@ pub fn run_fix(command: FixCommand) -> u8 {
     match command {
         FixCommand::Plan(args) => run_plan(&args),
         FixCommand::Apply(args) => run_apply(&args),
+        FixCommand::Status(args) => run_status(&args),
     }
 }
 
@@ -287,6 +307,9 @@ struct Applied {
     #[serde(skip_serializing_if = "Option::is_none")]
     branch: Option<String>,
     detail: String,
+    /// The pull request opened or updated for the branch.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pull_request: Option<String>,
 }
 
 fn run_apply(args: &FixApplyArgs) -> u8 {
@@ -327,6 +350,7 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
             outcome: Outcome::Skipped,
             branch: None,
             detail: why.to_string(),
+            pull_request: None,
         };
         if edit.strategy != Strategy::LockBump {
             results.push(skip(
@@ -349,7 +373,10 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
         if !args.quiet {
             eprintln!("{}: {} -> {} ...", edit.repo, edit.package, edit.to);
         }
-        let result = apply_one(edit, repo, &work_root, &args.scan_args);
+        let mut result = apply_one(edit, repo, &work_root, &args.scan_args);
+        if result.outcome == Outcome::Verified && (args.push || args.open_pr) {
+            publish(&mut result, edit, repo, &plan, args);
+        }
         if !args.quiet {
             eprintln!("  {:?}: {}", result.outcome, result.detail);
         }
@@ -362,11 +389,16 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
     }
     let count = |o: Outcome| results.iter().filter(|r| r.outcome == o).count();
     eprintln!(
-        "{} verified, {} unverified, {} blocked, {} skipped (nothing pushed)",
+        "{} verified, {} unverified, {} blocked, {} skipped{}",
         count(Outcome::Verified),
         count(Outcome::Unverified),
         count(Outcome::Blocked),
-        count(Outcome::Skipped)
+        count(Outcome::Skipped),
+        if args.push || args.open_pr {
+            ""
+        } else {
+            " (nothing pushed)"
+        }
     );
     // Like scan: 0 when everything planned was verified, 1 when some edit did not land.
     u8::from(count(Outcome::Unverified) + count(Outcome::Blocked) > 0)
@@ -381,6 +413,7 @@ fn apply_one(edit: &Edit, repo: &Repo, work_root: &Path, scan_args: &[String]) -
         outcome: Outcome::Blocked,
         branch: None,
         detail: String::new(),
+        pull_request: None,
     };
     let top = match git(&repo.path, &["rev-parse", "--show-toplevel"]) {
         Ok(t) => PathBuf::from(t),
@@ -495,6 +528,167 @@ fn apply_one(edit: &Edit, repo: &Repo, work_root: &Path, scan_args: &[String]) -
     out.branch = Some(branch);
     out.detail = detail;
     out
+}
+
+// ---- publish ----
+
+/// Push a verified branch and, with `--open-pr`, open or update its pull request.
+fn publish(result: &mut Applied, edit: &Edit, repo: &Repo, plan: &Plan, args: &FixApplyArgs) {
+    let Some(branch) = result.branch.clone() else {
+        return;
+    };
+    if !branch.starts_with("fleetreach/") {
+        return; // never push anything but our own branches
+    }
+    let top = match git(&repo.path, &["rev-parse", "--show-toplevel"]) {
+        Ok(t) => PathBuf::from(t),
+        Err(e) => {
+            result.detail.push_str(&format!("; push skipped: {e}"));
+            return;
+        }
+    };
+    // The branch is fleetreach's own, rebuilt from HEAD on every run, so a lease-protected
+    // force push is what keeps it current without touching anyone else's work.
+    if let Err(e) = git(
+        &top,
+        &[
+            "push",
+            "--quiet",
+            "--force-with-lease",
+            "origin",
+            &format!("{branch}:{branch}"),
+        ],
+    ) {
+        result.detail.push_str(&format!("; push failed: {e}"));
+        return;
+    }
+    result.detail.push_str("; pushed");
+    if !args.open_pr {
+        return;
+    }
+    let title = format!("fix(deps): bump {} to {}", edit.package, edit.to);
+    let body = pr_body(edit, plan);
+    let existing = run(Command::new("gh").current_dir(&top).args([
+        "pr", "list", "--head", &branch, "--state", "open", "--json", "url", "--jq", ".[0].url",
+    ]))
+    .ok()
+    .filter(|u| !u.is_empty());
+    let outcome = match &existing {
+        Some(url) => run(Command::new("gh")
+            .current_dir(&top)
+            .args(["pr", "edit", url, "--title", &title, "--body", &body]))
+        .map(|_| url.clone()),
+        None => {
+            let mut cmd = Command::new("gh");
+            cmd.current_dir(&top).args([
+                "pr", "create", "--head", &branch, "--title", &title, "--body", &body,
+            ]);
+            if args.draft {
+                cmd.arg("--draft");
+            }
+            run(&mut cmd).map(|out| out.lines().last().unwrap_or_default().to_string())
+        }
+    };
+    match outcome {
+        Ok(url) => {
+            result.detail.push_str(if existing.is_some() {
+                "; pull request updated"
+            } else {
+                "; pull request opened"
+            });
+            result.pull_request = Some(url);
+        }
+        Err(e) => result
+            .detail
+            .push_str(&format!("; pull request failed: {e}")),
+    }
+}
+
+/// The pull request description: what it fixes, how it was checked, and the campaign.
+fn pr_body(edit: &Edit, plan: &Plan) -> String {
+    let siblings: Vec<&str> = plan
+        .edits
+        .iter()
+        .filter(|e| e.campaign == edit.campaign && e.repo != edit.repo)
+        .map(|e| e.repo.as_str())
+        .collect();
+    let mut body = format!(
+        "Bumps `{}` from {} to {} ({}).\n\n**Fixes:** {}\n\n",
+        edit.package,
+        edit.from.join(", "),
+        edit.to,
+        ecosystem_name(edit.ecosystem),
+        edit.advisories.join(", ")
+    );
+    if edit.breaking {
+        body.push_str("**Breaking:** this crosses a major version; review the changelog.\n\n");
+    }
+    body.push_str(
+        "**Verified:** a fleetreach re-scan of this branch finds none of these advisories and \
+         nothing new. The update ran no package code.\n\n",
+    );
+    if siblings.is_empty() {
+        body.push_str(&format!("Campaign `{}`.", edit.campaign));
+    } else {
+        body.push_str(&format!(
+            "Campaign `{}`: the same bump in {} other repo(s): {}.",
+            edit.campaign,
+            siblings.len(),
+            siblings.join(", ")
+        ));
+    }
+    body.push_str("\n\n_Opened by `fleetreach fix apply --open-pr`._\n");
+    body
+}
+
+/// `fix status`: every `fleetreach/*` pull request of every repo, with its state.
+fn run_status(args: &FixStatusArgs) -> u8 {
+    let mut config = match Config::load(&args.config) {
+        Ok(c) => c,
+        Err(e) => return fail(&e.to_string()),
+    };
+    match sources::materialize(&config, false, true) {
+        Ok(m) => config.repos.extend(m.repos),
+        Err(e) => return fail(&e),
+    }
+    let mut rows = Vec::new();
+    let mut failed = 0usize;
+    for repo in &config.repos {
+        let listed = run(Command::new("gh").current_dir(&repo.path).args([
+            "pr",
+            "list",
+            "--state",
+            "all",
+            "--limit",
+            "200",
+            "--json",
+            "headRefName,state,url,title",
+        ]));
+        match listed
+            .and_then(|j| serde_json::from_str::<serde_json::Value>(&j).map_err(|e| e.to_string()))
+        {
+            Ok(prs) => {
+                for pr in prs.as_array().into_iter().flatten() {
+                    let head = pr["headRefName"].as_str().unwrap_or_default();
+                    if head.starts_with("fleetreach/") {
+                        rows.push(serde_json::json!({
+                            "repo": repo.id.0, "branch": head, "state": pr["state"],
+                            "title": pr["title"], "url": pr["url"],
+                        }));
+                    }
+                }
+            }
+            Err(e) => {
+                failed += 1;
+                eprintln!("error: {}: {e}", repo.id);
+            }
+        }
+    }
+    match serde_json::to_string_pretty(&rows) {
+        Ok(json) => println!("{json}"),
+        Err(e) => return fail(&e.to_string()),
+    }
+    u8::from(failed > 0) * 2
 }
 
 fn branch_name(edit: &Edit) -> String {

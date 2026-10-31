@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Fix pull requests.** `fix apply --push` pushes each verified `fleetreach/*` branch, and
+  `--open-pr [--draft]` opens a pull request for it with `gh`, or updates the open one on a
+  re-run. The description lists the advisories, flags breaking jumps, states the
+  verification and names the campaign's other repos. Unverified branches are never pushed.
+  `fix status` lists the pull requests of every repo. Tested against a real private repo.
+
 - **Typosquat signal.** `scan --signals` also flags npm, PyPI and Cargo dependencies one edit
   from a popular package they are not, against bundled lists (17,338 npm, 15,000 PyPI and
   5,000 crate names, refreshed by `scripts/update-popular.py`). Registry-equivalent spellings,

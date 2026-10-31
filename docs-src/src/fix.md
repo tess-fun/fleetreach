@@ -49,4 +49,22 @@ it was verified; an unverified one is for inspection, not for merging.
 `fix apply` prints a JSON summary (one entry per edit: `verified`, `unverified`, `blocked`
 or `skipped`, with the branch and what ran) and exits `0` only when everything planned was
 verified. `--repos a,b` limits it to some repos and `--max-repos` (default 20) caps a run.
-Nothing is pushed: review the branches, then push or open pull requests yourself.
+By default nothing is pushed.
+
+## Pull requests
+
+```sh
+fleetreach fix apply -c fleet.toml plan.json --open-pr [--draft] -- --db ./advisory-db
+fleetreach fix status -c fleet.toml
+```
+
+`--push` pushes each **verified** branch to the repo's `origin`; `--open-pr` also opens a
+pull request with the GitHub CLI (`gh`, using your existing login), or updates the open one
+when the branch already has a PR, so re-running a campaign never duplicates it. Unverified
+branches are never pushed, and only `fleetreach/*` branches are ever pushed (with
+`--force-with-lease`, since each run rebuilds them from `HEAD`). The description lists the
+advisories, flags a breaking jump, states the verification, and names the other repos in the
+same campaign. Nothing is merged for you.
+
+`fix status` lists every repo's `fleetreach/*` pull requests with their state, title and
+link.
