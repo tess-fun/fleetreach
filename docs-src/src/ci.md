@@ -99,8 +99,12 @@ safe.
   install script, packages fetched from git, a URL or a path, packages from a registry outside
   the public ones (add yours with `[settings.signals] registries = ["npm.example.com"]`; the
   whole host must match, so lookalike hosts are caught), registry packages with no checksum,
-  and third-party GitHub Actions pinned to a tag or branch their owner can move instead of a
-  commit SHA.
+  third-party GitHub Actions pinned to a tag or branch their owner can move instead of a
+  commit SHA, and possible typosquats: npm, PyPI and Cargo names one edit from a popular
+  package they are not (`crossenv` for `cross-env`). The popular names are bundled, so nothing
+  is sent anywhere; siblings in one npm scope and version-digit forks are not flagged. On a
+  9,000-name corpus of real projects it flagged 1.6 names per 1,000, all of them legitimate,
+  so treat a hit as a prompt to check the name, not as a verdict.
 - `--release-age 72h` flags dependency versions published less than that long ago: during a
   worm outbreak, the question is which repos pulled a version from the last few days. Publish
   times come from deps.dev, which sends each package's name and version; answers are cached.

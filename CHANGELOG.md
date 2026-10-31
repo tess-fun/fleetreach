@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Typosquat signal.** `scan --signals` also flags npm, PyPI and Cargo dependencies one edit
+  from a popular package they are not, against bundled lists (17,338 npm, 15,000 PyPI and
+  5,000 crate names, refreshed by `scripts/update-popular.py`). Registry-equivalent spellings,
+  siblings in one npm scope and version-digit forks are not flagged. Measured at 1.6 flags per
+  1,000 distinct names on real projects, all legitimate, so it stays opt-in.
+
 - **Release-age signal (`scan --release-age 72h`).** Warns on dependency versions published
   less than the given time ago, the question that matters during a worm outbreak. Publish
   times come from deps.dev (opt-in: it sends names and versions; cached), and a version

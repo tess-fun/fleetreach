@@ -125,7 +125,7 @@ pub fn fleet_signals(repos: &[Repo], extra_registries: &[String]) -> Vec<WarnFin
                 });
         }
     }
-    SIGNALS
+    let mut findings: Vec<WarnFinding> = SIGNALS
         .iter()
         .filter_map(|(id, title)| {
             let mut occurrences = by_signal.remove(id)?;
@@ -137,6 +137,54 @@ pub fn fleet_signals(repos: &[Repo], extra_registries: &[String]) -> Vec<WarnFin
                 title: (*title).to_string(),
                 occurrences,
             })
+        })
+        .collect();
+    findings.extend(typosquats(repos));
+    findings
+}
+
+/// One finding per popular package that a dependency's name imitates.
+fn typosquats(repos: &[Repo]) -> Vec<WarnFinding> {
+    let mut by_target: BTreeMap<(Ecosystem, String), Vec<Occurrence>> = BTreeMap::new();
+    for repo in repos {
+        let inv = crate::inventory::repo_inventory(repo);
+        for source in &inv.sources {
+            for p in &source.packages {
+                let Some(target) = crate::typosquat::lookalike(source.ecosystem, &p.name) else {
+                    continue;
+                };
+                by_target
+                    .entry((source.ecosystem, target))
+                    .or_default()
+                    .push(Occurrence::InRepo {
+                        repo: inv.repo.clone(),
+                        package: p.name.clone(),
+                        installed: lenient_version(&p.version),
+                        patched: Vec::new(),
+                        dependency_kind: if p.direct {
+                            DependencyKind::Direct
+                        } else {
+                            DependencyKind::Transitive
+                        },
+                        dependency_path: Vec::new(),
+                        active: None,
+                        source: Default::default(),
+                        scope: Default::default(),
+                    });
+            }
+        }
+    }
+    by_target
+        .into_iter()
+        .map(|((_, target), mut occurrences)| {
+            occurrences.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+            occurrences.dedup();
+            WarnFinding {
+                kind: WarnKind::Notice,
+                advisory_id: Some(format!("fleetreach:typosquat:{target}")),
+                title: format!("Name is one or two edits from the popular package `{target}` (possible typosquat)"),
+                occurrences,
+            }
         })
         .collect()
 }
