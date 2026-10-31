@@ -11,6 +11,7 @@ pub mod cli;
 pub mod config;
 pub mod db;
 pub mod db_cmd;
+pub mod depsdev;
 pub mod diff;
 pub mod enrich;
 pub mod fix;

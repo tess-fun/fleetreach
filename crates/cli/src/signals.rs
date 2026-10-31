@@ -341,6 +341,104 @@ fn actions(repo_root: &Path, hits: &mut Vec<Hit>) {
     }
 }
 
+/// `scan --release-age <duration>`: versions published less than `max_age_secs` ago, looked up
+/// on deps.dev (opt-in: it sends each package's name and version; answers are cached). A
+/// version deps.dev cannot date is reported under its own signal, never treated as old.
+///
+/// # Errors
+///
+/// When deps.dev lookups are unavailable (no cache directory, no network build).
+pub fn release_age(repos: &[Repo], max_age_secs: i64) -> Result<Vec<WarnFinding>, String> {
+    use crate::depsdev::{infos, system};
+    let now = time::OffsetDateTime::now_utc();
+    let inventories: Vec<_> = repos.iter().map(crate::inventory::repo_inventory).collect();
+    let mut keys = BTreeSet::new();
+    for inv in &inventories {
+        for source in &inv.sources {
+            if let Some(sys) = system(source.ecosystem) {
+                for p in &source.packages {
+                    keys.insert((sys.to_string(), p.name.clone(), p.version.clone()));
+                }
+            }
+        }
+    }
+    let (answers, _failed) = infos(&keys)?;
+    let mut recent: Vec<Occurrence> = Vec::new();
+    let mut undated: Vec<Occurrence> = Vec::new();
+    for inv in &inventories {
+        for source in &inv.sources {
+            let Some(sys) = system(source.ecosystem) else {
+                continue;
+            };
+            for p in &source.packages {
+                let key = (sys.to_string(), p.name.clone(), p.version.clone());
+                let published = answers
+                    .get(&key)
+                    .and_then(|i| i.as_ref())
+                    .and_then(|i| i.published.as_deref())
+                    .and_then(|t| {
+                        time::OffsetDateTime::parse(
+                            t,
+                            &time::format_description::well_known::Rfc3339,
+                        )
+                        .ok()
+                    });
+                let occ = Occurrence::InRepo {
+                    repo: inv.repo.clone(),
+                    package: p.name.clone(),
+                    installed: lenient_version(&p.version),
+                    patched: Vec::new(),
+                    dependency_kind: if p.direct {
+                        DependencyKind::Direct
+                    } else {
+                        DependencyKind::Transitive
+                    },
+                    dependency_path: Vec::new(),
+                    active: None,
+                    source: Default::default(),
+                    scope: Default::default(),
+                };
+                match published {
+                    Some(at) => {
+                        let age = (now - at).whole_seconds();
+                        if age < max_age_secs {
+                            recent.push(occ);
+                        }
+                    }
+                    None => undated.push(occ),
+                }
+            }
+        }
+    }
+    let hours = max_age_secs / 3600;
+    let mut out = Vec::new();
+    for (id, title, mut occurrences) in [
+        (
+            "fleetreach:recent-release",
+            format!("Version published less than {hours}h ago (not yet vetted by the ecosystem)"),
+            recent,
+        ),
+        (
+            "fleetreach:release-age-unknown",
+            "Publish time unknown (deps.dev has no date for this version)".to_string(),
+            undated,
+        ),
+    ] {
+        if occurrences.is_empty() {
+            continue;
+        }
+        occurrences.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        occurrences.dedup();
+        out.push(WarnFinding {
+            kind: WarnKind::Notice,
+            advisory_id: Some(id.to_string()),
+            title,
+            occurrences,
+        });
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]

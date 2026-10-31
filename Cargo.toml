@@ -88,7 +88,7 @@ comfy-table = "8"
 # content-addressed OpenVEX `@id` (§9.1) — pure-Rust RustCrypto, no vendored C
 sha2 = "0.11"
 # RFC3339 timestamps + DB age
-time = { version = "0.3", features = ["formatting", "std"] }
+time = { version = "0.3", features = ["formatting", "parsing", "std"] }
 
 # Release binaries (.github/workflows/release.yml): smaller and faster than plain
 # `release`, at the cost of a longer build. `cargo install` keeps the default profile.

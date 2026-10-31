@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Release-age signal (`scan --release-age 72h`).** Warns on dependency versions published
+  less than the given time ago, the question that matters during a worm outbreak. Publish
+  times come from deps.dev (opt-in: it sends names and versions; cached), and a version
+  deps.dev cannot date is listed separately, never treated as old. `licenses --fetch` and
+  this signal share one deps.dev client and cache.
+
 - **Maven transitive resolution.** A `pom.xml` is resolved into the dependency tree Maven
   would build, in pure Rust and without running Maven: parent chains, properties,
   `dependencyManagement` and imported BOMs, default profiles, nearest-wins mediation with

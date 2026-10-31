@@ -746,202 +746,56 @@ fn nuspec_license(version_dir: &Path) -> Option<License> {
 
 // ---- deps.dev ----
 
-/// The deps.dev system name of an ecosystem it covers.
-fn depsdev_system(ecosystem: Ecosystem) -> Option<&'static str> {
-    Some(match ecosystem {
-        Ecosystem::Npm => "npm",
-        Ecosystem::Pypi => "pypi",
-        Ecosystem::Cargo => "cargo",
-        Ecosystem::Go => "go",
-        Ecosystem::Maven => "maven",
-        Ecosystem::NuGet => "nuget",
-        Ecosystem::RubyGems => "rubygems",
-        _ => return None,
-    })
-}
-
-type Key = (String, String, String);
-
-/// Look up, on deps.dev, every package whose license no local source knew. Answers are cached
-/// for good under the user cache (a published version's license does not change); a failed
-/// lookup is not cached and the package stays unknown. Sends each package's ecosystem, name
-/// and version to deps.dev (Google), so it runs only on `--fetch`. Returns
-/// `(found, looked up, failed)`.
+/// Look up, on deps.dev, every package whose license no local source knew (see
+/// [`crate::depsdev`]: opt-in, cached). Returns `(found, looked up, failed)`.
 ///
 /// # Errors
 ///
 /// When no cache directory is usable, or (without the `network` feature) always.
 pub fn fetch_missing(inventories: &mut [RepoInventory]) -> Result<(usize, usize, usize), String> {
-    let mut wanted: BTreeSet<Key> = BTreeSet::new();
+    use crate::depsdev::{infos, system};
+    let mut wanted = BTreeSet::new();
     for inv in inventories.iter() {
         for source in &inv.sources {
-            let Some(system) = depsdev_system(source.ecosystem) else {
+            let Some(sys) = system(source.ecosystem) else {
                 continue;
             };
             for p in source.packages.iter().filter(|p| p.license.is_none()) {
-                wanted.insert((system.to_string(), p.name.clone(), p.version.clone()));
+                wanted.insert((sys.to_string(), p.name.clone(), p.version.clone()));
             }
         }
     }
-    let cache_dir = crate::osvdb::private_subdir("licenses").ok_or("no usable cache directory")?;
-    crate::osvdb::create_private_dir(&cache_dir)
-        .map_err(|e| format!("creating {}: {e}", cache_dir.display()))?;
-    let cache_path = cache_dir.join("depsdev.json");
-    let mut cache: BTreeMap<String, Option<String>> = std::fs::read_to_string(&cache_path)
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default();
-    let key = |k: &Key| format!("{}\u{1f}{}\u{1f}{}", k.0, k.1, k.2);
-    let todo: Vec<&Key> = wanted
-        .iter()
-        .filter(|k| !cache.contains_key(&key(k)))
-        .collect();
-    let fetched = if todo.is_empty() {
-        Vec::new()
-    } else {
-        depsdev::lookup_all(&todo)?
+    let (answers, failed) = infos(&wanted)?;
+    // deps.dev lists each license expression; several mean any one of them.
+    let license_of = |k: &crate::depsdev::Key| -> Option<License> {
+        let info = answers.get(k)?.as_ref()?;
+        let usable: Vec<String> = info
+            .licenses
+            .iter()
+            .filter(|l| !l.eq_ignore_ascii_case("non-standard"))
+            .map(|l| {
+                if l.contains(' ') && info.licenses.len() > 1 {
+                    format!("({l})")
+                } else {
+                    l.clone()
+                }
+            })
+            .collect();
+        normalize(&[usable.join(" OR ")]).filter(|_| !usable.is_empty())
     };
-    let mut failed = 0usize;
-    for (k, result) in todo.iter().zip(fetched) {
-        match result {
-            Ok(license) => {
-                cache.insert(key(k), license);
-            }
-            Err(_) => failed += 1,
-        }
-    }
-    if !todo.is_empty() {
-        let written = serde_json::to_string(&cache)
-            .map_err(|e| e.to_string())
-            .and_then(|json| std::fs::write(&cache_path, json).map_err(|e| e.to_string()));
-        if let Err(e) = written {
-            eprintln!(
-                "warning: could not save the license cache {}: {e}",
-                cache_path.display()
-            );
-        }
-    }
-    let found = wanted
-        .iter()
-        .filter(|k| matches!(cache.get(&key(k)), Some(Some(_))))
-        .count();
+    let found = wanted.iter().filter(|k| license_of(k).is_some()).count();
     for inv in inventories.iter_mut() {
         for source in &mut inv.sources {
-            let Some(system) = depsdev_system(source.ecosystem) else {
+            let Some(sys) = system(source.ecosystem) else {
                 continue;
             };
             for p in source.packages.iter_mut().filter(|p| p.license.is_none()) {
-                let k = (system.to_string(), p.name.clone(), p.version.clone());
-                if let Some(Some(raw)) = cache.get(&key(&k)) {
-                    set(
-                        p,
-                        normalize(std::slice::from_ref(raw)).map(|l| (l, "deps.dev")),
-                    );
-                }
+                let k = (sys.to_string(), p.name.clone(), p.version.clone());
+                set(p, license_of(&k).map(|l| (l, "deps.dev")));
             }
         }
     }
     Ok((found, wanted.len(), failed))
-}
-
-#[cfg(feature = "network")]
-mod depsdev {
-    use std::time::Duration;
-
-    use super::Key;
-
-    /// Look each `(system, name, version)` up, 16 at a time. `Ok(None)`: deps.dev has no
-    /// license for it (cached); `Err`: the lookup failed (not cached).
-    pub(super) fn lookup_all(keys: &[&Key]) -> Result<Vec<Result<Option<String>, String>>, String> {
-        use rayon::prelude::*;
-        let agent: ureq::Agent = ureq::Agent::config_builder()
-            .https_only(true)
-            .http_status_as_error(false)
-            .timeout_global(Some(Duration::from_secs(30)))
-            .build()
-            .into();
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(16)
-            .build()
-            .map_err(|e| e.to_string())?;
-        Ok(pool.install(|| keys.par_iter().map(|k| lookup(&agent, k)).collect()))
-    }
-
-    fn lookup(
-        agent: &ureq::Agent,
-        (system, name, version): &Key,
-    ) -> Result<Option<String>, String> {
-        let url = format!(
-            "https://api.deps.dev/v3/systems/{system}/packages/{}/versions/{}",
-            encode(name),
-            encode(version)
-        );
-        let mut resp = agent
-            .get(&url)
-            .header(
-                "User-Agent",
-                concat!("fleetreach/", env!("CARGO_PKG_VERSION")),
-            )
-            .call()
-            .map_err(|e| e.to_string())?;
-        match resp.status().as_u16() {
-            200 => {}
-            404 => return Ok(None),
-            other => return Err(format!("HTTP {other}")),
-        }
-        let body = resp
-            .body_mut()
-            .with_config()
-            .limit(4 * 1024 * 1024)
-            .read_to_string()
-            .map_err(|e| e.to_string())?;
-        let value: serde_json::Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
-        let licenses: Vec<String> = value
-            .get("licenses")
-            .and_then(|l| l.as_array())
-            .into_iter()
-            .flatten()
-            .filter_map(|l| l.as_str())
-            .filter(|l| !l.eq_ignore_ascii_case("non-standard"))
-            .map(str::to_string)
-            .collect();
-        Ok((!licenses.is_empty()).then(|| {
-            licenses
-                .iter()
-                .map(|l| {
-                    if l.contains(' ') && licenses.len() > 1 {
-                        format!("({l})")
-                    } else {
-                        l.clone()
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(" OR ")
-        }))
-    }
-
-    fn encode(s: &str) -> String {
-        s.bytes()
-            .map(|b| {
-                if b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-') {
-                    (b as char).to_string()
-                } else {
-                    format!("%{b:02X}")
-                }
-            })
-            .collect()
-    }
-}
-
-#[cfg(not(feature = "network"))]
-mod depsdev {
-    use super::Key;
-
-    pub(super) fn lookup_all(
-        _keys: &[&Key],
-    ) -> Result<Vec<Result<Option<String>, String>>, String> {
-        Err("--fetch needs a network build (`--features network`)".to_string())
-    }
 }
 
 // ---- rollup ----

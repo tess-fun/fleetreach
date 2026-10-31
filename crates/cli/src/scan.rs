@@ -64,6 +64,12 @@ pub(crate) struct ScanArgs {
     maven_fetch: bool,
     #[arg(
         long,
+        value_name = "DUR",
+        help = "warn on dependency versions published less than DUR ago, e.g. 72h (looks publish times up on deps.dev, which sends each package's name and version; cached)"
+    )]
+    release_age: Option<String>,
+    #[arg(
+        long,
         help = "exit 2 if any source was read with less than full coverage (a pom.xml without a resolved graph, a lockfile format fleetreach cannot read), as for an errored repo"
     )]
     require_full_coverage: bool,
@@ -575,6 +581,16 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             &config.repos,
             &config.signal_registries,
         ));
+    }
+    if let Some(spec) = &args.release_age {
+        let secs = match parse_duration_secs(spec) {
+            Ok(secs) => secs,
+            Err(e) => return fail(&format!("--release-age: {e}")),
+        };
+        match crate::signals::release_age(&config.repos, secs) {
+            Ok(findings) => scan.warnings.extend(findings),
+            Err(e) => return fail(&format!("--release-age: {e}")),
+        }
     }
     scan.outcomes.extend(
         materialized

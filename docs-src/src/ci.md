@@ -88,3 +88,23 @@ package counts as dev only if no runtime dependency (including extras) reaches
 it. The table marks those `(dev only)`, JSON carries `"scope": "dev"`, and
 `--ignore-dev-deps` drops them. A dev finding still gates by default: a
 vulnerable linter or test runner runs in CI with your credentials.
+
+## Supply-chain signals
+
+Two opt-in flags add supply-chain warnings to a scan. They are warnings (they gate with
+`--fail-on-warnings`), never vulnerabilities, and their absence never means a dependency is
+safe.
+
+- `--signals` reads the lockfiles already parsed, with no network: packages that run an
+  install script, packages fetched from git, a URL or a path, packages from a registry outside
+  the public ones (add yours with `[settings.signals] registries = ["npm.example.com"]`; the
+  whole host must match, so lookalike hosts are caught), registry packages with no checksum,
+  and third-party GitHub Actions pinned to a tag or branch their owner can move instead of a
+  commit SHA.
+- `--release-age 72h` flags dependency versions published less than that long ago: during a
+  worm outbreak, the question is which repos pulled a version from the last few days. Publish
+  times come from deps.dev, which sends each package's name and version; answers are cached.
+  A version deps.dev cannot date is listed separately, never assumed old.
+
+Known malware (OSV `MAL-` records) needs no flag: it is always critical, is never hidden by
+`--min-severity`, and the remediation queue says to remove the package and rotate credentials.
