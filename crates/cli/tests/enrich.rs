@@ -217,6 +217,7 @@ fn summary_max_severity_is_refreshed_after_enrichment_backfill() {
         coverage: Vec::new(),
         context: Vec::new(),
         ssvc: None,
+        package_versions: Vec::new(),
     };
 
     let enrichment = Enrichment {

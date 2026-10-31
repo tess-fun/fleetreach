@@ -57,10 +57,11 @@ pub use finding::{
     Reachability, RepoId, VulnFinding, WarnFinding, WarnKind,
 };
 pub use outcome::{RepoOutcome, ScanStatus};
-pub use remediation::{remediations, Action, ReachTier, RemediationItem};
+pub use remediation::{remediations, Action, FleetEvidence, ReachTier, RemediationItem, Risk};
 pub use report::{
-    max_severity_of, Coverage, CoverageGap, FleetReport, OsvProvenance, Provenance, RepoContext,
-    RepoSource, SsvcDecision, SsvcReport, Summary, SCHEMA_VERSION,
+    max_severity_of, Coverage, CoverageGap, FleetReport, OsvProvenance, PackageVersions,
+    Provenance, RepoContext, RepoSource, SsvcDecision, SsvcReport, Summary, VersionInFleet,
+    SCHEMA_VERSION,
 };
 pub use severity::Severity;
 

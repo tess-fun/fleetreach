@@ -14,6 +14,7 @@ pub mod db_cmd;
 pub mod depsdev;
 pub mod diff;
 pub mod enrich;
+pub mod evidence;
 pub mod fix;
 pub mod inventory;
 pub mod licenses;

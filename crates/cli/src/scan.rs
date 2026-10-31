@@ -873,6 +873,10 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             !fleet_report.vulnerabilities.is_empty() || !fleet_report.warnings.is_empty();
     }
 
+    // 5b2. Fleet evidence for upgrades (spec 13): the versions of each vulnerable package
+    //      every repo runs, so the fix queue can say which bumps the fleet already survived.
+    crate::evidence::annotate(&mut fleet_report, &config.repos);
+
     // 5c. Exposure context and SSVC decisions (spec 08), on what is left to report. CISA's
     //     own assessments (Vulnrichment) are looked up only when there is something to decide.
     let cisa = if crate::ssvc::enabled(&config) && exploitation_known {

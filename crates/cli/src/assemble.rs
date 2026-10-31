@@ -240,6 +240,7 @@ pub fn assemble(
             coverage: scan.coverage,
             context: Vec::new(),
             ssvc: None,
+            package_versions: Vec::new(),
         },
         suppressed,
     }

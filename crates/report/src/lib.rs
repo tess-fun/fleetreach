@@ -41,7 +41,7 @@
 //! #         summary: Summary { repos_scanned: 1, repos_errored: 0, vuln_count: 1, warn_count: 0,
 //! #             max_severity: Severity::High, stale_ignores: vec![] },
 //! #         vulnerabilities: vec![vuln], warnings: vec![], outcomes: vec![], coverage: vec![],
-//! #         context: vec![], ssvc: None }
+//! #         context: vec![], ssvc: None, package_versions: vec![] }
 //! # }
 //! // Render the fleet report as a plain-text table (no color for piped output).
 //! let table = to_table(&report(), false);
@@ -1354,7 +1354,14 @@ fn remediation_table(
     outcome: Option<&OutcomeOf<'_>>,
 ) -> String {
     let mut header = vec![
-        "#", "Action", "Severity", "Resolves", "Repos", "Reach", "Exploit",
+        "#",
+        "Action",
+        "Severity",
+        "Resolves",
+        "Repos",
+        "Reach",
+        "Exploit",
+        "Bump risk",
     ];
     if outcome.is_some() {
         header.insert(1, "SSVC");
@@ -1378,6 +1385,7 @@ fn remediation_table(
             Cell::new(it.repos),
             Cell::new(reach_tier_label(it.reach)),
             Cell::new(exploit_cell(it.kev, it.max_epss.unwrap_or(-1.0))),
+            Cell::new(bump_risk_cell(it)),
         ];
         if let Some(outcome) = outcome {
             row.insert(1, Cell::new(outcome(it).map_or("-", |o| o.label())));
@@ -1406,6 +1414,15 @@ fn action_label(it: &RemediationItem) -> String {
             format!("remove {pkg} (malicious package; rotate exposed credentials)")
         }
         Action::NoFixAvailable => format!("no fix: {pkg}"),
+    }
+}
+
+/// The upgrade's risk and the fleet evidence behind it: `medium · 4 on 2.1.0`.
+fn bump_risk_cell(it: &RemediationItem) -> String {
+    match (it.risk, &it.evidence) {
+        (None, _) => "-".to_string(),
+        (Some(risk), Some(e)) => format!("{} · {} on {}", risk.label(), e.repos, e.newest),
+        (Some(risk), None) => risk.label().to_string(),
     }
 }
 

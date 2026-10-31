@@ -664,6 +664,7 @@ mod tests {
             coverage: Vec::new(),
             context: Vec::new(),
             ssvc: None,
+            package_versions: Vec::new(),
         }
     }
 

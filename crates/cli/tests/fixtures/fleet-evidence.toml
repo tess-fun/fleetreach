@@ -1,0 +1,8 @@
+# Spec 13: one repo on the vulnerable fixturevuln 1.0.0, one already on the fixed 1.0.1.
+[[repo]]
+id = "app"
+path = "repos/repo-vuln"
+
+[[repo]]
+id = "patched"
+path = "repos/repo-patched"

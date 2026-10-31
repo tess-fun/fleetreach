@@ -1,6 +1,6 @@
 # Spec 13: Upgrade safety
 
-Status: draft · Gap: #10 · CTEM stage: mobilization · Effort: S (fleet evidence) to L (API diff)
+Status: phase 1 implemented (unreleased; fleet evidence and risk; no alternatives, which need registry version lists; CI status of the evidence repos not done; phase 2 not started) · Gap: #10 · CTEM stage: mobilization · Effort: S (fleet evidence) to L (API diff)
 
 ## Problem
 

@@ -67,6 +67,7 @@ fn empty_report() -> fleetreach_core::FleetReport {
         coverage: Vec::new(),
         context: Vec::new(),
         ssvc: None,
+        package_versions: Vec::new(),
     }
 }
 

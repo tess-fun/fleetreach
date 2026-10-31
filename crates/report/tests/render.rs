@@ -41,6 +41,7 @@ fn report(vulns: Vec<VulnFinding>) -> FleetReport {
         coverage: Vec::new(),
         context: Vec::new(),
         ssvc: None,
+        package_versions: Vec::new(),
     }
 }
 

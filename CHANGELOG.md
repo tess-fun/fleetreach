@@ -30,6 +30,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `packages` (and `packages-json`) show the most urgent outcome and a reach weighted by it
   (`[settings.ssvc] weights`, default 8/4/2/0), and rank by it. `[[source]]` takes the same
   context fields for every repo it discovers.
+- **Upgrade risk from fleet evidence** (spec 13, phase 1). Each remediation upgrade is rated
+  `low` (within the current major), `medium` (breaking, but at least 3 repos already run the
+  target or newer in its major) or `high`, with the reasons and the evidence (`repos`,
+  `newest`). `-f remediation` shows a **Bump risk** column, `remediation-json` the `risk`,
+  `risk_reasons` and `evidence` fields, and `fix plan` edits and pull request descriptions
+  carry the risk. The JSON report gains `package_versions`: the versions of each vulnerable
+  package that the fleet's lockfiles hold, and in which repos.
 
 ## [1.4.0] - 2026-10-31
 

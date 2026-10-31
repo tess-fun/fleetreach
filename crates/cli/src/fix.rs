@@ -126,6 +126,11 @@ pub struct Edit {
     pub strategy: Strategy,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+    /// The upgrade's risk and why (spec 13), from the scan's fleet evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk: Option<fleetreach_core::Risk>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub risk_reasons: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -219,6 +224,8 @@ pub fn build_plan(report: &FleetReport, allow_breaking: bool) -> Plan {
                 breaking,
                 strategy: strategy.clone(),
                 reason: reason.clone(),
+                risk: item.risk,
+                risk_reasons: item.risk_reasons.clone(),
             });
         }
     }
@@ -622,6 +629,13 @@ fn pr_body(edit: &Edit, plan: &Plan) -> String {
     );
     if edit.breaking {
         body.push_str("**Breaking:** this crosses a major version; review the changelog.\n\n");
+    }
+    if let Some(risk) = edit.risk {
+        body.push_str(&format!("**Risk:** {}", risk.label()));
+        if !edit.risk_reasons.is_empty() {
+            body.push_str(&format!(" ({})", edit.risk_reasons.join("; ")));
+        }
+        body.push_str(".\n\n");
     }
     body.push_str(
         "**Verified:** a fleetreach re-scan of this branch finds none of these advisories and \
@@ -1110,7 +1124,38 @@ mod tests {
             breaking: false,
             strategy: Strategy::LockBump,
             reason: None,
+            risk: None,
+            risk_reasons: Vec::new(),
         }
+    }
+
+    #[test]
+    fn the_pr_body_states_the_bump_risk() {
+        let mut e = edit();
+        let plain = pr_body(
+            &e,
+            &Plan {
+                schema: PLAN_SCHEMA.into(),
+                edits: vec![],
+            },
+        );
+        assert!(!plain.contains("**Risk:**"), "{plain}");
+        e.risk = Some(fleetreach_core::Risk::Medium);
+        e.risk_reasons = vec![
+            "breaking (new major)".into(),
+            "4 repos already run 2.0.0+".into(),
+        ];
+        let body = pr_body(
+            &e,
+            &Plan {
+                schema: PLAN_SCHEMA.into(),
+                edits: vec![],
+            },
+        );
+        assert!(
+            body.contains("**Risk:** medium (breaking (new major); 4 repos already run 2.0.0+)."),
+            "{body}"
+        );
     }
 
     fn scanned(findings: &[(&str, &str, &str)]) -> Scanned {

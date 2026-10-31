@@ -1919,3 +1919,47 @@ fn vulnrichment_dir_supplies_cisas_assessment() {
         .clone();
     assert_eq!(vector, "E:N/X:O/A:Y/HI:VH");
 }
+
+// ---- upgrade safety (spec 13) ----
+
+fn evidence_scan(format: &str) -> String {
+    let out = run(&[
+        "scan",
+        "-c",
+        &cfg("fleet-evidence.toml"),
+        "--db",
+        &db(),
+        "-f",
+        format,
+        "-q",
+    ]);
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    stdout(&out)
+}
+
+#[test]
+fn the_report_records_which_versions_the_fleet_runs() {
+    let value: serde_json::Value = serde_json::from_str(&evidence_scan("json")).unwrap();
+    let versions = &value["package_versions"];
+    assert_eq!(versions.as_array().unwrap().len(), 1, "{versions}");
+    assert_eq!(versions[0]["package"], "fixturevuln");
+    assert_eq!(versions[0]["versions"][0]["version"], "1.0.0");
+    assert_eq!(versions[0]["versions"][0]["repos"][0], "app");
+    assert_eq!(versions[0]["versions"][1]["version"], "1.0.1");
+    assert_eq!(versions[0]["versions"][1]["repos"][0], "patched");
+}
+
+#[test]
+fn remediation_rates_each_bump_against_the_fleet() {
+    let value: serde_json::Value =
+        serde_json::from_str(&evidence_scan("remediation-json")).unwrap();
+    let item = &value[0];
+    assert_eq!(item["risk"], "low");
+    assert_eq!(item["evidence"]["repos"], 1);
+    assert_eq!(item["evidence"]["newest"], "1.0.1");
+    assert_eq!(item["risk_reasons"][1], "1 repo already runs 1.0.1+");
+
+    let table = evidence_scan("remediation");
+    assert!(table.contains("Bump risk"), "{table}");
+    assert!(table.contains("low · 1 on 1.0.1"), "{table}");
+}

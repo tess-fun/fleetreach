@@ -23,6 +23,29 @@ Findings that are soundly not reachable are not planned. Every edit carries a ca
 a short hash of the ecosystem, package, target version and advisories, which is the same
 across repos and across runs.
 
+## Bump risk
+
+Every upgrade in the queue is rated from evidence no single-repo tool has: the repos in your
+own fleet that already run the target version, or a newer one with the same major (the same
+minor for `0.x`). A repo that is already on it and still ships is the best sign the bump is
+survivable.
+
+| Upgrade | Risk |
+|---------|------|
+| within the current major | `low` |
+| breaking, at least 3 repos already on the new version | `medium` |
+| breaking, fewer | `high` |
+
+`-f remediation` shows it in the **Bump risk** column (`medium · 4 on 2.1.0`),
+`remediation-json` as `risk`, `risk_reasons` and `evidence` (`repos`, `newest`), and the
+plan and pull request description carry it too. The versions come from the same lockfiles
+the scan reads, with no network, and the JSON report saves them as `package_versions`, so a
+plan made from a saved report sees the same evidence.
+
+The rating does not yet look at API changes or CI results, and it does not offer an
+alternative target: the queue still proposes the smallest version that clears every
+advisory.
+
 ## Apply
 
 `fix apply` never touches your work tree. For each lock bump it creates a git worktree on

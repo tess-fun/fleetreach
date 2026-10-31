@@ -54,6 +54,40 @@ pub enum Action {
     NoFixAvailable,
 }
 
+/// How likely an upgrade is to break its callers (spec 13).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Risk {
+    Low,
+    Medium,
+    High,
+}
+
+impl Risk {
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Risk::Low => "low",
+            Risk::Medium => "medium",
+            Risk::High => "high",
+        }
+    }
+}
+
+/// How much of the fleet already runs an upgrade's target (spec 13): repos whose lockfile
+/// has the package at the target or a later, compatible version (same major; same minor
+/// for `0.x`). Your own fleet is the best evidence that an upgrade is survivable.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FleetEvidence {
+    /// How many repos already run it.
+    pub repos: usize,
+    /// The highest such version.
+    pub newest: Version,
+}
+
+/// How many repos must already run the new major for a breaking bump to rate `medium`.
+const PROVEN_REPOS: usize = 3;
+
 /// One actionable remediation, derived from one or more [`VulnFinding`]s that
 /// share a target package. Computed from a [`FleetReport`]; never persisted in
 /// scan output, so it carries its own ranking signals (max/any across the group)
@@ -84,6 +118,16 @@ pub struct RemediationItem {
     /// Highest CVSS base score in the group, when any is known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_cvss: Option<f32>,
+    /// Repos already on the upgrade target (spec 13); `None` when there is no upgrade or the
+    /// report carries no fleet versions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<FleetEvidence>,
+    /// The upgrade's risk; `None` without an upgrade.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk: Option<Risk>,
+    /// Why, in a few words each.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub risk_reasons: Vec<String>,
 }
 
 /// Assemble the remediation queue from a correlated report.
@@ -114,13 +158,17 @@ pub fn remediations(report: &FleetReport) -> Vec<RemediationItem> {
             .into_iter()
             .partition(|f| finding_floor(&finding_patched(f)).is_some());
 
+        let fleet = report
+            .package_versions
+            .iter()
+            .find(|p| p.ecosystem == ecosystem && p.package == package);
+        let build = |subset: &[&VulnFinding], action: Action| {
+            let mut item = build_item(ecosystem, &package, subset, action);
+            assess_risk(&mut item, fleet);
+            item
+        };
         if !nofix.is_empty() {
-            items.push(build_item(
-                ecosystem,
-                &package,
-                &nofix,
-                Action::NoFixAvailable,
-            ));
+            items.push(build(&nofix, Action::NoFixAvailable));
         }
         if fixable.is_empty() {
             continue;
@@ -151,7 +199,7 @@ pub fn remediations(report: &FleetReport) -> Vec<RemediationItem> {
 
         if compatible {
             let action = upgrade_action(&fixable, &candidate);
-            items.push(build_item(ecosystem, &package, &fixable, action));
+            items.push(build(&fixable, action));
         } else {
             for &f in &fixable {
                 let lb = installed_versions(f)
@@ -160,7 +208,7 @@ pub fn remediations(report: &FleetReport) -> Vec<RemediationItem> {
                     .unwrap_or(Version::new(0, 0, 0));
                 if let Some(target) = finding_target(&finding_patched(f), &lb) {
                     let action = upgrade_action(&[f], &target);
-                    items.push(build_item(ecosystem, &package, &[f], action));
+                    items.push(build(&[f], action));
                 }
             }
         }
@@ -214,7 +262,64 @@ fn build_item(
         kev,
         max_epss,
         max_cvss,
+        evidence: None,
+        risk: None,
+        risk_reasons: Vec::new(),
     }
+}
+
+/// Whether `v` is a compatible later release of `to`: Cargo's rule, which every
+/// SemVer-coerced ecosystem shares (same major, or same minor under `0.x`).
+fn compatible_with(to: &Version, v: &Version) -> bool {
+    v >= to && v.major == to.major && (to.major != 0 || v.minor == to.minor)
+}
+
+/// Fill an upgrade item's fleet evidence and risk (spec 13, phase 1):
+///
+/// | Upgrade | Risk |
+/// |---------|------|
+/// | within the current major | low |
+/// | breaking, at least [`PROVEN_REPOS`] repos already on it | medium |
+/// | breaking, fewer | high |
+fn assess_risk(item: &mut RemediationItem, fleet: Option<&crate::PackageVersions>) {
+    let Action::Upgrade { to, breaking } = &item.action else {
+        return;
+    };
+    if let Some(fleet) = fleet {
+        let on_target: Vec<&crate::VersionInFleet> = fleet
+            .versions
+            .iter()
+            .filter(|v| compatible_with(to, &v.version))
+            .collect();
+        let repos: BTreeSet<&str> = on_target
+            .iter()
+            .flat_map(|v| v.repos.iter().map(|r| r.0.as_str()))
+            .collect();
+        if let Some(newest) = on_target.last() {
+            item.evidence = Some(FleetEvidence {
+                repos: repos.len(),
+                newest: newest.version.clone(),
+            });
+        }
+    }
+    let proven = item.evidence.as_ref().map_or(0, |e| e.repos);
+    let in_fleet = match proven {
+        0 if fleet.is_some() => "no repo in the fleet runs it yet".to_string(),
+        0 => String::new(),
+        1 => format!("1 repo already runs {to}+"),
+        n => format!("{n} repos already run {to}+"),
+    };
+    let (risk, why) = if !*breaking {
+        (Risk::Low, "within the current major".to_string())
+    } else if proven >= PROVEN_REPOS {
+        (Risk::Medium, "breaking (new major)".to_string())
+    } else {
+        (Risk::High, "breaking (new major)".to_string())
+    };
+    item.risk = Some(risk);
+    item.risk_reasons = std::iter::once(why)
+        .chain((!in_fleet.is_empty()).then_some(in_fleet))
+        .collect();
 }
 
 /// An [`Action::Upgrade`] to `to`, flagged breaking when it crosses the
@@ -426,6 +531,7 @@ mod tests {
             coverage: Vec::new(),
             context: Vec::new(),
             ssvc: None,
+            package_versions: Vec::new(),
         }
     }
 
@@ -677,5 +783,123 @@ mod tests {
             vec![in_repo("app", "foo", "1.2.0", &[">=1.2.0"])],
         )]);
         assert!(remediations(&r).is_empty());
+    }
+
+    fn fleet(package: &str, versions: &[(&str, &[&str])]) -> crate::PackageVersions {
+        crate::PackageVersions {
+            ecosystem: Ecosystem::Cargo,
+            package: package.into(),
+            versions: versions
+                .iter()
+                .map(|(v, repos)| crate::VersionInFleet {
+                    version: Version::parse(v).unwrap(),
+                    repos: repos.iter().map(|r| RepoId((*r).into())).collect(),
+                })
+                .collect(),
+        }
+    }
+
+    fn bump(installed: &str, patched: &str, versions: &[(&str, &[&str])]) -> RemediationItem {
+        let mut r = report_of(vec![vuln(
+            "RUSTSEC-1",
+            Severity::High,
+            vec![in_repo("app", "foo", installed, &[patched])],
+        )]);
+        r.package_versions = vec![fleet("foo", versions)];
+        remediations(&r).remove(0)
+    }
+
+    #[test]
+    fn a_bump_within_the_major_is_low_risk() {
+        let it = bump(
+            "1.0.0",
+            ">=1.2.0",
+            &[("1.0.0", &["app"]), ("1.3.1", &["b"])],
+        );
+        assert_eq!(it.risk, Some(Risk::Low));
+        let evidence = it.evidence.unwrap();
+        assert_eq!(
+            (evidence.repos, evidence.newest),
+            (1, Version::new(1, 3, 1))
+        );
+        assert_eq!(
+            it.risk_reasons,
+            ["within the current major", "1 repo already runs 1.2.0+"]
+        );
+    }
+
+    #[test]
+    fn a_breaking_bump_is_medium_only_once_enough_repos_run_it() {
+        let proven = bump(
+            "1.0.0",
+            ">=2.0.0",
+            &[
+                ("1.0.0", &["app"]),
+                ("2.0.0", &["b", "c"]),
+                ("2.4.0", &["d", "b"]),
+            ],
+        );
+        assert_eq!(proven.risk, Some(Risk::Medium));
+        assert_eq!(proven.evidence.unwrap().repos, 3, "b counts once");
+
+        let unproven = bump(
+            "1.0.0",
+            ">=2.0.0",
+            &[("1.0.0", &["app"]), ("2.1.0", &["b"])],
+        );
+        assert_eq!(unproven.risk, Some(Risk::High));
+        assert_eq!(unproven.evidence.unwrap().repos, 1);
+    }
+
+    #[test]
+    fn evidence_only_counts_versions_compatible_with_the_target() {
+        // 3.x is a different major from the 2.0.0 target, and 1.x is below it.
+        let it = bump(
+            "1.0.0",
+            ">=2.0.0",
+            &[
+                ("1.0.0", &["app"]),
+                ("1.9.0", &["b"]),
+                ("3.0.0", &["c", "d", "e"]),
+            ],
+        );
+        assert_eq!(it.evidence, None);
+        assert_eq!(it.risk, Some(Risk::High));
+        assert_eq!(
+            it.risk_reasons,
+            ["breaking (new major)", "no repo in the fleet runs it yet"]
+        );
+    }
+
+    #[test]
+    fn zero_major_evidence_must_share_the_minor() {
+        let it = bump(
+            "0.3.0",
+            ">=0.4.0",
+            &[
+                ("0.3.0", &["app"]),
+                ("0.4.2", &["b"]),
+                ("0.5.0", &["c", "d"]),
+            ],
+        );
+        assert_eq!(it.risk, Some(Risk::High), "0.3 to 0.4 is breaking");
+        let evidence = it.evidence.unwrap();
+        assert_eq!(
+            (evidence.repos, evidence.newest),
+            (1, Version::new(0, 4, 2))
+        );
+    }
+
+    #[test]
+    fn without_fleet_data_a_bump_still_gets_a_risk() {
+        let r = report_of(vec![vuln(
+            "RUSTSEC-1",
+            Severity::High,
+            vec![in_repo("app", "foo", "1.0.0", &[">=2.0.0"])],
+        )]);
+        let it = remediations(&r).remove(0);
+        assert_eq!(it.evidence, None);
+        assert_eq!(it.risk, Some(Risk::High));
+        assert_eq!(it.risk_reasons, ["breaking (new major)"]);
     }
 }

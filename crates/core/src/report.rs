@@ -31,6 +31,28 @@ pub struct FleetReport {
     /// SSVC deployer decisions (spec 08). Absent unless repo context is configured.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ssvc: Option<SsvcReport>,
+    /// Every version of each vulnerable package that the fleet runs, in any repo, vulnerable
+    /// or not (spec 13): the evidence that a proposed upgrade is already survivable here.
+    /// Empty (and omitted) when nothing was vulnerable.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub package_versions: Vec<PackageVersions>,
+}
+
+/// The versions of one package across the fleet (spec 13).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PackageVersions {
+    #[serde(default, skip_serializing_if = "Ecosystem::is_cargo")]
+    pub ecosystem: Ecosystem,
+    pub package: String,
+    /// Ascending by version.
+    pub versions: Vec<VersionInFleet>,
+}
+
+/// One version of a package and the repos whose lockfiles have it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VersionInFleet {
+    pub version: semver::Version,
+    pub repos: Vec<RepoId>,
 }
 
 /// A repo's exposure and impact context (spec 08), as resolved for this scan.
