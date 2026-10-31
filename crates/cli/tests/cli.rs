@@ -502,6 +502,166 @@ fn sbom_of_an_unreadable_source_exits_2() {
     );
 }
 
+/// Run `git` in `dir` for the fix tests, with a fixed identity and no global config.
+fn git_in(dir: &std::path::Path, args: &[&str]) -> String {
+    let out = std::process::Command::new("git")
+        .current_dir(dir)
+        .args(args)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_AUTHOR_NAME", "t")
+        .env("GIT_AUTHOR_EMAIL", "t@example.com")
+        .env("GIT_COMMITTER_NAME", "t")
+        .env("GIT_COMMITTER_EMAIL", "t@example.com")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+#[test]
+fn fix_plans_applies_and_verifies_a_lock_bump_on_a_branch() {
+    let root = std::env::temp_dir().join(format!("fleetreach-fix-e2e-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let repo = root.join("ci-repo");
+    let workflows = repo.join(".github/workflows");
+    std::fs::create_dir_all(&workflows).unwrap();
+    let workflow = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      \
+                    - uses: actions/checkout@v4\n      - uses: tj-actions/changed-files@v44\n";
+    std::fs::write(workflows.join("ci.yml"), workflow).unwrap();
+    git_in(&repo, &["init", "-q", "-b", "main"]);
+    git_in(&repo, &["add", "-A"]);
+    git_in(&repo, &["commit", "-q", "-m", "init"]);
+    let fleet = root.join("fleet.toml");
+    std::fs::write(
+        &fleet,
+        format!("[[repo]]\nid = \"ci-repo\"\npath = {:?}\n", repo),
+    )
+    .unwrap();
+    let fleet = fleet.to_str().unwrap().to_string();
+    let osv = file_url("ghactions-osv");
+    let db = db();
+    let env: Vec<(&str, &std::ffi::OsStr)> = vec![
+        ("GIT_CONFIG_GLOBAL", std::ffi::OsStr::new("/dev/null")),
+        ("GIT_AUTHOR_NAME", std::ffi::OsStr::new("t")),
+        ("GIT_AUTHOR_EMAIL", std::ffi::OsStr::new("t@example.com")),
+        ("GIT_COMMITTER_NAME", std::ffi::OsStr::new("t")),
+        ("GIT_COMMITTER_EMAIL", std::ffi::OsStr::new("t@example.com")),
+        ("XDG_CACHE_HOME", root.as_os_str()),
+    ];
+
+    // 1. Scan: the vulnerable tag is found.
+    let out = run_env(
+        &[
+            "scan",
+            "-q",
+            "-c",
+            &fleet,
+            "--db",
+            &db,
+            "--ghactions-vuln-db",
+            &osv,
+            "-f",
+            "json",
+        ],
+        &env,
+    );
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    let report = root.join("report.json");
+    std::fs::write(&report, stdout(&out)).unwrap();
+
+    // 2. Plan. v44 -> v46.0.1 is a major jump: blocked unless breaking bumps are allowed.
+    let plan_with = |extra: &[&str]| {
+        let mut argv = vec![
+            "fix",
+            "plan",
+            "-c",
+            &fleet,
+            "--report",
+            report.to_str().unwrap(),
+        ];
+        argv.extend_from_slice(extra);
+        run_env(&argv, &env)
+    };
+    let out = plan_with(&[]);
+    assert_eq!(code(&out), 0, "stderr: {}", stderr(&out));
+    let plan: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(plan["edits"][0]["strategy"], "blocked", "{plan}");
+    assert!(plan["edits"][0]["reason"]
+        .as_str()
+        .unwrap()
+        .contains("--allow-breaking"));
+    let out = plan_with(&["--allow-breaking"]);
+    let plan: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    let edit = &plan["edits"][0];
+    assert_eq!(edit["strategy"], "lock-bump", "{plan}");
+    assert_eq!(edit["breaking"], true);
+    assert_eq!(edit["package"], "tj-actions/changed-files");
+    assert_eq!(edit["to"], "46.0.1");
+    let plan_path = root.join("plan.json");
+    std::fs::write(&plan_path, stdout(&out)).unwrap();
+
+    // 3. Apply: verified by the re-scan, on its own branch.
+    let out = run_env(
+        &[
+            "fix",
+            "apply",
+            "-q",
+            "-c",
+            &fleet,
+            plan_path.to_str().unwrap(),
+            "--",
+            "--db",
+            &db,
+            "--ghactions-vuln-db",
+            &osv,
+        ],
+        &env,
+    );
+    assert_eq!(
+        code(&out),
+        0,
+        "stderr: {}\nstdout: {}",
+        stderr(&out),
+        stdout(&out)
+    );
+    let applied: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(applied[0]["outcome"], "verified", "{applied}");
+    let branch = applied[0]["branch"].as_str().unwrap().to_string();
+    assert!(
+        branch.starts_with("fleetreach/") && branch.ends_with("/tj-actions-changed-files-46.0.1")
+    );
+
+    // The branch holds the fixed tag; the user's work tree and main are untouched.
+    let fixed = git_in(
+        &repo,
+        &["show", &format!("{branch}:.github/workflows/ci.yml")],
+    );
+    assert!(
+        fixed.contains("tj-actions/changed-files@v46.0.1"),
+        "{fixed}"
+    );
+    assert!(fixed.contains("actions/checkout@v4"));
+    assert_eq!(
+        std::fs::read_to_string(workflows.join("ci.yml")).unwrap(),
+        workflow
+    );
+    assert_eq!(
+        git_in(&repo, &["rev-parse", "--abbrev-ref", "HEAD"]),
+        "main"
+    );
+    assert!(git_in(&repo, &["status", "--porcelain"]).is_empty());
+    let message = git_in(&repo, &["log", "-1", "--format=%B", &branch]);
+    assert!(
+        message.contains("Verified by a fleetreach re-scan"),
+        "{message}"
+    );
+    assert!(!message.to_lowercase().contains("co-authored"), "{message}");
+}
+
 #[test]
 fn incomplete_coverage_is_reported_and_can_gate() {
     let args = |extra: &[&'static str]| {

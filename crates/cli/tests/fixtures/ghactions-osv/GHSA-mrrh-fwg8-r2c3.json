@@ -1,0 +1,15 @@
+{
+  "id": "GHSA-mrrh-fwg8-r2c3",
+  "modified": "2025-03-20T00:00:00Z",
+  "summary": "tj-actions/changed-files has a supply chain compromise that leaks secrets",
+  "aliases": ["CVE-2025-30066"],
+  "affected": [
+    {
+      "package": { "ecosystem": "GitHub Actions", "name": "tj-actions/changed-files" },
+      "ranges": [
+        { "type": "ECOSYSTEM", "events": [ { "introduced": "0" }, { "fixed": "46.0.1" } ] }
+      ]
+    }
+  ],
+  "database_specific": { "severity": "HIGH", "github_reviewed": true }
+}

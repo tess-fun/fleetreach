@@ -13,6 +13,7 @@ pub mod db;
 pub mod db_cmd;
 pub mod diff;
 pub mod enrich;
+pub mod fix;
 pub mod inventory;
 pub mod npm_reach;
 pub mod orchestrate;

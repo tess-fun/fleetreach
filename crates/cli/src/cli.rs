@@ -43,6 +43,9 @@ enum Commands {
     Fleet(FleetCommand),
     /// Write a CycloneDX 1.6 SBOM per repo from the same sources `scan` reads.
     Sbom(crate::sbom::SbomArgs),
+    /// Plan and apply verified dependency fixes from the remediation queue.
+    #[command(subcommand)]
+    Fix(crate::fix::FixCommand),
 }
 
 #[derive(Subcommand)]
@@ -81,6 +84,7 @@ pub fn dispatch(cli: Cli) -> u8 {
         Commands::Fleet(FleetCommand::Sync(args)) => crate::db_cmd::run_fleet_sync(args),
         Commands::Fleet(FleetCommand::List(args)) => crate::db_cmd::run_fleet_list(args),
         Commands::Sbom(args) => crate::sbom::run_sbom(args),
+        Commands::Fix(command) => crate::fix::run_fix(command),
     }
 }
 

@@ -8,6 +8,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`fleetreach fix`: verified fix branches.** `fix plan` turns a saved report's
+  remediation queue into per-repo edits (lock bumps, or blocked with the reason: no fix, a
+  breaking jump without `--allow-breaking`, an unsupported ecosystem). `fix apply` performs
+  each lock bump in a git worktree on a `fleetreach/<campaign>/...` branch with a lock-only
+  command that runs no package code (`cargo update --precise`, `npm update
+  --package-lock-only --ignore-scripts`, or a GitHub Actions tag rewrite), then re-scans:
+  the commit is marked verified only when the targeted advisories are gone and nothing new
+  appeared. Your work tree is never touched and nothing is pushed.
+
 - **GitLab fleet sources.** `[[source]] kind = "gitlab"` lists a GitLab group with all its
   subgroups (or a user namespace) on gitlab.com or a self-managed instance (`api_url`), with
   the same include/exclude globs, topics, archived and fork filters and sparse checkouts as
