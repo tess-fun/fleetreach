@@ -771,13 +771,30 @@ fn finding_keys(report: &serde_json::Value) -> Vec<(String, String, String, Stri
 fn an_sbom_written_by_fleetreach_scans_back_to_the_same_findings() {
     for (fleet, repo, flag, osv) in [
         ("fleet-py.toml", "py-req", "--pypi-vuln-db", "pypi-osv"),
-        ("fleet-dotnet.toml", "dotnet-restored", "--nuget-vuln-db", "nuget-osv"),
+        (
+            "fleet-dotnet.toml",
+            "dotnet-restored",
+            "--nuget-vuln-db",
+            "nuget-osv",
+        ),
     ] {
-        let tmp = std::env::temp_dir().join(format!("fleetreach-sbom-in-{repo}-{}", std::process::id()));
+        let tmp =
+            std::env::temp_dir().join(format!("fleetreach-sbom-in-{repo}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         // 1. Scan the lockfiles directly, and write the SBOM.
-        let direct = run(&["scan", "-q", "-c", &cfg(fleet), "--db", &db(), flag, &file_url(osv), "-f", "json"]);
+        let direct = run(&[
+            "scan",
+            "-q",
+            "-c",
+            &cfg(fleet),
+            "--db",
+            &db(),
+            flag,
+            &file_url(osv),
+            "-f",
+            "json",
+        ]);
         let direct: serde_json::Value = serde_json::from_str(&stdout(&direct)).unwrap();
         let out = run(&["sbom", "-q", "-c", &cfg(fleet), "-o", tmp.to_str().unwrap()]);
         assert_eq!(code(&out), 0, "{}", stderr(&out));
@@ -791,11 +808,26 @@ fn an_sbom_written_by_fleetreach_scans_back_to_the_same_findings() {
         )
         .unwrap();
         let from_sbom = run(&[
-            "scan", "-q", "-c", fleet_from_sbom.to_str().unwrap(), "--db", &db(), flag, &file_url(osv), "-f", "json",
+            "scan",
+            "-q",
+            "-c",
+            fleet_from_sbom.to_str().unwrap(),
+            "--db",
+            &db(),
+            flag,
+            &file_url(osv),
+            "-f",
+            "json",
         ]);
         let from_sbom: serde_json::Value = serde_json::from_str(&stdout(&from_sbom)).unwrap();
-        let want: Vec<_> = finding_keys(&direct).into_iter().filter(|k| k.1 == repo).collect();
-        assert!(!want.is_empty(), "{repo}: the direct scan should find something");
+        let want: Vec<_> = finding_keys(&direct)
+            .into_iter()
+            .filter(|k| k.1 == repo)
+            .collect();
+        assert!(
+            !want.is_empty(),
+            "{repo}: the direct scan should find something"
+        );
         assert_eq!(finding_keys(&from_sbom), want, "{repo}: SBOM round trip");
     }
 }
