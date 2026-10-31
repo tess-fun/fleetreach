@@ -155,7 +155,10 @@ pub fn assemble_fresh(config: &Config, db: &AdvisoryDb, provenance: Provenance) 
         &SwiftScan { vuln_db: None },
         &HexScan { vuln_db: None },
         &GhActionsScan { vuln_db: None },
-        &MavenScan { vuln_db: None },
+        &MavenScan {
+            vuln_db: None,
+            fetch: false,
+        },
     );
     let mut suppressions: Vec<Suppression> = config
         .ignores

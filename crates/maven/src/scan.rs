@@ -47,7 +47,7 @@ pub fn scan_offline(repo_dir: &Path, db: &MavenDb, repo: &RepoId) -> Result<Tier
             continue;
         };
         for adv in db.advisories_for(&pkg.name) {
-            if let Some(finding) = match_advisory(adv, pkg, &version, repo) {
+            if let Some(finding) = match_advisory(adv, pkg, &version, repo, false) {
                 out.push(finding);
             }
         }
@@ -59,12 +59,52 @@ pub fn scan_offline(repo_dir: &Path, db: &MavenDb, repo: &RepoId) -> Result<Tier
     })
 }
 
+/// Match a resolved tree ([`crate::resolve`]) against the OSV DB: every artifact, with its
+/// dev scope (`test`/`provided`) and the chain that pulls it in.
+pub fn scan_resolution(
+    resolution: &crate::resolve::Resolution,
+    db: &MavenDb,
+    repo: &RepoId,
+) -> TierCScan {
+    let mut out: Vec<VulnFinding> = Vec::new();
+    let mut skipped_unparseable = 0u32;
+    for dep in &resolution.packages {
+        let Some(version) = parse_maven_version(&dep.version) else {
+            skipped_unparseable += 1;
+            continue;
+        };
+        let pkg = InstalledPackage {
+            name: dep.name.clone(),
+            version: dep.version.clone(),
+            direct: dep.direct,
+        };
+        let path = resolution.graph.chain_to(&dep.name);
+        for adv in db.advisories_for(&dep.name) {
+            if let Some(mut finding) = match_advisory(adv, &pkg, &version, repo, dep.dev) {
+                if let Some(fleetreach_core::Occurrence::InRepo {
+                    dependency_path, ..
+                }) = finding.occurrences.first_mut()
+                {
+                    dependency_path.clone_from(&path);
+                }
+                out.push(finding);
+            }
+        }
+    }
+    sort_dedup_findings(&mut out);
+    TierCScan {
+        findings: out,
+        skipped_unparseable,
+    }
+}
+
 /// Build a finding if `adv` lists `pkg` as affected at `version` (a Maven version).
 fn match_advisory(
     adv: &Advisory,
     pkg: &InstalledPackage,
     version: &Version,
     repo: &RepoId,
+    dev: bool,
 ) -> Option<VulnFinding> {
     let fixed = match affected_fixed(version, &adv.ranges) {
         Match::Affected { fixed } => fixed,
@@ -89,7 +129,7 @@ fn match_advisory(
             installed: to_semver(version),
             patched,
             direct: pkg.direct,
-            dev: false,
+            dev,
             dependency_path: Vec::new(),
             repo,
             reach_reason: "package-level scan (no toolchain): version match only",
@@ -153,6 +193,7 @@ mod tests {
             &p,
             &parse_maven_version("2.9.8").unwrap(),
             &RepoId("r".into()),
+            false,
         )
         .unwrap();
         assert_eq!(f.ecosystem, Ecosystem::Maven);
@@ -176,7 +217,8 @@ mod tests {
             &a,
             &pkg("g:a", "2.9.10.7", true),
             &parse_maven_version("2.9.10.7").unwrap(),
-            &RepoId("r".into())
+            &RepoId("r".into()),
+            false,
         )
         .is_none());
     }

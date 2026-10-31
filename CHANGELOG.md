@@ -8,6 +8,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Maven transitive resolution.** A `pom.xml` is resolved into the dependency tree Maven
+  would build, in pure Rust and without running Maven: parent chains, properties,
+  `dependencyManagement` and imported BOMs, default profiles, nearest-wins mediation with
+  scope widening, exclusions, optional dependencies, version ranges and multi-module
+  reactors. POMs come from `~/.m2/repository` and a local cache; `scan --maven-fetch` also
+  fetches missing ones from Maven Central (opt-in: it sends coordinates). Unresolvable items
+  are named as partial coverage. Matched `mvn dependency:list` on test projects (25 of 25, and
+  85 of 85 artifacts and versions for a Spring Boot project, with one scope label differing).
+
 - **Supply-chain signals (`scan --signals`).** Lockfile hygiene as warnings, read from files
   already parsed and with no network: install scripts (npm `hasInstallScript`), git, URL or
   path sources, registries outside the public ones or `[settings.signals] registries`

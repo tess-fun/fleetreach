@@ -72,7 +72,10 @@ fn ghactions() -> GhActionsScan<'static> {
 
 /// Neutral Maven scan config: these Cargo-only fixtures never reach the Maven path.
 fn maven() -> MavenScan<'static> {
-    MavenScan { vuln_db: None }
+    MavenScan {
+        vuln_db: None,
+        fetch: false,
+    }
 }
 
 fn cli_fixtures() -> PathBuf {
@@ -295,6 +298,7 @@ fn pom_only_maven_repo_is_labelled_direct_only() {
             &ghactions(),
             &MavenScan {
                 vuln_db: Some(&url),
+                fetch: false,
             },
         )
     };

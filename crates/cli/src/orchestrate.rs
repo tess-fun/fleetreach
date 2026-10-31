@@ -149,6 +149,8 @@ pub struct GhActionsScan<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct MavenScan<'a> {
     pub vuln_db: Option<&'a str>,
+    /// Fetch POMs missing locally from Maven Central (`--maven-fetch`).
+    pub fetch: bool,
 }
 
 // Each ecosystem threads its own scan config / once-loaded DB through the fleet walk as an
@@ -349,6 +351,7 @@ pub fn scan_fleet(
             hex_db.as_ref(),
             ghactions_db.as_ref(),
             maven_db.as_ref(),
+            maven,
         )
     };
     let per_repo: Vec<RepoResult> = plans
@@ -717,6 +720,7 @@ fn scan_unit(
     hex_db: Option<&Result<HexDb, HexError>>,
     ghactions_db: Option<&Result<GhActionsDb, GhaError>>,
     maven_db: Option<&Result<MavenDb, MavenError>>,
+    maven: &MavenScan,
 ) -> RepoResult {
     match ecosystem {
         Ecosystem::Go => return scan_go_repo(repo, go, go_db),
@@ -728,7 +732,7 @@ fn scan_unit(
         Ecosystem::Julia => return scan_julia_repo(repo, julia_db),
         Ecosystem::Swift => return scan_swift_repo(repo, swift_db),
         Ecosystem::Hex => return scan_hex_repo(repo, hex_db),
-        Ecosystem::Maven => return scan_maven_repo(repo, maven_db),
+        Ecosystem::Maven => return scan_maven_repo(repo, maven_db, maven.fetch),
         Ecosystem::GitHubActions => return scan_ghactions_repo(repo, ghactions_db),
         Ecosystem::Cargo => {}
     }
@@ -1077,7 +1081,11 @@ fn scan_hex_repo(repo: &Repo, hex_db: Option<&Result<HexDb, HexError>>) -> RepoR
 /// `pom.xml` and match each dependency against the preloaded OSV DB. Builds nothing, so it
 /// needs no consent and no sandbox. `maven_db` is the once-loaded DB: `None` means no `file://`
 /// mirror was given (an honest gap), `Some(Err)` a mirror that failed to load (surfaced).
-fn scan_maven_repo(repo: &Repo, maven_db: Option<&Result<MavenDb, MavenError>>) -> RepoResult {
+fn scan_maven_repo(
+    repo: &Repo,
+    maven_db: Option<&Result<MavenDb, MavenError>>,
+    fetch: bool,
+) -> RepoResult {
     let errored = |reason: String| RepoResult::errored(&repo.id, reason);
 
     let db =
@@ -1091,9 +1099,56 @@ fn scan_maven_repo(repo: &Repo, maven_db: Option<&Result<MavenDb, MavenError>>) 
                     .to_string(),
             ),
         };
-    // The Maven matcher reads `gradle.lockfile` when present (the resolved closure) and falls
-    // back to `pom.xml`, which declares direct dependencies only: say so (C1) rather than let
-    // the transitive blind spot pass as a full scan.
+    // `gradle.lockfile` is the resolved closure. A `pom.xml` is resolved like Maven would
+    // (parents, BOMs, mediation) from local repositories, plus Maven Central with
+    // `--maven-fetch`; whatever cannot be resolved is named as partial coverage. A POM that
+    // cannot be parsed falls back to its declared dependencies, labelled direct-only.
+    if !repo.path.join("gradle.lockfile").is_file() {
+        let local = crate::maven_repo::local();
+        let central = crate::maven_repo::Central;
+        let mut sources: Vec<&dyn fleetreach_maven::PomSource> = vec![&local];
+        if fetch {
+            sources.push(&central);
+        }
+        if let Ok(resolution) =
+            fleetreach_maven::resolve(&repo.path, &fleetreach_maven::Chain(sources))
+        {
+            let scan = fleetreach_maven::scan_resolution(&resolution, db, &repo.id);
+            let result = RepoResult::scanned(&repo.id, scan.findings, Vec::new())
+                .with_skipped(scan.skipped_unparseable);
+            if resolution.missing.is_empty() {
+                return result;
+            }
+            let shown: Vec<&str> = resolution
+                .missing
+                .iter()
+                .take(5)
+                .map(String::as_str)
+                .collect();
+            let more = resolution.missing.len().saturating_sub(shown.len());
+            let hint = if fetch {
+                ""
+            } else {
+                "; pass --maven-fetch to fetch missing POMs from Maven Central (sends their coordinates), or build once so ~/.m2 has them"
+            };
+            return result.with_coverage(CoverageGap {
+                repo: repo.id.clone(),
+                source: "pom.xml".to_string(),
+                ecosystem: Ecosystem::Maven,
+                level: Coverage::Partial,
+                reason: format!(
+                    "{} item(s) not resolved: {}{}{hint}",
+                    resolution.missing.len(),
+                    shown.join("; "),
+                    if more > 0 {
+                        format!(" and {more} more")
+                    } else {
+                        String::new()
+                    }
+                ),
+            });
+        }
+    }
     let direct_only = !repo.path.join("gradle.lockfile").is_file();
     match fleetreach_maven::scan_offline(&repo.path, db, &repo.id) {
         Ok(scan) if direct_only => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
@@ -1103,9 +1158,8 @@ fn scan_maven_repo(repo: &Repo, maven_db: Option<&Result<MavenDb, MavenError>>) 
                 source: "pom.xml".to_string(),
                 ecosystem: Ecosystem::Maven,
                 level: Coverage::DirectOnly,
-                reason: "pom.xml declares direct dependencies only; transitive dependencies \
-                         were not resolved (enable Gradle dependency locking, or wait for \
-                         Maven resolution)"
+                reason: "pom.xml could not be resolved; only its declared dependencies were \
+                         read"
                     .to_string(),
             }),
         Ok(scan) => RepoResult::scanned(&repo.id, scan.findings, Vec::new())

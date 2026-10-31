@@ -59,6 +59,11 @@ pub(crate) struct ScanArgs {
     signals: bool,
     #[arg(
         long,
+        help = "resolve pom.xml with POMs fetched from Maven Central when they are not in ~/.m2 (sends each artifact's coordinates to Maven Central); without it, only local repositories are used"
+    )]
+    maven_fetch: bool,
+    #[arg(
+        long,
         help = "exit 2 if any source was read with less than full coverage (a pom.xml without a resolved graph, a lockfile format fleetreach cannot read), as for an errored repo"
     )]
     require_full_coverage: bool,
@@ -559,6 +564,7 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         },
         &MavenScan {
             vuln_db: maven_vuln_db.as_deref(),
+            fetch: args.maven_fetch,
         },
     );
 

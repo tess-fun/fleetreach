@@ -73,6 +73,18 @@ values from the project and the nearest `Directory.Build.props`. Conditions are 
 evaluated (every item is read), an `<Import>` of another file is named as a gap, and a
 range or floating version (`[1,2)`, `1.*`) is listed as unresolved, never guessed.
 
+Maven projects without a `gradle.lockfile` are **resolved** from `pom.xml` the way Maven
+would, without running Maven: the parent chain, properties, `dependencyManagement` with
+imported BOMs, profiles active by default, nearest-wins mediation (with scope widening),
+exclusions, optional dependencies, version ranges and multi-module reactors. POMs come from
+your local Maven repository (`~/.m2/repository`, so any machine that has built the project
+already has them) and fleetreach's cache; `scan --maven-fetch` also downloads missing ones
+from Maven Central, which sends each artifact's coordinates there. Anything that cannot be
+resolved (a missing POM, an undefined property) makes the source `partial` coverage with the
+items named; what did resolve is still matched. Checked against `mvn dependency:list`: on a
+Spring Boot 2.7 project every one of the 85 artifacts and versions matches (one scope label
+differs: a compile dependency reported as test).
+
 The osv.dev exports live at
 `https://osv-vulnerabilities.storage.googleapis.com/<Ecosystem>/all.zip`.
 
