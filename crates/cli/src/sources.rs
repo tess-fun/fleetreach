@@ -70,6 +70,7 @@ pub const SPARSE_PATTERNS: &[&str] = &[
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum SourceKind {
     GitHub,
+    GitLab,
     Git,
 }
 
@@ -102,15 +103,18 @@ impl Source {
     fn label(&self) -> String {
         match self.kind {
             SourceKind::GitHub => format!("github:{}", self.org.as_deref().unwrap_or_default()),
+            SourceKind::GitLab => format!("gitlab:{}", self.org.as_deref().unwrap_or_default()),
             SourceKind::Git => format!("git:{} url(s)", self.urls.len()),
         }
     }
 
-    /// The token for this source: `token_env`, else `GITHUB_TOKEN` / `GH_TOKEN` for GitHub.
+    /// The token for this source: `token_env`, else `GITHUB_TOKEN` / `GH_TOKEN` for GitHub and
+    /// `GITLAB_TOKEN` for GitLab.
     fn token(&self) -> Option<String> {
         let names: Vec<&str> = match (&self.token_env, self.kind) {
             (Some(name), _) => vec![name.as_str()],
             (None, SourceKind::GitHub) => vec!["GITHUB_TOKEN", "GH_TOKEN"],
+            (None, SourceKind::GitLab) => vec!["GITLAB_TOKEN"],
             (None, SourceKind::Git) => Vec::new(),
         };
         names
@@ -196,17 +200,17 @@ pub fn glob_match(pattern: &str, text: &str) -> bool {
 pub fn id_from_url(url: &str) -> Option<String> {
     let path = url.strip_prefix("https://")?.split_once('/')?.1;
     let path = path.trim_end_matches('/').trim_end_matches(".git");
-    let mut parts = path.rsplitn(3, '/');
-    let name = parts.next()?;
-    let owner = parts.next()?;
-    let ok = |s: &str| {
+    let parts: Vec<&str> = path.split('/').collect();
+    let ok = |s: &&str| {
         !s.is_empty()
-            && s != "."
-            && s != ".."
+            && *s != "."
+            && *s != ".."
             && s.chars()
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
     };
-    (ok(owner) && ok(name)).then(|| format!("{owner}/{name}"))
+    // `owner/name`, or a GitLab namespace path `group/subgroup/name` kept whole, so two
+    // projects of the same name in different subgroups never share an id or a checkout.
+    (parts.len() >= 2 && parts.iter().all(ok)).then(|| parts.join("/"))
 }
 
 fn host_of(url: &str) -> Option<&str> {
@@ -231,7 +235,7 @@ pub fn list(source: &Source, refresh: bool) -> Result<Vec<Listed>, String> {
                 })
             })
             .collect(),
-        SourceKind::GitHub => {
+        SourceKind::GitHub | SourceKind::GitLab => {
             let cache = listing_cache_path(source)?;
             if !refresh {
                 let text = std::fs::read_to_string(&cache).map_err(|_| {
@@ -244,7 +248,11 @@ pub fn list(source: &Source, refresh: bool) -> Result<Vec<Listed>, String> {
                     .map_err(|e| format!("listing cache {}: {e}", cache.display()))?;
                 return Ok(all.into_iter().filter(|r| source.keeps(r)).collect());
             }
-            let all = github::list(source)?;
+            let all = if source.kind == SourceKind::GitLab {
+                gitlab::list(source)?
+            } else {
+                github::list(source)?
+            };
             if let Some(dir) = cache.parent() {
                 create_private_dir(dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
             }
@@ -611,6 +619,184 @@ mod github {
     }
 }
 
+/// GitLab project listing: `GET /groups/:group/projects` (subgroups included, shared
+/// projects excluded), falling back to `/users/:user/projects` for a personal namespace.
+// The parsers are used by the network client (and the tests) only.
+#[cfg_attr(not(feature = "network"), allow(dead_code))]
+mod gitlab {
+    use super::Listed;
+
+    #[cfg(feature = "network")]
+    const DEFAULT_API: &str = "https://gitlab.com/api/v4";
+
+    /// One page of `GET .../projects`: the repos it lists. Empty repositories are left out
+    /// (there is nothing to clone or scan).
+    pub(super) fn parse_projects(body: &str) -> Result<Vec<Listed>, String> {
+        let items: Vec<serde_json::Value> =
+            serde_json::from_str(body).map_err(|e| format!("GitLab projects: {e}"))?;
+        Ok(items
+            .iter()
+            .filter(|p| p.get("empty_repo").and_then(serde_json::Value::as_bool) != Some(true))
+            .filter_map(|p| {
+                let text = |k: &str| p.get(k).and_then(|v| v.as_str()).map(str::to_string);
+                let topics = p
+                    .get("topics")
+                    .or_else(|| p.get("tag_list"))
+                    .and_then(|v| v.as_array())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|t| t.as_str().map(str::to_string))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Some(Listed {
+                    id: text("path_with_namespace")?,
+                    clone_url: text("http_url_to_repo")?,
+                    default_branch: text("default_branch"),
+                    archived: p.get("archived").and_then(serde_json::Value::as_bool) == Some(true),
+                    fork: p.get("forked_from_project").is_some_and(|f| !f.is_null()),
+                    topics,
+                })
+            })
+            .collect())
+    }
+
+    /// The group or user path as one URL path segment (`group/sub` -> `group%2Fsub`).
+    pub(super) fn encode_namespace(namespace: &str) -> String {
+        namespace
+            .trim_matches('/')
+            .bytes()
+            .map(|b| {
+                if b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-') {
+                    (b as char).to_string()
+                } else {
+                    format!("%{b:02X}")
+                }
+            })
+            .collect()
+    }
+
+    #[cfg(feature = "network")]
+    pub(super) fn list(source: &super::Source) -> Result<Vec<Listed>, String> {
+        use std::time::Duration;
+        let namespace = source.org.as_deref().ok_or("gitlab source without org")?;
+        let api = source
+            .api_url
+            .as_deref()
+            .unwrap_or(DEFAULT_API)
+            .trim_end_matches('/');
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .https_only(true)
+            .http_status_as_error(false)
+            .timeout_global(Some(Duration::from_secs(60)))
+            .build()
+            .into();
+        let token = source.token();
+        let encoded = encode_namespace(namespace);
+        let mut all = Vec::new();
+        // Groups first (subgroups included); a 404 means `org` is a user namespace.
+        for (kind, query) in [
+            ("groups", "include_subgroups=true&with_shared=false&"),
+            ("users", ""),
+        ] {
+            let mut page = 1u32;
+            loop {
+                let url = format!(
+                    "{api}/{kind}/{encoded}/projects?{query}per_page=100&page={page}&order_by=id&sort=asc"
+                );
+                let mut req = agent.get(&url).header(
+                    "User-Agent",
+                    concat!("fleetreach/", env!("CARGO_PKG_VERSION")),
+                );
+                if let Some(t) = &token {
+                    req = req.header("PRIVATE-TOKEN", t);
+                }
+                let mut resp = req.call().map_err(|e| format!("GET {url}: {e}"))?;
+                let status = resp.status().as_u16();
+                if status == 404 && kind == "groups" && page == 1 {
+                    break;
+                }
+                if status != 200 {
+                    let hint = match status {
+                        401 | 403 => " (set GITLAB_TOKEN to a token with read_api scope)",
+                        429 => " (rate limited; set GITLAB_TOKEN or retry later)",
+                        _ => "",
+                    };
+                    return Err(format!("GET {url}: HTTP {status}{hint}"));
+                }
+                let next = resp
+                    .headers()
+                    .get("x-next-page")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string();
+                let body = resp
+                    .body_mut()
+                    .with_config()
+                    .limit(64 * 1024 * 1024)
+                    .read_to_string()
+                    .map_err(|e| format!("reading {url}: {e}"))?;
+                let items = parse_projects(&body)?;
+                let raw_count = serde_json::from_str::<Vec<serde_json::Value>>(&body)
+                    .map(|v| v.len())
+                    .unwrap_or(0);
+                all.extend(items);
+                // GitLab omits `x-next-page` (or leaves it empty) on the last page; a short
+                // page ends it too.
+                if next.is_empty() || raw_count < 100 {
+                    return Ok(all);
+                }
+                page += 1;
+            }
+        }
+        Err(format!("GitLab has no group or user `{namespace}`"))
+    }
+
+    #[cfg(not(feature = "network"))]
+    pub(super) fn list(_source: &super::Source) -> Result<Vec<Listed>, String> {
+        Err("listing a GitLab source needs a network build (`--features network`)".to_string())
+    }
+
+    #[cfg(test)]
+    mod tests {
+        #![allow(clippy::unwrap_used)]
+        use super::*;
+
+        #[test]
+        fn projects_page_maps_to_listed_repos() {
+            let body = r#"[
+              {"path_with_namespace": "acme/platform/api", "http_url_to_repo": "https://gitlab.com/acme/platform/api.git",
+               "default_branch": "main", "archived": false, "topics": ["production"], "forked_from_project": null},
+              {"path_with_namespace": "acme/old", "http_url_to_repo": "https://gitlab.com/acme/old.git",
+               "default_branch": "master", "archived": true, "tag_list": ["legacy"]},
+              {"path_with_namespace": "acme/fork", "http_url_to_repo": "https://gitlab.com/acme/fork.git",
+               "forked_from_project": {"id": 1}},
+              {"path_with_namespace": "acme/empty", "http_url_to_repo": "https://gitlab.com/acme/empty.git",
+               "empty_repo": true},
+              {"name": "no path"}
+            ]"#;
+            let listed = parse_projects(body).unwrap();
+            let ids: Vec<&str> = listed.iter().map(|r| r.id.as_str()).collect();
+            assert_eq!(ids, vec!["acme/platform/api", "acme/old", "acme/fork"]);
+            assert_eq!(listed[0].topics, vec!["production"]);
+            assert_eq!(listed[0].default_branch.as_deref(), Some("main"));
+            assert!(!listed[0].fork && !listed[0].archived);
+            assert!(listed[1].archived);
+            assert_eq!(listed[1].topics, vec!["legacy"]);
+            assert!(listed[2].fork);
+            assert!(parse_projects("{\"message\": \"404\"}").is_err());
+        }
+
+        #[test]
+        fn namespaces_are_one_path_segment() {
+            assert_eq!(encode_namespace("acme"), "acme");
+            assert_eq!(encode_namespace("acme/platform"), "acme%2Fplatform");
+            assert_eq!(encode_namespace("/a b/"), "a%20b");
+        }
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
@@ -627,15 +813,17 @@ mod tests {
     }
 
     #[test]
-    fn ids_from_urls_are_owner_name_and_reject_traversal() {
+    fn ids_from_urls_keep_the_namespace_and_reject_traversal() {
         assert_eq!(
             id_from_url("https://github.com/acme/api.git").as_deref(),
             Some("acme/api")
         );
         assert_eq!(
-            id_from_url("https://git.example.com/group/sub/svc").as_deref(),
-            Some("sub/svc")
+            id_from_url("https://gitlab.example.com/group/sub/svc.git").as_deref(),
+            Some("group/sub/svc")
         );
+        assert_eq!(id_from_url("https://github.com/acme").as_deref(), None);
+        assert_eq!(id_from_url("https://gitlab.com/g/../svc").as_deref(), None);
         assert_eq!(id_from_url("https://github.com/acme/..").as_deref(), None);
         assert_eq!(id_from_url("http://github.com/acme/api"), None);
         assert_eq!(id_from_url("https://github.com/acme/a b"), None);

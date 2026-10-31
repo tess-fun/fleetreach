@@ -303,7 +303,7 @@ reason = "dev-dependency only, not in any shipped path"   # REQUIRED, non-empty
 ```
 
 Instead of listing local clones, a `[[source]]` discovers repos from a GitHub organization
-(or user) or a list of https URLs. `fleetreach fleet sync` (or `scan --sync`) keeps a cheap
+(or user), a GitLab group with its subgroups (or user), or a list of https URLs. `fleetreach fleet sync` (or `scan --sync`) keeps a cheap
 checkout of each under `~/.cache/fleetreach/checkouts/`: a shallow, blob-less, sparse clone
 holding only the lockfiles and manifests the feeders read. Each report records the commit
 scanned. A listing that fails stops the run, and a repo that cannot be cloned is an errored
@@ -311,8 +311,8 @@ gap.
 
 ```toml
 [[source]]
-kind     = "github"                 # or "git" with urls = ["https://..."]
-org      = "acme"                   # an organization or a user
+kind     = "github"                 # or "gitlab", or "git" with urls = ["https://..."]
+org      = "acme"                   # GitHub org or user; GitLab group (with subgroups) or user
 include  = ["svc-*"]                # globs on the repo name
 exclude  = ["*-sandbox"]
 topics   = ["production"]           # all must be present
@@ -320,8 +320,9 @@ checkout = "lockfiles"              # or "full" (needed for reachability)
 # api_url = "https://ghe.example.com/api/v3", token_env = "GHE_TOKEN"
 ```
 
-`GITHUB_TOKEN` or `GH_TOKEN` is used when set (needed for private repos and higher rate
-limits). `git` runs with hooks, submodules and the `file://` transport disabled, and the
+`GITHUB_TOKEN` or `GH_TOKEN` (GitHub) and `GITLAB_TOKEN` (GitLab) are used when set (needed
+for private repos and higher rate limits); `api_url` points at GitHub Enterprise or a
+self-managed GitLab. `git` runs with hooks, submodules and the `file://` transport disabled, and the
 token is passed in an environment-supplied header, never on the command line.
 
 A repo with a `go.mod` (and no `Cargo.lock`) is scanned by `govulncheck` and folds

@@ -1,6 +1,6 @@
 # Spec 06: Fleet sources (repo discovery and checkouts)
 
-Status: phases 1–2 implemented (git + GitHub incl. GHES, uncommitted); GitLab pending · Gap: #3 (onboarding) · CTEM stage: scoping, discovery · Effort: M
+Status: implemented: git + GitHub incl. GHES (1.2.0), GitLab groups with subgroups · Gap: #3 (onboarding) · CTEM stage: scoping, discovery · Effort: M
 
 ## Problem
 

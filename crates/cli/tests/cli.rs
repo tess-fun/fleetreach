@@ -1311,8 +1311,12 @@ fn unsynced_github_source_fails_closed_with_the_fix() {
 fn invalid_sources_are_config_errors() {
     for (toml, needle) in [
         (
-            "[[source]]\nkind = \"gitlab\"\norg = \"x\"\n",
-            "kind `gitlab`",
+            "[[source]]\nkind = \"bitbucket\"\norg = \"x\"\n",
+            "kind `bitbucket` is not one of `github`, `gitlab`, `git`",
+        ),
+        (
+            "[[source]]\nkind = \"gitlab\"\n",
+            "kind `gitlab` needs `org`",
         ),
         ("[[source]]\nkind = \"github\"\n", "needs `org`"),
         ("[[source]]\nkind = \"git\"\n", "needs `urls`"),

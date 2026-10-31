@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **GitLab fleet sources.** `[[source]] kind = "gitlab"` lists a GitLab group with all its
+  subgroups (or a user namespace) on gitlab.com or a self-managed instance (`api_url`), with
+  the same include/exclude globs, topics, archived and fork filters and sparse checkouts as
+  GitHub. `GITLAB_TOKEN` (or `token_env`) authenticates private groups.
+
+### Changed
+
+- Repo ids from fleet sources keep the full namespace path of nested URLs
+  (`group/sub/name`, previously `sub/name`), so same-named projects in different subgroups
+  no longer collide. A `git` source with a nested URL gets a new id, so a saved baseline
+  or a `[[repo]]` override written against the old id needs updating.
+
 ## [1.3.0] - 2026-10-30
 
 ### Added

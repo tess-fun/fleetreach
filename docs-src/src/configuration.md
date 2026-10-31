@@ -80,8 +80,8 @@ A `[[source]]` discovers repos instead of listing local paths:
 
 ```toml
 [[source]]
-kind     = "github"        # or "git", with urls = ["https://host/owner/repo.git"]
-org      = "acme"          # an organization or a user
+kind     = "github"        # or "gitlab", or "git" with urls = ["https://host/owner/repo.git"]
+org      = "acme"          # GitHub: organization or user; GitLab: group (subgroups included) or user
 include  = ["svc-*"]       # globs on the repo name (default: all)
 exclude  = ["*-sandbox"]
 topics   = ["production"]  # all must be present
@@ -89,9 +89,15 @@ archived = false           # default: skip archived repos
 forks    = false           # default: skip forks
 checkout = "lockfiles"     # sparse clone of lockfiles/manifests; "full" for reachability
 glob     = true            # default for discovered repos
-# api_url = "https://ghe.example.com/api/v3"
-# token_env = "GHE_TOKEN"  # default: GITHUB_TOKEN or GH_TOKEN
+# api_url = "https://ghe.example.com/api/v3"   # or "https://gitlab.example.com/api/v4"
+# token_env = "GHE_TOKEN"  # default: GITHUB_TOKEN or GH_TOKEN; GITLAB_TOKEN for GitLab
 ```
+
+A GitLab group is listed with all its subgroups (projects shared into it from other groups
+are not), and a repo's id keeps its full namespace path (`acme/platform/api`), so two
+projects of the same name in different subgroups never collide. Empty repositories are
+skipped. Public groups need no token; private ones need `GITLAB_TOKEN` with the `read_api`
+scope for listing and `read_repository` for cloning.
 
 `fleetreach fleet sync` lists each source and clones or refreshes its repos under
 `~/.cache/fleetreach/checkouts/`; `scan --sync` does the same before scanning, and a

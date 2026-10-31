@@ -409,10 +409,11 @@ impl Config {
             };
             let kind = match src.kind.as_str() {
                 "github" => crate::sources::SourceKind::GitHub,
+                "gitlab" => crate::sources::SourceKind::GitLab,
                 "git" => crate::sources::SourceKind::Git,
                 other => {
                     return Err(invalid(format!(
-                        "kind `{other}` is not one of `github`, `git`"
+                        "kind `{other}` is not one of `github`, `gitlab`, `git`"
                     )))
                 }
             };
@@ -428,6 +429,11 @@ impl Config {
             match kind {
                 crate::sources::SourceKind::GitHub if src.org.is_none() => {
                     return Err(invalid("kind `github` needs `org`".to_string()))
+                }
+                crate::sources::SourceKind::GitLab if src.org.is_none() => {
+                    return Err(invalid(
+                        "kind `gitlab` needs `org` (a group, subgroup or user path)".to_string(),
+                    ))
                 }
                 crate::sources::SourceKind::Git if src.urls.is_empty() => {
                     return Err(invalid("kind `git` needs `urls`".to_string()))
