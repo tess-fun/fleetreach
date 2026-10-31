@@ -11,13 +11,17 @@ across your whole fleet carry known advisories (plus supply-chain warnings:
 unmaintained, unsound, notice; and advisories against the Rust toolchain
 itself). On top of that you get blast-radius analysis (which single fix clears
 the most repos, split direct versus transitive), a batched remediation queue,
-`--why` provenance across the fleet, drift tracking between scans, and SARIF /
-JSON / OpenVEX output. One binary: no server to run, no SBOM pipeline to wire up.
+`--why` provenance across the fleet, drift tracking between scans, SARIF / JSON /
+OpenVEX output, and a CycloneDX SBOM per repo. One binary: no server to run, no SBOM
+pipeline to wire up.
 
 It covers 12 ecosystems (Rust, Go, npm, PyPI, RubyGems, Packagist, NuGet, Julia,
-Swift, Hex, Maven, GitHub Actions), and for Rust it adds a sound MIR-based
-reachability analysis that proves whether a vulnerable function is actually
-callable.
+Swift, Hex, Maven, GitHub Actions), including projects without a lockfile (pip
+requirements files, `pylock.toml`, .NET project files and restore output), and labels
+every source it reads as full, partial or direct-only coverage, so a partly-read repo is
+never passed off as fully scanned. For Rust it adds a sound MIR-based reachability analysis
+that proves whether a vulnerable function is actually callable; npm and Python get
+import-graph witness chains (`fastapi → starlette → python-multipart`).
 
 It is **not** a scanner or an advisory database. It is an orchestration and
 correlation layer over audited data sources: the
@@ -338,8 +342,12 @@ its matching has been validated differentially against govulncheck on real modul
 
 Every other ecosystem is scanned the same **toolchain-free** way: `fleetreach` reads the
 lockfile (the full transitive tree, already pinned to exact versions) and matches each
-package against the osv.dev export for its ecosystem (`all.zip`, read directly with no unzip
-needed). Network builds fetch exactly the exports your fleet needs into
+package against the osv.dev export for its ecosystem. A project with no lockfile is read
+from what it has (pip requirements and `pylock.toml`; .NET `obj/project.assets.json`,
+`packages.config` or project files with central package management; `pom.xml`), and each
+such source carries a coverage label in the report and the summary line:
+`--require-full-coverage` turns anything below full into exit 2. Exports come from osv.dev
+(`all.zip`, read directly with no unzip needed); network builds fetch exactly the exports your fleet needs into
 `~/.cache/fleetreach/osv/` and keep them fresh, so a polyglot fleet needs no database flags.
 For air-gapped use, `fleetreach db sync --all --osv-dir <dir>` on a connected host builds a
 directory laid out like the osv.dev bucket (`<dir>/<Ecosystem>/all.zip`, also OSV-Scanner's
@@ -378,6 +386,12 @@ against the OSV exports.
 
 A mixed-ecosystem fleet — Rust, Go, and any of the toolchain-free feeders — folds into one
 unified, blast-radius-ranked remediation queue.
+
+`fleetreach sbom -c fleet.toml -o boms/` writes one CycloneDX 1.6 SBOM per repo from the
+same sources: a component per package with its purl, the lockfiles' dependency graph,
+dev-only packages as `scope: excluded`, and `compositions` that mark partly-read sources
+incomplete. The output is deterministic and ready to upload to Dependency-Track; see
+[SBOM output](https://tess-fun.github.io/fleetreach/docs/sbom.html).
 
 Key flags: `--db <PATH>` (use a local advisory-db clone), `--offline`,
 `--max-db-age 7d`, `--min-severity high`, `--fail-on critical`,
