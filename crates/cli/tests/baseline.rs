@@ -37,6 +37,7 @@ fn vuln(id: &str) -> VulnFinding {
         title: id.into(),
         severity: Severity::High,
         cvss_score: None,
+        cvss_vector: None,
         url: None,
         occurrences: vec![Occurrence::InRepo {
             repo: RepoId("a".into()),
@@ -116,6 +117,7 @@ fn drop_phantom_removes_unbuilt_keeps_built_and_unknown() {
         title: id.into(),
         severity: Severity::High,
         cvss_score: None,
+        cvss_vector: None,
         url: None,
         occurrences: vec![occ(active)],
     };

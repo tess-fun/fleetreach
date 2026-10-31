@@ -1,0 +1,7 @@
+# Spec 08: one small, low-impact repo, decided `scheduled` even for a KEV finding.
+[[repo]]
+id = "intranet"
+path = "repos/repo-vuln"
+exposure = "small"
+mission_impact = "degraded"
+safety_impact = "negligible"

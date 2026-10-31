@@ -103,6 +103,7 @@ fn match_advisory(
             title: adv.summary.clone().unwrap_or_else(|| adv.id.clone()),
             severity: adv.severity,
             cvss_score: adv.cvss_score,
+            cvss_vector: adv.cvss_vector.clone(),
             package: gem.name.clone(),
             installed: to_semver(version),
             patched,
@@ -145,6 +146,7 @@ mod tests {
             summary: Some(format!("bug in {id}")),
             severity: Severity::High,
             cvss_score: Some(7.5),
+            cvss_vector: None,
             ranges: vec![osv::parse_range(&range, parse_rubygems_version)],
             versions: vec![],
         }
@@ -223,6 +225,7 @@ mod tests {
             summary: Some("listed versions".into()),
             severity: Severity::Critical,
             cvss_score: None,
+            cvss_vector: None,
             ranges: vec![],
             versions: vec![parse_rubygems_version("1.0.0").unwrap()],
         };

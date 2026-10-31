@@ -1694,3 +1694,147 @@ fn never_synced_source_repos_are_gaps_not_clean() {
         stderr(&out)
     );
 }
+
+// ---- exposure context and SSVC (spec 08) ----
+
+fn ssvc_scan(extra: &[&str]) -> Output {
+    let fleet = cfg("fleet-ssvc.toml");
+    let db = db();
+    let mut args = vec!["scan", "-c", &fleet, "--db", &db];
+    args.extend_from_slice(extra);
+    run(&args)
+}
+
+#[test]
+fn ssvc_decides_per_repo_context() {
+    let kev = cfg("kev.json");
+    let out = ssvc_scan(&["--kev-file", &kev, "-f", "json"]);
+    let v: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(v["ssvc"]["table"], "ssvc:DT_DP:1.0.0");
+    let outcome = |repo: &str| {
+        v["ssvc"]["decisions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|d| d["repo"] == repo)
+            .map(|d| (d["outcome"].clone(), d["vector"].clone()))
+            .unwrap()
+    };
+    // KEV + automatable vector: an open, mission-critical repo acts now, a small, low-impact
+    // one schedules it, and a repo without context fails closed to the most urgent values.
+    assert_eq!(
+        outcome("payments"),
+        ("immediate".into(), "E:A/X:O/A:Y/HI:VH".into())
+    );
+    assert_eq!(
+        outcome("intranet"),
+        ("scheduled".into(), "E:A/X:S/A:Y/HI:L".into())
+    );
+    assert_eq!(outcome("legacy").0, "immediate");
+    let legacy = v["context"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["repo"] == "legacy")
+        .unwrap();
+    assert_eq!(legacy["fail_closed"], true);
+    assert!(stderr(&out).contains("1 repo(s) have incomplete context"));
+    assert_eq!(
+        v["vulnerabilities"][0]["cvss_vector"],
+        "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+    );
+
+    let table = stdout(&ssvc_scan(&["--kev-file", &kev, "-f", "ssvc"]));
+    assert!(table.contains("E:A/X:S/A:Y/HI:L"), "{table}");
+    assert!(table.contains("2 immediate, 0 out-of-cycle, 1 scheduled, 0 defer"));
+
+    // SARIF carries the outcome and maps it to the level.
+    let sarif: serde_json::Value =
+        serde_json::from_str(&stdout(&ssvc_scan(&["--kev-file", &kev, "-f", "sarif"]))).unwrap();
+    let results = sarif["runs"][0]["results"].as_array().unwrap();
+    let levels: std::collections::BTreeSet<(String, String)> = results
+        .iter()
+        .map(|r| {
+            (
+                r["properties"]["ssvc"].as_str().unwrap().to_string(),
+                r["level"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect();
+    assert!(levels.contains(&("immediate".into(), "error".into())));
+    assert!(levels.contains(&("scheduled".into(), "warning".into())));
+}
+
+#[test]
+fn ssvc_without_exploitation_data_decides_nothing() {
+    let out = ssvc_scan(&["-f", "json"]);
+    let v: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(v["ssvc"]["decisions"].as_array().unwrap().len(), 0);
+    assert!(v["ssvc"]["not_computed"]
+        .as_str()
+        .unwrap()
+        .contains("--enrich"));
+
+    // EPSS alone cannot say a finding is not actively exploited.
+    let epss = cfg("epss.csv");
+    let out = ssvc_scan(&["--epss-file", &epss, "-f", "ssvc"]);
+    assert!(stdout(&out).starts_with("No SSVC decisions: no exploitation data"));
+
+    // The gate fails closed rather than passing on missing data.
+    let out = ssvc_scan(&["--epss-file", &epss, "--fail-on-ssvc", "immediate"]);
+    assert_eq!(code(&out), 2);
+    assert!(stderr(&out).contains("no SSVC decisions under --fail-on-ssvc"));
+}
+
+#[test]
+fn fail_on_ssvc_replaces_the_default_severity_gate() {
+    let kev = cfg("kev.json");
+    // A repo decided `immediate` trips the gate...
+    let out = ssvc_scan(&["--kev-file", &kev, "--fail-on-ssvc", "immediate", "-q"]);
+    assert_eq!(code(&out), 1);
+    // ...while a fleet whose only repo is decided `scheduled` passes `out-of-cycle` even
+    // though the finding is critical: SSVC replaced the default `--fail-on low`.
+    let fleet = cfg("fleet-ssvc-small.toml");
+    let db = db();
+    let gate = |extra: &[&str]| {
+        let mut args = vec!["scan", "-c", &fleet, "--db", &db, "--kev-file", &kev, "-q"];
+        args.extend_from_slice(extra);
+        code(&run(&args))
+    };
+    assert_eq!(gate(&["--fail-on-ssvc", "out-of-cycle"]), 0);
+    assert_eq!(gate(&["--fail-on-ssvc", "scheduled"]), 1);
+    // An explicit --fail-on still applies alongside it.
+    assert_eq!(
+        gate(&["--fail-on-ssvc", "out-of-cycle", "--fail-on", "high"]),
+        1
+    );
+}
+
+#[test]
+fn owners_view_splits_the_queue_by_owner() {
+    let out = ssvc_scan(&["-f", "owners"]);
+    let text = stdout(&out);
+    let payments = text.find("team-payments (1 repo(s): payments)").unwrap();
+    let tools = text.find("team-tools (1 repo(s): intranet)").unwrap();
+    let unowned = text.find("(no owner) (1 repo(s): legacy)").unwrap();
+    assert!(payments < tools && tools < unowned, "{text}");
+}
+
+#[test]
+fn context_values_must_be_ssvc_names() {
+    let dir = std::env::temp_dir().join("fleetreach_ssvc_bad_context");
+    std::fs::create_dir_all(&dir).unwrap();
+    let fleet = dir.join("fleet.toml");
+    std::fs::write(
+        &fleet,
+        "[[repo]]\nid = \"a\"\npath = \".\"\nexposure = \"internet\"\n",
+    )
+    .unwrap();
+    let out = run(&["scan", "-c", fleet.to_str().unwrap()]);
+    assert_eq!(code(&out), 2);
+    assert!(
+        stderr(&out).contains("unknown variant `internet`"),
+        "{}",
+        stderr(&out)
+    );
+}

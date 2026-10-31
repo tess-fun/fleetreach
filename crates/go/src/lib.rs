@@ -190,6 +190,7 @@ fn build_finding(
             .unwrap_or_else(|| id.to_string()),
         severity: Severity::Unknown,
         cvss_score: None,
+        cvss_vector: None,
         url: Some(go_vuln_url(id)),
         occurrences: vec![Occurrence::InRepo {
             repo: repo.clone(),

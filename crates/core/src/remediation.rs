@@ -377,6 +377,7 @@ mod tests {
             title: id.into(),
             severity: sev,
             cvss_score: None,
+            cvss_vector: None,
             url: None,
             occurrences: occ,
             affected_functions: vec![],
@@ -423,6 +424,8 @@ mod tests {
             warnings: vec![],
             outcomes: vec![],
             coverage: Vec::new(),
+            context: Vec::new(),
+            ssvc: None,
         }
     }
 

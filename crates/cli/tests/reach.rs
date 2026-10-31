@@ -43,6 +43,7 @@ fn finding(id: &str, repo: &str) -> VulnFinding {
         title: id.into(),
         severity: Severity::High,
         cvss_score: None,
+        cvss_vector: None,
         url: None,
         occurrences: vec![Occurrence::InRepo {
             repo: RepoId(repo.into()),
@@ -146,6 +147,7 @@ fn tier_c(
         title: id.into(),
         severity: Severity::High,
         cvss_score: None,
+        cvss_vector: None,
         url: None,
         occurrences: vec![Occurrence::InRepo {
             repo: RepoId(repo.into()),

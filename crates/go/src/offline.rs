@@ -192,6 +192,7 @@ fn match_module(
         title: osv.summary.clone().unwrap_or_else(|| osv.id.clone()),
         severity: Severity::Unknown,
         cvss_score: None,
+        cvss_vector: None,
         url: Some(go_vuln_url(&osv.id)),
         occurrences: vec![Occurrence::InRepo {
             repo: repo.clone(),

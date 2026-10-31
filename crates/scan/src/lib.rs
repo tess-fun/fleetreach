@@ -528,6 +528,7 @@ fn vuln_finding(
         title: meta.title.clone(),
         severity: map_severity(meta.cvss.as_ref().map(|cvss| cvss.severity())),
         cvss_score: meta.cvss.as_ref().map(|cvss| cvss.score() as f32),
+        cvss_vector: meta.cvss.as_ref().map(ToString::to_string),
         url: meta.url.as_ref().map(ToString::to_string),
         occurrences: vec![occurrence],
     }

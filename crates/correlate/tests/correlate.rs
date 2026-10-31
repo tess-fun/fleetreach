@@ -53,6 +53,7 @@ fn arb_vuln() -> impl Strategy<Value = VulnFinding> {
             advisory_id: id,
             severity,
             cvss_score: None,
+            cvss_vector: None,
             url: None,
             occurrences: vec![Occurrence::InRepo {
                 repo,
@@ -184,6 +185,7 @@ fn version_divergent_occurrences_keep_independent_verdicts() {
         title: "shared advisory".into(),
         severity: Severity::High,
         cvss_score: None,
+        cvss_vector: None,
         url: None,
         occurrences: vec![Occurrence::InRepo {
             repo: RepoId(repo.into()),
@@ -237,6 +239,7 @@ fn identical_occurrences_are_deduplicated() {
         title: "t".into(),
         severity: Severity::High,
         cvss_score: None,
+        cvss_vector: None,
         url: None,
         occurrences: vec![Occurrence::InRepo {
             repo: RepoId("services".into()),

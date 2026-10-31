@@ -162,6 +162,7 @@ fn match_advisory(
             severity: adv.severity,
             // npm derives severity from the GitHub band only; it does not extract a CVSS score.
             cvss_score: None,
+            cvss_vector: None,
             package: pkg.name.clone(),
             installed: version.clone(),
             patched,
@@ -212,6 +213,7 @@ mod tests {
             summary: Some(format!("bug in {id}")),
             severity: fleetreach_core::Severity::High,
             cvss_score: None,
+            cvss_vector: None,
             ranges: vec![osv::parse_range(&range, parse_bound)],
             versions: vec![],
         }

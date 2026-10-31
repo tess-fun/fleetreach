@@ -7,6 +7,7 @@
 - [Report views](./views.md)
 - [SBOM output](./sbom.md)
 - [Licenses](./licenses.md)
+- [Context and SSVC](./context.md)
 - [Fixing: plan and apply](./fix.md)
 - [Reachability](./reachability.md)
 - [Ecosystems](./ecosystems.md)

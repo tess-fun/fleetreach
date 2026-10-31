@@ -65,6 +65,8 @@ fn empty_report() -> fleetreach_core::FleetReport {
         warnings: vec![],
         outcomes: vec![],
         coverage: Vec::new(),
+        context: Vec::new(),
+        ssvc: None,
     }
 }
 

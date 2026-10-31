@@ -1,6 +1,6 @@
 # Spec 08: Exposure context and SSVC decisions
 
-Status: draft · Gap: CTEM scoping (from the CTEM notes) · CTEM stage: scoping, prioritization · Effort: M
+Status: phases 1–2 implemented (unreleased) · Gap: CTEM scoping (from the CTEM notes) · CTEM stage: scoping, prioritization · Effort: M
 
 ## Problem
 

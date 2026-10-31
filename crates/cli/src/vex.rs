@@ -610,6 +610,7 @@ mod tests {
             title: "t".into(),
             severity: Severity::High,
             cvss_score: None,
+            cvss_vector: None,
             url: None,
             occurrences: vec![Occurrence::InRepo {
                 repo: RepoId("app".into()),
@@ -661,6 +662,8 @@ mod tests {
             warnings: vec![],
             outcomes: vec![],
             coverage: Vec::new(),
+            context: Vec::new(),
+            ssvc: None,
         }
     }
 

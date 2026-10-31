@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Repo context and SSVC decisions** (spec 08). `[[repo]]` takes `exposure`,
+  `mission_impact`, `safety_impact`, `owner` and `tags`, with `[settings.context.defaults]`
+  for the rest. Each vulnerable occurrence then gets a CISA SSVC deployer decision
+  (`immediate`, `out-of-cycle`, `scheduled`, `defer`) from KEV exploitation, the advisory's
+  CVSS vector (Automatable) and the repo's exposure and impact, through the published
+  `ssvc:DT_DP:1.0.0` table, tested row by row against CERT/CC's data. `-f ssvc` lists the
+  decisions with their vector and reason; `fix-first` and `remediation` sort by them; SARIF
+  results carry the outcome and take their level from it; `-f owners` splits the fix queue by
+  owner. `--fail-on-ssvc <outcome>` gates on them and, given alone, replaces the default
+  severity gate. Fail-closed throughout: without KEV data nothing is decided (and the gate
+  exits 2), missing context takes the most urgent values, and only a sound `NotReachable` or a
+  phantom dependency lowers a decision to `defer`. `[settings.ssvc] poc_epss` optionally
+  counts a high EPSS as a public proof of concept.
+- Findings carry the advisory's `cvss_vector` (additive JSON field).
+
 ## [1.4.0] - 2026-10-31
 
 ### Added

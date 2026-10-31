@@ -21,7 +21,7 @@
 //! # fn finding(repo: &str) -> VulnFinding {
 //! #     VulnFinding {
 //! #         advisory_id: "RUSTSEC-2024-0001".into(), aliases: vec![], ecosystem: Default::default(), title: "boom".into(),
-//! #         severity: Severity::High, cvss_score: None, url: None, affected_functions: vec![],
+//! #         severity: Severity::High, cvss_score: None, cvss_vector: None, url: None, affected_functions: vec![],
 //! #         reachable: None, reachability: None, exploit: Default::default(),
 //! #         occurrences: vec![Occurrence::InRepo {
 //! #             repo: RepoId(repo.into()), package: "foo".into(), installed: Version::new(1, 0, 0),

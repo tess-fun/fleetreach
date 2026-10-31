@@ -104,6 +104,9 @@ fn static_engine_annotates_a_dependency_finding_reachable() {
         licenses: None,
         signal_registries: Vec::new(),
         sboms: Default::default(),
+        context: Default::default(),
+        context_defaults: None,
+        ssvc_poc_epss: None,
     };
 
     assess(
@@ -202,6 +205,9 @@ fn uninstantiated_generic_dependency_fn_is_not_reachable() {
         licenses: None,
         signal_registries: Vec::new(),
         sboms: Default::default(),
+        context: Default::default(),
+        context_defaults: None,
+        ssvc_poc_epss: None,
     };
 
     assess(

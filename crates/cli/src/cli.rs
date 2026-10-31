@@ -158,6 +158,31 @@ pub(crate) enum Format {
     RemediationJson,
     /// OpenVEX 0.2.0 suppression document (§14).
     Vex,
+    /// SSVC view: findings grouped by deployer decision (immediate → defer), each with its
+    /// decision vector. Needs repo context in fleet.toml and --enrich.
+    Ssvc,
+    /// Owners view: the remediation queue split by each repo's `owner`.
+    Owners,
+}
+
+/// An SSVC outcome on the command line (`--fail-on-ssvc`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct OutcomeArg(pub fleetreach_core::ssvc::Outcome);
+
+impl ValueEnum for OutcomeArg {
+    fn value_variants<'a>() -> &'a [Self] {
+        use fleetreach_core::ssvc::Outcome;
+        &[
+            OutcomeArg(Outcome::Defer),
+            OutcomeArg(Outcome::Scheduled),
+            OutcomeArg(Outcome::OutOfCycle),
+            OutcomeArg(Outcome::Immediate),
+        ]
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        Some(clap::builder::PossibleValue::new(self.0.label()))
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]

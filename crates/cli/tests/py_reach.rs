@@ -44,6 +44,7 @@ fn pypi_finding(id: &str, repo: &str, package: &str) -> VulnFinding {
         title: id.into(),
         severity: fleetreach_core::Severity::High,
         cvss_score: None,
+        cvss_vector: None,
         url: None,
         occurrences: vec![Occurrence::InRepo {
             repo: RepoId(repo.into()),

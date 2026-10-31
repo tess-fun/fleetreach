@@ -15,7 +15,9 @@ use crate::assemble::{
     assemble, combine_baseline, drop_dev, drop_phantom, exit_code, retain_min_epss, retain_new,
     retain_reachable, Assembled, GateConfig, SuppressedOccurrence, Suppression,
 };
-use crate::cli::{fail, usage_fail, BuildSandbox, Format, ReachMode, SeverityArg, VexScopeArg};
+use crate::cli::{
+    fail, usage_fail, BuildSandbox, Format, OutcomeArg, ReachMode, SeverityArg, VexScopeArg,
+};
 use crate::config::Config;
 use crate::db::{
     build_provenance, check_db_age, detect_toolchain, fetch_enrichment, load_db_from,
@@ -48,8 +50,12 @@ pub(crate) struct ScanArgs {
     // filtering & gating
     #[arg(long, value_enum, help = "report only at/above this severity")]
     min_severity: Option<SeverityArg>,
-    #[arg(long, value_enum, default_value_t = SeverityArg::Low, help = "fail if any vuln at/above")]
-    fail_on: SeverityArg,
+    #[arg(
+        long,
+        value_enum,
+        help = "fail if any vuln at/above [default: low, or off when --fail-on-ssvc is given alone]"
+    )]
+    fail_on: Option<SeverityArg>,
     #[arg(long, help = "also fail if any warning is present")]
     fail_on_warnings: bool,
     #[arg(
@@ -106,6 +112,13 @@ pub(crate) struct ScanArgs {
     fail_on_kev: bool,
     #[arg(long, value_name = "P", help = "report only findings with EPSS >= P")]
     min_epss: Option<f32>,
+    #[arg(
+        long,
+        value_enum,
+        value_name = "OUTCOME",
+        help = "fail if any SSVC decision is at or above OUTCOME (needs repo context in fleet.toml; implies --enrich)"
+    )]
+    fail_on_ssvc: Option<OutcomeArg>,
 
     #[arg(
         long,
@@ -692,10 +705,15 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
     //      filter by EPSS, then re-rank by exploit risk (the action queue).
     let enrich_requested = args.enrich
         || args.fail_on_kev
+        || args.fail_on_ssvc.is_some()
         || args.min_epss.is_some()
         || args.kev_file.is_some()
         || args.epss_file.is_some();
+    // SSVC Exploitation is only known once the KEV catalog was loaded; an EPSS file alone
+    // cannot say a finding is not actively exploited.
+    let mut exploitation_known = false;
     if enrich_requested {
+        let from_files = args.kev_file.is_some() || args.epss_file.is_some();
         let loaded = if args.kev_file.is_some() || args.epss_file.is_some() {
             Enrichment::from_files(args.kev_file.as_deref(), args.epss_file.as_deref())
         } else if args.offline {
@@ -711,6 +729,7 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         };
         match loaded {
             Ok(enrichment) => {
+                exploitation_known = !from_files || args.kev_file.is_some();
                 enrichment.apply(&mut fleet_report.vulnerabilities);
                 // apply() backfills `unknown` severities from NVD CVSS, so the summary
                 // (built pre-enrichment) must be refreshed or it reports a stale
@@ -842,6 +861,56 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             !fleet_report.vulnerabilities.is_empty() || !fleet_report.warnings.is_empty();
     }
 
+    // 5c. Exposure context and SSVC decisions (spec 08), on what is left to report.
+    crate::ssvc::annotate(
+        &mut fleet_report,
+        &config,
+        crate::ssvc::Inputs {
+            exploitation_known,
+            poc_epss: config.ssvc_poc_epss,
+        },
+    );
+    if let Some(threshold) = args.fail_on_ssvc {
+        let why_not = match &fleet_report.ssvc {
+            None => Some(
+                "--fail-on-ssvc needs repo context: set exposure and impact on [[repo]] or in \
+                 [settings.context.defaults]"
+                    .to_string(),
+            ),
+            Some(s) => s.not_computed.clone(),
+        };
+        if let Some(why) = why_not {
+            if !args.quiet {
+                eprintln!(
+                    "error: no SSVC decisions under --fail-on-ssvc {}: {why}",
+                    threshold.0
+                );
+            }
+            return 2;
+        }
+    }
+    if !args.quiet {
+        if let Some(s) = &fleet_report.ssvc {
+            if let Some(why) = &s.not_computed {
+                eprintln!("note: SSVC decisions not computed: {why}");
+            }
+            let fail_closed: Vec<&str> = fleet_report
+                .context
+                .iter()
+                .filter(|c| c.fail_closed)
+                .map(|c| c.repo.0.as_str())
+                .collect();
+            if !fail_closed.is_empty() {
+                eprintln!(
+                    "note: {} repo(s) have incomplete context and were decided with the most \
+                     urgent values: {}",
+                    fail_closed.len(),
+                    fail_closed.join(", ")
+                );
+            }
+        }
+    }
+
     // 6. Render: machine payload to stdout, human summary to stderr.
     // Color only a TTY table — never JSON, never piped output (§7).
     let payload = match args.format {
@@ -871,6 +940,8 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         Format::Remediation => {
             report::to_remediation(&fleet_report, std::io::stdout().is_terminal())
         }
+        Format::Ssvc => report::to_ssvc(&fleet_report, std::io::stdout().is_terminal()),
+        Format::Owners => report::to_owners(&fleet_report, std::io::stdout().is_terminal()),
         Format::RemediationJson => match report::to_remediation_json(&fleet_report) {
             Ok(json) => json,
             Err(e) => return fail(&format!("serializing remediation: {e}")),
@@ -896,14 +967,35 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
     //    elevates a clean/gated code to >=1 on its flag while preserving the
     //    untrustworthy `2`; we reuse it for KEV (any actively-exploited finding).
     let kev_hit = args.fail_on_kev && fleet_report.vulnerabilities.iter().any(|v| v.exploit.kev);
+    // `--fail-on-ssvc` on its own replaces the severity gate, so SSVC decides; known
+    // malware still fails the run whatever its decision.
+    let severity_gate = args
+        .fail_on
+        .or_else(|| args.fail_on_ssvc.is_none().then_some(SeverityArg::Low));
+    let gated;
+    let gated_report = match severity_gate {
+        Some(_) => &fleet_report,
+        None => {
+            let mut only_malware = fleet_report.clone();
+            only_malware
+                .vulnerabilities
+                .retain(crate::assemble::is_malware);
+            gated = only_malware;
+            &gated
+        }
+    };
     let code = exit_code(
-        &fleet_report,
+        gated_report,
         &GateConfig {
-            fail_on: args.fail_on.into(),
+            fail_on: severity_gate.unwrap_or(SeverityArg::Low).into(),
             fail_on_warnings: args.fail_on_warnings,
         },
     );
+    let ssvc_hit = args
+        .fail_on_ssvc
+        .is_some_and(|t| crate::ssvc::gate_hit(&fleet_report, t.0));
     let code = combine_baseline(combine_baseline(code, kev_hit), baseline_new);
+    let code = combine_baseline(code, ssvc_hit);
     // --require-full-coverage: a source read only partly means the fleet cannot be called
     // clean, the same contract as an errored repo.
     if args.require_full_coverage && coverage_incomplete {

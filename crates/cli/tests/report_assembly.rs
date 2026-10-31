@@ -37,6 +37,7 @@ fn vuln(id: &str, severity: Severity, repo: &str) -> VulnFinding {
         title: format!("title {id}"),
         severity,
         cvss_score: None,
+        cvss_vector: None,
         url: None,
         occurrences: vec![Occurrence::InRepo {
             repo: RepoId(repo.into()),

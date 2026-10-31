@@ -238,6 +238,8 @@ pub fn assemble(
             warnings: correlated.warnings,
             outcomes: scan.outcomes,
             coverage: scan.coverage,
+            context: Vec::new(),
+            ssvc: None,
         },
         suppressed,
     }

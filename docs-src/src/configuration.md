@@ -39,6 +39,9 @@ reason = "dev-dependency only, not in any shipped path"   # REQUIRED, non-empty
 | `glob` | Also scan lockfiles below the repo root (every ecosystem). |
 | `glob_max_depth` | How deep `glob` descends (default 3). |
 | `ecosystem` | Override auto-detection (`cargo`, `go`, `npm`, `pypi`, `rubygems`, `packagist`, `nuget`, `julia`, `swift`, `hex`, `maven`, `githubactions`). |
+| `sbom` | Scan this CycloneDX or SPDX file instead of the repo's lockfiles ([SBOM](./sbom.md)). |
+| `exposure`, `mission_impact`, `safety_impact` | SSVC context for prioritization ([Context and SSVC](./context.md)). |
+| `owner`, `tags` | Who owns the repo, and free-form labels; `-f owners` splits the fix queue by owner. |
 
 ### Ignoring an advisory
 

@@ -430,6 +430,28 @@ Gate on it with `--fail-on-kev` (fail if anything is actively exploited) or
 `--min-epss 0.5`. Both feeds can be supplied offline via `--kev-file` /
 `--epss-file`.
 
+### Act now or schedule it: repo context and SSVC
+
+KEV and EPSS describe the vulnerability, not where it runs. Add each repo's exposure and
+impact to `fleet.toml` and every finding gets a CISA [SSVC](https://certcc.github.io/SSVC/)
+deployer decision (`immediate`, `out-of-cycle`, `scheduled` or `defer`):
+
+```toml
+[[repo]]
+id = "payments-api"
+path = "../payments-api"
+exposure = "open"                 # small | controlled | open
+mission_impact = "mission-failure"
+safety_impact = "negligible"
+owner = "team-payments"
+```
+
+The same KEV finding is `immediate` in an internet-facing payments API and `scheduled` in a
+small internal tool. `-f ssvc` lists the decisions with their vector, `fix-first` and
+`remediation` sort by them, `-f owners` splits the fix queue by owner, and
+`--fail-on-ssvc out-of-cycle` gates on them. Decisions need `--enrich` (or `--kev-file`);
+without KEV data fleetreach decides nothing rather than guess.
+
 Findings whose advisory carries no severity get a CVSS score from NVD. Without an API key
 NVD allows about one request every 6 seconds, so set `NVD_API_KEY` (free from NVD) to cut
 that roughly 8x; answers are cached per CVE under `~/.cache/fleetreach/nvd/`, so later runs

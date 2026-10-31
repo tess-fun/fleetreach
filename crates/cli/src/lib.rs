@@ -30,6 +30,7 @@ pub mod sbom_input;
 pub mod scan;
 pub mod signals;
 pub mod sources;
+pub mod ssvc;
 pub mod static_reach;
 pub mod typosquat;
 pub mod vex;

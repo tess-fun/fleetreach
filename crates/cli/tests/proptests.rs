@@ -66,6 +66,7 @@ fn arb_vuln() -> impl Strategy<Value = VulnFinding> {
             title: "t".into(),
             severity,
             cvss_score: None,
+            cvss_vector: None,
             url: None,
             occurrences: vec![occ],
         })

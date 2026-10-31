@@ -39,6 +39,8 @@ fn report(vulns: Vec<VulnFinding>) -> FleetReport {
         warnings: vec![],
         outcomes: vec![],
         coverage: Vec::new(),
+        context: Vec::new(),
+        ssvc: None,
     }
 }
 
@@ -54,6 +56,7 @@ fn a_vuln() -> VulnFinding {
         title: "boom".into(),
         severity: Severity::Critical,
         cvss_score: Some(9.8),
+        cvss_vector: None,
         url: None,
         occurrences: vec![Occurrence::InRepo {
             repo: RepoId("app".into()),

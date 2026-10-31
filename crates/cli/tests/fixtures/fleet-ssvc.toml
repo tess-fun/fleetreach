@@ -1,0 +1,22 @@
+# Spec 08: three repos sharing one vulnerable checkout, with different context.
+[[repo]]
+id = "payments"
+path = "repos/repo-vuln"
+exposure = "open"
+mission_impact = "mission-failure"
+safety_impact = "negligible"
+owner = "team-payments"
+tags = ["pci"]
+
+[[repo]]
+id = "intranet"
+path = "repos/repo-vuln"
+exposure = "small"
+mission_impact = "degraded"
+safety_impact = "negligible"
+owner = "team-tools"
+
+# No context and no defaults: decided with the most urgent values.
+[[repo]]
+id = "legacy"
+path = "repos/repo-vuln"

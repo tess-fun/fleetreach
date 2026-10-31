@@ -49,6 +49,7 @@ mod outcome;
 mod remediation;
 mod report;
 mod severity;
+pub mod ssvc;
 
 pub use depgraph::DepGraph;
 pub use finding::{
@@ -58,8 +59,8 @@ pub use finding::{
 pub use outcome::{RepoOutcome, ScanStatus};
 pub use remediation::{remediations, Action, ReachTier, RemediationItem};
 pub use report::{
-    max_severity_of, Coverage, CoverageGap, FleetReport, OsvProvenance, Provenance, RepoSource,
-    Summary, SCHEMA_VERSION,
+    max_severity_of, Coverage, CoverageGap, FleetReport, OsvProvenance, Provenance, RepoContext,
+    RepoSource, SsvcDecision, SsvcReport, Summary, SCHEMA_VERSION,
 };
 pub use severity::Severity;
 

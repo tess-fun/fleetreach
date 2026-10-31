@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+use crate::ssvc::{
+    Automatable, Exploitation, Exposure, HumanImpact, MissionImpact, Outcome, SafetyImpact,
+};
 use crate::{Ecosystem, RepoId, RepoOutcome, Severity, VulnFinding, WarnFinding};
 
 /// Pinned from day one so machine consumers can branch on the wire format.
@@ -21,6 +24,75 @@ pub struct FleetReport {
     /// what was read were never matched. Empty (and omitted) when everything was full.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub coverage: Vec<CoverageGap>,
+    /// Per-repo context from `fleet.toml` (spec 08): exposure, impact, owner and tags, with
+    /// defaults applied. Empty (and omitted) when no repo has any context.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub context: Vec<RepoContext>,
+    /// SSVC deployer decisions (spec 08). Absent unless repo context is configured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssvc: Option<SsvcReport>,
+}
+
+/// A repo's exposure and impact context (spec 08), as resolved for this scan.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RepoContext {
+    pub repo: RepoId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exposure: Option<Exposure>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mission_impact: Option<MissionImpact>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub safety_impact: Option<SafetyImpact>,
+    /// Free text: a team, a GitHub team handle or an email.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+    /// Exposure or impact came from neither the repo nor `[settings.context.defaults]`, so
+    /// the fail-closed values (`open`, Human Impact `very-high`) were used.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fail_closed: bool,
+}
+
+/// SSVC deployer decisions for every vulnerable in-repo occurrence (spec 08).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SsvcReport {
+    /// The decision table used, e.g. `ssvc:DT_DP:1.0.0`.
+    pub table: String,
+    /// Sorted most urgent first, then advisory, repo and package.
+    pub decisions: Vec<SsvcDecision>,
+    /// Why no decisions were computed, when they were not (for example, no exploitation
+    /// data because the scan ran without `--enrich` or `--kev-file`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_computed: Option<String>,
+}
+
+impl SsvcReport {
+    /// The most urgent outcome across all decisions.
+    #[must_use]
+    pub fn max_outcome(&self) -> Option<Outcome> {
+        self.decisions.iter().map(|d| d.outcome).max()
+    }
+}
+
+/// One occurrence's decision: the four decision points, the outcome and why.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SsvcDecision {
+    pub advisory_id: String,
+    pub repo: RepoId,
+    pub package: String,
+    pub installed: String,
+    pub exploitation: Exploitation,
+    pub exposure: Exposure,
+    pub automatable: Automatable,
+    pub human_impact: HumanImpact,
+    pub outcome: Outcome,
+    /// The compact decision vector, e.g. `E:A/X:O/A:Y/HI:VH`.
+    pub vector: String,
+    /// What drove the decision points, or why the table was overridden (`not_reachable`).
+    pub rationale: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
 }
 
 /// Where a repo discovered by a fleet source (spec 06) was checked out from.

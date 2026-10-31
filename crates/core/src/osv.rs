@@ -242,6 +242,9 @@ pub struct Advisory<V> {
     /// A CVSS base score when the record carries a parseable CVSS_V3 vector (always `None`
     /// for feeders whose [`Spec::severity`] does not extract one, e.g. npm).
     pub cvss_score: Option<f32>,
+    /// The record's CVSS vector string (a `CVSS_V3` entry, else `CVSS_V4`), for decisions
+    /// that read individual metrics, such as SSVC Automatable.
+    pub cvss_vector: Option<String>,
     /// `matchable` ranges with bounds pre-parsed (see [`parse_range`]).
     pub ranges: Vec<ParsedRange<V>>,
     /// Enumerated affected versions, sorted+deduped for `binary_search` (empty when
@@ -447,6 +450,7 @@ where
         return Vec::new();
     }
     let (severity, cvss_score) = (spec.severity)(&osv);
+    let cvss_vector = cvss_vector_of(&osv);
     osv.affected
         .iter()
         .filter(|a| a.package.ecosystem.as_deref() == Some(spec.ecosystem))
@@ -491,12 +495,23 @@ where
                     summary: osv.summary.clone(),
                     severity,
                     cvss_score,
+                    cvss_vector: cvss_vector.clone(),
                     ranges,
                     versions,
                 },
             ))
         })
         .collect()
+}
+
+/// The record's CVSS vector: the first `CVSS_V3` entry, else the first `CVSS_V4`.
+pub fn cvss_vector_of(osv: &OsvRecord) -> Option<String> {
+    ["CVSS_V3", "CVSS_V4"].iter().find_map(|kind| {
+        osv.severity
+            .iter()
+            .find(|s| s.kind.as_deref() == Some(kind))
+            .and_then(|s| s.score.clone())
+    })
 }
 
 /// The default `(severity, cvss_score)` derivation: prefer the curated GHSA band
@@ -675,11 +690,15 @@ pub fn collapse_alias_duplicates(out: &mut Vec<VulnFinding>) {
     for (kept, others) in merges {
         let mut aliases: BTreeSet<String> = out[kept].aliases.iter().cloned().collect();
         let (mut severity, mut cvss) = (out[kept].severity, out[kept].cvss_score);
+        let mut vector = out[kept].cvss_vector.clone();
         for &i in &others {
             absorbed[i] = true;
             aliases.insert(out[i].advisory_id.clone());
             aliases.extend(out[i].aliases.iter().cloned());
             severity = severity.max(out[i].severity);
+            if vector.is_none() {
+                vector = out[i].cvss_vector.clone();
+            }
             cvss = match (cvss, out[i].cvss_score) {
                 (Some(a), Some(b)) => Some(a.max(b)),
                 (a, b) => a.or(b),
@@ -690,6 +709,7 @@ pub fn collapse_alias_duplicates(out: &mut Vec<VulnFinding>) {
         finding.aliases = aliases.into_iter().collect();
         finding.severity = severity;
         finding.cvss_score = cvss;
+        finding.cvss_vector = vector;
     }
     let mut i = 0;
     out.retain(|_| {
@@ -738,6 +758,8 @@ pub struct TierCFinding<'a> {
     /// CVSS base score when the advisory carries one (`None` where the feeder does not
     /// extract it).
     pub cvss_score: Option<f32>,
+    /// The advisory's CVSS vector string, when it carries one.
+    pub cvss_vector: Option<String>,
     /// The affected package name.
     pub package: String,
     /// The installed version, in the shared SemVer model (already coerced by the feeder).
@@ -772,6 +794,7 @@ impl TierCFinding<'_> {
             title: self.title,
             severity: self.severity,
             cvss_score: self.cvss_score,
+            cvss_vector: self.cvss_vector,
             url: Some(advisory_url(&self.advisory_id)),
             occurrences: vec![Occurrence::InRepo {
                 repo: self.repo.clone(),
@@ -1046,6 +1069,7 @@ mod tests {
             title: title.into(),
             severity,
             cvss_score: None,
+            cvss_vector: None,
             package: package.into(),
             installed: v(installed),
             patched: Vec::new(),

@@ -91,6 +91,13 @@ NVD allows about one request every 6 seconds, so set `NVD_API_KEY` (free from NV
 that roughly 8x; answers are cached per CVE under `~/.cache/fleetreach/nvd/`, so later runs
 only ask about new CVEs.
 
+## `ssvc` and `owners` — act now or schedule it?
+
+With repo context in `fleet.toml`, `-f ssvc` gives every finding an SSVC action
+(`immediate`, `out-of-cycle`, `scheduled`, `defer`) from its exploitation and the repo's
+exposure and impact, and `fix-first` and `remediation` sort by it first. `-f owners` splits
+the fix queue by each repo's `owner`. See [Context and SSVC](./context.md).
+
 ## Provenance: `--why`
 
 Every finding shows whether the flagged package is a direct or transitive

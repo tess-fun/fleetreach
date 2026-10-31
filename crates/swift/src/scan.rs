@@ -97,6 +97,7 @@ fn match_advisory(
             title: adv.summary.clone().unwrap_or_else(|| adv.id.clone()),
             severity: adv.severity,
             cvss_score: adv.cvss_score,
+            cvss_vector: adv.cvss_vector.clone(),
             package: pkg.name.clone(),
             installed: version.clone(),
             patched,
@@ -139,6 +140,7 @@ mod tests {
             summary: Some(format!("bug in {id}")),
             severity: Severity::High,
             cvss_score: Some(7.5),
+            cvss_vector: None,
             ranges: vec![osv::parse_range(&range, crate::db::parse_bound)],
             versions: vec![],
         }

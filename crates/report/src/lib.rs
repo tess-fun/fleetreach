@@ -27,7 +27,7 @@
 //! # fn report() -> FleetReport {
 //! #     let vuln = VulnFinding {
 //! #         advisory_id: "RUSTSEC-2024-0001".into(), aliases: vec![], ecosystem: Default::default(), title: "use-after-free".into(),
-//! #         severity: Severity::High, cvss_score: Some(7.5), url: None, affected_functions: vec![],
+//! #         severity: Severity::High, cvss_score: Some(7.5), cvss_vector: None, url: None, affected_functions: vec![],
 //! #         reachable: None, reachability: None, exploit: Default::default(),
 //! #         occurrences: vec![Occurrence::InRepo {
 //! #             repo: RepoId("app".into()), package: "foo".into(), installed: Version::new(1, 0, 0),
@@ -40,7 +40,8 @@
 //! #             host_arch: "x86_64".into(), generated_at: "t".into(), osv: vec![], sources: vec![] },
 //! #         summary: Summary { repos_scanned: 1, repos_errored: 0, vuln_count: 1, warn_count: 0,
 //! #             max_severity: Severity::High, stale_ignores: vec![] },
-//! #         vulnerabilities: vec![vuln], warnings: vec![], outcomes: vec![], coverage: vec![] }
+//! #         vulnerabilities: vec![vuln], warnings: vec![], outcomes: vec![], coverage: vec![],
+//! #         context: vec![], ssvc: None }
 //! # }
 //! // Render the fleet report as a plain-text table (no color for piped output).
 //! let table = to_table(&report(), false);
@@ -63,8 +64,10 @@ use fleetreach_core::{
 use serde::Serialize;
 
 mod cyclonedx;
+mod ssvc;
 mod vex;
 pub use cyclonedx::{to_cyclonedx, CYCLONEDX_SPEC_VERSION};
+pub use ssvc::{to_owners, to_ssvc};
 pub use vex::{
     project, purl, to_vex, HumanAssertion, StatementView, VexParams, VexScope, OPENVEX_CONTEXT,
 };
@@ -121,6 +124,7 @@ pub fn to_sarif(
         }
     }
 
+    let decisions = ssvc::index(report);
     let mut results = Vec::new();
     for v in &report.vulnerabilities {
         for occ in &v.occurrences {
@@ -131,14 +135,29 @@ pub fn to_sarif(
                 )),
                 _ => None,
             };
-            results.push(sarif_result(
+            // An SSVC decision, when there is one, sets the level: it already weighs
+            // severity against exploitation and the repo's exposure.
+            let decision = match occ {
+                Occurrence::InRepo { repo, package, .. } => decisions
+                    .get(&(v.advisory_id.as_str(), repo.0.as_str(), package.as_str()))
+                    .copied(),
+                Occurrence::Toolchain { .. } => None,
+            };
+            let level =
+                decision.map_or_else(|| sarif_level(v.severity), |d| ssvc::sarif_level(d.outcome));
+            let mut result = sarif_result(
                 v.advisory_id.clone(),
-                sarif_level(v.severity),
+                level,
                 &v.title,
                 &format!("{:?}", v.ecosystem),
                 occ,
                 suppression,
-            ));
+            );
+            if let (Some(d), Some(props)) = (decision, result.properties.as_mut()) {
+                props.ssvc = Some(d.outcome.label());
+                props.ssvc_vector = Some(d.vector.clone());
+            }
+            results.push(result);
         }
     }
     for w in &report.warnings {
@@ -284,6 +303,11 @@ fn fingerprints(parts: &[&str]) -> BTreeMap<&'static str, String> {
 struct SarifResultProps {
     #[serde(rename = "dependencyKind")]
     dependency_kind: &'static str,
+    /// The SSVC deployer outcome (spec 08), when decided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ssvc: Option<&'static str>,
+    #[serde(rename = "ssvcVector", skip_serializing_if = "Option::is_none")]
+    ssvc_vector: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -404,6 +428,8 @@ fn sarif_result(
                 DependencyKind::Direct => "direct",
                 DependencyKind::Transitive => "transitive",
             },
+            ssvc: None,
+            ssvc_vector: None,
         }),
         Occurrence::Toolchain { .. } => None,
     };
@@ -1139,11 +1165,18 @@ pub fn to_fix_first(report: &FleetReport, color: bool) -> String {
         return "No advisories found.".to_string();
     }
 
-    // KEV first, then severity tier desc, then blast radius desc (the fleet-only
-    // tie-breaker), then EPSS desc, CVSS desc, and id for a total, stable order.
+    // The SSVC outcome first when decided (spec 08), then KEV, then severity tier desc,
+    // then blast radius desc (the fleet-only tie-breaker), then EPSS desc, CVSS desc, and
+    // id for a total, stable order.
+    let decided = report
+        .ssvc
+        .as_ref()
+        .is_some_and(|s| !s.decisions.is_empty());
+    let outcome = |id: &str| ssvc::max_outcome(report, id, None);
     rows.sort_by(|a, b| {
-        b.kev
-            .cmp(&a.kev)
+        outcome(b.id)
+            .cmp(&outcome(a.id))
+            .then(b.kev.cmp(&a.kev))
             .then(b.tier.cmp(&a.tier))
             .then(b.repos.len().cmp(&a.repos.len()))
             .then(b.epss.partial_cmp(&a.epss).unwrap_or(Ordering::Equal))
@@ -1151,19 +1184,24 @@ pub fn to_fix_first(report: &FleetReport, color: bool) -> String {
             .then(a.id.cmp(b.id))
     });
 
-    let mut table = styled_table(
-        color,
-        vec!["#", "Severity", "Repos", "Exploit", "Advisory", "Title"],
-    );
+    let mut header = vec!["#", "Severity", "Repos", "Exploit", "Advisory", "Title"];
+    if decided {
+        header.insert(1, "SSVC");
+    }
+    let mut table = styled_table(color, header);
     for (i, r) in rows.iter().enumerate() {
-        table.add_row(vec![
+        let mut row = vec![
             Cell::new(i + 1),
             advisory_sev_cell(&r.label, r.kev, r.severity, color),
             Cell::new(impact_count(r.repos.len(), r.toolchain)),
             Cell::new(exploit_cell(r.kev, r.epss)),
             Cell::new(sanitize_cell(r.id)),
             Cell::new(truncate(&sanitize_cell(r.title), 40)),
-        ]);
+        ];
+        if decided {
+            row.insert(1, Cell::new(outcome(r.id).map_or("-", |o| o.label())));
+        }
+        table.add_row(row);
     }
     table.to_string()
 }
@@ -1188,9 +1226,22 @@ pub fn to_remediation(report: &FleetReport, color: bool) -> String {
     // before blast radius breaks the tie — a govulncheck-confirmed call site is a
     // stronger "fix this" signal than merely hitting more repos. (Decisive for Go,
     // whose advisories carry no CVSS, so most sit in the same `unknown` band.)
+    // The SSVC outcome leads when decided (spec 08): it already folds in exploitation and
+    // the exposure of the repos involved.
+    let decided = report
+        .ssvc
+        .as_ref()
+        .is_some_and(|s| !s.decisions.is_empty());
+    let outcome = |it: &RemediationItem| {
+        it.advisories
+            .iter()
+            .filter_map(|id| ssvc::max_outcome(report, id, Some(&it.package)))
+            .max()
+    };
     active.sort_by(|a, b| {
-        b.kev
-            .cmp(&a.kev)
+        outcome(b)
+            .cmp(&outcome(a))
+            .then(b.kev.cmp(&a.kev))
             .then(severity_tier(Some(b.max_severity)).cmp(&severity_tier(Some(a.max_severity))))
             .then(reach_rank(b.reach).cmp(&reach_rank(a.reach)))
             .then(b.repos.cmp(&a.repos))
@@ -1213,12 +1264,22 @@ pub fn to_remediation(report: &FleetReport, color: bool) -> String {
 
     let mut sections: Vec<String> = Vec::new();
     if !active.is_empty() {
-        sections.push(remediation_table(&active, true, color));
+        sections.push(remediation_table(
+            &active,
+            true,
+            color,
+            decided.then_some(&outcome),
+        ));
     }
     if !informational.is_empty() {
         let mut section =
             String::from("Informational \u{2014} not reachable (shown, not queued):\n");
-        section.push_str(&remediation_table(&informational, false, color));
+        section.push_str(&remediation_table(
+            &informational,
+            false,
+            color,
+            decided.then_some(&outcome),
+        ));
         sections.push(section);
     }
     sections.join("\n\n")
@@ -1231,13 +1292,22 @@ pub fn to_remediation_json(report: &FleetReport) -> Result<String, serde_json::E
     serde_json::to_string_pretty(&remediations(report))
 }
 
-fn remediation_table(items: &[&RemediationItem], numbered: bool, color: bool) -> String {
-    let mut table = styled_table(
-        color,
-        vec![
-            "#", "Action", "Severity", "Resolves", "Repos", "Reach", "Exploit",
-        ],
-    );
+/// Looks up a remediation item's most urgent SSVC outcome.
+type OutcomeOf<'a> = dyn Fn(&RemediationItem) -> Option<fleetreach_core::ssvc::Outcome> + 'a;
+
+fn remediation_table(
+    items: &[&RemediationItem],
+    numbered: bool,
+    color: bool,
+    outcome: Option<&OutcomeOf<'_>>,
+) -> String {
+    let mut header = vec![
+        "#", "Action", "Severity", "Resolves", "Repos", "Reach", "Exploit",
+    ];
+    if outcome.is_some() {
+        header.insert(1, "SSVC");
+    }
+    let mut table = styled_table(color, header);
     for (i, it) in items.iter().enumerate() {
         let num = if numbered {
             (i + 1).to_string()
@@ -1248,7 +1318,7 @@ fn remediation_table(items: &[&RemediationItem], numbered: bool, color: bool) ->
             Cell::new(remediation_severity_text(it)),
             color.then(|| severity_color(it.max_severity)),
         );
-        table.add_row(vec![
+        let mut row = vec![
             Cell::new(num),
             Cell::new(action_label(it)),
             sev_cell,
@@ -1256,7 +1326,11 @@ fn remediation_table(items: &[&RemediationItem], numbered: bool, color: bool) ->
             Cell::new(it.repos),
             Cell::new(reach_tier_label(it.reach)),
             Cell::new(exploit_cell(it.kev, it.max_epss.unwrap_or(-1.0))),
-        ]);
+        ];
+        if let Some(outcome) = outcome {
+            row.insert(1, Cell::new(outcome(it).map_or("-", |o| o.label())));
+        }
+        table.add_row(row);
     }
     table.to_string()
 }

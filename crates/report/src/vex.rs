@@ -625,6 +625,7 @@ mod tests {
             title: "a vuln".to_string(),
             severity: Severity::High,
             cvss_score: None,
+            cvss_vector: None,
             url: None,
             occurrences: occs,
             affected_functions: vec!["some_crate::bad".to_string()],
@@ -660,6 +661,8 @@ mod tests {
             warnings: vec![],
             outcomes: vec![],
             coverage: Vec::new(),
+            context: Vec::new(),
+            ssvc: None,
         }
     }
 

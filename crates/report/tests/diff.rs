@@ -46,6 +46,7 @@ fn vuln(id: &str, severity: Severity, repos: &[&str]) -> VulnFinding {
         title: id.into(),
         severity,
         cvss_score: None,
+        cvss_vector: None,
         url: None,
         occurrences: repos.iter().map(|r| occ(r)).collect(),
         affected_functions: vec![],
@@ -71,6 +72,8 @@ fn report(vulns: Vec<VulnFinding>, warnings: Vec<WarnFinding>) -> FleetReport {
         warnings,
         outcomes: vec![],
         coverage: Vec::new(),
+        context: Vec::new(),
+        ssvc: None,
     }
 }
 

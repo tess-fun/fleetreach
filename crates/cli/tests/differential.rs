@@ -77,6 +77,9 @@ fn config() -> Config {
         licenses: None,
         signal_registries: Vec::new(),
         sboms: Default::default(),
+        context: Default::default(),
+        context_defaults: None,
+        ssvc_poc_epss: None,
     }
 }
 

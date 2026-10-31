@@ -24,6 +24,7 @@ fn vuln(id: &str, cve: &str, severity: Severity) -> VulnFinding {
         title: id.into(),
         severity,
         cvss_score: None,
+        cvss_vector: None,
         url: None,
         occurrences: vec![Occurrence::InRepo {
             repo: RepoId("a".into()),
@@ -214,6 +215,8 @@ fn summary_max_severity_is_refreshed_after_enrichment_backfill() {
         warnings: vec![],
         outcomes: vec![],
         coverage: Vec::new(),
+        context: Vec::new(),
+        ssvc: None,
     };
 
     let enrichment = Enrichment {

@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
+use fleetreach_core::ssvc::{Exposure, MissionImpact, SafetyImpact};
 use fleetreach_core::{Ecosystem, RepoId};
 use fleetreach_report::VexScope;
 use serde::Deserialize;
@@ -43,6 +44,8 @@ pub enum ConfigError {
     InvalidSource { index: usize, message: String },
     #[error("settings.licenses: {0}")]
     InvalidLicenses(String),
+    #[error("settings.ssvc: {0}")]
+    InvalidSsvc(String),
 }
 
 /// The five CISA VEX Working Group `not_affected` justification labels; a
@@ -118,6 +121,54 @@ struct RawRepo {
     /// `nuget`/`julia`/`swift`/`hex`/`maven`/`githubactions`).
     /// Absent = auto-detect from the repo's manifests at scan time.
     ecosystem: Option<RawEcosystem>,
+    // Exposure and impact context (spec 08). Inline rather than a flattened `RawContext`,
+    // because serde's `flatten` silently disables `deny_unknown_fields`.
+    exposure: Option<Exposure>,
+    mission_impact: Option<MissionImpact>,
+    safety_impact: Option<SafetyImpact>,
+    owner: Option<String>,
+    #[serde(default)]
+    tags: Vec<String>,
+}
+
+/// Exposure and impact context (spec 08), on a `[[repo]]` or as
+/// `[settings.context.defaults]`. Values use SSVC's own names.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawContext {
+    exposure: Option<Exposure>,
+    mission_impact: Option<MissionImpact>,
+    safety_impact: Option<SafetyImpact>,
+    owner: Option<String>,
+    #[serde(default)]
+    tags: Vec<String>,
+}
+
+impl From<RawContext> for ContextFields {
+    fn from(raw: RawContext) -> Self {
+        ContextFields {
+            exposure: raw.exposure,
+            mission_impact: raw.mission_impact,
+            safety_impact: raw.safety_impact,
+            owner: raw.owner.filter(|o| !o.trim().is_empty()),
+            tags: raw.tags,
+        }
+    }
+}
+
+/// The `[settings.context]` block (spec 08).
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawContextSettings {
+    defaults: Option<RawContext>,
+}
+
+/// The `[settings.ssvc]` block (spec 08).
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawSsvc {
+    /// EPSS at or above this counts as Exploitation `public-poc`. Off by default.
+    poc_epss: Option<f32>,
 }
 
 /// The accepted `ecosystem = "..."` strings, mapped onto [`Ecosystem`]. `rust` is
@@ -190,6 +241,10 @@ struct SettingsTable {
     licenses: Option<RawLicenses>,
     #[serde(default)]
     signals: RawSignals,
+    #[serde(default)]
+    context: RawContextSettings,
+    #[serde(default)]
+    ssvc: RawSsvc,
 }
 
 /// The `[settings.signals]` block (spec 10).
@@ -287,6 +342,34 @@ pub struct Config {
     pub signal_registries: Vec<String>,
     /// `[[repo]] sbom`: repos scanned from an SBOM instead of their lockfiles.
     pub sboms: std::collections::BTreeMap<RepoId, PathBuf>,
+    /// Per-repo exposure and impact context (spec 08), for repos that set any.
+    pub context: std::collections::BTreeMap<RepoId, ContextFields>,
+    /// `[settings.context.defaults]`, applied where a repo sets nothing.
+    pub context_defaults: Option<ContextFields>,
+    /// `[settings.ssvc] poc_epss`.
+    pub ssvc_poc_epss: Option<f32>,
+}
+
+/// Validated exposure and impact context (spec 08).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ContextFields {
+    pub exposure: Option<Exposure>,
+    pub mission_impact: Option<MissionImpact>,
+    pub safety_impact: Option<SafetyImpact>,
+    pub owner: Option<String>,
+    pub tags: Vec<String>,
+}
+
+impl ContextFields {
+    /// Whether any SSVC decision point is set (an owner or tags alone do not turn SSVC on).
+    #[must_use]
+    pub fn has_decision_points(&self) -> bool {
+        self.exposure.is_some() || self.mission_impact.is_some() || self.safety_impact.is_some()
+    }
+
+    fn is_empty(&self) -> bool {
+        *self == ContextFields::default()
+    }
 }
 
 /// Validated `[settings.osv]` (spec 01).
@@ -427,6 +510,7 @@ impl Config {
 
         let mut repos = Vec::with_capacity(raw.repo.len());
         let mut sboms = std::collections::BTreeMap::new();
+        let mut context = std::collections::BTreeMap::new();
         let mut seen = std::collections::BTreeSet::new();
         for r in raw.repo {
             if !seen.insert(r.id.clone()) {
@@ -447,6 +531,16 @@ impl Config {
             }
             if let Some(sbom) = &r.sbom {
                 sboms.insert(RepoId(r.id.clone()), base_dir.join(sbom));
+            }
+            let fields = ContextFields::from(RawContext {
+                exposure: r.exposure,
+                mission_impact: r.mission_impact,
+                safety_impact: r.safety_impact,
+                owner: r.owner,
+                tags: r.tags,
+            });
+            if !fields.is_empty() {
+                context.insert(RepoId(r.id.clone()), fields);
             }
             repos.push(Repo {
                 id: RepoId(r.id),
@@ -588,6 +682,14 @@ impl Config {
         }
 
         let licenses = raw.settings.licenses.map(license_policy).transpose()?;
+        let ssvc_poc_epss = match raw.settings.ssvc.poc_epss {
+            Some(p) if !(0.0..=1.0).contains(&p) => {
+                return Err(ConfigError::InvalidSsvc(format!(
+                    "poc_epss `{p}` must be between 0 and 1"
+                )))
+            }
+            p => p,
+        };
 
         Ok(Config {
             repos,
@@ -599,6 +701,9 @@ impl Config {
             licenses,
             signal_registries: raw.settings.signals.registries,
             sboms,
+            context,
+            context_defaults: raw.settings.context.defaults.map(ContextFields::from),
+            ssvc_poc_epss,
         })
     }
 }

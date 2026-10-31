@@ -261,6 +261,11 @@ pub struct VulnFinding {
     /// omitted from JSON when absent (advisories with no CVSS at all).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cvss_score: Option<f32>,
+    /// The CVSS vector string behind `cvss_score` (`CVSS:3.1/AV:N/...` or `CVSS:4.0/...`),
+    /// when the advisory carries one. Read by SSVC (spec 08) to decide Automatable.
+    /// Additive; omitted from JSON when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cvss_vector: Option<String>,
     pub url: Option<String>,
     /// At least one; the same advisory may surface in many repos/versions.
     pub occurrences: Vec<Occurrence>,

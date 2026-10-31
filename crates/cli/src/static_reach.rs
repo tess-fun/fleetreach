@@ -262,6 +262,7 @@ mod tests {
             title: "t".into(),
             severity: Severity::High,
             cvss_score: None,
+            cvss_vector: None,
             url: None,
             occurrences: repos
                 .iter()
