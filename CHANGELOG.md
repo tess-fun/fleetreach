@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-30
+
 ### Added
 
 - **`fleetreach sbom`: CycloneDX 1.6 SBOMs.** One BOM per repo from the same sources `scan`
@@ -565,7 +567,8 @@ Initial release. Fleet-wide Rust dependency advisory audit built on `rustsec`.
   targets on the two untrusted-byte surfaces (`fleet.toml`, lockfile content);
   black-box tests over the compiled binary's exit-code and stream contract.
 
-[Unreleased]: https://github.com/tess-fun/fleetreach/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/tess-fun/fleetreach/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/tess-fun/fleetreach/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/tess-fun/fleetreach/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/tess-fun/fleetreach/compare/v1.0.3...v1.1.0
 [1.0.3]: https://github.com/tess-fun/fleetreach/compare/v1.0.2...v1.0.3
