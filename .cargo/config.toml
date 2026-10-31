@@ -1,0 +1,6 @@
+# Prefer dependency versions that support the workspace `rust-version` (1.89) when
+# resolving, so `cargo update` cannot pull in a release that breaks the MSRV build
+# (ordered-float 5.5 needs 1.90 and once failed the MSRV job). Falls back to newer
+# versions only when no compatible one exists.
+[resolver]
+incompatible-rust-versions = "fallback"
