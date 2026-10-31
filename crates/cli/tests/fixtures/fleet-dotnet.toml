@@ -1,0 +1,13 @@
+# .NET repos without packages.lock.json (spec 03): central package management, a restored
+# project whose obj/project.assets.json is older than its project file, and packages.config.
+[[repo]]
+id = "dotnet-cpm"
+path = "repos/dotnet-cpm"
+
+[[repo]]
+id = "dotnet-restored"
+path = "repos/dotnet-restored"
+
+[[repo]]
+id = "dotnet-config"
+path = "repos/dotnet-config"

@@ -38,7 +38,7 @@ band or a CVSS vector; direct vs transitive comes from the lockfile; findings ar
 | PyPI | `uv.lock` / `poetry.lock` / `Pipfile.lock` / `pylock.toml` / `requirements*.txt` | `--pypi-vuln-db` | PEP 440 (PEP 503 names) |
 | RubyGems | `Gemfile.lock` | `--rubygems-vuln-db` | `Gem::Version` |
 | Packagist | `composer.lock` | `--packagist-vuln-db` | Composer `version_compare` |
-| NuGet | `packages.lock.json` | `--nuget-vuln-db` | four-part `NuGetVersion` |
+| NuGet | `packages.lock.json` / `obj/project.assets.json` / `packages.config` / `*.csproj` | `--nuget-vuln-db` | four-part `NuGetVersion` |
 | Julia | `Manifest.toml` | `--julia-vuln-db` | `VersionNumber` |
 | Swift | `Package.resolved` | `--swift-vuln-db` | URL-identified SemVer |
 | Hex | `mix.lock` | `--hex-vuln-db` | SemVer |
@@ -62,6 +62,16 @@ Environment markers are not evaluated (a marker could only hide a finding), and
 `-e`, URL and path requirements are counted, not matched. Files named for
 development (`requirements-dev.txt`, `requirements/test.txt`) are dev scope.
 `--require-full-coverage` turns any label below full into exit 2.
+
+.NET projects without `packages.lock.json` (most of them) are read from the first of:
+`obj/project.assets.json` (the full graph `dotnet restore` writes; labelled partial when
+the project file declares a package it does not have), legacy `packages.config` (full),
+or the project files' `PackageReference` items (direct-only). Project files are read
+with central package management (`Directory.Packages.props` `PackageVersion`,
+`GlobalPackageReference`, `VersionOverride`, the per-project opt-out) and `$(Property)`
+values from the project and the nearest `Directory.Build.props`. Conditions are not
+evaluated (every item is read), an `<Import>` of another file is named as a gap, and a
+range or floating version (`[1,2)`, `1.*`) is listed as unresolved, never guessed.
 
 The osv.dev exports live at
 `https://osv-vulnerabilities.storage.googleapis.com/<Ecosystem>/all.zip`.

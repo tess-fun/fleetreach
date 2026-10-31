@@ -1,0 +1,15 @@
+{
+  "id": "GHSA-5crp-9r3c-p9vr",
+  "modified": "2023-06-30T00:00:00Z",
+  "summary": "Improper Handling of Exceptional Conditions in Newtonsoft.Json",
+  "aliases": ["CVE-2024-21907"],
+  "affected": [
+    {
+      "package": { "ecosystem": "NuGet", "name": "Newtonsoft.Json" },
+      "ranges": [
+        { "type": "ECOSYSTEM", "events": [ { "introduced": "0" }, { "fixed": "13.0.1" } ] }
+      ]
+    }
+  ],
+  "database_specific": { "severity": "HIGH", "github_reviewed": true }
+}

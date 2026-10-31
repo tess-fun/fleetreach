@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <JsonVersion>12.0.1</JsonVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Newtonsoft.Json" Version="$(JsonVersion)" />
+    <PackageVersion Include="Serilog" Version="[2.10.0, 3.0.0)" />
+  </ItemGroup>
+</Project>

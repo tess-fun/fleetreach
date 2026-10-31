@@ -126,7 +126,7 @@ fn dependency_graph(lock: &Lock) -> DepGraph {
 
 /// Collapse duplicate `(name, version)` rows into one, with `direct` winning if any
 /// occurrence was direct, and sort for deterministic output.
-fn dedupe(packages: Vec<InstalledPackage>) -> Vec<InstalledPackage> {
+pub(crate) fn dedupe(packages: Vec<InstalledPackage>) -> Vec<InstalledPackage> {
     let mut by_key: BTreeMap<(String, String), bool> = BTreeMap::new();
     for p in packages {
         let e = by_key.entry((p.name, p.version)).or_insert(false);

@@ -11,28 +11,71 @@ use std::path::Path;
 
 use fleetreach_core::osv::{sort_dedup_findings, Match, TierCFinding, TierCScan};
 use fleetreach_core::semver::VersionReq;
-use fleetreach_core::{Ecosystem, RepoId, VulnFinding};
+use fleetreach_core::{Coverage, DepGraph, Ecosystem, RepoId, VulnFinding};
 
 use crate::db::{affected_fixed, Advisory, NuGetDb};
 use crate::error::NuGetError;
-use crate::lockfile::{parse_lockfile, InstalledPackage};
+use crate::lockfile::{dedupe, parse_lockfile, InstalledPackage};
 use crate::version::{parse_nuget_version, to_semver, Version};
+use crate::{assets, msbuild};
 
-/// Scan the .NET project at `repo_dir` (containing `packages.lock.json`) against the
-/// preloaded OSV DB, without a .NET toolchain. Emits one module-level [`VulnFinding`] per
-/// affected package; output is sorted by `(advisory id, package)` for determinism.
+/// Scan the .NET project at `repo_dir` against the preloaded OSV DB, without a .NET
+/// toolchain. Reads, in order of preference, `packages.lock.json`, `obj/project.assets.json`
+/// (restore output), `packages.config`, or the project files' `PackageReference` items. Emits
+/// one module-level [`VulnFinding`] per affected package; output is sorted by `(advisory id,
+/// package)` for determinism.
+///
+/// This drops the coverage labels; [`scan_offline_with_coverage`] keeps them.
 ///
 /// # Errors
 ///
-/// Returns [`NuGetError::Db`] if `packages.lock.json` is missing, cannot be read, or is not
-/// valid JSON — failing closed, so an unreadable/absent/corrupt lockfile is an honest gap.
+/// Returns [`NuGetError::Db`] if no recognized source is present or one cannot be read or
+/// parsed, failing closed, so an unreadable/absent/corrupt source is an honest gap.
 pub fn scan_offline(repo_dir: &Path, db: &NuGetDb, repo: &RepoId) -> Result<TierCScan, NuGetError> {
-    let lock_path = repo_dir.join("packages.lock.json");
-    let lock_text =
-        std::fs::read_to_string(&lock_path).map_err(|e| NuGetError::db(&lock_path, e))?;
-    let (installed, graph) =
-        parse_lockfile(&lock_text).map_err(|e| NuGetError::db(&lock_path, e))?;
+    scan_offline_with_coverage(repo_dir, db, repo).map(|scan| scan.scan)
+}
 
+/// One source read with less than full coverage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct SourceCoverage {
+    /// The file, relative to the scanned directory.
+    pub source: String,
+    pub level: Coverage,
+    /// Why coverage is incomplete, naming what was not read.
+    pub reason: String,
+}
+
+/// A NuGet scan, with the sources it read with less than full coverage.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct NuGetScan {
+    pub scan: TierCScan,
+    /// Project files read for their declared dependencies only, a stale
+    /// `project.assets.json`, imports that were not followed.
+    pub coverage: Vec<SourceCoverage>,
+}
+
+/// Whether `dir` holds anything the NuGet feeder reads: `packages.lock.json`,
+/// `packages.config`, or a `.csproj` / `.fsproj` / `.vbproj` project file.
+#[must_use]
+pub fn has_nuget_sources(dir: &Path) -> bool {
+    dir.join("packages.lock.json").is_file()
+        || dir.join("packages.config").is_file()
+        || !msbuild::project_files(dir).is_empty()
+}
+
+/// [`scan_offline`], also reporting which sources were read with less than full coverage.
+///
+/// # Errors
+///
+/// As [`scan_offline`].
+pub fn scan_offline_with_coverage(
+    repo_dir: &Path,
+    db: &NuGetDb,
+    repo: &RepoId,
+) -> Result<NuGetScan, NuGetError> {
+    let (installed, graph, coverage) = read_sources(repo_dir)?;
     let mut out: Vec<VulnFinding> = Vec::new();
     let mut skipped_unparseable = 0u32;
     for pkg in &installed {
@@ -52,10 +95,154 @@ pub fn scan_offline(repo_dir: &Path, db: &NuGetDb, repo: &RepoId) -> Result<Tier
         }
     }
     sort_dedup_findings(&mut out);
-    Ok(TierCScan {
-        findings: out,
-        skipped_unparseable,
+    Ok(NuGetScan {
+        scan: TierCScan {
+            findings: out,
+            skipped_unparseable,
+        },
+        coverage,
     })
+}
+
+type Read = (Vec<InstalledPackage>, DepGraph, Vec<SourceCoverage>);
+
+/// Read the preferred source in `repo_dir`.
+fn read_sources(repo_dir: &Path) -> Result<Read, NuGetError> {
+    let text = |path: &Path| std::fs::read_to_string(path).map_err(|e| NuGetError::db(path, e));
+    let gap = |source: &str, level: Coverage, reason: String| SourceCoverage {
+        source: source.to_string(),
+        level,
+        reason,
+    };
+
+    let lock_path = repo_dir.join("packages.lock.json");
+    if lock_path.is_file() {
+        let (installed, graph) =
+            parse_lockfile(&text(&lock_path)?).map_err(|e| NuGetError::db(&lock_path, e))?;
+        return Ok((installed, graph, Vec::new()));
+    }
+
+    let projects = msbuild::project_files(repo_dir);
+    let mut declared = Vec::new();
+    for project in &projects {
+        let read = msbuild::read_project(project)
+            .map_err(|e| NuGetError::db(project, std::io::Error::from(e)))?;
+        declared.push((file_name(project), read));
+    }
+    let mut coverage: Vec<SourceCoverage> = declared
+        .iter()
+        .flat_map(|(file, d)| d.imports.iter().map(move |i| (file, i)))
+        .map(|(file, import)| {
+            gap(
+                file,
+                Coverage::Partial,
+                format!("{import} is not followed; packages declared there were not read"),
+            )
+        })
+        .collect();
+    coverage.sort_by(|a, b| a.reason.cmp(&b.reason));
+    coverage.dedup_by(|a, b| a.reason == b.reason);
+
+    // Restore output: the full resolved graph, if it still matches the project files.
+    let assets_path = repo_dir.join("obj").join("project.assets.json");
+    if !projects.is_empty() && assets_path.is_file() {
+        let restored =
+            assets::parse(&text(&assets_path)?).map_err(|e| NuGetError::db(&assets_path, e))?;
+        let stale: Vec<String> = declared
+            .iter()
+            .flat_map(|(_, d)| &d.declared)
+            .filter_map(|(name, version)| match restored.requested.get(name) {
+                None => Some(format!("{name} (not restored)")),
+                Some(range) => {
+                    let floor = assets::range_floor(range)?;
+                    let same = version.as_deref().is_none_or(|v| {
+                        parse_nuget_version(v).is_some()
+                            && parse_nuget_version(v) == parse_nuget_version(floor)
+                    });
+                    (!same).then(|| {
+                        format!(
+                            "{name} {} (restored {floor})",
+                            version.as_deref().unwrap_or("")
+                        )
+                    })
+                }
+            })
+            .collect();
+        if !stale.is_empty() {
+            coverage.push(gap(
+                "obj/project.assets.json",
+                Coverage::Partial,
+                format!(
+                    "older than the project file(s), which now declare {}; run dotnet restore \
+                     before scanning",
+                    sample(&stale)
+                ),
+            ));
+        }
+        return Ok((restored.packages, restored.graph, coverage));
+    }
+
+    let config_path = repo_dir.join("packages.config");
+    if config_path.is_file() {
+        let installed = msbuild::parse_packages_config(&text(&config_path)?)
+            .map_err(|e| NuGetError::db(&config_path, std::io::Error::from(e)))?;
+        return Ok((dedupe(installed), DepGraph::default(), coverage));
+    }
+
+    if declared.is_empty() {
+        return Err(NuGetError::db(
+            repo_dir.to_path_buf(),
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "no recognized NuGet source (packages.lock.json, obj/project.assets.json, \
+                 packages.config or a .csproj/.fsproj/.vbproj)",
+            ),
+        ));
+    }
+    let mut installed = Vec::new();
+    for (file, d) in declared {
+        if d.declared.is_empty() {
+            continue; // nothing declared: nothing to miss
+        }
+        let unresolved = if d.unresolved.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "; {} without a single resolvable version were not matched: {}",
+                d.unresolved.len(),
+                sample(&d.unresolved)
+            )
+        };
+        coverage.push(gap(
+            &file,
+            Coverage::DirectOnly,
+            format!(
+                "PackageReference items declare direct dependencies only; transitive \
+                 dependencies were not resolved (commit packages.lock.json with \
+                 RestorePackagesWithLockFile, or scan after dotnet restore){unresolved}"
+            ),
+        ));
+        installed.extend(d.packages);
+    }
+    // Every package here is direct, so there is no chain to show.
+    Ok((dedupe(installed), DepGraph::default(), coverage))
+}
+
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// At most five items, then a count of the rest.
+fn sample(items: &[String]) -> String {
+    let shown: Vec<&str> = items.iter().take(5).map(String::as_str).collect();
+    let more = items.len().saturating_sub(shown.len());
+    if more == 0 {
+        shown.join(", ")
+    } else {
+        format!("{} and {more} more", shown.join(", "))
+    }
 }
 
 /// Build a finding if `adv` lists `pkg` as affected at `version` (a NuGet version).

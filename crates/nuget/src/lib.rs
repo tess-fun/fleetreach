@@ -5,9 +5,14 @@
 //!
 //! Like the npm/PyPI/RubyGems/Packagist feeders it needs no build: `packages.lock.json`
 //! already pins the full transitive tree to exact versions and records whether each package
-//! is a direct or transitive dependency. It reads the lockfile and compares versions against
-//! OSV `ECOSYSTEM` ranges, running no .NET tool and no package build, so it is **safe by
-//! construction**: no untrusted-build consent and no sandbox.
+//! is a direct or transitive dependency. Most .NET repos never enable that lockfile, so the
+//! feeder falls back, in order, to `obj/project.assets.json` (the full graph any `dotnet
+//! restore` writes; labelled partial when older than the project file), legacy
+//! `packages.config`, and the project files' `PackageReference` items with central package
+//! management (direct dependencies only, labelled direct-only). `scan_offline_with_coverage`
+//! reports those labels. It compares versions against OSV `ECOSYSTEM` ranges, running no .NET
+//! tool and no package build, so it is **safe by construction**: no untrusted-build consent and
+//! no sandbox.
 //!
 //! One thing is NuGet-specific. A NuGet version is SemVer 2.0 with a **four-component**
 //! numeric core (`Major.Minor.Patch.Revision`, e.g. `1.1.1.1`) and **case-insensitive**
@@ -42,9 +47,11 @@
 //!
 //! 1.89. An MSRV increase is treated as a minor-version bump.
 
+mod assets;
 mod db;
 mod error;
 mod lockfile;
+mod msbuild;
 mod scan;
 mod version;
 
@@ -53,5 +60,7 @@ pub use error::{DbError, NuGetError};
 /// The OSV version-match outcome, shared with the other ecosystem feeders.
 pub use fleetreach_core::osv::Match;
 pub use lockfile::{installed_packages, InstalledPackage};
-pub use scan::scan_offline;
+pub use scan::{
+    has_nuget_sources, scan_offline, scan_offline_with_coverage, NuGetScan, SourceCoverage,
+};
 pub use version::{parse_nuget_version, to_semver, Version};

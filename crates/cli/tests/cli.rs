@@ -344,6 +344,83 @@ fn requirements_and_pylock_repos_scan_with_coverage_labels() {
 }
 
 #[test]
+fn dotnet_repos_without_a_lockfile_scan_with_coverage_labels() {
+    let out = run(&[
+        "scan",
+        "-c",
+        &cfg("fleet-dotnet.toml"),
+        "--db",
+        &db(),
+        "--nuget-vuln-db",
+        &file_url("nuget-osv"),
+        "-f",
+        "json",
+        "-q",
+    ]);
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(value["summary"]["repos_errored"], 0, "{value}");
+    let occ: Vec<&serde_json::Value> = value["vulnerabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|v| v["occurrences"].as_array().unwrap())
+        .collect();
+    let find = |repo: &str| {
+        occ.iter()
+            .find(|o| o["repo"] == repo && o["package"] == "newtonsoft.json")
+            .unwrap_or_else(|| panic!("no newtonsoft.json hit in {repo}: {occ:?}"))
+    };
+    // Central package management, with the version from a property.
+    assert_eq!(find("dotnet-cpm")["installed"], "12.0.1");
+    // Restore output: transitive, with its chain.
+    let restored = find("dotnet-restored");
+    assert_eq!(restored["dependency_kind"], "transitive");
+    assert_eq!(
+        restored["dependency_path"],
+        serde_json::json!(["(root)", "contoso.wrapper", "newtonsoft.json"])
+    );
+    assert_eq!(find("dotnet-config")["installed"], "9.0.1");
+
+    let coverage: Vec<(String, String, String)> = value["coverage"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| {
+            (
+                c["repo"].as_str().unwrap().to_string(),
+                c["source"].as_str().unwrap().to_string(),
+                c["level"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        coverage,
+        vec![
+            (
+                "dotnet-cpm".into(),
+                "App.csproj".into(),
+                "direct-only".into()
+            ),
+            (
+                "dotnet-restored".into(),
+                "obj/project.assets.json".into(),
+                "partial".into()
+            ),
+        ]
+    );
+    let reasons: String = value["coverage"].to_string();
+    assert!(
+        reasons.contains("serilog"),
+        "the range-versioned package is named: {reasons}"
+    );
+    assert!(
+        reasons.contains("added.later"),
+        "the unrestored package is named: {reasons}"
+    );
+}
+
+#[test]
 fn incomplete_coverage_is_reported_and_can_gate() {
     let args = |extra: &[&'static str]| {
         let mut v = vec![

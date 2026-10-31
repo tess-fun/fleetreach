@@ -16,6 +16,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   requirements direct-only with their names listed, never guessed. Checked against pip's own
   parser on warehouse, NetBox and Home Assistant (1,603 of 1,603 pinned packages). Fleet
   sources now check out these files too.
+- **.NET without `packages.lock.json`.** The NuGet feeder reads `obj/project.assets.json`
+  (the full graph from `dotnet restore`, with dependency paths; partial when older than the
+  project file), legacy `packages.config`, and otherwise the project files' `PackageReference`
+  items with central package management, `VersionOverride`, global references and simple
+  `$(Property)` values, labelled direct-only. Range and floating versions are named, never
+  guessed. Checked statically on eShop, both CleanArchitecture templates and nopCommerce:
+  every one of 236 package references read with its central version.
 
 ## [1.2.0] - 2026-10-30
 

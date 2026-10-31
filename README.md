@@ -356,7 +356,7 @@ reachability mode runs.
 | PyPI | `uv.lock` / `poetry.lock` / `Pipfile.lock` / `pylock.toml` / `requirements*.txt` | `--pypi-vuln-db` | PEP 440 (PEP 503 names) |
 | RubyGems | `Gemfile.lock` | `--rubygems-vuln-db` | `Gem::Version` |
 | Packagist | `composer.lock` | `--packagist-vuln-db` | Composer `version_compare` |
-| NuGet | `packages.lock.json` | `--nuget-vuln-db` | four-part `NuGetVersion` |
+| NuGet | `packages.lock.json` / `obj/project.assets.json` / `packages.config` / `*.csproj` | `--nuget-vuln-db` | four-part `NuGetVersion` |
 | Julia | `Manifest.toml` | `--julia-vuln-db` | `VersionNumber` |
 | Swift | `Package.resolved` | `--swift-vuln-db` | URL-identified SemVer |
 | Hex | `mix.lock` | `--hex-vuln-db` | SemVer |

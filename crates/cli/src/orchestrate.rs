@@ -621,7 +621,7 @@ fn dir_ecosystems(dir: &Path, files: &BTreeSet<String>, is_root: bool) -> Vec<Ec
     if has("composer.lock") {
         found.push(Ecosystem::Packagist);
     }
-    if has("packages.lock.json") {
+    if fleetreach_nuget::has_nuget_sources(dir) {
         found.push(Ecosystem::NuGet);
     }
     if has("Manifest.toml") {
@@ -971,16 +971,27 @@ fn scan_nuget_repo(repo: &Repo, nuget_db: Option<&Result<NuGetDb, NuGetError>>) 
         Some(Err(e)) => return errored(format!("NuGet OSV DB: {e}")),
         None => {
             return errored(
-                "NuGet repo (packages.lock.json): no OSV DB mirror for the toolchain-free \
+                "NuGet repo (packages.lock.json/project.assets.json/packages.config/.csproj): no OSV DB mirror for the toolchain-free \
                  matcher (pass --osv-dir=<dir> or --nuget-vuln-db=file://<path>, e.g. the osv.dev NuGet export \
                  all.zip or an unzipped directory)"
                     .to_string(),
             )
         }
     };
-    match fleetreach_nuget::scan_offline(&repo.path, db, &repo.id) {
-        Ok(scan) => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
-            .with_skipped(scan.skipped_unparseable),
+    match fleetreach_nuget::scan_offline_with_coverage(&repo.path, db, &repo.id) {
+        Ok(scan) => scan.coverage.into_iter().fold(
+            RepoResult::scanned(&repo.id, scan.scan.findings, Vec::new())
+                .with_skipped(scan.scan.skipped_unparseable),
+            |result, gap| {
+                result.with_coverage(CoverageGap {
+                    repo: repo.id.clone(),
+                    source: gap.source,
+                    ecosystem: Ecosystem::NuGet,
+                    level: gap.level,
+                    reason: gap.reason,
+                })
+            },
+        ),
         Err(e) => errored(format!("nuget tier-c scan: {e}")),
     }
 }
