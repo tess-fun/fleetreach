@@ -77,3 +77,82 @@ The clock starts when the finding was first seen. A finding's SSVC outcome decid
 deadline when the policy names that outcome; otherwise its severity does. An `unknown`
 severity without its own entry gets the shortest severity deadline, so not knowing never buys
 time. A finding with neither has no deadline.
+
+## Notifications
+
+```
+fleetreach notify --history-dir history/ -c fleet.toml                          # print the payload
+fleetreach notify --history-dir history/ -c fleet.toml --webhook "$HOOK_URL"    # generic JSON
+fleetreach notify --history-dir history/ -c fleet.toml -f slack --webhook "$SLACK_WEBHOOK"
+fleetreach notify --history-dir history/ -c fleet.toml --github-issues --repo acme/security
+fleetreach notify --history-dir history/ -c fleet.toml --gitlab-issues --repo acme/security
+```
+
+Run it after `scan --history-dir`, from the same job. It reports, grouped by owner:
+
+- **new**: open in the newest run and not open before it: first seen, back after a fix, or
+  no longer ignored;
+- **fixed**: marked fixed by the newest run;
+- **breaches**: every open finding past its `[settings.sla]` deadline (only with `-c`),
+  measured now, so an overdue finding is repeated on every run until it is fixed.
+
+"Before" is the history as it stood before the newest run, so a gap run in between does not
+make old findings look new when their repo is read again.
+
+### Webhooks
+
+`--webhook` POSTs the payload as JSON (a build with the `network` feature; the release
+binaries have it). It must be `https://`, or `http://` to localhost. Messages name only the
+URL's host, since webhook URLs carry their secret in the path. When nothing is new, fixed or
+past due nothing is sent, unless `--always`. `--dry-run` prints the payload instead.
+
+`-f generic` (the default) is the stable payload below, for Jira automation rules,
+ServiceNow, PagerDuty or your own script. Its fields only grow within
+`fleetreach-notify/1`; a breaking change gets a new schema id.
+
+```json
+{
+  "schema": "fleetreach-notify/1",
+  "run": { "id": "20261210T000000Z-1a2b3c4d", "at": "2026-12-10T00:00:00Z",
+           "exit_code": 1, "gap": false },
+  "previous_run": "20261120T000000Z-5e6f7a8b",
+  "summary": { "new": 0, "fixed": 0, "breaches": 1, "open": 1 },
+  "owners": [
+    {
+      "owner": "team-b",
+      "open": 1,
+      "new": [],
+      "fixed": [],
+      "breaches": [
+        {
+          "advisory": "RUSTSEC-2099-0001", "ecosystem": "cargo", "repo": "api",
+          "package": "fixturevuln", "version": "1.0.0", "severity": "critical",
+          "first_seen": "2026-10-31T00:00:00Z", "due": "2026-11-30T00:00:00Z",
+          "overdue_days": 10.0, "url": "https://osv.dev/vulnerability/RUSTSEC-2099-0001"
+        }
+      ]
+    }
+  ]
+}
+```
+
+`owners` lists only owners with something to report, named owners first; `owner` is `null`
+for repos without one. Items also carry `ssvc` when an outcome was computed and `fixed_at`
+when fixed. `run.gap` is true when the newest run exited `2`.
+
+`-f slack` sends a Block Kit message: a summary header, then one section per owner with up
+to ten findings per list.
+
+### Issues
+
+`--github-issues` (through `gh`) or `--gitlab-issues` (through `glab`) keeps one issue per
+owner in `--repo`, which should be a repo for this purpose. Each issue lists the owner's
+findings past SLA, every open finding (new ones marked) and those fixed by the newest run.
+A hidden first line, `<!-- fleetreach:campaign=fleetreach;owner=team-b -->`, finds it again
+on the next run, where it is rewritten in place. It is closed when the owner has nothing open
+and reopened when a finding comes back. `--campaign` names a separate set of issues, for
+example per program or quarter. `--dry-run` prints the issues without running `gh` or
+`glab`. Edits made by hand to these issues are overwritten.
+
+There is no Jira client: point the generic webhook at a Jira automation rule instead, so
+fleetreach holds no Jira credentials.

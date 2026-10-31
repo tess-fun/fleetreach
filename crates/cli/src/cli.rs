@@ -51,6 +51,8 @@ enum Commands {
     /// Trends, age, SLA breaches and time to fix from `scan --history-dir` snapshots.
     #[command(subcommand)]
     History(crate::history_cmd::HistoryCommand),
+    /// Send what the newest history run changed, and SLA breaches, to a webhook or issues.
+    Notify(crate::notify::NotifyArgs),
 }
 
 #[derive(Subcommand)]
@@ -92,6 +94,7 @@ pub fn dispatch(cli: Cli) -> u8 {
         Commands::Fix(command) => crate::fix::run_fix(command),
         Commands::Licenses(args) => crate::licenses_cmd::run_licenses(&args),
         Commands::History(command) => crate::history_cmd::run_history(command),
+        Commands::Notify(args) => crate::notify::run_notify(&args),
     }
 }
 

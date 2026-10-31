@@ -742,6 +742,54 @@ pub fn mttr(history: &History, by: GroupBy) -> Vec<Mttr> {
         .collect()
 }
 
+/// What the newest run changed against the one before it.
+pub struct Changes<'a> {
+    pub run: &'a Run,
+    pub previous: Option<&'a Run>,
+    /// Open now and not open before: first seen, back after a fix, or no longer ignored.
+    pub new: Vec<&'a Entry>,
+    /// Marked fixed by the newest run.
+    pub fixed: Vec<&'a Entry>,
+}
+
+/// The newest run's changes, judged from the index as it stood before that run (rebuilt
+/// from the earlier snapshots), so a gap run in between never makes old findings look new.
+/// `None` without snapshots.
+pub fn changes(history: &History) -> Option<Changes<'_>> {
+    let (latest, earlier) = history.snapshots.split_last()?;
+    let before = rebuild(earlier, None);
+    let status_before: BTreeMap<&Key, Status> =
+        before.entries.iter().map(|e| (&e.key, e.status)).collect();
+    let mut new = Vec::new();
+    let mut fixed = Vec::new();
+    for e in &history.index.entries {
+        match e.status {
+            Status::Open => {
+                let is_new = match status_before.get(&e.key) {
+                    Some(Status::Open) => false,
+                    Some(Status::Fixed | Status::Ignored) => true,
+                    // Unknown to the retained snapshots: new only if this run first saw it
+                    // (otherwise its earlier sightings were pruned).
+                    None => e.first_seen == latest.run.at,
+                };
+                if is_new {
+                    new.push(e);
+                }
+            }
+            Status::Fixed if e.fixed_at.as_deref() == Some(latest.run.at.as_str()) => {
+                fixed.push(e);
+            }
+            _ => {}
+        }
+    }
+    Some(Changes {
+        run: &latest.run,
+        previous: earlier.last().map(|s| &s.run),
+        new,
+        fixed,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

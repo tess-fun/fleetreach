@@ -2358,3 +2358,300 @@ fn history_tracks_fixes_age_sla_and_never_trusts_a_gap_run() {
     assert_eq!(left, 2, "days 40 and 41 are kept");
     assert_eq!(json(&["age"])[0]["first_seen"], "2026-10-31T00:00:00Z");
 }
+
+#[test]
+fn notify_reports_changes_by_owner_and_keeps_one_issue_per_owner() {
+    let root = std::env::temp_dir().join(format!("fleetreach-notify-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let vulnerable =
+        std::fs::read_to_string(manifest().join("tests/fixtures/repos/repo-vuln/Cargo.lock"))
+            .unwrap();
+    let patched = vulnerable.replace("1.0.0", "1.0.1");
+    let app = root.join("app");
+    let api = root.join("api");
+    for dir in [&app, &api] {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("Cargo.lock"), &vulnerable).unwrap();
+    }
+    let fleet = root.join("fleet.toml");
+    std::fs::write(
+        &fleet,
+        format!(
+            "[[repo]]\nid = \"app\"\npath = {app:?}\nowner = \"team-a\"\n\n\
+             [[repo]]\nid = \"api\"\npath = {api:?}\nowner = \"team-b\"\n\n\
+             [settings.sla]\ncritical = \"30d\"\n"
+        ),
+    )
+    .unwrap();
+    let config = fleet.to_str().unwrap();
+    let history = root.join("history");
+    let hist = history.to_str().unwrap();
+    let day = 86_400_i64;
+    let t0 = 1_793_404_800_i64; // 2026-10-31T00:00:00Z
+    let epoch = |t: i64| t.to_string();
+    let scan_at = |t: i64| {
+        let e = epoch(t);
+        let out = run_env(
+            &[
+                "scan",
+                "-q",
+                "-c",
+                config,
+                "--db",
+                &db(),
+                "-f",
+                "json",
+                "--history-dir",
+                hist,
+            ],
+            &[("SOURCE_DATE_EPOCH", std::ffi::OsStr::new(&e))],
+        );
+        code(&out)
+    };
+    let notify = |t: i64, extra: &[&str], env: &[(&str, &std::ffi::OsStr)]| {
+        let e = epoch(t);
+        let mut argv = vec!["notify", "--history-dir", hist, "-c", config];
+        argv.extend_from_slice(extra);
+        let mut env = env.to_vec();
+        env.push(("SOURCE_DATE_EPOCH", std::ffi::OsStr::new(&e)));
+        let out = run_env(&argv, &env);
+        (code(&out), stdout(&out), stderr(&out))
+    };
+    let payload = |t: i64| -> serde_json::Value {
+        let (c, out, err) = notify(t, &[], &[]);
+        assert_eq!(c, 0, "{err}");
+        serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out} {err}"))
+    };
+    let owners = |p: &serde_json::Value| -> Vec<String> {
+        p["owners"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|o| o["owner"].as_str().unwrap().to_string())
+            .collect()
+    };
+
+    // Day 0: both new, one section per owner, the documented schema.
+    assert_eq!(scan_at(t0), 1);
+    let p = payload(t0);
+    assert_eq!(p["schema"], "fleetreach-notify/1");
+    assert_eq!(p["previous_run"], serde_json::Value::Null);
+    assert_eq!(p["summary"]["new"], 2, "{p}");
+    assert_eq!(owners(&p), ["team-a", "team-b"]);
+    let item = &p["owners"][0]["new"][0];
+    for field in [
+        "advisory",
+        "ecosystem",
+        "repo",
+        "package",
+        "version",
+        "severity",
+        "first_seen",
+        "url",
+    ] {
+        assert!(item.get(field).is_some(), "{field} missing: {item}");
+    }
+    assert_eq!(item["advisory"], "RUSTSEC-2099-0001");
+    assert_eq!(item["severity"], "critical");
+    assert_eq!(
+        item["url"],
+        "https://osv.dev/vulnerability/RUSTSEC-2099-0001"
+    );
+
+    // Day 10: app fixed, nothing new.
+    std::fs::write(app.join("Cargo.lock"), &patched).unwrap();
+    assert_eq!(scan_at(t0 + 10 * day), 1);
+    let p = payload(t0 + 10 * day);
+    assert_eq!(p["summary"]["new"], 0, "{p}");
+    assert_eq!(p["summary"]["fixed"], 1, "{p}");
+    assert_eq!(owners(&p), ["team-a"]);
+    assert!(p["previous_run"].is_string());
+
+    // Day 20, a gap run, then day 40: api read again. Its finding is neither fixed by the
+    // gap nor new when it is read again; it is past its 30-day SLA.
+    std::fs::write(api.join("Cargo.lock"), "not a lockfile [[[").unwrap();
+    assert_eq!(scan_at(t0 + 20 * day), 2);
+    let p = payload(t0 + 20 * day);
+    assert_eq!(p["run"]["gap"], true);
+    assert_eq!(
+        (p["summary"]["new"].as_u64(), p["summary"]["fixed"].as_u64()),
+        (Some(0), Some(0))
+    );
+    std::fs::write(api.join("Cargo.lock"), &vulnerable).unwrap();
+    assert_eq!(scan_at(t0 + 40 * day), 1);
+    let p = payload(t0 + 40 * day);
+    assert_eq!(p["summary"]["new"], 0, "{p}");
+    assert_eq!(p["summary"]["breaches"], 1, "{p}");
+    assert_eq!(p["owners"][0]["owner"], "team-b");
+    assert_eq!(p["owners"][0]["breaches"][0]["overdue_days"], 10.0);
+
+    let (_, slack, _) = notify(t0 + 40 * day, &["-f", "slack"], &[]);
+    let slack: serde_json::Value = serde_json::from_str(&slack).unwrap();
+    assert_eq!(slack["blocks"][0]["type"], "header");
+    assert!(
+        slack["blocks"][2]["text"]["text"]
+            .as_str()
+            .unwrap()
+            .contains("*Past SLA* (1)"),
+        "{slack}"
+    );
+
+    // Webhooks: HTTPS only, and a POST of the payload.
+    let (c, _, err) = notify(
+        t0 + 40 * day,
+        &["--webhook", "http://example.com/hook"],
+        &[],
+    );
+    assert_eq!(c, 3, "{err}");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!(
+        "http://127.0.0.1:{}/hook/secret",
+        listener.local_addr().unwrap().port()
+    );
+    let server = std::thread::spawn(move || {
+        use std::io::{BufRead, BufReader, Read, Write};
+        let (stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream);
+        let mut length = 0;
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            if line.trim().is_empty() {
+                break;
+            }
+            if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                length = v.trim().parse().unwrap();
+            }
+        }
+        let mut body = vec![0; length];
+        reader.read_exact(&mut body).unwrap();
+        reader
+            .get_mut()
+            .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok")
+            .unwrap();
+        String::from_utf8(body).unwrap()
+    });
+    let (c, _, err) = notify(t0 + 40 * day, &["--webhook", &url], &[]);
+    if cfg!(feature = "network") {
+        assert_eq!(c, 0, "{err}");
+        assert!(!err.contains("secret"), "the URL's path is a secret: {err}");
+        let got: serde_json::Value = serde_json::from_str(&server.join().unwrap()).unwrap();
+        assert_eq!(got["schema"], "fleetreach-notify/1");
+        assert_eq!(got["summary"]["breaches"], 1);
+    } else {
+        assert_eq!(c, 2, "{err}");
+        assert!(err.contains("network"), "{err}");
+    }
+
+    // Issues: a fake gh that keeps each issue as files.
+    let bin = root.join("bin");
+    let state = root.join("issues");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::create_dir_all(&state).unwrap();
+    let gh = bin.join("gh");
+    std::fs::write(
+        &gh,
+        r#"#!/bin/sh
+echo "$*" >> "$FAKE_GH_LOG"
+S="$FAKE_GH_STATE"
+case "$1 $2" in
+  "issue list")
+    printf '['; sep=''
+    for f in "$S"/*.body; do
+      [ -e "$f" ] || continue
+      n=$(basename "$f" .body)
+      printf '%s{"number":%s,"body":"%s","state":"%s"}' "$sep" "$n" "$(head -n1 "$f")" "$(cat "$S/$n.state")"
+      sep=','
+    done
+    echo ']' ;;
+  "issue create")
+    n=$(( $(ls "$S" | grep -c '\.body$') + 1 ))
+    cat > "$S/$n.body"; echo OPEN > "$S/$n.state"
+    echo "https://github.com/acme/security/issues/$n" ;;
+  "issue edit") cat > "$S/$3.body" ;;
+  "issue close") echo CLOSED > "$S/$3.state" ;;
+  "issue reopen") echo OPEN > "$S/$3.state" ;;
+esac
+"#,
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let log = root.join("gh.log");
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let gh_env: Vec<(&str, &std::ffi::OsStr)> = vec![
+        ("PATH", std::ffi::OsStr::new(&path)),
+        ("FAKE_GH_LOG", log.as_os_str()),
+        ("FAKE_GH_STATE", state.as_os_str()),
+    ];
+    let issues = ["--github-issues", "--repo", "acme/security"];
+    let read = |p: &str| std::fs::read_to_string(state.join(p)).unwrap();
+
+    let (c, out, err) = notify(
+        t0 + 40 * day,
+        &[&issues[..], &["--dry-run"]].concat(),
+        &gh_env,
+    );
+    assert_eq!(c, 0, "{err}");
+    assert!(
+        out.contains("fleetreach: 1 open finding(s) for team-b, 1 past SLA"),
+        "{out}"
+    );
+    assert!(!log.exists(), "a dry run runs no gh");
+
+    // Only team-b has an open finding, so only it gets an issue; running again rewrites it.
+    for _ in 0..2 {
+        let (c, _, err) = notify(t0 + 40 * day, &issues, &gh_env);
+        assert_eq!(c, 0, "{err}");
+    }
+    assert!(
+        !state.join("2.body").exists(),
+        "one issue, updated in place"
+    );
+    let body = read("1.body");
+    assert!(
+        body.starts_with("<!-- fleetreach:campaign=fleetreach;owner=team-b -->"),
+        "{body}"
+    );
+    assert!(
+        body.contains("### Past SLA (1)") && body.contains("api"),
+        "{body}"
+    );
+    let calls = std::fs::read_to_string(&log).unwrap();
+    assert!(
+        calls.contains("issue create --repo acme/security"),
+        "{calls}"
+    );
+    assert!(
+        calls.contains("issue edit 1 --repo acme/security"),
+        "{calls}"
+    );
+
+    // api fixed: the issue says so and is closed; back again: reopened.
+    std::fs::write(api.join("Cargo.lock"), &patched).unwrap();
+    assert_eq!(scan_at(t0 + 41 * day), 0);
+    assert_eq!(notify(t0 + 41 * day, &issues, &gh_env).0, 0);
+    assert_eq!(read("1.state").trim(), "CLOSED");
+    assert!(
+        read("1.body").contains("### Fixed in this run (1)"),
+        "{}",
+        read("1.body")
+    );
+    std::fs::write(api.join("Cargo.lock"), &vulnerable).unwrap();
+    assert_eq!(scan_at(t0 + 42 * day), 1);
+    let p = payload(t0 + 42 * day);
+    assert_eq!(
+        p["summary"]["new"], 1,
+        "a finding back after its fix is new: {p}"
+    );
+    assert_eq!(notify(t0 + 42 * day, &issues, &gh_env).0, 0);
+    assert_eq!(read("1.state").trim(), "OPEN");
+    assert!(!state.join("2.body").exists());
+}

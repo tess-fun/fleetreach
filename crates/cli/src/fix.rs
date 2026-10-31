@@ -922,7 +922,7 @@ fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
         .args(args))
 }
 
-fn run(cmd: &mut Command) -> Result<String, String> {
+pub(crate) fn run(cmd: &mut Command) -> Result<String, String> {
     let output = cmd.output().map_err(|e| format!("{e}"))?;
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())

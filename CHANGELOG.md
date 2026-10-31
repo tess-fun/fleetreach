@@ -59,6 +59,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ignored, and `--history-dir` refuses the flags that drop findings. `[settings.history]
   keep` prunes old snapshots while the index keeps first-seen dates; a lost or stale index is
   rebuilt from the snapshots.
+- **Notifications** (spec 09, phase 3). `fleetreach notify --history-dir DIR` reports what
+  the newest run changed (new findings, fixed findings) and every breach of `[settings.sla]`
+  (with `-c`), grouped by owner. It prints, or POSTs to `--webhook` (HTTPS; network builds),
+  a stable `fleetreach-notify/1` JSON payload or, with `-f slack`, a Slack Block Kit message;
+  a webhook gets nothing when nothing changed unless `--always`. `--github-issues` (`gh`) or
+  `--gitlab-issues` (`glab`) with `--repo` keeps one issue per owner, found again by a hidden
+  marker, rewritten each run, closed when the owner has nothing open and reopened when a
+  finding comes back. A gap run never makes old findings look new.
 - **GitLab merge requests** for `fix apply --open-pr` and `fix status`, through `glab`:
   the open merge request from a `fleetreach/*` branch is updated, otherwise one is created.
   The forge is read from each repo's `origin` host, or set with `--forge gitlab|github`.

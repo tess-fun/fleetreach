@@ -22,6 +22,7 @@ pub mod inventory;
 pub mod licenses;
 pub mod licenses_cmd;
 pub mod maven_repo;
+pub mod notify;
 pub mod npm_reach;
 pub mod orchestrate;
 pub mod osvdb;

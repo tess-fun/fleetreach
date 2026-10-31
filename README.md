@@ -122,6 +122,7 @@ fleetreach fix plan -c fleet.toml --report report.json > plan.json  # the fix qu
 fleetreach fix apply -c fleet.toml plan.json -- --db ./advisory-db  # verified local branches
 fleetreach scan -c fleet.toml --history-dir history/  # keep this run for trends and SLAs
 fleetreach history sla --history-dir history/ -c fleet.toml  # exit 1 on a breach of [settings.sla]
+fleetreach notify --history-dir history/ -c fleet.toml -f slack --webhook "$SLACK_WEBHOOK"  # new, fixed, past SLA
 fleetreach scan -c fleet.toml --sync   # sync sources, then scan
 fleetreach scan -c fleet.toml --osv-dir ./osv  # air-gapped: one dir of osv.dev exports
 fleetreach scan -c fleet.toml --require-full-coverage  # exit 2 if any source was only partly read
