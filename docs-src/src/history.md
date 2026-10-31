@@ -137,7 +137,8 @@ ServiceNow, PagerDuty or your own script. Its fields only grow within
 ```
 
 `owners` lists only owners with something to report, named owners first; `owner` is `null`
-for repos without one. Items also carry `ssvc` when an outcome was computed and `fixed_at`
+for repos without one. `url` is the advisory's own page when its database gives an `https://` one,
+otherwise its osv.dev page; the HTML report links the same way. Items also carry `ssvc` when an outcome was computed and `fixed_at`
 when fixed. `run.gap` is true when the newest run exited `2`.
 
 `-f slack` sends a Block Kit message: a summary header, then one section per owner with up
@@ -156,3 +157,27 @@ example per program or quarter. `--dry-run` prints the issues without running `g
 
 There is no Jira client: point the generic webhook at a Jira automation rule instead, so
 fleetreach holds no Jira credentials.
+
+## Static report
+
+```
+fleetreach report html --history-dir history/ -c fleet.toml -o fleet-report.html
+fleetreach fix status -c fleet.toml > fix-status.json   # optional: list fix campaigns too
+fleetreach report html --history-dir history/ -c fleet.toml --fix-status fix-status.json -o site/index.html
+```
+
+One self-contained HTML file: inline styles, an inline SVG chart and a few lines of script for
+its tooltips, nothing fetched, so it works offline and on any static host (GitHub Pages, an
+internal bucket). It shows:
+
+- summary tiles: open findings, past SLA, new and fixed in the newest run, median days to fix;
+- open findings per run, stacked by severity, with gap runs marked, and a table view;
+- every finding past its SLA (with `-c` and `[settings.sla]`), most overdue first;
+- a queue per owner: past due first, then by severity and age, with each deadline;
+- fix campaigns from a saved `fix status` (`--fix-status`), with links to the requests;
+- time to fix by severity.
+
+`--title` names the page and `--since 90d` shortens the trend. `-o -` writes to stdout. Every
+value from the history is escaped, and only `https://` links from a status file become links.
+The page is the same for the same history and `SOURCE_DATE_EPOCH`, so it diffs cleanly when
+committed. It follows the light or dark setting of the viewer's system.

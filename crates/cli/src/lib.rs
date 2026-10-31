@@ -28,6 +28,7 @@ pub mod orchestrate;
 pub mod osvdb;
 pub mod py_reach;
 pub mod reach;
+pub mod report_html;
 pub mod resolve;
 pub mod sbom;
 pub mod sbom_input;

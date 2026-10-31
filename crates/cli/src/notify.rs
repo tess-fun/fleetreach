@@ -135,7 +135,7 @@ pub struct Item {
 }
 
 impl Item {
-    fn of(e: &Entry) -> Item {
+    fn of(e: &Entry, links: &history::AdvisoryLinks) -> Item {
         Item {
             advisory: e.key.advisory.clone(),
             ecosystem: e.key.ecosystem,
@@ -148,7 +148,7 @@ impl Item {
             fixed_at: e.fixed_at.clone(),
             due: None,
             overdue_days: None,
-            url: format!("https://osv.dev/vulnerability/{}", e.key.advisory),
+            url: links.url(&e.key.advisory),
         }
     }
 }
@@ -189,6 +189,7 @@ fn build(
     at: time::OffsetDateTime,
 ) -> Option<Built> {
     let changes = history::changes(h)?;
+    let links = history::AdvisoryLinks::new(h);
     let mut owners: BTreeMap<Option<String>, OwnerState> = BTreeMap::new();
     let new_keys: std::collections::BTreeSet<_> = changes.new.iter().map(|e| &e.key).collect();
     // Every owner the index knows, so an owner whose findings are all gone still gets its
@@ -196,7 +197,9 @@ fn build(
     for e in &h.index.entries {
         let state = owners.entry(e.owner.clone()).or_default();
         if e.status == Status::Open {
-            state.open.push((Item::of(e), new_keys.contains(&e.key)));
+            state
+                .open
+                .push((Item::of(e, &links), new_keys.contains(&e.key)));
         }
     }
     for e in &changes.new {
@@ -204,19 +207,19 @@ fn build(
             .entry(e.owner.clone())
             .or_default()
             .new
-            .push(Item::of(e));
+            .push(Item::of(e, &links));
     }
     for e in &changes.fixed {
         owners
             .entry(e.owner.clone())
             .or_default()
             .fixed
-            .push(Item::of(e));
+            .push(Item::of(e, &links));
     }
     let mut breaches = 0;
     if let Some(policy) = policy {
         for b in history::sla(h, policy, at) {
-            let mut item = Item::of(b.entry);
+            let mut item = Item::of(b.entry, &links);
             item.due = Some(b.due.clone());
             item.overdue_days = Some(b.overdue_days);
             owners

@@ -67,6 +67,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `--gitlab-issues` (`glab`) with `--repo` keeps one issue per owner, found again by a hidden
   marker, rewritten each run, closed when the owner has nothing open and reopened when a
   finding comes back. A gap run never makes old findings look new.
+- **Static HTML report** (spec 09, phase 4). `fleetreach report html --history-dir DIR -o
+  fleet-report.html` writes one self-contained page (no external resources) to host
+  anywhere: summary tiles, open findings per run by severity with gap runs marked, SLA
+  breaches, a queue per owner, fix campaigns from a saved `fix status` (`--fix-status`) and
+  time to fix by severity. Light and dark, usable at phone width, deterministic for a given
+  history.
 - **GitLab merge requests** for `fix apply --open-pr` and `fix status`, through `glab`:
   the open merge request from a `fleetreach/*` branch is updated, otherwise one is created.
   The forge is read from each repo's `origin` host, or set with `--forge gitlab|github`.

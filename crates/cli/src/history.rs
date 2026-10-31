@@ -742,6 +742,31 @@ pub fn mttr(history: &History, by: GroupBy) -> Vec<Mttr> {
         .collect()
 }
 
+/// Where to read each advisory: its own `https://` URL from the newest snapshot that gives
+/// one, otherwise its osv.dev page.
+pub struct AdvisoryLinks(BTreeMap<String, String>);
+
+impl AdvisoryLinks {
+    pub fn new(history: &History) -> AdvisoryLinks {
+        let mut urls = BTreeMap::new();
+        for s in &history.snapshots {
+            for v in &s.report.vulnerabilities {
+                if let Some(url) = v.url.as_deref().filter(|u| u.starts_with("https://")) {
+                    urls.insert(v.advisory_id.clone(), url.to_string());
+                }
+            }
+        }
+        AdvisoryLinks(urls)
+    }
+
+    pub fn url(&self, advisory: &str) -> String {
+        self.0
+            .get(advisory)
+            .cloned()
+            .unwrap_or_else(|| format!("https://osv.dev/vulnerability/{advisory}"))
+    }
+}
+
 /// What the newest run changed against the one before it.
 pub struct Changes<'a> {
     pub run: &'a Run,
@@ -793,6 +818,20 @@ pub fn changes(history: &History) -> Option<Changes<'_>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn advisories_without_their_own_page_link_to_osv() {
+        let h = History {
+            snapshots: Vec::new(),
+            index: Index::default(),
+            unreadable: Vec::new(),
+            rebuilt: None,
+        };
+        assert_eq!(
+            AdvisoryLinks::new(&h).url("GHSA-xxxx-yyyy-zzzz"),
+            "https://osv.dev/vulnerability/GHSA-xxxx-yyyy-zzzz"
+        );
+    }
 
     #[test]
     fn deadlines_prefer_ssvc_and_unknown_never_buys_time() {

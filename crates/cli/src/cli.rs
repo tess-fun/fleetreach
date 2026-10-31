@@ -53,6 +53,9 @@ enum Commands {
     History(crate::history_cmd::HistoryCommand),
     /// Send what the newest history run changed, and SLA breaches, to a webhook or issues.
     Notify(crate::notify::NotifyArgs),
+    /// Publishable reports from the scan history.
+    #[command(subcommand)]
+    Report(crate::report_html::ReportCommand),
 }
 
 #[derive(Subcommand)]
@@ -95,6 +98,7 @@ pub fn dispatch(cli: Cli) -> u8 {
         Commands::Licenses(args) => crate::licenses_cmd::run_licenses(&args),
         Commands::History(command) => crate::history_cmd::run_history(command),
         Commands::Notify(args) => crate::notify::run_notify(&args),
+        Commands::Report(command) => crate::report_html::run_report(command),
     }
 }
 

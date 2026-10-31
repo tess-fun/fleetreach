@@ -2453,10 +2453,8 @@ fn notify_reports_changes_by_owner_and_keeps_one_issue_per_owner() {
     }
     assert_eq!(item["advisory"], "RUSTSEC-2099-0001");
     assert_eq!(item["severity"], "critical");
-    assert_eq!(
-        item["url"],
-        "https://osv.dev/vulnerability/RUSTSEC-2099-0001"
-    );
+    // The advisory's own page when its database gives one (osv.dev otherwise).
+    assert_eq!(item["url"], "https://example.com/RUSTSEC-2099-0001");
 
     // Day 10: app fixed, nothing new.
     std::fs::write(app.join("Cargo.lock"), &patched).unwrap();
@@ -2654,4 +2652,136 @@ esac
     assert_eq!(notify(t0 + 42 * day, &issues, &gh_env).0, 0);
     assert_eq!(read("1.state").trim(), "OPEN");
     assert!(!state.join("2.body").exists());
+}
+
+#[test]
+fn report_html_is_one_self_contained_page_from_the_history() {
+    let root = std::env::temp_dir().join(format!("fleetreach-report-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let vulnerable =
+        std::fs::read_to_string(manifest().join("tests/fixtures/repos/repo-vuln/Cargo.lock"))
+            .unwrap();
+    let app = root.join("app");
+    let api = root.join("api");
+    for dir in [&app, &api] {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("Cargo.lock"), &vulnerable).unwrap();
+    }
+    let fleet = root.join("fleet.toml");
+    std::fs::write(
+        &fleet,
+        format!(
+            "[[repo]]\nid = \"app\"\npath = {app:?}\nowner = \"team-a\"\n\n\
+             [[repo]]\nid = \"api\"\npath = {api:?}\nowner = \"<b>team-b</b>\"\n\n\
+             [settings.sla]\ncritical = \"30d\"\n"
+        ),
+    )
+    .unwrap();
+    let config = fleet.to_str().unwrap();
+    let history = root.join("history");
+    let hist = history.to_str().unwrap();
+    let day = 86_400_i64;
+    let t0 = 1_793_404_800_i64; // 2026-10-31T00:00:00Z
+    let epoch = |t: i64| t.to_string();
+    for (t, patched) in [(t0, false), (t0 + 10 * day, true)] {
+        if patched {
+            std::fs::write(app.join("Cargo.lock"), vulnerable.replace("1.0.0", "1.0.1")).unwrap();
+        }
+        let e = epoch(t);
+        let out = run_env(
+            &[
+                "scan",
+                "-q",
+                "-c",
+                config,
+                "--db",
+                &db(),
+                "--history-dir",
+                hist,
+            ],
+            &[("SOURCE_DATE_EPOCH", std::ffi::OsStr::new(&e))],
+        );
+        assert_eq!(code(&out), 1, "{}", stderr(&out));
+    }
+    let status = root.join("status.json");
+    std::fs::write(
+        &status,
+        r#"[{"repo":"app","branch":"fleetreach/cargo-fixturevuln-1.0.1","state":"MERGED",
+             "title":"Bump fixturevuln","url":"https://github.com/acme/app/pull/1"},
+            {"repo":"api","branch":"fleetreach/x","state":"OPEN",
+             "title":"<script>alert(1)</script>","url":"javascript:alert(1)"}]"#,
+    )
+    .unwrap();
+    let page = root.join("report.html");
+    let e = epoch(t0 + 40 * day);
+    let out = run_env(
+        &[
+            "report",
+            "html",
+            "--history-dir",
+            hist,
+            "-c",
+            config,
+            "--fix-status",
+            status.to_str().unwrap(),
+            "-o",
+            page.to_str().unwrap(),
+        ],
+        &[("SOURCE_DATE_EPOCH", std::ffi::OsStr::new(&e))],
+    );
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    let html = std::fs::read_to_string(&page).unwrap();
+
+    // The DOM text a reader sees.
+    for text in [
+        "<title>Fleet security report</title>",
+        "Open findings per run",
+        "Past SLA",
+        "Queues by owner",
+        "Fix campaigns",
+        "Time to fix by severity",
+        "RUSTSEC-2099-0001",
+        "fixturevuln@1.0.0",
+        "1 merged · 1 open",
+        "Generated 2026-12-10T00:00:00Z from 2 run(s)",
+    ] {
+        assert!(html.contains(text), "missing {text:?}");
+    }
+    // An owner with nothing open has no queue.
+    assert!(!html.contains("team-a"));
+    // api is 10 days past its 30-day deadline; app's fix took 10 days.
+    assert!(html.contains(">10.0</td></tr>"), "overdue days");
+    assert!(html.contains("Median days to fix</div><div class=\"value\">10.0"));
+    // Self-contained, and nothing from the history or the status file runs as markup.
+    assert!(
+        !html.contains("<script src") && !html.contains("<link"),
+        "external resources"
+    );
+    assert_eq!(
+        html.matches("<script").count(),
+        1,
+        "only the page's own script"
+    );
+    assert!(html.contains("&lt;b&gt;team-b&lt;/b&gt;") && !html.contains("<b>team-b"));
+    assert!(!html.contains("javascript:"), "only https links are kept");
+    assert!(html.contains("<a href=\"https://example.com/RUSTSEC-2099-0001\">"));
+    assert!(html.len() < 100_000, "size budget: {} bytes", html.len());
+
+    // Deterministic for the same history and time.
+    let again = run_env(
+        &[
+            "report",
+            "html",
+            "--history-dir",
+            hist,
+            "-c",
+            config,
+            "--fix-status",
+            status.to_str().unwrap(),
+            "-o",
+            "-",
+        ],
+        &[("SOURCE_DATE_EPOCH", std::ffi::OsStr::new(&e))],
+    );
+    assert_eq!(stdout(&again), html);
 }
