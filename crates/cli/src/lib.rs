@@ -16,6 +16,8 @@ pub mod diff;
 pub mod enrich;
 pub mod evidence;
 pub mod fix;
+pub mod history;
+pub mod history_cmd;
 pub mod inventory;
 pub mod licenses;
 pub mod licenses_cmd;

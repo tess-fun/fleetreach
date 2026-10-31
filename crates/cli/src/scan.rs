@@ -322,6 +322,11 @@ pub(crate) struct ScanArgs {
     // diffing & inspection
     #[arg(long, help = "prior JSON report; report only findings new since it")]
     baseline: Option<PathBuf>,
+    /// Record this run in a scan history directory (a gzipped snapshot plus an index; see
+    /// `fleetreach history`). Refuses the flags that drop findings from the report, which
+    /// would otherwise be recorded as fixed
+    #[arg(long)]
+    history_dir: Option<PathBuf>,
     #[arg(
         long,
         value_name = "ID",
@@ -404,6 +409,28 @@ fn locate_govulncheck(explicit: Option<&Path>) -> Option<PathBuf> {
 }
 
 pub(crate) fn run_scan(args: ScanArgs) -> u8 {
+    if args.history_dir.is_some() {
+        let narrowing = [
+            (args.baseline.is_some(), "--baseline"),
+            (args.min_severity.is_some(), "--min-severity"),
+            (args.min_epss.is_some(), "--min-epss"),
+            (args.ignore_dev_deps, "--ignore-dev-deps"),
+            (args.ignore_phantom, "--ignore-phantom"),
+            (args.reachable_only, "--reachable-only"),
+        ];
+        let used: Vec<&str> = narrowing
+            .iter()
+            .filter(|(on, _)| *on)
+            .map(|(_, f)| *f)
+            .collect();
+        if !used.is_empty() {
+            return usage_fail(&format!(
+                "--history-dir records the whole fleet; {} would drop findings that history \
+                 would then count as fixed",
+                used.join(", ")
+            ));
+        }
+    }
     // --explain short-circuits (§10.1): load DB, print one advisory, exit.
     // It needs no fleet.toml.
     if let Some(id) = &args.explain {
@@ -1033,11 +1060,29 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
     let code = combine_baseline(code, ssvc_hit);
     // --require-full-coverage: a source read only partly means the fleet cannot be called
     // clean, the same contract as an errored repo.
-    if args.require_full_coverage && coverage_incomplete {
+    let code = if args.require_full_coverage && coverage_incomplete {
         if !args.quiet {
             eprintln!("error: incomplete coverage under --require-full-coverage (see note above)");
         }
-        return 2;
+        2
+    } else {
+        code
+    };
+    // 8. Scan history (spec 09): the run as it gated. Failing to record what was asked for
+    //    is a failed run.
+    if let Some(dir) = &args.history_dir {
+        let keys = crate::history::suppressed_keys(&fleet_report, &suppressed);
+        match crate::history::record(dir, &fleet_report, keys, code, config.history_keep) {
+            Ok((path, notes)) => {
+                for note in notes {
+                    eprintln!("note: {note}");
+                }
+                if !args.quiet {
+                    eprintln!("history: recorded {}", path.display());
+                }
+            }
+            Err(e) => return fail(&format!("recording history: {e}")),
+        }
     }
     code
 }

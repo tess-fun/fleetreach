@@ -46,6 +46,10 @@ pub enum ConfigError {
     InvalidLicenses(String),
     #[error("settings.ssvc: {0}")]
     InvalidSsvc(String),
+    #[error("settings.sla: {0}")]
+    InvalidSla(String),
+    #[error("settings.history: {0}")]
+    InvalidHistory(String),
 }
 
 /// The five CISA VEX Working Group `not_affected` justification labels; a
@@ -265,6 +269,19 @@ struct SettingsTable {
     context: RawContextSettings,
     #[serde(default)]
     ssvc: RawSsvc,
+    /// `[settings.sla]`: an SSVC outcome or a severity to a duration (`7d`).
+    #[serde(default)]
+    sla: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    history: RawHistory,
+}
+
+/// The `[settings.history]` block (spec 09).
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawHistory {
+    /// Drop snapshots older than this (`180d`); the index keeps their findings.
+    keep: Option<String>,
 }
 
 /// The `[settings.signals]` block (spec 10).
@@ -372,6 +389,10 @@ pub struct Config {
     pub ssvc_table: fleetreach_core::ssvc::DecisionTable,
     /// `[settings.ssvc] weights`, else the spec's 8 / 4 / 2 / 0.
     pub ssvc_weights: std::collections::BTreeMap<fleetreach_core::ssvc::Outcome, u32>,
+    /// `[settings.sla]` (spec 09).
+    pub sla: crate::history::SlaPolicy,
+    /// `[settings.history] keep`, in seconds.
+    pub history_keep: Option<i64>,
 }
 
 /// Validated exposure and impact context (spec 08).
@@ -756,6 +777,39 @@ impl Config {
             .collect()
         };
 
+        let mut sla = crate::history::SlaPolicy::default();
+        for (key, value) in &raw.settings.sla {
+            let seconds = crate::db::parse_duration_secs(value)
+                .ok()
+                .filter(|s| *s > 0)
+                .ok_or_else(|| {
+                    ConfigError::InvalidSla(format!("`{key}`: `{value}` is not a duration like 7d"))
+                })?;
+            if let Some(outcome) = fleetreach_core::ssvc::Outcome::parse(key) {
+                sla.by_outcome.insert(outcome, seconds);
+            } else if let Some(severity) = severity_named(key) {
+                sla.by_severity.insert(severity, seconds);
+            } else {
+                return Err(ConfigError::InvalidSla(format!(
+                    "`{key}` is neither an SSVC outcome (immediate, out-of-cycle, scheduled, \
+                     defer) nor a severity (critical, high, medium, low, unknown)"
+                )));
+            }
+        }
+        let history_keep = match &raw.settings.history.keep {
+            None => None,
+            Some(v) => Some(
+                crate::db::parse_duration_secs(v)
+                    .ok()
+                    .filter(|s| *s > 0)
+                    .ok_or_else(|| {
+                        ConfigError::InvalidHistory(format!(
+                            "keep `{v}` is not a duration like 180d"
+                        ))
+                    })?,
+            ),
+        };
+
         Ok(Config {
             repos,
             ignores,
@@ -771,6 +825,20 @@ impl Config {
             ssvc_poc_epss,
             ssvc_table,
             ssvc_weights,
+            sla,
+            history_keep,
         })
     }
+}
+
+fn severity_named(name: &str) -> Option<fleetreach_core::Severity> {
+    use fleetreach_core::Severity;
+    Some(match name {
+        "critical" => Severity::Critical,
+        "high" => Severity::High,
+        "medium" => Severity::Medium,
+        "low" => Severity::Low,
+        "unknown" => Severity::Unknown,
+        _ => return None,
+    })
 }

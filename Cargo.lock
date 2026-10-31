@@ -775,6 +775,7 @@ dependencies = [
  "assert_cmd",
  "clap",
  "comfy-table",
+ "flate2",
  "fleetreach-core",
  "fleetreach-correlate",
  "fleetreach-ghactions",

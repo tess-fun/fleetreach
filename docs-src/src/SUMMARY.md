@@ -9,6 +9,7 @@
 - [Licenses](./licenses.md)
 - [Context and SSVC](./context.md)
 - [Fixing: plan and apply](./fix.md)
+- [History and SLAs](./history.md)
 - [Reachability](./reachability.md)
 - [Ecosystems](./ecosystems.md)
 - [CI integration](./ci.md)

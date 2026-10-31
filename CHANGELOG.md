@@ -49,6 +49,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `NotReachable`: `code_not_reachable`; phantom: `requires_dependency`), or SPDX `SECURITY`
   advisory references. Both formats pass their official schemas, and an SPDX document scans
   back to the same findings.
+- **Scan history, trends and SLAs** (spec 09, phases 1 and 2). `scan --history-dir DIR`
+  records each run as a gzipped snapshot plus an index of every finding's first and last
+  sighting and fix. `fleetreach history trend|age|sla|mttr` reads it: open findings per run
+  by severity, SSVC, ecosystem or owner; the oldest open findings; breaches of a
+  `[settings.sla]` policy keyed by SSVC outcome or severity (`history sla` exits 1 on a
+  breach, 2 without a policy); and time to fix. Fail-closed: a run that exited 2, an errored
+  repo or a partly-read source never marks a finding fixed, ignored findings are recorded as
+  ignored, and `--history-dir` refuses the flags that drop findings. `[settings.history]
+  keep` prunes old snapshots while the index keeps first-seen dates; a lost or stale index is
+  rebuilt from the snapshots.
 - **GitLab merge requests** for `fix apply --open-pr` and `fix status`, through `glab`:
   the open merge request from a `fleetreach/*` branch is updated, otherwise one is created.
   The forge is read from each repo's `origin` host, or set with `--forge gitlab|github`.

@@ -2198,3 +2198,163 @@ fn remediation_rates_each_bump_against_the_fleet() {
     assert!(table.contains("Bump risk"), "{table}");
     assert!(table.contains("low · 1 on 1.0.1"), "{table}");
 }
+
+// ---- scan history (spec 09) ----
+
+#[test]
+fn history_tracks_fixes_age_sla_and_never_trusts_a_gap_run() {
+    let root = std::env::temp_dir().join(format!("fleetreach-history-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let vulnerable =
+        std::fs::read_to_string(manifest().join("tests/fixtures/repos/repo-vuln/Cargo.lock"))
+            .unwrap();
+    let patched = vulnerable.replace("1.0.0", "1.0.1");
+    let app = root.join("app");
+    let api = root.join("api");
+    for dir in [&app, &api] {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("Cargo.lock"), &vulnerable).unwrap();
+    }
+    let fleet = root.join("fleet.toml");
+    let write_fleet = |sla: &str| {
+        std::fs::write(
+            &fleet,
+            format!(
+                "[[repo]]\nid = \"app\"\npath = {app:?}\nowner = \"team-a\"\n\n\
+                 [[repo]]\nid = \"api\"\npath = {api:?}\nowner = \"team-b\"\n\n\
+                 [settings.sla]\n{sla}\n"
+            ),
+        )
+        .unwrap();
+    };
+    write_fleet("critical = \"30d\"");
+    let history = root.join("history");
+    let day = 86_400_i64;
+    let t0 = 1_793_404_800_i64; // 2026-10-31T00:00:00Z
+    let scan_at = |t: i64| {
+        let out = run_env(
+            &[
+                "scan",
+                "-q",
+                "-c",
+                fleet.to_str().unwrap(),
+                "--db",
+                &db(),
+                "-f",
+                "json",
+                "--history-dir",
+                history.to_str().unwrap(),
+            ],
+            &[("SOURCE_DATE_EPOCH", std::ffi::OsStr::new(&t.to_string()))],
+        );
+        code(&out)
+    };
+    // Day 0: both vulnerable. Day 10: app fixed. Day 20: api unreadable, the run is a gap.
+    // Day 40: api read again, still vulnerable.
+    assert_eq!(scan_at(t0), 1);
+    std::fs::write(app.join("Cargo.lock"), &patched).unwrap();
+    assert_eq!(scan_at(t0 + 10 * day), 1);
+    std::fs::write(api.join("Cargo.lock"), "not a lockfile [[[").unwrap();
+    assert_eq!(scan_at(t0 + 20 * day), 2);
+    std::fs::write(api.join("Cargo.lock"), &vulnerable).unwrap();
+    assert_eq!(scan_at(t0 + 40 * day), 1);
+
+    let at = "2026-12-10T00:00:00Z"; // day 40
+    let query = |args: &[&str]| {
+        let mut argv = vec!["history"];
+        argv.extend_from_slice(args);
+        argv.extend_from_slice(&["--history-dir", history.to_str().unwrap(), "--at", at]);
+        let out = run(&argv);
+        (code(&out), stdout(&out), stderr(&out))
+    };
+    let json = |args: &[&str]| -> serde_json::Value {
+        let mut argv = args.to_vec();
+        argv.extend_from_slice(&["-f", "json"]);
+        let (_, out, err) = query(&argv);
+        serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out} {err}"))
+    };
+
+    let trend = json(&["trend"]);
+    let open: Vec<u64> = trend
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["open"].as_u64().unwrap())
+        .collect();
+    assert_eq!(open, [2, 1, 0, 1], "{trend}");
+    assert_eq!(trend[2]["gap"], true);
+
+    // The gap run did not fix api's finding: it has been open since day 0.
+    let age = json(&["age"]);
+    assert_eq!(age.as_array().unwrap().len(), 1, "{age}");
+    assert_eq!(age[0]["repo"], "api");
+    assert_eq!(age[0]["age_days"], 40.0);
+    assert_eq!(age[0]["owner"], "team-b");
+    assert_eq!(age[0]["first_seen"], "2026-10-31T00:00:00Z");
+
+    let mttr = json(&["mttr", "--by", "owner"]);
+    let team_a = mttr
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["group"] == "team-a")
+        .unwrap();
+    assert_eq!(team_a["fixed"], 1);
+    assert_eq!(team_a["mean_days"], 10.0);
+
+    let config = fleet.to_str().unwrap();
+    let (code_sla, out, _) = query(&["sla", "-c", config]);
+    assert_eq!(
+        code_sla, 1,
+        "a 30-day critical SLA is 10 days overdue: {out}"
+    );
+    assert!(out.contains("api") && out.contains("10.0"), "{out}");
+    write_fleet("critical = \"60d\"");
+    assert_eq!(query(&["sla", "-c", config]).0, 0);
+    write_fleet("");
+    assert_eq!(
+        query(&["sla", "-c", config]).0,
+        2,
+        "no policy is not a pass"
+    );
+
+    // The snapshots are the truth: a lost index is rebuilt to the same answer.
+    std::fs::remove_file(history.join("index.json")).unwrap();
+    assert_eq!(json(&["age"]), age);
+
+    // Flags that drop findings would record them as fixed.
+    let out = run(&[
+        "scan",
+        "-q",
+        "-c",
+        config,
+        "--db",
+        &db(),
+        "--min-severity",
+        "high",
+        "--history-dir",
+        history.to_str().unwrap(),
+    ]);
+    assert_eq!(code(&out), 3, "{}", stderr(&out));
+    assert!(stderr(&out).contains("--min-severity"), "{}", stderr(&out));
+
+    // Retention drops old snapshots, but the index keeps when each finding was first seen.
+    std::fs::write(
+        &fleet,
+        std::fs::read_to_string(&fleet).unwrap() + "\n[settings.history]\nkeep = \"15d\"\n",
+    )
+    .unwrap();
+    assert_eq!(scan_at(t0 + 41 * day), 1);
+    let left = std::fs::read_dir(&history)
+        .unwrap()
+        .filter(|e| {
+            e.as_ref()
+                .unwrap()
+                .path()
+                .to_string_lossy()
+                .ends_with(".json.gz")
+        })
+        .count();
+    assert_eq!(left, 2, "days 40 and 41 are kept");
+    assert_eq!(json(&["age"])[0]["first_seen"], "2026-10-31T00:00:00Z");
+}

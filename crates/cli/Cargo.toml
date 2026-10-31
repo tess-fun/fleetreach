@@ -64,6 +64,8 @@ rayon = "1"
 # Validate a freshly downloaded osv.dev export before installing it (spec 01). Same pure-Rust
 # inflate backend as the core loader.
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# Gzip for scan history snapshots (spec 09): the same pure-Rust zlib-rs backend, no C.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 
 [dev-dependencies]
 assert_cmd = "2"

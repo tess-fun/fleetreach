@@ -41,13 +41,16 @@ enum Commands {
     /// Discover and check out the repos named by `[[source]]` entries.
     #[command(subcommand)]
     Fleet(FleetCommand),
-    /// Write a CycloneDX 1.6 SBOM per repo from the same sources `scan` reads.
+    /// Write a CycloneDX 1.6 or SPDX 2.3 SBOM per repo from the same sources `scan` reads.
     Sbom(crate::sbom::SbomArgs),
     /// License inventory and policy violations across the fleet.
     Licenses(crate::licenses_cmd::LicensesArgs),
     /// Plan and apply verified dependency fixes from the remediation queue.
     #[command(subcommand)]
     Fix(crate::fix::FixCommand),
+    /// Trends, age, SLA breaches and time to fix from `scan --history-dir` snapshots.
+    #[command(subcommand)]
+    History(crate::history_cmd::HistoryCommand),
 }
 
 #[derive(Subcommand)]
@@ -88,6 +91,7 @@ pub fn dispatch(cli: Cli) -> u8 {
         Commands::Sbom(args) => crate::sbom::run_sbom(args),
         Commands::Fix(command) => crate::fix::run_fix(command),
         Commands::Licenses(args) => crate::licenses_cmd::run_licenses(&args),
+        Commands::History(command) => crate::history_cmd::run_history(command),
     }
 }
 

@@ -82,6 +82,8 @@ fn config() -> Config {
         ssvc_poc_epss: None,
         ssvc_table: Default::default(),
         ssvc_weights: Default::default(),
+        sla: Default::default(),
+        history_keep: None,
     }
 }
 
