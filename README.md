@@ -117,6 +117,7 @@ fleetreach db sync                     # fetch the OSV exports the fleet needs (
 fleetreach db status                   # what is cached, and how old
 fleetreach fleet sync                  # clone/refresh repos named by [[source]] entries
 fleetreach sbom -c fleet.toml -o boms/ # one CycloneDX 1.6 SBOM per repo
+fleetreach licenses -c fleet.toml      # license inventory; policy violations with [settings.licenses]
 fleetreach fix plan -c fleet.toml --report report.json > plan.json  # the fix queue as edits
 fleetreach fix apply -c fleet.toml plan.json -- --db ./advisory-db  # verified local branches
 fleetreach scan -c fleet.toml --sync   # sync sources, then scan

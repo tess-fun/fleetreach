@@ -22,6 +22,11 @@ pub struct Package {
     pub dev: bool,
     /// Where the package comes from, when the lockfile says (crates.io, git, a registry).
     pub source: DepSource,
+    /// The package's license: a canonical SPDX expression, or the string as found when it
+    /// is not one. `None` when no source knew it.
+    pub license: Option<String>,
+    /// Where the license came from (`package-lock.json`, `cargo registry`, ...).
+    pub license_source: Option<String>,
 }
 
 impl Package {
@@ -38,6 +43,8 @@ impl Package {
             direct,
             dev,
             source: DepSource::default(),
+            license: None,
+            license_source: None,
         }
     }
 

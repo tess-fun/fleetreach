@@ -41,6 +41,8 @@ pub enum ConfigError {
     InvalidOsvRefresh(String),
     #[error("source #{index}: {message}")]
     InvalidSource { index: usize, message: String },
+    #[error("settings.licenses: {0}")]
+    InvalidLicenses(String),
 }
 
 /// The five CISA VEX Working Group `not_affected` justification labels; a
@@ -182,6 +184,33 @@ struct SettingsTable {
     vex_assertion: Vec<RawVexAssertion>,
     #[serde(default)]
     osv: RawOsv,
+    licenses: Option<RawLicenses>,
+}
+
+/// The `[settings.licenses]` policy (spec 11).
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawLicenses {
+    #[serde(default)]
+    allow: Vec<String>,
+    #[serde(default)]
+    deny: Vec<String>,
+    /// `category = "allow" | "warn" | "deny"`.
+    #[serde(default)]
+    categories: std::collections::BTreeMap<String, String>,
+    unknown: Option<String>,
+    /// `"runtime"` leaves dev-only packages out of the policy; `"all"` (default) includes them.
+    scope: Option<String>,
+    #[serde(default)]
+    exception: Vec<RawLicenseException>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawLicenseException {
+    package: String,
+    allow: Vec<String>,
+    reason: String,
 }
 
 /// The `[settings.osv]` block (spec 01): where the osv.dev exports live and how often the
@@ -237,6 +266,8 @@ pub struct Config {
     pub osv: OsvSettings,
     /// `[[source]]` entries; expanded into repos by [`crate::sources`] at scan time.
     pub sources: Vec<crate::sources::Source>,
+    /// `[settings.licenses]`, when present.
+    pub licenses: Option<crate::licenses::Policy>,
 }
 
 /// Validated `[settings.osv]` (spec 01).
@@ -286,6 +317,72 @@ pub struct VexAssertion {
     pub justification: Option<String>,
     pub reason: String,
     pub approved_by: String,
+}
+
+/// Validate `[settings.licenses]`: every id must be an SPDX license id, every verdict
+/// `allow`/`warn`/`deny`, every exception must say why.
+fn license_policy(raw: RawLicenses) -> Result<crate::licenses::Policy, ConfigError> {
+    use crate::licenses::{Category, Policy, Verdict};
+    let bad = |m: String| ConfigError::InvalidLicenses(m);
+    let ids = |list: Vec<String>,
+               field: &str|
+     -> Result<std::collections::BTreeSet<String>, ConfigError> {
+        list.into_iter()
+            .map(|id| match spdx::license_id(&id) {
+                Some(l) => Ok(l.name.to_string()),
+                None if id.starts_with("LicenseRef-") => Ok(id),
+                None => Err(bad(format!("{field}: `{id}` is not an SPDX license id"))),
+            })
+            .collect()
+    };
+    let verdict = |v: &str, field: &str| {
+        Verdict::parse(v).ok_or_else(|| {
+            bad(format!(
+                "{field} `{v}` is not one of `allow`, `warn`, `deny`"
+            ))
+        })
+    };
+    let mut categories = Policy::default_categories();
+    for (name, v) in &raw.categories {
+        let category = Category::parse(name).ok_or_else(|| {
+            bad(format!(
+                "category `{name}` is not one of forbidden, restricted, reciprocal, notice, unencumbered"
+            ))
+        })?;
+        categories.insert(category, verdict(v, &format!("categories.{name}"))?);
+    }
+    let unknown = match raw.unknown.as_deref() {
+        Some(v) => verdict(v, "unknown")?,
+        None => Verdict::Deny,
+    };
+    let runtime_only = match raw.scope.as_deref() {
+        None | Some("all") => false,
+        Some("runtime") => true,
+        Some(other) => {
+            return Err(bad(format!(
+                "scope `{other}` is not one of `all`, `runtime`"
+            )))
+        }
+    };
+    let mut exceptions = std::collections::BTreeMap::new();
+    for e in raw.exception {
+        if e.reason.trim().is_empty() {
+            return Err(bad(format!(
+                "exception for `{}` must have a non-empty `reason`",
+                e.package
+            )));
+        }
+        let allowed = ids(e.allow, &format!("exception `{}`", e.package))?;
+        exceptions.insert(e.package, (allowed, e.reason));
+    }
+    Ok(Policy {
+        allow: ids(raw.allow, "allow")?,
+        deny: ids(raw.deny, "deny")?,
+        categories,
+        unknown,
+        runtime_only,
+        exceptions,
+    })
 }
 
 impl Config {
@@ -467,6 +564,8 @@ impl Config {
             });
         }
 
+        let licenses = raw.settings.licenses.map(license_policy).transpose()?;
+
         Ok(Config {
             repos,
             ignores,
@@ -474,6 +573,7 @@ impl Config {
             vex_assertions,
             osv,
             sources,
+            licenses,
         })
     }
 }

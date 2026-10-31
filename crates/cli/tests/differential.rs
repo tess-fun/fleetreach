@@ -74,6 +74,7 @@ fn config() -> Config {
         vex_assertions: vec![],
         osv: Default::default(),
         sources: Vec::new(),
+        licenses: None,
     }
 }
 

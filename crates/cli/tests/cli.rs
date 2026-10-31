@@ -663,6 +663,89 @@ fn fix_plans_applies_and_verifies_a_lock_bump_on_a_branch() {
 }
 
 #[test]
+fn licenses_inventory_and_policy_violations() {
+    let out = run(&["licenses", "-c", &cfg("fleet-licenses.toml"), "-f", "json"]);
+    assert_eq!(code(&out), 1, "a denied license exits 1: {}", stderr(&out));
+    let v: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(v["policy"], true);
+    let by_pkg = |pkg: &str| {
+        v["packages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["package"] == pkg)
+            .unwrap_or_else(|| panic!("no {pkg}"))
+            .clone()
+    };
+    // From composer.lock and package-lock.json, with where each came from.
+    assert_eq!(by_pkg("monolog/monolog")["license"], "MIT");
+    assert_eq!(by_pkg("monolog/monolog")["source"], "composer.lock");
+    assert_eq!(by_pkg("monolog/monolog")["verdict"], "allow");
+    assert_eq!(by_pkg("left-pad")["source"], "package-lock.json");
+    // `WTFPL OR MIT` passes through its MIT side; `AGPL OR MIT` (a composer list) too.
+    assert_eq!(by_pkg("left-pad")["verdict"], "allow");
+    assert_eq!(by_pkg("acme/dual")["license"], "AGPL-3.0-only OR MIT");
+    assert_eq!(by_pkg("acme/dual")["verdict"], "allow");
+    // Forbidden denied, restricted warned, unknown denied (fail closed).
+    assert_eq!(by_pkg("acme/agpl-lib")["verdict"], "deny");
+    assert_eq!(by_pkg("acme/agpl-lib")["category"], "forbidden");
+    assert_eq!(by_pkg("acme/gpl-lib")["verdict"], "warn");
+    assert_eq!(by_pkg("mystery")["verdict"], "deny");
+    assert!(by_pkg("mystery")["reason"]
+        .as_str()
+        .unwrap()
+        .contains("no license found"));
+    // Dev-only packages are out of a runtime-scoped policy.
+    assert_eq!(by_pkg("phpunit/phpunit")["dev"], true);
+    assert_eq!(by_pkg("phpunit/phpunit")["verdict"], "allow");
+    let mut denied: Vec<&str> = v["violations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["package"].as_str().unwrap())
+        .collect();
+    denied.sort_unstable();
+    assert_eq!(denied, vec!["acme/agpl-lib", "mystery"]);
+
+    // The SBOM carries the same licenses.
+    let out_dir = std::env::temp_dir().join(format!("fleetreach-lic-sbom-{}", std::process::id()));
+    let out = run(&[
+        "sbom",
+        "-q",
+        "-c",
+        &cfg("fleet-licenses.toml"),
+        "-o",
+        out_dir.to_str().unwrap(),
+    ]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    let bom: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(out_dir.join("lic-app.cdx.json")).unwrap())
+            .unwrap();
+    let dual = bom["components"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "acme/dual")
+        .unwrap();
+    assert_eq!(dual["licenses"][0]["expression"], "AGPL-3.0-only OR MIT");
+}
+
+#[test]
+fn license_policy_rejects_unknown_ids() {
+    let path = temp_fleet(
+        "lic-bad",
+        "[[repo]]\nid = \"a\"\npath = \".\"\n[settings.licenses]\nallow = [\"MIT\", \"NotALicense\"]\n",
+    );
+    let out = run(&["licenses", "-c", path.to_str().unwrap()]);
+    assert_eq!(code(&out), 2);
+    assert!(
+        stderr(&out).contains("`NotALicense` is not an SPDX license id"),
+        "{}",
+        stderr(&out)
+    );
+}
+
+#[test]
 fn incomplete_coverage_is_reported_and_can_gate() {
     let args = |extra: &[&'static str]| {
         let mut v = vec![

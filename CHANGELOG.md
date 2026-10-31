@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **License inventory and policy.** `fleetreach licenses` gives every dependency's license
+  (SPDX, with where it came from: `composer.lock`, `package-lock.json`, `node_modules`, the
+  Cargo registry cache, virtualenv metadata, the NuGet cache) and a category (forbidden,
+  restricted, reciprocal, notice, unencumbered). `--fetch` looks unknown ones up on deps.dev,
+  opt-in because it sends package names, with a permanent local cache. A
+  `[settings.licenses]` policy (allow/deny lists, per-category verdicts, `unknown = "deny"`
+  by default, runtime scope, per-package exceptions with a reason) turns them into
+  violations: exit 1 on a denied license. `fleetreach sbom` fills CycloneDX `licenses` from
+  the same data. Cargo licenses agree with cargo-deny's on this repository.
+
 - **`fleetreach fix`: verified fix branches.** `fix plan` turns a saved report's
   remediation queue into per-repo edits (lock bumps, or blocked with the reason: no fix, a
   breaking jump without `--allow-breaking`, an unsupported ecosystem). `fix apply` performs

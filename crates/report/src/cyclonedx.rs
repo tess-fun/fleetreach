@@ -44,6 +44,7 @@ pub fn to_cyclonedx(
         dev: bool,
         sources: BTreeSet<String>,
         complete: bool,
+        license: Option<String>,
     }
     let mut components: BTreeMap<String, Merged> = BTreeMap::new();
     let mut depends: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
@@ -67,7 +68,11 @@ pub fn to_cyclonedx(
                 dev: true,
                 sources: BTreeSet::new(),
                 complete: true,
+                license: None,
             });
+            if entry.license.is_none() {
+                entry.license.clone_from(&p.license);
+            }
             entry.direct |= p.direct;
             entry.dev &= p.dev;
             entry.complete &= complete;
@@ -99,7 +104,7 @@ pub fn to_cyclonedx(
     let component_values: Vec<Value> = components
         .iter()
         .map(|(id, c)| {
-            json!({
+            let mut component = json!({
                 "type": "library",
                 "bom-ref": id,
                 "name": c.name,
@@ -112,7 +117,18 @@ pub fn to_cyclonedx(
                     { "name": "fleetreach:source",
                       "value": c.sources.iter().cloned().collect::<Vec<_>>().join(", ") },
                 ],
-            })
+            });
+            if let Some(license) = &c.license {
+                // An SPDX expression goes in `expression`; anything else is a license name.
+                let entry =
+                    if spdx::Expression::parse_mode(license, spdx::ParseMode::STRICT).is_ok() {
+                        json!([{ "expression": license }])
+                    } else {
+                        json!([{ "license": { "name": license } }])
+                    };
+                component["licenses"] = entry;
+            }
+            component
         })
         .collect();
 

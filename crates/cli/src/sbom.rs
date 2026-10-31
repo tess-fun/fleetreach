@@ -29,6 +29,10 @@ pub struct SbomArgs {
     sync: bool,
     #[arg(short, long, help = "no progress output")]
     quiet: bool,
+    /// Look up licenses no local source knows on deps.dev. Sends each such package's
+    /// ecosystem, name and version to deps.dev (Google); answers are cached locally
+    #[arg(long)]
+    fetch_licenses: bool,
 }
 
 pub fn run_sbom(args: SbomArgs) -> u8 {
@@ -57,6 +61,17 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
     }
     for repo in &config.repos {
         let mut inv = repo_inventory(repo);
+        crate::licenses::annotate(&mut inv, &repo.path);
+        if args.fetch_licenses {
+            match crate::licenses::fetch_missing(std::slice::from_mut(&mut inv)) {
+                Ok((_, _, failed)) if failed > 0 => eprintln!(
+                    "warning: {}: {failed} deps.dev license lookup(s) failed",
+                    repo.id
+                ),
+                Ok(_) => {}
+                Err(e) => return fail(&e),
+            }
+        }
         if let Some(p) = materialized.provenance.iter().find(|p| p.repo == repo.id) {
             inv.url = Some(p.url.clone());
             inv.commit = Some(p.commit.clone());

@@ -1,0 +1,9 @@
+# License policy (spec 11): MIT allowed, forbidden licenses denied, restricted warned,
+# unknown denied; dev-only packages left out.
+[[repo]]
+id = "lic-app"
+path = "repos/lic-app"
+
+[settings.licenses]
+allow = ["MIT", "BSD-3-Clause"]
+scope = "runtime"
