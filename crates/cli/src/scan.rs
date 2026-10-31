@@ -54,6 +54,11 @@ pub(crate) struct ScanArgs {
     fail_on_warnings: bool,
     #[arg(
         long,
+        help = "add supply-chain signals as warnings: install scripts, non-registry sources, unexpected registries, missing checksums, third-party GitHub Actions on movable tags"
+    )]
+    signals: bool,
+    #[arg(
+        long,
         help = "exit 2 if any source was read with less than full coverage (a pom.xml without a resolved graph, a lockfile format fleetreach cannot read), as for an errored repo"
     )]
     require_full_coverage: bool,
@@ -559,6 +564,12 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
 
     // Discovered repos that could not be checked out are gaps, never silently absent.
     let mut scan = scan;
+    if args.signals {
+        scan.warnings.extend(crate::signals::fleet_signals(
+            &config.repos,
+            &config.signal_registries,
+        ));
+    }
     scan.outcomes.extend(
         materialized
             .failed

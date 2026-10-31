@@ -185,6 +185,18 @@ struct SettingsTable {
     #[serde(default)]
     osv: RawOsv,
     licenses: Option<RawLicenses>,
+    #[serde(default)]
+    signals: RawSignals,
+}
+
+/// The `[settings.signals]` block (spec 10).
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawSignals {
+    /// Registry hosts (and path prefixes) allowed besides the public ones, e.g. a company
+    /// npm mirror `npm.example.com`.
+    #[serde(default)]
+    registries: Vec<String>,
 }
 
 /// The `[settings.licenses]` policy (spec 11).
@@ -268,6 +280,8 @@ pub struct Config {
     pub sources: Vec<crate::sources::Source>,
     /// `[settings.licenses]`, when present.
     pub licenses: Option<crate::licenses::Policy>,
+    /// `[settings.signals] registries`: hosts allowed besides the public registries.
+    pub signal_registries: Vec<String>,
 }
 
 /// Validated `[settings.osv]` (spec 01).
@@ -574,6 +588,7 @@ impl Config {
             osv,
             sources,
             licenses,
+            signal_registries: raw.settings.signals.registries,
         })
     }
 }

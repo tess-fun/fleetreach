@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Supply-chain signals (`scan --signals`).** Lockfile hygiene as warnings, read from files
+  already parsed and with no network: install scripts (npm `hasInstallScript`), git, URL or
+  path sources, registries outside the public ones or `[settings.signals] registries`
+  (matched on the whole host, so lookalike hosts are caught), registry packages without a
+  checksum, and third-party GitHub Actions pinned to a movable tag instead of a commit SHA.
+  Opt-in, so existing reports and `--fail-on-warnings` gates do not change.
+- **Known malware is first-class.** OSV `MAL-` findings are always critical, are never
+  hidden by `--min-severity`, and the remediation queue and `fix plan` say to remove the
+  package and rotate credentials instead of suggesting a version.
+
 - **License inventory and policy.** `fleetreach licenses` gives every dependency's license
   (SPDX, with where it came from: `composer.lock`, `package-lock.json`, `node_modules`, the
   Cargo registry cache, virtualenv metadata, the NuGet cache) and a category (forbidden,

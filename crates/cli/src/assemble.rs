@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 
 use fleetreach_core::{
     max_severity_of, DepScope, FleetReport, Occurrence, Provenance, RepoId, RepoOutcome,
-    ScanStatus, Severity, Summary,
+    ScanStatus, Severity, Summary, VulnFinding,
 };
 
 /// Drop occurrences known to be phantom — a `Cargo.lock`-only optional dependency
@@ -200,6 +200,13 @@ pub struct GateConfig {
     pub fail_on_warnings: bool,
 }
 
+/// Whether a finding is known malware: an OSV `MAL-` record, or an advisory aliasing one.
+pub fn is_malware(v: &VulnFinding) -> bool {
+    std::iter::once(&v.advisory_id)
+        .chain(&v.aliases)
+        .any(|id| id.starts_with("MAL-"))
+}
+
 /// Correlate and assemble the report, capturing occurrences removed by
 /// `suppressions` for VEX promotion.
 pub fn assemble(
@@ -208,12 +215,18 @@ pub fn assemble(
     min_severity: Option<Severity>,
     provenance: Provenance,
 ) -> Assembled {
-    let correlated = correlate(scan.vulnerabilities, scan.warnings);
+    let mut vulnerabilities = scan.vulnerabilities;
+    // Known malware (OSV `MAL-` records) is critical whatever the record says: every
+    // version is suspect and installing it may already have run its code.
+    for v in vulnerabilities.iter_mut().filter(|v| is_malware(v)) {
+        v.severity = Severity::Critical;
+    }
+    let correlated = correlate(vulnerabilities, scan.warnings);
     let (mut correlated, stale_ignores, suppressed) = apply_suppressions(correlated, suppressions);
     if let Some(min) = min_severity {
         correlated
             .vulnerabilities
-            .retain(|v| passes_threshold(v.severity, min));
+            .retain(|v| is_malware(v) || passes_threshold(v.severity, min));
     }
     let summary = summarize(&correlated, &scan.outcomes, stale_ignores);
     Assembled {

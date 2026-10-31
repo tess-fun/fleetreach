@@ -1275,6 +1275,10 @@ fn action_label(it: &RemediationItem) -> String {
             let brk = if *breaking { " (breaking)" } else { "" };
             format!("bump {pkg} {from}{to}{brk}")
         }
+        // Known malware: no version is safe to keep.
+        Action::NoFixAvailable if it.advisories.iter().any(|a| a.starts_with("MAL-")) => {
+            format!("remove {pkg} (malicious package; rotate exposed credentials)")
+        }
         Action::NoFixAvailable => format!("no fix: {pkg}"),
     }
 }

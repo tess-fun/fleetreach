@@ -25,6 +25,7 @@ pub mod reach;
 pub mod resolve;
 pub mod sbom;
 pub mod scan;
+pub mod signals;
 pub mod sources;
 pub mod static_reach;
 pub mod vex;

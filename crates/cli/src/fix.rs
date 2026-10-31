@@ -158,7 +158,16 @@ pub fn build_plan(report: &FleetReport, allow_breaking: bool) -> Plan {
                 }
             }
         }
+        let malware = item.advisories.iter().any(|a| a.starts_with("MAL-"));
         let (strategy, reason) = match &item.action {
+            _ if malware => (
+                Strategy::Blocked,
+                Some(
+                    "malicious package: remove it from the manifest and rotate credentials on \
+                     machines that installed it; no version bump fixes malware"
+                        .to_string(),
+                ),
+            ),
             Action::NoFixAvailable => (
                 Strategy::Blocked,
                 Some("no published fix; consider a VEX statement or a mitigation".to_string()),

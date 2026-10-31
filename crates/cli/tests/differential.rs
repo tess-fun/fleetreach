@@ -75,6 +75,7 @@ fn config() -> Config {
         osv: Default::default(),
         sources: Vec::new(),
         licenses: None,
+        signal_registries: Vec::new(),
     }
 }
 
