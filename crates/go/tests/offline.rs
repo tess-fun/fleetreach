@@ -147,3 +147,99 @@ fn missing_db_is_an_honest_error_with_a_source_chain() {
         "GoError::Db must expose its underlying cause via source()"
     );
 }
+
+/// The osv.dev `Go` export (a folder of OSV records, or its `all.zip`) gives exactly what
+/// the vuln.go.dev mirror gives: GHSA copies, withdrawn records and other ecosystems'
+/// entries are ignored.
+#[test]
+fn the_osv_dev_export_matches_like_the_vuln_go_dev_mirror() {
+    let export = std::env::temp_dir().join(format!("fleetreach-go-export-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&export);
+    std::fs::create_dir_all(&export).unwrap();
+    let mut records: Vec<(String, String)> = std::fs::read_dir(fixtures().join("db/ID"))
+        .unwrap()
+        .map(|e| {
+            let p = e.unwrap().path();
+            (
+                p.file_name().unwrap().to_string_lossy().into_owned(),
+                std::fs::read_to_string(&p).unwrap(),
+            )
+        })
+        .collect();
+    let ignored = |id: &str, extra: &str, eco: &str| {
+        format!(
+            r#"{{"id":"{id}",{extra}"affected":[{{"package":{{"name":"example.com/safe","ecosystem":"{eco}"}},
+            "ranges":[{{"type":"SEMVER","events":[{{"introduced":"0"}}]}}]}}]}}"#
+        )
+    };
+    records.push((
+        "GHSA-test-0001.json".into(),
+        ignored("GHSA-test-0001", "", "Go"),
+    ));
+    records.push((
+        "GO-TEST-0009.json".into(),
+        ignored(
+            "GO-TEST-0009",
+            r#""withdrawn":"2026-01-01T00:00:00Z","#,
+            "Go",
+        ),
+    ));
+    records.push((
+        "GO-TEST-0010.json".into(),
+        ignored("GO-TEST-0010", "", "npm"),
+    ));
+    records.sort();
+
+    let dir = export.join("Go");
+    std::fs::create_dir_all(&dir).unwrap();
+    for (name, body) in &records {
+        std::fs::write(dir.join(name), body).unwrap();
+    }
+    let zip_path = export.join("all.zip");
+    {
+        use std::io::Write;
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+        let opts = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        for (name, body) in &records {
+            zip.start_file(name.as_str(), opts).unwrap();
+            zip.write_all(body.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
+    let summary = |db: &GoDb| -> Vec<(String, String)> {
+        scan_offline(&fixtures().join("repo"), db, &RepoId("app".into()))
+            .unwrap()
+            .iter()
+            .map(|f| (f.advisory_id.clone(), format!("{:?}", f.occurrences)))
+            .collect()
+    };
+    let expected = summary(&db());
+    assert_eq!(expected.len(), 2);
+    assert_eq!(
+        summary(&GoDb::load(&dir).unwrap()),
+        expected,
+        "unzipped export"
+    );
+    assert_eq!(
+        summary(&GoDb::load(&zip_path).unwrap()),
+        expected,
+        "all.zip"
+    );
+
+    // A corrupt record fails closed.
+    std::fs::write(dir.join("GO-TEST-0011.json"), "{not json").unwrap();
+    assert!(GoDb::load(&dir).is_err());
+}
+
+/// An export folder with no `GO-` record is a wrong path or a failed download: an error,
+/// never an empty database that scans clean.
+#[test]
+fn an_empty_osv_export_is_an_error_not_a_clean_db() {
+    let dir = std::env::temp_dir().join(format!("fleetreach-go-empty-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("GHSA-test-0001.json"), "{}").unwrap();
+    assert!(GoDb::load(&dir).is_err());
+}

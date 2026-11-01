@@ -84,4 +84,7 @@ compiles the module and confirms call sites. A confirmed call is marked
 `reachable` (the analysis is sound-positive); present-but-uncalled stays
 `unknown`, never a false "not reachable". Because it compiles, Go scanning needs
 `--allow-untrusted-builds`. A degraded toolchain-free **module-level** mode reads
-`go.mod` and matches against a vuln.go.dev mirror without compiling anything.
+`go.mod` and matches against a vuln.go.dev mirror (`--go-vuln-db=file://<mirror>`) or,
+with no mirror given, the osv.dev `Go/all.zip` export that `fleetreach db sync` keeps with
+the others, without compiling anything. Only `GO-` records count, so the export's GHSA
+copies of the same advisories are not counted twice.

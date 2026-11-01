@@ -1,7 +1,8 @@
 # Ecosystems
 
 fleetreach covers 12 ecosystems. Rust uses the `rustsec` advisory engine; Go
-uses `govulncheck` (plus a toolchain-free fallback); the other ten are
+uses `govulncheck` (plus a toolchain-free fallback that reads a vuln.go.dev mirror or
+the osv.dev `Go` export); the other ten are
 **toolchain-free** OSV feeders.
 
 ## Toolchain-free OSV feeders
@@ -84,6 +85,17 @@ resolved (a missing POM, an undefined property) makes the source `partial` cover
 items named; what did resolve is still matched. Checked against `mvn dependency:list`: on a
 Spring Boot 2.7 project every one of the 85 artifacts and versions matches (one scope label
 differs: a compile dependency reported as test).
+
+`--maven-fetch` goes through your Maven mirror when `~/.m2/settings.xml` (or the file given
+with `--maven-settings`) has one for Maven Central, as most company networks require
+(Artifactory, Nexus). The mirror is chosen the way Maven chooses it: one naming `central`
+first, then `*` or `external:*`, with `!central` excluding it. Credentials come from the
+`<server>` with the mirror's id, and `${env.NAME}` is expanded, so a CI secret can stay in
+the environment; they are sent to the mirror only, never across a redirect. A mirror that
+is configured but cannot be used stops the scan (exit 2) instead of falling back to Maven
+Central: one over plain HTTP, a password encrypted with `settings-security.xml` (not
+supported; use `${env.NAME}`), or an unset variable. `<proxies>` and repositories declared
+inside POMs are not used. `-v` names the mirror in use.
 
 The osv.dev exports live at
 `https://osv-vulnerabilities.storage.googleapis.com/<Ecosystem>/all.zip`.

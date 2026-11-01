@@ -157,7 +157,7 @@ pub fn assemble_fresh(config: &Config, db: &AdvisoryDb, provenance: Provenance) 
         &GhActionsScan { vuln_db: None },
         &MavenScan {
             vuln_db: None,
-            fetch: false,
+            remote: None,
         },
     );
     let mut suppressions: Vec<Suppression> = config

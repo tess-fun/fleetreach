@@ -13,6 +13,9 @@
 //! occurrence per package, so they gate with `--fail-on-warnings` and never inflate the
 //! vulnerability count. They are additive: no signal never means safe.
 //! `[settings.signals] registries` adds hosts to the allowed set.
+//!
+//! With `scan --history-dir`, `fleetreach:new-to-fleet` also flags packages no earlier
+//! recorded run of the fleet has read (see [`new_to_fleet`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -187,6 +190,88 @@ fn typosquats(repos: &[Repo]) -> Vec<WarnFinding> {
             }
         })
         .collect()
+}
+
+/// One package as read from a repo's lockfiles and manifests.
+pub struct FleetPackage {
+    pub repo: RepoId,
+    pub ecosystem: Ecosystem,
+    pub name: String,
+    pub version: String,
+    pub direct: bool,
+}
+
+impl FleetPackage {
+    /// The name as the history records it (spelled as the registry compares names).
+    pub fn key(&self) -> crate::history::PackageName {
+        crate::history::PackageName {
+            ecosystem: self.ecosystem,
+            name: crate::evidence::key(self.ecosystem, &self.name),
+        }
+    }
+}
+
+/// Every package the fleet's repos read, from the same inventories `sbom` writes.
+pub fn fleet_packages(repos: &[Repo]) -> Vec<FleetPackage> {
+    use rayon::prelude::*;
+    repos
+        .par_iter()
+        .flat_map_iter(|repo| {
+            let inv = crate::inventory::repo_inventory(repo);
+            let id = inv.repo.clone();
+            inv.sources
+                .into_iter()
+                .flat_map(|s| s.packages.into_iter().map(move |p| (s.ecosystem, p)))
+                .map(move |(ecosystem, p)| FleetPackage {
+                    repo: id.clone(),
+                    ecosystem,
+                    name: p.name,
+                    version: p.version,
+                    direct: p.direct,
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// Fleet novelty (spec 10, phase 4): packages whose name no earlier run of the fleet has
+/// read. Alone it is weak; with a typosquat or a recent release it is the strongest cheap
+/// sign of a planted dependency.
+pub fn new_to_fleet(
+    packages: &[FleetPackage],
+    known: &BTreeSet<&crate::history::PackageName>,
+) -> Option<WarnFinding> {
+    let mut occurrences: Vec<Occurrence> = packages
+        .iter()
+        .filter(|p| !known.contains(&p.key()))
+        .map(|p| Occurrence::InRepo {
+            repo: p.repo.clone(),
+            package: p.name.clone(),
+            installed: lenient_version(&p.version),
+            patched: Vec::new(),
+            dependency_kind: if p.direct {
+                DependencyKind::Direct
+            } else {
+                DependencyKind::Transitive
+            },
+            dependency_path: Vec::new(),
+            active: None,
+            source: Default::default(),
+            scope: Default::default(),
+        })
+        .collect();
+    if occurrences.is_empty() {
+        return None;
+    }
+    occurrences.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+    occurrences.dedup();
+    Some(WarnFinding {
+        kind: WarnKind::Notice,
+        advisory_id: Some("fleetreach:new-to-fleet".to_string()),
+        title: "First appearance in the fleet: no earlier recorded scan read this package"
+            .to_string(),
+        occurrences,
+    })
 }
 
 /// A version for the shared model; tags like `v4` or refs like `main` become `0.0.0`.

@@ -8,7 +8,7 @@
 //! - `fix apply` performs each `lock-bump` in a git worktree on a `fleetreach/<campaign>/...`
 //!   branch, never in the user's own work tree, with a lock-only command that runs no package
 //!   code (`cargo update --precise`, `npm update --package-lock-only --ignore-scripts`, a
-//!   text edit of a workflow `uses:` tag). It then **verifies** the change by running
+//!   text edit of a workflow `uses:` tag, `go get`, `uv lock --no-build`). It then **verifies** the change by running
 //!   fleetreach's own scan on the work tree before and after: every targeted advisory must be
 //!   gone, nothing new may appear, and the repo must still scan without errors or new
 //!   coverage gaps. The commit stays on its branch either way, marked verified or not;
@@ -22,7 +22,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use clap::{Args, Subcommand, ValueEnum};
-use fleetreach_core::{remediations, Action, Ecosystem, FleetReport, Occurrence};
+use fleetreach_core::semver::Version;
+use fleetreach_core::{
+    line, remediations, upgrade_risk, Action, Ecosystem, FleetReport, Occurrence,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::cli::fail;
@@ -204,7 +207,11 @@ pub struct Plan {
 fn applicable(ecosystem: Ecosystem) -> bool {
     matches!(
         ecosystem,
-        Ecosystem::Cargo | Ecosystem::Npm | Ecosystem::GitHubActions
+        Ecosystem::Cargo
+            | Ecosystem::Npm
+            | Ecosystem::GitHubActions
+            | Ecosystem::Go
+            | Ecosystem::Pypi
     )
 }
 
@@ -212,6 +219,10 @@ fn applicable(ecosystem: Ecosystem) -> bool {
 pub fn build_plan(report: &FleetReport, allow_breaking: bool) -> Plan {
     let mut edits = Vec::new();
     for item in remediations(report) {
+        let report_has_fleet = report
+            .package_versions
+            .iter()
+            .any(|p| p.ecosystem == item.ecosystem && p.package == item.package);
         if !item.reach.is_actionable() {
             continue;
         }
@@ -245,7 +256,7 @@ pub fn build_plan(report: &FleetReport, allow_breaking: bool) -> Plan {
             }
         }
         let malware = item.advisories.iter().any(|a| a.starts_with("MAL-"));
-        let (strategy, reason) = match &item.action {
+        let strategy_for = |to: &str, breaking: bool| match &item.action {
             _ if malware => (
                 Strategy::Blocked,
                 Some(
@@ -274,20 +285,75 @@ pub fn build_plan(report: &FleetReport, allow_breaking: bool) -> Plan {
             Action::Upgrade { .. } => (Strategy::LockBump, None),
         };
         for (repo, from) in per_repo {
-            edits.push(Edit {
-                campaign: campaign.clone(),
-                repo,
-                ecosystem: item.ecosystem,
-                package: item.package.clone(),
-                from: from.into_iter().collect(),
-                to: to.clone(),
-                advisories: item.advisories.clone(),
-                breaking,
-                strategy: strategy.clone(),
-                reason: reason.clone(),
-                risk: item.risk,
-                risk_reasons: item.risk_reasons.clone(),
+            let versions: Vec<Version> =
+                from.iter().filter_map(|v| Version::parse(v).ok()).collect();
+            let repo_line = versions.first().map(line);
+            let on_one_line = versions.iter().all(|v| Some(line(v)) == repo_line);
+            // A repo on an older line takes that line's fix when it clears everything there
+            // (spec 13): a lock bump instead of a new major.
+            let alternative = item.alternatives.iter().find(|a| {
+                on_one_line && Some(line(&a.to)) == repo_line && a.leaves_open.is_empty()
             });
+            let edit = match (alternative, &item.action) {
+                (Some(alt), _) if !malware => {
+                    let to = alt.to.to_string();
+                    let (strategy, reason) = strategy_for(&to, false);
+                    let (risk, mut risk_reasons) =
+                        upgrade_risk(&alt.to, false, alt.evidence.as_ref(), report_has_fleet);
+                    if let Action::Upgrade { to: main, .. } = &item.action {
+                        risk_reasons.insert(1, format!("instead of {main}, a new major"));
+                    }
+                    Edit {
+                        campaign: campaign_id(item.ecosystem, &item.package, &to, &alt.clears),
+                        repo,
+                        ecosystem: item.ecosystem,
+                        package: item.package.clone(),
+                        from: from.into_iter().collect(),
+                        to,
+                        advisories: alt.clears.clone(),
+                        breaking: false,
+                        strategy,
+                        reason,
+                        risk: Some(risk),
+                        risk_reasons,
+                    }
+                }
+                (_, action) => {
+                    // The item's `breaking` is relative to the fleet's newest version; a repo
+                    // on an older line crosses a major even when that newest one does not.
+                    let (breaking, risk, risk_reasons) = match action {
+                        Action::Upgrade {
+                            to: target,
+                            breaking: false,
+                        } if versions.iter().any(|v| line(v) != line(target)) => {
+                            let (risk, reasons) = upgrade_risk(
+                                target,
+                                true,
+                                item.evidence.as_ref(),
+                                report_has_fleet,
+                            );
+                            (true, Some(risk), reasons)
+                        }
+                        _ => (breaking, item.risk, item.risk_reasons.clone()),
+                    };
+                    let (strategy, reason) = strategy_for(&to, breaking);
+                    Edit {
+                        campaign: campaign.clone(),
+                        repo,
+                        ecosystem: item.ecosystem,
+                        package: item.package.clone(),
+                        from: from.into_iter().collect(),
+                        to: to.clone(),
+                        advisories: item.advisories.clone(),
+                        breaking,
+                        strategy,
+                        reason,
+                        risk,
+                        risk_reasons,
+                    }
+                }
+            };
+            edits.push(edit);
         }
     }
     edits.sort_by(|a, b| (&a.repo, &a.campaign).cmp(&(&b.repo, &b.campaign)));
@@ -378,6 +444,9 @@ struct Applied {
     /// The pull request opened or updated for the branch.
     #[serde(skip_serializing_if = "Option::is_none")]
     pull_request: Option<String>,
+    /// What the update ran and changed, for the pull request.
+    #[serde(skip)]
+    ran: String,
 }
 
 fn run_apply(args: &FixApplyArgs) -> u8 {
@@ -419,6 +488,7 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
             branch: None,
             detail: why.to_string(),
             pull_request: None,
+            ran: String::new(),
         };
         if edit.strategy != Strategy::LockBump {
             results.push(skip(
@@ -482,6 +552,7 @@ fn apply_one(edit: &Edit, repo: &Repo, work_root: &Path, scan_args: &[String]) -
         branch: None,
         detail: String::new(),
         pull_request: None,
+        ran: String::new(),
     };
     let top = match git(&repo.path, &["rev-parse", "--show-toplevel"]) {
         Ok(t) => PathBuf::from(t),
@@ -574,7 +645,7 @@ fn apply_one(edit: &Edit, repo: &Repo, work_root: &Path, scan_args: &[String]) -
         ),
     };
     let message = format!(
-        "{title}\n\nClears {} ({} campaign {}).\n{}\n",
+        "{title}\n\nClears {} ({} campaign {}).\nUpdate: {changed}.\n{}\n",
         edit.advisories.join(", "),
         ecosystem_name(edit.ecosystem),
         edit.campaign,
@@ -595,6 +666,7 @@ fn apply_one(edit: &Edit, repo: &Repo, work_root: &Path, scan_args: &[String]) -
     out.outcome = outcome;
     out.branch = Some(branch);
     out.detail = detail;
+    out.ran = changed;
     out
 }
 
@@ -635,7 +707,7 @@ fn publish(result: &mut Applied, edit: &Edit, repo: &Repo, plan: &Plan, args: &F
         return;
     }
     let title = format!("fix(deps): bump {} to {}", edit.package, edit.to);
-    let body = pr_body(edit, plan);
+    let body = pr_body(edit, plan, &result.ran);
     let (noun, opened) = match args.forge.resolve(&top) {
         Forge::GitHub => (
             "pull request",
@@ -752,7 +824,7 @@ fn gitlab_request(
 }
 
 /// The pull request description: what it fixes, how it was checked, and the campaign.
-fn pr_body(edit: &Edit, plan: &Plan) -> String {
+fn pr_body(edit: &Edit, plan: &Plan, ran: &str) -> String {
     let siblings: Vec<&str> = plan
         .edits
         .iter()
@@ -767,6 +839,9 @@ fn pr_body(edit: &Edit, plan: &Plan) -> String {
         ecosystem_name(edit.ecosystem),
         edit.advisories.join(", ")
     );
+    if !ran.is_empty() {
+        body.push_str(&format!("**Update:** {ran}.\n\n"));
+    }
     if edit.breaking {
         body.push_str("**Breaking:** this crosses a major version; review the changelog.\n\n");
     }
@@ -945,6 +1020,8 @@ fn apply_edit(work: &Path, edit: &Edit) -> Result<String, String> {
         Ecosystem::Cargo => cargo_bump(work, edit),
         Ecosystem::Npm => npm_bump(work, edit),
         Ecosystem::GitHubActions => actions_bump(work, edit),
+        Ecosystem::Go => go_bump(work, edit),
+        Ecosystem::Pypi => uv_bump(work, edit),
         other => Err(format!(
             "fix apply does not handle {} yet",
             ecosystem_name(other)
@@ -1036,6 +1113,90 @@ fn npm_bump(work: &Path, edit: &Edit) -> Result<String, String> {
     Ok(format!(
         "npm update {} --package-lock-only in {} dir(s)",
         edit.package,
+        dirs.len()
+    ))
+}
+
+/// `go get <module>@v<to>` in every module whose `go.mod` requires the module. Go resolves
+/// and downloads module sources but never runs their code; `GOTOOLCHAIN=local` stops a
+/// `toolchain` line from fetching another Go, and `GOWORK=off` keeps the edit to that module.
+fn go_bump(work: &Path, edit: &Edit) -> Result<String, String> {
+    let needle = format!("{} v", edit.package);
+    let dirs: Vec<PathBuf> = dirs_with(work, "go.mod")
+        .into_iter()
+        .filter(|d| std::fs::read_to_string(d.join("go.mod")).is_ok_and(|t| t.contains(&needle)))
+        .collect();
+    if dirs.is_empty() {
+        return Err(format!("no go.mod requires {}", edit.package));
+    }
+    let target = format!("{}@v{}", edit.package, edit.to);
+    let mut raised = Vec::new();
+    for dir in &dirs {
+        let before = go_directive(&dir.join("go.mod"));
+        run(Command::new("go")
+            .current_dir(dir)
+            .env("GOTOOLCHAIN", "local")
+            .env("GOWORK", "off")
+            .env("GOFLAGS", "-mod=mod")
+            .args(["get", &target]))
+        .map_err(|e| format!("go get {target}: {e}"))?;
+        // A newer module can require a newer Go, and `go get` raises the directive to match:
+        // a real change for whoever builds the module, so it is named.
+        let after = go_directive(&dir.join("go.mod"));
+        if after != before {
+            if let (Some(before), Some(after)) = (before, after) {
+                raised.push(format!("raised the go directive from {before} to {after}"));
+            }
+        }
+    }
+    raised.dedup();
+    let mut done = format!("go get {target} in {} module(s)", dirs.len());
+    for r in raised {
+        done.push_str("; ");
+        done.push_str(&r);
+    }
+    Ok(done)
+}
+
+/// The `go` directive of a `go.mod`.
+fn go_directive(path: &Path) -> Option<String> {
+    std::fs::read_to_string(path).ok()?.lines().find_map(|l| {
+        l.trim()
+            .strip_prefix("go ")
+            .map(|v| v.split_whitespace().next().unwrap_or_default().to_string())
+    })
+}
+
+/// `uv lock --upgrade-package <pkg>==<to> --no-build` where `uv.lock` holds the package:
+/// a re-resolution from the index's metadata, with source builds refused so no package code
+/// runs. Other Python lockfiles are not handled: Poetry and Pipenv can build sdists to read
+/// their metadata, which runs package code.
+fn uv_bump(work: &Path, edit: &Edit) -> Result<String, String> {
+    let needle = format!("name = \"{}\"", edit.package);
+    let dirs: Vec<PathBuf> = dirs_with(work, "uv.lock")
+        .into_iter()
+        .filter(|d| std::fs::read_to_string(d.join("uv.lock")).is_ok_and(|t| t.contains(&needle)))
+        .collect();
+    if dirs.is_empty() {
+        return Err(format!(
+            "no uv.lock holds {} (poetry.lock, Pipfile.lock and requirements files are not \
+             handled: their tools can run package code)",
+            edit.package
+        ));
+    }
+    let spec = format!("{}=={}", edit.package, edit.to);
+    for dir in &dirs {
+        run(Command::new("uv").current_dir(dir).args([
+            "lock",
+            "--quiet",
+            "--no-build",
+            "--upgrade-package",
+            &spec,
+        ]))
+        .map_err(|e| format!("uv lock --upgrade-package {spec}: {e}"))?;
+    }
+    Ok(format!(
+        "uv lock --upgrade-package {spec} in {} dir(s)",
         dirs.len()
     ))
 }
@@ -1234,6 +1395,64 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
 
+    /// One advisory fixed on 1.x and 2.x, in repos on both lines, plus a 2.x-only one.
+    fn two_line_report() -> FleetReport {
+        let occ = |repo: &str, installed: &str, patched: &[&str]| {
+            serde_json::json!({"kind": "in_repo", "repo": repo, "package": "foo",
+                "installed": installed, "patched": patched, "dependency_kind": "direct",
+                "dependency_path": ["foo"]})
+        };
+        let both = [">=1.4.2, <2.0.0", ">=2.1.0"];
+        let vuln = |id: &str, occurrences: Vec<serde_json::Value>| {
+            serde_json::json!({"advisory_id": id, "aliases": [], "title": id, "severity": "high",
+                "affected_functions": [],
+                "occurrences": occurrences})
+        };
+        serde_json::from_value(serde_json::json!({
+            "schema_version": 1,
+            "provenance": {"tool_version": "t", "rustsec_crate_version": "t", "host_os": "t",
+                "host_arch": "t", "generated_at": "t"},
+            "summary": {"repos_scanned": 3, "repos_errored": 0, "vuln_count": 2,
+                "warn_count": 0, "max_severity": "high", "stale_ignores": []},
+            "vulnerabilities": [
+                vuln("RUSTSEC-A", vec![occ("old", "1.4.0", &both), occ("mixed", "1.3.0", &both),
+                    occ("mixed", "2.0.0", &both), occ("new", "2.0.0", &both)]),
+                vuln("RUSTSEC-B", vec![occ("new", "2.0.0", &[">=2.0.3"])]),
+            ],
+            "warnings": [],
+            "outcomes": [],
+            "package_versions": [{"package": "foo", "versions": [
+                {"version": "1.3.0", "repos": ["mixed"]},
+                {"version": "1.4.0", "repos": ["old"]},
+                {"version": "2.0.0", "repos": ["mixed", "new"]}]}],
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn a_repo_on_an_older_line_gets_its_own_lines_fix() {
+        let plan = build_plan(&two_line_report(), false);
+        let by_repo = |repo: &str| plan.edits.iter().find(|e| e.repo == repo).unwrap();
+
+        let old = by_repo("old");
+        assert_eq!((old.to.as_str(), old.breaking), ("1.4.2", false));
+        assert_eq!(old.strategy, Strategy::LockBump);
+        assert_eq!(old.advisories, ["RUSTSEC-A"]);
+        assert_eq!(old.risk, Some(fleetreach_core::Risk::Low));
+        assert_eq!(old.risk_reasons[1], "instead of 2.1.0, a new major");
+
+        let new = by_repo("new");
+        assert_eq!((new.to.as_str(), new.breaking), ("2.1.0", false));
+        assert_eq!(new.strategy, Strategy::LockBump);
+        assert_ne!(new.campaign, old.campaign);
+
+        // Versions on both lines: the main target, which is breaking for its 1.x copy.
+        let mixed = by_repo("mixed");
+        assert_eq!((mixed.to.as_str(), mixed.breaking), ("2.1.0", true));
+        assert_eq!(mixed.strategy, Strategy::Blocked);
+        assert_eq!(mixed.risk, Some(fleetreach_core::Risk::High));
+    }
+
     fn set(items: &[&str]) -> BTreeSet<&'static str> {
         items
             .iter()
@@ -1336,6 +1555,7 @@ mod tests {
                 schema: PLAN_SCHEMA.into(),
                 edits: vec![],
             },
+            "",
         );
         assert!(!plain.contains("**Risk:**"), "{plain}");
         e.risk = Some(fleetreach_core::Risk::Medium);
@@ -1349,6 +1569,7 @@ mod tests {
                 schema: PLAN_SCHEMA.into(),
                 edits: vec![],
             },
+            "",
         );
         assert!(
             body.contains("**Risk:** medium (breaking (new major); 4 repos already run 2.0.0+)."),

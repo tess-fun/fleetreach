@@ -15,9 +15,11 @@ fleetreach history mttr  --history-dir history/ --by severity
 ## What is stored
 
 Each run writes `history/<UTC time>-<hash>.json.gz`: the full JSON report, the occurrences
-that ignores suppressed, and the run's exit code. `history/index.json` records, for each
-finding (advisory, ecosystem, repo, package and version), when it was first and last seen,
-when it was fixed, how often it came back, and its latest severity, SSVC outcome and owner.
+that ignores suppressed, the run's exit code, and the name of every package it read (for
+the `new-to-fleet` signal, see [CI](ci.md#supply-chain-signals)). `history/index.json`
+records, for each finding (advisory, ecosystem, repo, package and version), when it was
+first and last seen, when it was fixed, how often it came back, and its latest severity,
+SSVC outcome and owner; and every package name with its first sighting.
 
 The snapshots are the source of truth. An index that is missing, unreadable or out of step
 with them (a snapshot older than its newest run appeared, say from merging two branches of

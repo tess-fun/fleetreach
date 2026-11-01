@@ -32,7 +32,27 @@ pub struct Snapshot {
     pub run: Run,
     #[serde(default)]
     pub suppressed: Vec<Key>,
+    /// Every package name the run read (spec 10 fleet novelty); absent in snapshots written
+    /// before it was recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub packages: Option<Vec<PackageName>>,
     pub report: FleetReport,
+}
+
+/// A package by name alone, spelled as its registry compares names.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct PackageName {
+    #[serde(default, skip_serializing_if = "Ecosystem::is_cargo")]
+    pub ecosystem: Ecosystem,
+    pub name: String,
+}
+
+/// When a package name was first read in the fleet.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KnownPackage {
+    #[serde(flatten)]
+    pub package: PackageName,
+    pub first_seen: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,6 +113,9 @@ pub struct Index {
     /// Run ids folded in, oldest first (ids of pruned snapshots stay listed).
     pub runs: Vec<String>,
     pub entries: Vec<Entry>,
+    /// Every package name any run recorded, with its first sighting (kept past retention).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub packages: Vec<KnownPackage>,
 }
 
 /// The history directory loaded: every readable snapshot (oldest first), the index brought
@@ -297,6 +320,39 @@ fn fold(index: &mut Index, snapshot: &Snapshot) {
     }
     index.entries = by_key.into_values().collect();
     index.runs.push(snapshot.run.id.clone());
+    if let Some(packages) = &snapshot.packages {
+        merge_packages(
+            &mut index.packages,
+            packages.iter().map(|p| (p, at.as_str())),
+        );
+    }
+}
+
+/// Add packages to the known list, keeping each one's earliest sighting.
+fn merge_packages<'a>(
+    known: &mut Vec<KnownPackage>,
+    seen: impl Iterator<Item = (&'a PackageName, &'a str)>,
+) {
+    let mut by_name: BTreeMap<PackageName, String> = std::mem::take(known)
+        .into_iter()
+        .map(|k| (k.package, k.first_seen))
+        .collect();
+    for (package, at) in seen {
+        match by_name.get_mut(package) {
+            Some(first) if parse_time(at) < parse_time(first) => *first = at.to_string(),
+            Some(_) => {}
+            None => {
+                by_name.insert(package.clone(), at.to_string());
+            }
+        }
+    }
+    *known = by_name
+        .into_iter()
+        .map(|(package, first_seen)| KnownPackage {
+            package,
+            first_seen,
+        })
+        .collect();
 }
 
 /// Rebuild the index from `snapshots`, keeping what `old` knew about findings whose
@@ -329,6 +385,12 @@ fn rebuild(snapshots: &[Snapshot], old: Option<Index>) -> Index {
             }
         }
         index.entries = by_key.into_values().collect();
+        merge_packages(
+            &mut index.packages,
+            old.packages
+                .iter()
+                .map(|k| (&k.package, k.first_seen.as_str())),
+        );
         let mut runs: Vec<String> = old.runs;
         for id in index.runs {
             if !runs.contains(&id) {
@@ -435,6 +497,7 @@ pub fn record(
     suppressed: Vec<Key>,
     exit_code: u8,
     keep: Option<i64>,
+    packages: Vec<PackageName>,
 ) -> Result<(PathBuf, Vec<String>), String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let at = now();
@@ -464,6 +527,7 @@ pub fn record(
             exit_code,
         },
         suppressed,
+        packages: Some(packages),
         report: report.clone(),
     };
     let path = dir.join(format!("{id}.json.gz"));
@@ -767,6 +831,14 @@ impl AdvisoryLinks {
     }
 }
 
+/// The package names the fleet has used in any recorded run, or `None` when no run has
+/// recorded them yet (so there is no baseline to call anything new against).
+pub fn known_packages(history: &History) -> Option<BTreeSet<&PackageName>> {
+    let recorded = history.snapshots.iter().any(|s| s.packages.is_some())
+        || !history.index.packages.is_empty();
+    recorded.then(|| history.index.packages.iter().map(|k| &k.package).collect())
+}
+
 /// What the newest run changed against the one before it.
 pub struct Changes<'a> {
     pub run: &'a Run,
@@ -818,6 +890,30 @@ pub fn changes(history: &History) -> Option<Changes<'_>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn known_packages_keep_their_earliest_sighting() {
+        let name = |n: &str| PackageName {
+            ecosystem: Ecosystem::Npm,
+            name: n.to_string(),
+        };
+        let (a, b) = (name("a"), name("b"));
+        let mut known = Vec::new();
+        merge_packages(&mut known, [(&a, "2026-10-10T00:00:00Z")].into_iter());
+        merge_packages(
+            &mut known,
+            [(&a, "2026-10-01T00:00:00Z"), (&b, "2026-10-20T00:00:00Z")].into_iter(),
+        );
+        merge_packages(&mut known, [(&a, "2026-10-30T00:00:00Z")].into_iter());
+        let first: Vec<(&str, &str)> = known
+            .iter()
+            .map(|k| (k.package.name.as_str(), k.first_seen.as_str()))
+            .collect();
+        assert_eq!(
+            first,
+            [("a", "2026-10-01T00:00:00Z"), ("b", "2026-10-20T00:00:00Z")]
+        );
+    }
 
     #[test]
     fn advisories_without_their_own_page_link_to_osv() {

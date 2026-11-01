@@ -2785,3 +2785,456 @@ fn report_html_is_one_self_contained_page_from_the_history() {
     );
     assert_eq!(stdout(&again), html);
 }
+
+#[test]
+fn new_to_fleet_flags_packages_no_earlier_run_read() {
+    let root = std::env::temp_dir().join(format!("fleetreach-novelty-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let lock =
+        std::fs::read_to_string(manifest().join("tests/fixtures/repos/repo-vuln/Cargo.lock"))
+            .unwrap();
+    let app = root.join("app");
+    let api = root.join("api");
+    for dir in [&app, &api] {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("Cargo.lock"), &lock).unwrap();
+    }
+    let fleet = root.join("fleet.toml");
+    std::fs::write(
+        &fleet,
+        format!(
+            "[[repo]]\nid = \"app\"\npath = {app:?}\n\n[[repo]]\nid = \"api\"\npath = {api:?}\n"
+        ),
+    )
+    .unwrap();
+    let history = root.join("history");
+    let scan = || {
+        let out = run(&[
+            "scan",
+            "-c",
+            fleet.to_str().unwrap(),
+            "--db",
+            &db(),
+            "-f",
+            "json",
+            "--signals",
+            "--history-dir",
+            history.to_str().unwrap(),
+        ]);
+        assert_eq!(code(&out), 1, "{}", stderr(&out));
+        let report: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+        let novel: Vec<String> = report["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|w| w["advisory_id"] == "fleetreach:new-to-fleet")
+            .flat_map(|w| w["occurrences"].as_array().unwrap().clone())
+            .map(|o| {
+                format!(
+                    "{}:{}",
+                    o["repo"].as_str().unwrap(),
+                    o["package"].as_str().unwrap()
+                )
+            })
+            .collect();
+        (novel, stderr(&out))
+    };
+
+    // The first run is the baseline: nothing is new against nothing.
+    let (novel, err) = scan();
+    assert!(novel.is_empty(), "{novel:?}");
+    assert!(err.contains("becomes the baseline"), "{err}");
+    assert!(scan().0.is_empty(), "an unchanged fleet has nothing new");
+
+    // A package added to one repo is new there, once.
+    std::fs::write(
+        app.join("Cargo.lock"),
+        format!(
+            "{lock}\n[[package]]\nname = \"freshdep\"\nversion = \"0.1.0\"\n\
+             source = \"registry+https://github.com/rust-lang/crates.io-index\"\n\
+             checksum = \"{}\"\n",
+            "c".repeat(64)
+        ),
+    )
+    .unwrap();
+    assert_eq!(scan().0, ["app:freshdep"]);
+    assert!(
+        scan().0.is_empty(),
+        "known after the run that first read it"
+    );
+
+    // A package another repo already uses is not new to the fleet.
+    std::fs::write(
+        api.join("Cargo.lock"),
+        std::fs::read_to_string(app.join("Cargo.lock")).unwrap(),
+    )
+    .unwrap();
+    assert!(scan().0.is_empty());
+
+    // The index lists every name the fleet has read (retention never drops them).
+    let index: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(history.join("index.json")).unwrap())
+            .unwrap();
+    let names: Vec<&str> = index["packages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["fixturevuln", "freshdep"]);
+}
+
+#[test]
+fn maven_fetch_refuses_a_mirror_it_cannot_use_instead_of_falling_back_to_central() {
+    let root = std::env::temp_dir().join(format!("fleetreach-mvnsettings-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let settings = root.join("settings.xml");
+    let write = |url: &str, password: &str| {
+        std::fs::write(
+            &settings,
+            format!(
+                "<settings><mirrors><mirror><id>corp</id><mirrorOf>*</mirrorOf><url>{url}</url>\
+                 </mirror></mirrors><servers><server><id>corp</id><username>ci</username>\
+                 <password>{password}</password></server></servers></settings>"
+            ),
+        )
+        .unwrap();
+    };
+    let scan = || {
+        run(&[
+            "scan",
+            "-q",
+            "-c",
+            &cfg("fleet-vuln.toml"),
+            "--db",
+            &db(),
+            "--maven-fetch",
+            "--maven-settings",
+            settings.to_str().unwrap(),
+        ])
+    };
+    write("http://artifactory.example/maven", "x");
+    let out = scan();
+    assert_eq!(code(&out), 2, "{}", stderr(&out));
+    assert!(stderr(&out).contains("not HTTPS"), "{}", stderr(&out));
+
+    write(
+        "https://artifactory.example/maven",
+        "${env.FLEETREACH_TEST_UNSET_TOKEN}",
+    );
+    let out = scan();
+    assert_eq!(code(&out), 2);
+    assert!(
+        stderr(&out).contains("FLEETREACH_TEST_UNSET_TOKEN is not set"),
+        "{}",
+        stderr(&out)
+    );
+
+    // A usable mirror lets the scan run (this fleet has no pom.xml, so nothing is fetched).
+    write("https://artifactory.example/maven", "x");
+    assert_eq!(code(&scan()), 1);
+
+    // The settings file only means something with --maven-fetch.
+    let out = run(&[
+        "scan",
+        "-c",
+        &cfg("fleet-vuln.toml"),
+        "--db",
+        &db(),
+        "--maven-settings",
+        settings.to_str().unwrap(),
+    ]);
+    assert_ne!(code(&out), 0);
+    assert!(stderr(&out).contains("--maven-fetch"), "{}", stderr(&out));
+}
+
+/// Without govulncheck, a Go repo is matched against the osv.dev `Go` export from the OSV
+/// directory, like every toolchain-free ecosystem: no separate vuln.go.dev mirror needed.
+#[test]
+fn go_repos_use_the_osv_dev_export_from_the_osv_dir() {
+    let tierc = manifest().join("../go/tests/fixtures/tierc");
+    let root = std::env::temp_dir().join(format!("fleetreach-go-osvdir-{}", std::process::id()));
+    let go = root.join("osv").join("Go");
+    std::fs::create_dir_all(&go).unwrap();
+    for entry in std::fs::read_dir(tierc.join("db/ID")).unwrap() {
+        let entry = entry.unwrap();
+        std::fs::copy(entry.path(), go.join(entry.file_name())).unwrap();
+    }
+    let fleet = root.join("fleet.toml");
+    std::fs::write(
+        &fleet,
+        format!(
+            "[[repo]]\nid = \"go-app\"\npath = \"{}\"\n",
+            tierc.join("repo").display()
+        ),
+    )
+    .unwrap();
+    let osv = root.join("osv");
+    let args = [
+        "scan",
+        "-c",
+        fleet.to_str().unwrap(),
+        "--db",
+        &db(),
+        "--osv-dir",
+        osv.to_str().unwrap(),
+        "-f",
+        "json",
+        "-q",
+    ];
+    let out = run(&args);
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    let mut ids: Vec<&str> = value["vulnerabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["advisory_id"].as_str().unwrap())
+        .collect();
+    ids.sort_unstable();
+    assert_eq!(ids, ["GO-TEST-0001", "GO-TEST-0002"]);
+
+    // An export with no Go advisories is a gap, never a clean scan.
+    std::fs::remove_dir_all(&go).unwrap();
+    std::fs::create_dir_all(&go).unwrap();
+    std::fs::write(go.join("GHSA-test-0001.json"), "{}").unwrap();
+    let out = run(&args);
+    assert_eq!(code(&out), 2, "stderr: {}", stderr(&out));
+}
+
+/// Go fixes run `go get <module>@v<to>` (a fake `go` here that records what it was given and
+/// edits `go.mod` the way the real one does, including raising the `go` directive), then the
+/// re-scan verifies them; a breaking bump stays blocked.
+#[test]
+fn fix_apply_bumps_a_go_module_with_go_get() {
+    let root = std::env::temp_dir().join(format!("fleetreach-fix-go-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let tierc = manifest().join("../go/tests/fixtures/tierc");
+    let repo = root.join("go-repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::copy(tierc.join("repo/go.mod"), repo.join("go.mod")).unwrap();
+    git_in(&repo, &["init", "-q", "-b", "main"]);
+    git_in(&repo, &["add", "-A"]);
+    git_in(&repo, &["commit", "-q", "-m", "init"]);
+    let fleet = root.join("fleet.toml");
+    std::fs::write(
+        &fleet,
+        format!("[[repo]]\nid = \"go-repo\"\npath = {:?}\n", repo),
+    )
+    .unwrap();
+    let fleet = fleet.to_str().unwrap().to_string();
+    let mirror = format!("file://{}", tierc.join("db").display());
+
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let go = bin.join("go");
+    std::fs::write(
+        &go,
+        r#"#!/bin/sh
+echo "$* GOTOOLCHAIN=$GOTOOLCHAIN GOWORK=$GOWORK GOFLAGS=$GOFLAGS" >> "$FAKE_GO_LOG"
+[ "$1" = "get" ] || exit 1
+mod="${2%@v*}"; ver="${2##*@v}"
+sed -e "s#^\([[:space:]]*\)$mod v[^[:space:]]*#\1$mod v$ver#" -e 's#^go 1\.21$#go 1.25.0#' \
+  go.mod > go.mod.new && mv go.mod.new go.mod
+"#,
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&go, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let log = root.join("go.log");
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let env: Vec<(&str, &std::ffi::OsStr)> = vec![
+        ("GIT_CONFIG_GLOBAL", std::ffi::OsStr::new("/dev/null")),
+        ("GIT_AUTHOR_NAME", std::ffi::OsStr::new("t")),
+        ("GIT_AUTHOR_EMAIL", std::ffi::OsStr::new("t@example.com")),
+        ("GIT_COMMITTER_NAME", std::ffi::OsStr::new("t")),
+        ("GIT_COMMITTER_EMAIL", std::ffi::OsStr::new("t@example.com")),
+        ("PATH", std::ffi::OsStr::new(&path)),
+        ("FAKE_GO_LOG", log.as_os_str()),
+    ];
+    let scan_flags = ["--db", &db(), "--go-vuln-db", &mirror];
+
+    let mut argv = vec!["scan", "-q", "-c", &fleet, "-f", "json"];
+    argv.extend_from_slice(&scan_flags);
+    let out = run_env(&argv, &env);
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    let report = root.join("report.json");
+    std::fs::write(&report, stdout(&out)).unwrap();
+    let out = run_env(
+        &[
+            "fix",
+            "plan",
+            "-c",
+            &fleet,
+            "--report",
+            report.to_str().unwrap(),
+        ],
+        &env,
+    );
+    assert_eq!(code(&out), 0, "stderr: {}", stderr(&out));
+    let plan_path = root.join("plan.json");
+    std::fs::write(&plan_path, stdout(&out)).unwrap();
+
+    let mut argv = vec![
+        "fix",
+        "apply",
+        "-q",
+        "-c",
+        &fleet,
+        plan_path.to_str().unwrap(),
+        "--",
+    ];
+    argv.extend_from_slice(&scan_flags);
+    let out = run_env(&argv, &env);
+    assert_eq!(code(&out), 0, "stderr: {}", stderr(&out));
+    let applied: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    let by_package = |p: &str| {
+        applied
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|a| a["package"] == p)
+            .unwrap_or_else(|| panic!("{p}: {applied}"))
+            .clone()
+    };
+    let vuln = by_package("example.com/vuln");
+    assert_eq!(vuln["outcome"], "verified", "{applied}");
+    assert!(vuln["detail"]
+        .as_str()
+        .unwrap()
+        .contains("raised the go directive from 1.21 to 1.25.0"));
+    // 0.5.0 to 1.0.0 crosses a major: left for --allow-breaking.
+    assert_eq!(by_package("example.com/indirectvuln")["outcome"], "skipped");
+
+    let calls = std::fs::read_to_string(&log).unwrap();
+    assert_eq!(
+        calls.trim(),
+        "get example.com/vuln@v1.2.0 GOTOOLCHAIN=local GOWORK=off GOFLAGS=-mod=mod"
+    );
+    let branch = vuln["branch"].as_str().unwrap();
+    let fixed = git_in(&repo, &["show", &format!("{branch}:go.mod")]);
+    assert!(fixed.contains("example.com/vuln v1.2.0"), "{fixed}");
+    assert!(
+        std::fs::read_to_string(repo.join("go.mod"))
+            .unwrap()
+            .contains("example.com/vuln v1.0.0"),
+        "the work tree is untouched"
+    );
+}
+
+/// PyPI fixes run `uv lock --upgrade-package <pkg>==<to> --no-build` where `uv.lock` holds the
+/// package (a fake `uv` here), so no sdist is ever built.
+#[test]
+fn fix_apply_bumps_a_uv_lock_without_building() {
+    let root = std::env::temp_dir().join(format!("fleetreach-fix-uv-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let repo = root.join("py-repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::write(
+        repo.join("pyproject.toml"),
+        "[project]\nname = \"app\"\nversion = \"0.1.0\"\ndependencies = [\"jinja2>=3.0\"]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        repo.join("uv.lock"),
+        "version = 1\nrequires-python = \">=3.9\"\n\n[[package]]\nname = \"app\"\n\
+         version = \"0.1.0\"\nsource = { virtual = \".\" }\ndependencies = [{ name = \"jinja2\" }]\n\n\
+         [[package]]\nname = \"jinja2\"\nversion = \"3.1.2\"\n\
+         source = { registry = \"https://pypi.org/simple\" }\n",
+    )
+    .unwrap();
+    git_in(&repo, &["init", "-q", "-b", "main"]);
+    git_in(&repo, &["add", "-A"]);
+    git_in(&repo, &["commit", "-q", "-m", "init"]);
+    let fleet = root.join("fleet.toml");
+    std::fs::write(
+        &fleet,
+        format!("[[repo]]\nid = \"py-repo\"\npath = {:?}\n", repo),
+    )
+    .unwrap();
+    let fleet = fleet.to_str().unwrap().to_string();
+
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let uv = bin.join("uv");
+    std::fs::write(
+        &uv,
+        r##"#!/bin/sh
+echo "$*" >> "$FAKE_UV_LOG"
+while [ $# -gt 0 ]; do [ "$1" = "--upgrade-package" ] && spec="$2"; shift; done
+ver="${spec##*==}"
+sed -e "s#^version = \"3\.1\.2\"#version = \"$ver\"#" uv.lock > uv.lock.new && mv uv.lock.new uv.lock
+"##,
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&uv, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let log = root.join("uv.log");
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let env: Vec<(&str, &std::ffi::OsStr)> = vec![
+        ("GIT_CONFIG_GLOBAL", std::ffi::OsStr::new("/dev/null")),
+        ("GIT_AUTHOR_NAME", std::ffi::OsStr::new("t")),
+        ("GIT_AUTHOR_EMAIL", std::ffi::OsStr::new("t@example.com")),
+        ("GIT_COMMITTER_NAME", std::ffi::OsStr::new("t")),
+        ("GIT_COMMITTER_EMAIL", std::ffi::OsStr::new("t@example.com")),
+        ("PATH", std::ffi::OsStr::new(&path)),
+        ("FAKE_UV_LOG", log.as_os_str()),
+    ];
+    let osv = file_url("pypi-osv");
+    let scan_flags = ["--db", &db(), "--pypi-vuln-db", &osv];
+    let mut argv = vec!["scan", "-q", "-c", &fleet, "-f", "json"];
+    argv.extend_from_slice(&scan_flags);
+    let out = run_env(&argv, &env);
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    let report = root.join("report.json");
+    std::fs::write(&report, stdout(&out)).unwrap();
+    let out = run_env(
+        &[
+            "fix",
+            "plan",
+            "-c",
+            &fleet,
+            "--report",
+            report.to_str().unwrap(),
+        ],
+        &env,
+    );
+    assert_eq!(code(&out), 0, "stderr: {}", stderr(&out));
+    let plan_path = root.join("plan.json");
+    std::fs::write(&plan_path, stdout(&out)).unwrap();
+
+    let mut argv = vec![
+        "fix",
+        "apply",
+        "-q",
+        "-c",
+        &fleet,
+        plan_path.to_str().unwrap(),
+        "--",
+    ];
+    argv.extend_from_slice(&scan_flags);
+    let out = run_env(&argv, &env);
+    assert_eq!(code(&out), 0, "stderr: {}", stderr(&out));
+    let applied: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(applied[0]["outcome"], "verified", "{applied}");
+    assert_eq!(applied[0]["to"], "3.1.5");
+    assert_eq!(
+        std::fs::read_to_string(&log).unwrap().trim(),
+        "lock --quiet --no-build --upgrade-package jinja2==3.1.5"
+    );
+}

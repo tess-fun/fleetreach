@@ -687,6 +687,24 @@ fn remediation_gate_demotes_not_reachable() {
 }
 
 #[test]
+fn remediation_offers_the_fix_on_an_older_line() {
+    use fleetreach_core::semver::VersionReq;
+    let both = |repo: &str, installed: &str| {
+        let mut o = fixable(repo, "foo", installed, ">=1.4.2, <2.0.0");
+        if let Occurrence::InRepo { patched, .. } = &mut o {
+            patched.push(VersionReq::parse(">=2.1.0").unwrap());
+        }
+        o
+    };
+    let mut a = a_vuln();
+    a.advisory_id = "RUSTSEC-A".into();
+    a.occurrences = vec![both("old", "1.4.0"), both("new", "2.0.0")];
+    let out = fleetreach_report::to_remediation(&report(vec![a]), false);
+    assert!(out.contains("bump foo 1.4.0 \u{2192} 2.1.0"), "{out}");
+    assert!(out.contains("or 1.4.2 on 1.x (1 repo)"), "{out}");
+}
+
+#[test]
 fn remediation_reports_no_fix_honestly() {
     // a_vuln has empty patched -> no published fix.
     let mut v = a_vuln();

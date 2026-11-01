@@ -1,6 +1,6 @@
 # Spec 07: Fix plans, verified patches and pull requests
 
-Status: implemented for Cargo, npm and GitHub Actions (plan, apply, verify, GitHub PRs via `gh` released in 1.4.0; GitLab MRs via `glab` unreleased) · Gap: #4 (mobilization) · CTEM stage: validation, mobilization · Effort: L
+Status: implemented for Cargo, npm and GitHub Actions (plan, apply, verify, GitHub PRs via `gh` released in 1.4.0); unreleased: GitLab MRs via `glab`, Go (`go get`, no `go mod tidy`) and PyPI `uv.lock` (`uv lock --no-build`, so no sandbox needed) · Gap: #4 (mobilization) · CTEM stage: validation, mobilization · Effort: L
 
 ## Problem
 

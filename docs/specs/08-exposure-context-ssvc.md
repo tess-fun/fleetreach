@@ -1,6 +1,6 @@
 # Spec 08: Exposure context and SSVC decisions
 
-Status: implemented (unreleased; OSV EVIDENCE references and tag_rules not done) · Gap: CTEM scoping (from the CTEM notes) · CTEM stage: scoping, prioritization · Effort: M
+Status: implemented (unreleased; tag_rules not done; OSV EVIDENCE references dropped, see Exploitation below) · Gap: CTEM scoping (from the CTEM notes) · CTEM stage: scoping, prioritization · Effort: M
 
 ## Problem
 
@@ -79,10 +79,17 @@ configured, missing context resolves to `exposure = open` and Human Impact `very
 
 | Point | Source | Rule |
 |-------|--------|------|
-| Exploitation | `--enrich` KEV, EPSS, OSV references | `active` if in KEV. `public-poc` if an OSV reference is typed `EVIDENCE` (to verify against the OSV schema) or EPSS ≥ `[settings.ssvc] poc_epss` (default off; documented as a proxy). Else `none`. |
+| Exploitation | `--enrich` KEV, EPSS, CISA Vulnrichment | `active` if in KEV. `public-poc` if CISA Vulnrichment says so, or EPSS ≥ `[settings.ssvc] poc_epss` (default off; documented as a proxy). Else `none`. |
 | Automatable | CVSS vector | v3: `AV:N/AC:L/PR:N/UI:N` → `yes`. v4: `AV:N/AC:L/AT:N/PR:N/UI:N` → `yes`. Otherwise `no`. No vector → `yes` (conservative). Phase 2: prefer CISA Vulnrichment's published `Automatable` when the CVE has it. |
 | System Exposure | repo context | as configured |
 | Human Impact | repo context | SSVC table `ssvc:HI:2.0.2` from safety × mission |
+
+OSV `EVIDENCE` references were considered as a `public-poc` source and dropped (2026-10-31).
+In the osv.dev exports only PyPI has them outside malware records (about 680 PYSEC
+advisories; npm, RubyGems, Packagist and Hex have none), and sampled ones point to bug
+trackers, fix commits and write-ups rather than proofs of concept, so they would raise
+decisions on weak evidence. CISA Vulnrichment's own Exploitation assessment covers the
+same need with a vetted source.
 
 Without enrichment data (no `--enrich`, no `--kev-file`/`--epss-file`), Exploitation is
 unknown and SSVC outcomes are not computed (the views say why). Guessing `none` would be a

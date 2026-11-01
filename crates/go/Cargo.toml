@@ -25,6 +25,9 @@ thiserror = { workspace = true }
 # Random, 0700, auto-cleaned scratch dir the confined build writes into (Go build
 # cache + temp), never a predictable path — mirrors the reach driver's work dir.
 tempfile = "3"
+# Read the osv.dev `Go/all.zip` export directly (pure-Rust inflate, as in core).
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]
 serde_json = { workspace = true }
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }

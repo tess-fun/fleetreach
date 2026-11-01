@@ -1,6 +1,6 @@
 # Spec 01: OSV database sync
 
-Status: phases 1–2 implemented (uncommitted) · Gap: #1 (onboarding) · CTEM stage: discovery · Effort: S/M
+Status: phases 1–2 implemented (released in 1.2.0); phase 3 (Go from `Go/all.zip`) implemented, unreleased · Gap: #1 (onboarding) · CTEM stage: discovery · Effort: S/M
 
 ## Problem
 

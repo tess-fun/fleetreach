@@ -57,7 +57,10 @@ pub use finding::{
     Reachability, RepoId, VulnFinding, WarnFinding, WarnKind,
 };
 pub use outcome::{RepoOutcome, ScanStatus};
-pub use remediation::{remediations, Action, FleetEvidence, ReachTier, RemediationItem, Risk};
+pub use remediation::{
+    line, remediations, upgrade_risk, Action, Alternative, FleetEvidence, ReachTier,
+    RemediationItem, Risk,
+};
 pub use report::{
     max_severity_of, Coverage, CoverageGap, FleetReport, OsvProvenance, PackageVersions,
     Provenance, RepoContext, RepoSource, SsvcDecision, SsvcReport, Summary, VersionInFleet,

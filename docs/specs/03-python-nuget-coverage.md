@@ -1,6 +1,6 @@
 # Spec 03: Python and .NET coverage without a native lockfile
 
-Status: draft · Gap: #2 (coverage) · CTEM stage: discovery · Effort: M
+Status: phases 1–3 implemented (released in 1.3.0: pylock.toml, requirements, project.assets.json, packages.config, csproj/CPM direct-only); phase 4 (deps.dev resolution) not started · Gap: #2 (coverage) · CTEM stage: discovery · Effort: M
 
 ## Problem
 

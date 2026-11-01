@@ -94,7 +94,7 @@ pub fn annotate(report: &mut FleetReport, repos: &[Repo]) {
 
 /// The name as each registry compares it: PyPI by its normalized form (PEP 503), Composer and
 /// NuGet case-insensitively, everything else verbatim.
-fn key(ecosystem: Ecosystem, name: &str) -> String {
+pub(crate) fn key(ecosystem: Ecosystem, name: &str) -> String {
     match ecosystem {
         Ecosystem::Pypi => name
             .to_ascii_lowercase()

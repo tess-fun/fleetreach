@@ -71,7 +71,8 @@ informational tail. (`remediation-json` emits the queue as JSON.)
 
 Each bump also gets a **Bump risk** from your own fleet: how many repos already run the
 target version, or a newer one in the same major. `low · 4 on 1.38.2` means the bump stays
-within the current major and four repos are already on it. See
+within the current major and four repos are already on it. Repos on an older line get
+that line's own fix listed under the action (`or 1.4.2 on 1.x (3 repos)`). See
 [Fixing](./fix.md#bump-risk).
 
 ## Prioritize by real-world risk

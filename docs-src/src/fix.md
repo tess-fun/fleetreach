@@ -42,9 +42,28 @@ plan and pull request description carry it too. The versions come from the same 
 the scan reads, with no network, and the JSON report saves them as `package_versions`, so a
 plan made from a saved report sees the same evidence.
 
-The rating does not yet look at API changes or CI results, and it does not offer an
-alternative target: the queue still proposes the smallest version that clears every
-advisory.
+The rating does not yet look at API changes or CI results.
+
+### Fixes on an older line
+
+The queue proposes the smallest version that clears every advisory for the newest version
+the fleet runs. Repos still on an older line (1.x when the target is 2.1.0; 0.3.x under a
+0.4 target) often have a fix on their own line too, so each item also lists, per older
+line, the smallest version on that line at or above what those repos run that clears the
+advisories they have:
+
+```text
+bump foo 1.4.0 → 2.1.0
+  or 1.4.2 on 1.x (3 repos)
+```
+
+`remediation-json` carries them as `alternatives` (`to`, `repos`, `clears`, `leaves_open`,
+`evidence`). When an alternative clears everything on its line, `fix plan` gives each repo
+whose vulnerable versions are all on that line its own edit to it: a low-risk lock bump,
+in its own campaign, instead of a breaking upgrade that would be blocked without
+`--allow-breaking`. An advisory with no fix on the line is listed in `leaves_open`, and
+those repos keep the main target. A repo that is on the newest line but also holds an
+older copy keeps the main target, marked breaking.
 
 ## Apply
 
@@ -57,9 +76,18 @@ lock-only update that runs no package code:
 | Cargo | `cargo update -p <pkg>@<from> --precise <to>` in each workspace that locks it |
 | npm | `npm update <pkg> --package-lock-only --ignore-scripts` (the newest version the declared ranges allow) |
 | GitHub Actions | the `uses: <action>@<tag>` reference rewritten to the fixed release tag |
+| Go | `go get <module>@v<to>` in each module whose `go.mod` requires it, with `GOTOOLCHAIN=local` and `GOWORK=off` (Go downloads module sources but never runs them) |
+| PyPI (`uv.lock`) | `uv lock --upgrade-package <pkg>==<to> --no-build` (source builds refused, so no package code runs) |
 
 If the declared version range does not allow the target, the tool refuses and the edit is
 reported `blocked`.
+
+When a Go update raises the module's `go` directive (a newer module can require a newer Go),
+the result, the commit message and the pull request say so. `poetry.lock`, `Pipfile.lock` and
+requirements files are not updated: Poetry and Pipenv may build source distributions to read
+their metadata, which runs package code. pnpm, yarn, Composer, Bundler, Maven and NuGet are
+not handled yet. The tool must be on `PATH`; a missing one leaves the edit `blocked` with the
+reason.
 
 ## Verify
 

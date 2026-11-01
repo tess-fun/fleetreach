@@ -74,7 +74,7 @@ fn ghactions() -> GhActionsScan<'static> {
 fn maven() -> MavenScan<'static> {
     MavenScan {
         vuln_db: None,
-        fetch: false,
+        remote: None,
     }
 }
 
@@ -298,7 +298,7 @@ fn pom_only_maven_repo_is_labelled_direct_only() {
             &ghactions(),
             &MavenScan {
                 vuln_db: Some(&url),
-                fetch: false,
+                remote: None,
             },
         )
     };

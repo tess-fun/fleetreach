@@ -65,9 +65,16 @@ pub(crate) struct ScanArgs {
     signals: bool,
     #[arg(
         long,
-        help = "resolve pom.xml with POMs fetched from Maven Central when they are not in ~/.m2 (sends each artifact's coordinates to Maven Central); without it, only local repositories are used"
+        help = "resolve pom.xml with POMs fetched when they are not in ~/.m2, from the mirror of Maven Central that settings.xml names, else Maven Central (sends each artifact's coordinates there); without it, only local repositories are used"
     )]
     maven_fetch: bool,
+    #[arg(
+        long,
+        value_name = "FILE",
+        requires = "maven_fetch",
+        help = "the Maven settings.xml whose mirror --maven-fetch uses (default: ~/.m2/settings.xml when present)"
+    )]
+    maven_settings: Option<PathBuf>,
     #[arg(
         long,
         value_name = "DUR",
@@ -527,7 +534,16 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
     // its explicit flag (or env var), then the one OSV directory, then the default cache,
     // which network builds keep fresh. Only ecosystems the fleet actually has are resolved,
     // so a Rust-only fleet never touches the network for them.
-    let needed = fleet_ecosystems(&config);
+    let mut needed = fleet_ecosystems(&config);
+    // Go needs the osv.dev export only for its offline matcher: not when govulncheck runs,
+    // and not when a `file://` vuln.go.dev mirror is given.
+    if go_govulncheck.is_some()
+        || go_vuln_db
+            .as_deref()
+            .is_some_and(|d| d.starts_with("file://"))
+    {
+        needed.retain(|e| *e != Ecosystem::Go);
+    }
     let explicit = explicit_osv_dbs(&args);
     let osv_opts = osvdb::Options {
         dir: args
@@ -582,6 +598,36 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
     let hex_vuln_db = osv_url(Ecosystem::Hex);
     let ghactions_vuln_db = osv_url(Ecosystem::GitHubActions);
     let maven_vuln_db = osv_url(Ecosystem::Maven);
+    // govulncheck takes the configured DB as is; the offline matcher takes a `file://`
+    // vuln.go.dev mirror, else the osv.dev Go export.
+    let go_db = if go_govulncheck.is_some() {
+        go_vuln_db.clone()
+    } else {
+        go_vuln_db
+            .clone()
+            .filter(|d| d.starts_with("file://"))
+            .or_else(|| osv_url(Ecosystem::Go))
+    };
+    // Read once: a mirror that is configured but unusable stops the scan rather than letting
+    // POM requests fall back to Maven Central.
+    let maven_remote = if args.maven_fetch {
+        match crate::maven_repo::Remote::configured(args.maven_settings.as_deref()) {
+            Ok(remote) => {
+                if args.verbose {
+                    match &remote.mirror {
+                        Some(id) => {
+                            eprintln!("maven: fetching through mirror `{id}` ({})", remote.host())
+                        }
+                        None => eprintln!("maven: fetching from Maven Central"),
+                    }
+                }
+                Some(remote)
+            }
+            Err(e) => return fail(&format!("--maven-fetch: {e}")),
+        }
+    } else {
+        None
+    };
     let scan = scan_fleet(
         &db,
         &config,
@@ -590,7 +636,7 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         &GoScan {
             govulncheck: go_govulncheck.as_deref(),
             sandbox: args.build_sandbox.into(),
-            vuln_db: go_vuln_db.as_deref(),
+            vuln_db: go_db.as_deref(),
             offline: args.offline,
         },
         &NpmScan {
@@ -622,7 +668,7 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         },
         &MavenScan {
             vuln_db: maven_vuln_db.as_deref(),
-            fetch: args.maven_fetch,
+            remote: maven_remote.as_ref(),
         },
     );
 
@@ -633,6 +679,19 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             &config.repos,
             &config.signal_registries,
         ));
+    }
+    // The fleet's packages, read once: recorded in the history, and checked against it for
+    // fleet novelty.
+    let fleet_packages = args
+        .history_dir
+        .as_ref()
+        .map(|_| crate::signals::fleet_packages(&config.repos));
+    if let (true, Some(dir), Some(packages)) = (args.signals, &args.history_dir, &fleet_packages) {
+        match novelty(dir, packages) {
+            Ok(Some(finding)) => scan.warnings.push(finding),
+            Ok(None) => {}
+            Err(note) => eprintln!("note: fleet novelty not checked: {note}"),
+        }
     }
     if let Some(spec) = &args.release_age {
         let secs = match parse_duration_secs(spec) {
@@ -1072,7 +1131,14 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
     //    is a failed run.
     if let Some(dir) = &args.history_dir {
         let keys = crate::history::suppressed_keys(&fleet_report, &suppressed);
-        match crate::history::record(dir, &fleet_report, keys, code, config.history_keep) {
+        let mut names: Vec<crate::history::PackageName> = fleet_packages
+            .iter()
+            .flatten()
+            .map(crate::signals::FleetPackage::key)
+            .collect();
+        names.sort();
+        names.dedup();
+        match crate::history::record(dir, &fleet_report, keys, code, config.history_keep, names) {
             Ok((path, notes)) => {
                 for note in notes {
                     eprintln!("note: {note}");
@@ -1085,6 +1151,21 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         }
     }
     code
+}
+
+/// The `new-to-fleet` finding against the history in `dir`. `Err` explains why there is no
+/// baseline to judge against: no history yet, or none that recorded package names.
+fn novelty(
+    dir: &std::path::Path,
+    packages: &[crate::signals::FleetPackage],
+) -> Result<Option<fleetreach_core::WarnFinding>, String> {
+    if !dir.exists() {
+        return Err("this is the first recorded run; it becomes the baseline".to_string());
+    }
+    let history = crate::history::load(dir)?;
+    let known = crate::history::known_packages(&history)
+        .ok_or("no earlier run recorded package names; this run becomes the baseline")?;
+    Ok(crate::signals::new_to_fleet(packages, &known))
 }
 
 /// CISA Vulnrichment over the network, only on the network enrichment path: the offline

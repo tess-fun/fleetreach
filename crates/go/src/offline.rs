@@ -71,6 +71,10 @@ impl GoDb {
     /// false-clean scan. An advisory file that is simply *absent* is skipped (it cannot
     /// match anything); only a present-but-malformed file is an error.
     pub fn load(db_root: &Path) -> Result<GoDb, GoError> {
+        // A missing path keeps the mirror's error (it names `index/modules.json`).
+        if db_root.is_file() || (db_root.is_dir() && !db_root.join("index").exists()) {
+            return Self::load_osv_export(db_root);
+        }
         let index = load_module_index(db_root)?;
         let mut advisories: BTreeMap<String, Osv> = BTreeMap::new();
         for id in index.values().flatten() {
@@ -87,6 +91,81 @@ impl GoDb {
                     advisories.insert(id.clone(), osv);
                 }
             }
+        }
+        Ok(GoDb { index, advisories })
+    }
+}
+
+impl GoDb {
+    /// Load the osv.dev `Go` export: its `all.zip`, or the directory it unzips to. Only `GO-`
+    /// records are kept, which is exactly what vuln.go.dev serves: the export also carries
+    /// GHSA copies of the same advisories, which would otherwise double-count. Withdrawn
+    /// records never match.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GoError::Db`] if the export cannot be read or a record is not valid JSON,
+    /// failing closed.
+    pub fn load_osv_export(root: &Path) -> Result<GoDb, GoError> {
+        let mut bodies: Vec<String> = Vec::new();
+        if root.is_dir() {
+            let mut paths: Vec<PathBuf> = std::fs::read_dir(root)
+                .map_err(|e| GoError::db(root, e))?
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+                .filter(|p| {
+                    p.file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.starts_with("GO-"))
+                })
+                .collect();
+            paths.sort();
+            for path in paths {
+                bodies.push(std::fs::read_to_string(&path).map_err(|e| GoError::db(&path, e))?);
+            }
+        } else {
+            use std::io::Read;
+            let file = std::fs::File::open(root).map_err(|e| GoError::db(root, e))?;
+            let mut archive = zip::ZipArchive::new(file).map_err(|e| GoError::db(root, e))?;
+            for i in 0..archive.len() {
+                let mut entry = archive.by_index(i).map_err(|e| GoError::db(root, e))?;
+                let name = entry.name().map_err(|e| GoError::db(root, e))?;
+                if !(name.starts_with("GO-") && name.ends_with(".json")) {
+                    continue;
+                }
+                let mut body = String::new();
+                entry
+                    .read_to_string(&mut body)
+                    .map_err(|e| GoError::db(root, e))?;
+                bodies.push(body);
+            }
+        }
+        if bodies.is_empty() {
+            return Err(GoError::Db {
+                path: root.to_path_buf(),
+                source: crate::DbError::Empty,
+            });
+        }
+        let mut index: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut advisories: BTreeMap<String, Osv> = BTreeMap::new();
+        for body in bodies {
+            let osv: Osv = serde_json::from_str(&body).map_err(|e| GoError::db(root, e))?;
+            if osv.withdrawn.is_some() || !osv.id.starts_with("GO-") {
+                continue;
+            }
+            for affected in &osv.affected {
+                let (Some(name), Some("Go")) = (
+                    &affected.package.name,
+                    affected.package.ecosystem.as_deref(),
+                ) else {
+                    continue;
+                };
+                let ids = index.entry(name.clone()).or_default();
+                if !ids.contains(&osv.id) {
+                    ids.push(osv.id.clone());
+                }
+            }
+            advisories.insert(osv.id.clone(), osv);
         }
         Ok(GoDb { index, advisories })
     }

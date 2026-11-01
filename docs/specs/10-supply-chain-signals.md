@@ -1,6 +1,6 @@
 # Spec 10: Supply-chain signals beyond known CVEs
 
-Status: draft · Gap: #7 (malware) · CTEM stage: discovery, prioritization · Effort: M
+Status: implemented, all four phases (1–3 released in 1.4.0: malware first-class, lockfile hygiene, typosquats, release age; phase 4 fleet novelty unreleased) · Gap: #7 (malware) · CTEM stage: discovery, prioritization · Effort: M
 
 ## Problem
 

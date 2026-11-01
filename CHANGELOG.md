@@ -78,6 +78,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The forge is read from each repo's `origin` host, or set with `--forge gitlab|github`.
   `fix status` rows gain a `forge` field and GitLab states are reported as `OPEN`, `MERGED`
   and `CLOSED`, like GitHub's.
+- **Fleet novelty signal** (spec 10, phase 4). With `--signals` and `--history-dir`,
+  `fleetreach:new-to-fleet` flags packages whose name no earlier recorded run of the fleet
+  has read, the cheap early sign of a planted dependency (strongest next to a typosquat or a
+  recent release). Each history snapshot now records the package names it read, and the
+  index keeps them past retention. The first run that records names is the baseline and
+  flags nothing.
+- **Maven mirrors from `settings.xml`** (spec 04). `--maven-fetch` fetches POMs through
+  the mirror of Maven Central that `~/.m2/settings.xml` (or `--maven-settings FILE`) names,
+  chosen with Maven's `mirrorOf` rules, with credentials from the matching `<server>` and
+  `${env.NAME}` expansion. A configured mirror that cannot be used (plain HTTP, encrypted
+  password, unset variable) stops the scan instead of falling back to Maven Central.
+- **Fixes on an older line** (spec 13). Remediation items list `alternatives`: for repos
+  still on an older major (or `0.x` minor) than the target, the smallest version on their
+  own line that clears their advisories, with what it leaves open and the fleet evidence.
+  `-f remediation` shows them under the action (`or 1.4.2 on 1.x (3 repos)`), and `fix plan`
+  gives those repos a low-risk lock bump to it instead of a blocked breaking upgrade. Plan
+  edits are now marked breaking per repo: a repo on an older line crossing a major is
+  breaking even when the fleet's newest version is not.
+- **`fix apply` for Go and uv** (spec 07). Go modules are bumped with `go get
+  <module>@v<to>` (with `GOTOOLCHAIN=local` and `GOWORK=off`) and `uv.lock` with `uv lock
+  --upgrade-package <pkg>==<to> --no-build`, so neither runs package code; both are
+  verified by the re-scan like Cargo and npm. A raised `go` directive is named in the result,
+  the commit and the pull request, which now also say what the update ran.
+- **Go from the osv.dev export** (spec 01, phase 3). Without govulncheck, the module-level
+  Go scan reads `Go/all.zip` from `--osv-dir` or the default cache like every other
+  toolchain-free ecosystem, so `fleetreach db sync` now covers Go and no separate
+  vuln.go.dev mirror is needed. `--go-vuln-db=file://` still takes a mirror (or an unzipped
+  export). Only `GO-` records are used, so GHSA copies are not double-counted; an export
+  with no `GO-` record is an error, not a clean database.
 
 ## [1.4.0] - 2026-10-31
 

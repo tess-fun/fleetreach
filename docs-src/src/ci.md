@@ -112,6 +112,14 @@ safe.
   worm outbreak, the question is which repos pulled a version from the last few days. Publish
   times come from deps.dev, which sends each package's name and version; answers are cached.
   A version deps.dev cannot date is listed separately, never assumed old.
+- With `--history-dir` as well (see [Scan history](history.md)), `--signals` also flags
+  `fleetreach:new-to-fleet`: packages whose name no earlier recorded run of the fleet has
+  read. Each recorded run keeps the names of every package it read (names only), and the
+  history index keeps them past retention. The first recorded run, or the first after
+  upgrading from a version that did not record names, is the baseline and flags nothing; a
+  note says so. A new name is often a normal new dependency; it matters most together with
+  a typosquat hit or a recent release on the same package. Because it is a warning, it gates
+  with `--fail-on-warnings` like the other signals.
 
 Known malware (OSV `MAL-` records) needs no flag: it is always critical, is never hidden by
 `--min-severity`, and the remediation queue says to remove the package and rotate credentials.

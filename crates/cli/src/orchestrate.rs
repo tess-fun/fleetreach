@@ -149,8 +149,9 @@ pub struct GhActionsScan<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct MavenScan<'a> {
     pub vuln_db: Option<&'a str>,
-    /// Fetch POMs missing locally from Maven Central (`--maven-fetch`).
-    pub fetch: bool,
+    /// Where to fetch POMs missing locally (`--maven-fetch`): the `settings.xml` mirror of
+    /// Maven Central, or Central.
+    pub remote: Option<&'a crate::maven_repo::Remote>,
 }
 
 // Each ecosystem threads its own scan config / once-loaded DB through the fleet walk as an
@@ -1005,7 +1006,7 @@ fn scan_unit(
         Ecosystem::Julia => return scan_julia_repo(repo, julia_db),
         Ecosystem::Swift => return scan_swift_repo(repo, swift_db),
         Ecosystem::Hex => return scan_hex_repo(repo, hex_db),
-        Ecosystem::Maven => return scan_maven_repo(repo, maven_db, maven.fetch),
+        Ecosystem::Maven => return scan_maven_repo(repo, maven_db, maven.remote),
         Ecosystem::GitHubActions => return scan_ghactions_repo(repo, ghactions_db),
         Ecosystem::Cargo => {}
     }
@@ -1091,8 +1092,8 @@ fn scan_go_repo(repo: &Repo, go: &GoScan, go_db: Option<&Result<GoDb, GoError>>)
             None => errored(
                 "Go repo (go.mod): no govulncheck available (needs --allow-untrusted-builds \
                  and a govulncheck binary via --govulncheck <path> or PATH), and no offline \
-                 DB mirror for the toolchain-free Tier-C fallback (pass \
-                 --go-vuln-db=file://<mirror>)"
+                 DB for the toolchain-free Tier-C fallback (run `fleetreach db sync`, pass \
+                 --osv-dir <dir> with <dir>/Go/all.zip, or --go-vuln-db=file://<mirror>)"
                     .to_string(),
             ),
         };
@@ -1357,7 +1358,7 @@ fn scan_hex_repo(repo: &Repo, hex_db: Option<&Result<HexDb, HexError>>) -> RepoR
 fn scan_maven_repo(
     repo: &Repo,
     maven_db: Option<&Result<MavenDb, MavenError>>,
-    fetch: bool,
+    remote: Option<&crate::maven_repo::Remote>,
 ) -> RepoResult {
     let errored = |reason: String| RepoResult::errored(&repo.id, reason);
 
@@ -1378,10 +1379,9 @@ fn scan_maven_repo(
     // cannot be parsed falls back to its declared dependencies, labelled direct-only.
     if !repo.path.join("gradle.lockfile").is_file() {
         let local = crate::maven_repo::local();
-        let central = crate::maven_repo::Central;
         let mut sources: Vec<&dyn fleetreach_maven::PomSource> = vec![&local];
-        if fetch {
-            sources.push(&central);
+        if let Some(remote) = remote {
+            sources.push(remote);
         }
         if let Ok(resolution) =
             fleetreach_maven::resolve(&repo.path, &fleetreach_maven::Chain(sources))
@@ -1399,10 +1399,10 @@ fn scan_maven_repo(
                 .map(String::as_str)
                 .collect();
             let more = resolution.missing.len().saturating_sub(shown.len());
-            let hint = if fetch {
+            let hint = if remote.is_some() {
                 ""
             } else {
-                "; pass --maven-fetch to fetch missing POMs from Maven Central (sends their coordinates), or build once so ~/.m2 has them"
+                "; pass --maven-fetch to fetch missing POMs from your settings.xml mirror or Maven Central (sends their coordinates), or build once so ~/.m2 has them"
             };
             return result.with_coverage(CoverageGap {
                 repo: repo.id.clone(),

@@ -1,6 +1,6 @@
 # Spec 13: Upgrade safety
 
-Status: phase 1 implemented (unreleased; fleet evidence and risk; no alternatives, which need registry version lists; CI status of the evidence repos not done; phase 2 not started) · Gap: #10 · CTEM stage: mobilization · Effort: S (fleet evidence) to L (API diff)
+Status: phase 1 implemented (unreleased: fleet evidence, risk, and in-line alternatives for repos on an older line, from the advisories' own fix versions; "latest in the same major" needs registry version lists and is not done; CI status of the evidence repos not done); phase 2 (Rust API impact) not started · Gap: #10 · CTEM stage: mobilization · Effort: S (fleet evidence) to L (API diff)
 
 ## Problem
 

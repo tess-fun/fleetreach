@@ -75,6 +75,13 @@ pub enum DbError {
     /// The file was not valid JSON.
     #[error("invalid JSON: {0}")]
     Parse(#[from] serde_json::Error),
+    /// The osv.dev export's zip archive could not be read.
+    #[error("invalid zip archive: {0}")]
+    Archive(#[from] zip::result::ZipError),
+    /// The osv.dev export held no `GO-` advisory at all: a wrong path or an empty download,
+    /// never a clean database.
+    #[error("no GO- advisories in this export")]
+    Empty,
 }
 
 impl GoError {

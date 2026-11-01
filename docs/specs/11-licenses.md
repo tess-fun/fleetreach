@@ -1,6 +1,6 @@
 # Spec 11: License inventory and policy
 
-Status: draft · Gap: #8 · CTEM stage: discovery (compliance exposure) · Effort: M
+Status: implemented, all three phases (released in 1.4.0: inventory, policy and gating, `--fetch` via deps.dev) · Gap: #8 · CTEM stage: discovery (compliance exposure) · Effort: M
 
 ## Problem
 

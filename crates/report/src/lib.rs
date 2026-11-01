@@ -1409,13 +1409,38 @@ fn action_label(it: &RemediationItem) -> String {
                 .map(|v| format!("{v} \u{2192} "))
                 .unwrap_or_default();
             let brk = if *breaking { " (breaking)" } else { "" };
-            format!("bump {pkg} {from}{to}{brk}")
+            let mut label = format!("bump {pkg} {from}{to}{brk}");
+            for alt in &it.alternatives {
+                let open = match alt.leaves_open.len() {
+                    0 => String::new(),
+                    n => format!(", {n} left open"),
+                };
+                let repos = match alt.repos {
+                    1 => "1 repo".to_string(),
+                    n => format!("{n} repos"),
+                };
+                label.push_str(&format!(
+                    "\n  or {} on {}.x ({repos}{open})",
+                    alt.to,
+                    line_name(&alt.to)
+                ));
+            }
+            label
         }
         // Known malware: no version is safe to keep.
         Action::NoFixAvailable if it.advisories.iter().any(|a| a.starts_with("MAL-")) => {
             format!("remove {pkg} (malicious package; rotate exposed credentials)")
         }
         Action::NoFixAvailable => format!("no fix: {pkg}"),
+    }
+}
+
+/// A version's compatibility line as people say it: `1` for 1.x, `0.3` for 0.3.x.
+fn line_name(v: &fleetreach_core::semver::Version) -> String {
+    if v.major == 0 {
+        format!("0.{}", v.minor)
+    } else {
+        v.major.to_string()
     }
 }
 

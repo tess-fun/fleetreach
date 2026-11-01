@@ -85,6 +85,24 @@ pub struct FleetEvidence {
     pub newest: Version,
 }
 
+/// A smaller upgrade for the repos still on an older compatible line than the main target
+/// (spec 13): the lowest version on their own line that clears what it can, so they are not
+/// pushed across a major for a fix their line also has.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Alternative {
+    pub to: Version,
+    /// Repos with a vulnerable version on this line.
+    pub repos: usize,
+    /// Grouped advisories this version clears, sorted.
+    pub clears: Vec<String>,
+    /// Grouped advisories with no fix on this line, which still need the main target.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub leaves_open: Vec<String>,
+    /// Repos already on it or a later compatible version.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<FleetEvidence>,
+}
+
 /// How many repos must already run the new major for a breaking bump to rate `medium`.
 const PROVEN_REPOS: usize = 3;
 
@@ -128,6 +146,9 @@ pub struct RemediationItem {
     /// Why, in a few words each.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub risk_reasons: Vec<String>,
+    /// In-line upgrades for repos on an older line than `to`, oldest line first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alternatives: Vec<Alternative>,
 }
 
 /// Assemble the remediation queue from a correlated report.
@@ -165,6 +186,7 @@ pub fn remediations(report: &FleetReport) -> Vec<RemediationItem> {
         let build = |subset: &[&VulnFinding], action: Action| {
             let mut item = build_item(ecosystem, &package, subset, action);
             assess_risk(&mut item, fleet);
+            item.alternatives = alternatives(subset, &item.action, fleet);
             item
         };
         if !nofix.is_empty() {
@@ -265,13 +287,115 @@ fn build_item(
         evidence: None,
         risk: None,
         risk_reasons: Vec::new(),
+        alternatives: Vec::new(),
     }
 }
 
 /// Whether `v` is a compatible later release of `to`: Cargo's rule, which every
 /// SemVer-coerced ecosystem shares (same major, or same minor under `0.x`).
 fn compatible_with(to: &Version, v: &Version) -> bool {
-    v >= to && v.major == to.major && (to.major != 0 || v.minor == to.minor)
+    v >= to && line(v) == line(to)
+}
+
+/// A version's compatibility line: its major, or its minor under `0.x`.
+pub fn line(v: &Version) -> (u64, u64) {
+    (v.major, if v.major == 0 { v.minor } else { 0 })
+}
+
+/// How many repos already run `to` or a later compatible version, and the newest of those.
+fn evidence_for(to: &Version, fleet: &crate::PackageVersions) -> Option<FleetEvidence> {
+    let on_target: Vec<&crate::VersionInFleet> = fleet
+        .versions
+        .iter()
+        .filter(|v| compatible_with(to, &v.version))
+        .collect();
+    let repos: BTreeSet<&str> = on_target
+        .iter()
+        .flat_map(|v| v.repos.iter().map(|r| r.0.as_str()))
+        .collect();
+    on_target.last().map(|newest| FleetEvidence {
+        repos: repos.len(),
+        newest: newest.version.clone(),
+    })
+}
+
+/// The in-line alternatives to an upgrade (spec 13): for each line older than the target
+/// that has vulnerable repos, the smallest version on that line, at or above what they run,
+/// that clears every grouped advisory with a fix there. Lines where no advisory has a fix are
+/// left out: those repos need the main target.
+fn alternatives(
+    subset: &[&VulnFinding],
+    action: &Action,
+    fleet: Option<&crate::PackageVersions>,
+) -> Vec<Alternative> {
+    let Action::Upgrade { to, .. } = action else {
+        return Vec::new();
+    };
+    // Each older line's highest vulnerable version, its repos and the advisories on it.
+    type Line<'a> = (Version, BTreeSet<&'a str>, Vec<&'a VulnFinding>);
+    let mut lines: BTreeMap<(u64, u64), Line<'_>> = BTreeMap::new();
+    for &f in subset {
+        for o in f.occurrences.iter().filter(|o| o.is_vulnerable()) {
+            let Occurrence::InRepo {
+                repo, installed, ..
+            } = o
+            else {
+                continue;
+            };
+            if line(installed) >= line(to) {
+                continue;
+            }
+            let entry = lines
+                .entry(line(installed))
+                .or_insert_with(|| (installed.clone(), BTreeSet::new(), Vec::new()));
+            entry.0 = entry.0.clone().max(installed.clone());
+            entry.1.insert(repo.0.as_str());
+            if !entry.2.iter().any(|g| std::ptr::eq(*g, f)) {
+                entry.2.push(f);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for (key, (floor, repos, on_line)) in lines {
+        let candidate = on_line
+            .iter()
+            .filter_map(|f| {
+                let mut floors: Vec<Version> = finding_patched(f)
+                    .iter()
+                    .filter_map(req_floor)
+                    .filter(|v| line(v) == key && *v >= floor)
+                    .collect();
+                floors.sort();
+                floors.into_iter().next()
+            })
+            .max();
+        let Some(candidate) = candidate else {
+            continue;
+        };
+        let (mut clears, mut leaves_open): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+        for f in &on_line {
+            if satisfied_by(&finding_patched(f), &candidate) {
+                clears.push(f.advisory_id.clone());
+            } else {
+                leaves_open.push(f.advisory_id.clone());
+            }
+        }
+        if clears.is_empty() {
+            continue;
+        }
+        for list in [&mut clears, &mut leaves_open] {
+            list.sort();
+            list.dedup();
+        }
+        out.push(Alternative {
+            evidence: fleet.and_then(|fleet| evidence_for(&candidate, fleet)),
+            to: candidate,
+            repos: repos.len(),
+            clears,
+            leaves_open,
+        });
+    }
+    out
 }
 
 /// Fill an upgrade item's fleet evidence and risk (spec 13, phase 1):
@@ -285,41 +409,39 @@ fn assess_risk(item: &mut RemediationItem, fleet: Option<&crate::PackageVersions
     let Action::Upgrade { to, breaking } = &item.action else {
         return;
     };
-    if let Some(fleet) = fleet {
-        let on_target: Vec<&crate::VersionInFleet> = fleet
-            .versions
-            .iter()
-            .filter(|v| compatible_with(to, &v.version))
-            .collect();
-        let repos: BTreeSet<&str> = on_target
-            .iter()
-            .flat_map(|v| v.repos.iter().map(|r| r.0.as_str()))
-            .collect();
-        if let Some(newest) = on_target.last() {
-            item.evidence = Some(FleetEvidence {
-                repos: repos.len(),
-                newest: newest.version.clone(),
-            });
-        }
-    }
-    let proven = item.evidence.as_ref().map_or(0, |e| e.repos);
+    item.evidence = fleet.and_then(|fleet| evidence_for(to, fleet));
+    let (risk, reasons) = upgrade_risk(to, *breaking, item.evidence.as_ref(), fleet.is_some());
+    item.risk = Some(risk);
+    item.risk_reasons = reasons;
+}
+
+/// An upgrade's risk and why (spec 13), from whether it is `breaking` and how many repos
+/// already run `to` (`evidence`; `fleet_known` says whether the report had fleet versions).
+#[must_use]
+pub fn upgrade_risk(
+    to: &Version,
+    breaking: bool,
+    evidence: Option<&FleetEvidence>,
+    fleet_known: bool,
+) -> (Risk, Vec<String>) {
+    let proven = evidence.map_or(0, |e| e.repos);
     let in_fleet = match proven {
-        0 if fleet.is_some() => "no repo in the fleet runs it yet".to_string(),
+        0 if fleet_known => "no repo in the fleet runs it yet".to_string(),
         0 => String::new(),
         1 => format!("1 repo already runs {to}+"),
         n => format!("{n} repos already run {to}+"),
     };
-    let (risk, why) = if !*breaking {
+    let (risk, why) = if !breaking {
         (Risk::Low, "within the current major".to_string())
     } else if proven >= PROVEN_REPOS {
         (Risk::Medium, "breaking (new major)".to_string())
     } else {
         (Risk::High, "breaking (new major)".to_string())
     };
-    item.risk = Some(risk);
-    item.risk_reasons = std::iter::once(why)
+    let reasons = std::iter::once(why)
         .chain((!in_fleet.is_empty()).then_some(in_fleet))
         .collect();
+    (risk, reasons)
 }
 
 /// An [`Action::Upgrade`] to `to`, flagged breaking when it crosses the
@@ -807,6 +929,101 @@ mod tests {
         )]);
         r.package_versions = vec![fleet("foo", versions)];
         remediations(&r).remove(0)
+    }
+
+    #[test]
+    fn repos_on_an_older_line_get_the_fix_on_their_own_line() {
+        // One advisory is fixed on both lines, the other only on 2.x.
+        let both = &[">=1.4.2, <2.0.0", ">=2.1.0"];
+        let mut r = report_of(vec![
+            vuln(
+                "RUSTSEC-A",
+                Severity::High,
+                vec![
+                    in_repo("old", "foo", "1.4.0", both),
+                    in_repo("older", "foo", "1.2.0", both),
+                    in_repo("new", "foo", "2.0.0", both),
+                ],
+            ),
+            vuln(
+                "RUSTSEC-B",
+                Severity::Low,
+                vec![in_repo("new", "foo", "2.0.0", &[">=2.0.3"])],
+            ),
+        ]);
+        r.package_versions = vec![fleet(
+            "foo",
+            &[
+                ("1.2.0", &["older"]),
+                ("1.4.0", &["old"]),
+                ("1.5.0", &["other"]),
+                ("2.0.0", &["new"]),
+            ],
+        )];
+        let it = remediations(&r).remove(0);
+        assert_eq!(
+            it.action,
+            Action::Upgrade {
+                to: Version::new(2, 1, 0),
+                breaking: false
+            }
+        );
+        let [alt] = it.alternatives.as_slice() else {
+            panic!("{:?}", it.alternatives)
+        };
+        assert_eq!(
+            alt.to,
+            Version::new(1, 4, 2),
+            "at or above the line's newest"
+        );
+        assert_eq!(alt.repos, 2);
+        assert_eq!(alt.clears, ["RUSTSEC-A"]);
+        assert!(alt.leaves_open.is_empty(), "B never reached 1.x");
+        assert_eq!(alt.evidence.as_ref().map(|e| e.repos), Some(1));
+
+        // Without a fix on the old line there is no alternative.
+        let r = report_of(vec![vuln(
+            "RUSTSEC-C",
+            Severity::High,
+            vec![
+                in_repo("old", "foo", "1.4.0", &[">=2.1.0"]),
+                in_repo("new", "foo", "2.0.0", &[">=2.1.0"]),
+            ],
+        )]);
+        assert!(remediations(&r)[0].alternatives.is_empty());
+    }
+
+    #[test]
+    fn an_alternative_names_the_advisories_its_line_cannot_fix() {
+        let r = report_of(vec![
+            vuln(
+                "RUSTSEC-A",
+                Severity::High,
+                vec![in_repo(
+                    "app",
+                    "foo",
+                    "0.3.1",
+                    &[">=0.3.4, <0.4.0", ">=0.4.1"],
+                )],
+            ),
+            vuln(
+                "RUSTSEC-B",
+                Severity::High,
+                vec![in_repo("app", "foo", "0.3.1", &[">=0.4.1"])],
+            ),
+        ]);
+        let it = remediations(&r).remove(0);
+        assert_eq!(
+            it.action,
+            Action::Upgrade {
+                to: Version::new(0, 4, 1),
+                breaking: true
+            }
+        );
+        let alt = &it.alternatives[0];
+        assert_eq!(alt.to, Version::new(0, 3, 4));
+        assert_eq!(alt.clears, ["RUSTSEC-A"]);
+        assert_eq!(alt.leaves_open, ["RUSTSEC-B"]);
     }
 
     #[test]

@@ -31,8 +31,9 @@ pub const DIR_ENV: &str = "FLEETREACH_OSV_DIR";
 /// Default interval after which a cached export is re-checked upstream.
 pub const DEFAULT_REFRESH: Duration = Duration::from_secs(6 * 3600);
 
-/// The ecosystems served by osv.dev exports, in a stable order. Go is absent: its offline
-/// matcher reads a vuln.go.dev mirror, a different format.
+/// The ecosystems served by osv.dev exports, in a stable order. Go's export feeds its
+/// offline matcher (only its `GO-` records, which are what vuln.go.dev serves) when there is
+/// neither govulncheck nor a `file://` vuln.go.dev mirror.
 pub const OSV_ECOSYSTEMS: &[Ecosystem] = &[
     Ecosystem::Npm,
     Ecosystem::Pypi,
@@ -44,6 +45,7 @@ pub const OSV_ECOSYSTEMS: &[Ecosystem] = &[
     Ecosystem::Hex,
     Ecosystem::GitHubActions,
     Ecosystem::Maven,
+    Ecosystem::Go,
 ];
 
 /// The osv.dev directory name of an ecosystem's export, or `None` if it has none.
@@ -59,7 +61,8 @@ pub fn osv_name(eco: Ecosystem) -> Option<&'static str> {
         Ecosystem::Hex => "Hex",
         Ecosystem::GitHubActions => "GitHub Actions",
         Ecosystem::Maven => "Maven",
-        Ecosystem::Cargo | Ecosystem::Go => return None,
+        Ecosystem::Go => "Go",
+        Ecosystem::Cargo => return None,
     })
 }
 
@@ -77,6 +80,7 @@ pub fn parse_ecosystem(name: &str) -> Option<Ecosystem> {
         "hex" | "elixir" => Ecosystem::Hex,
         "githubactions" | "github actions" | "actions" | "gha" => Ecosystem::GitHubActions,
         "maven" | "gradle" | "java" => Ecosystem::Maven,
+        "go" | "golang" => Ecosystem::Go,
         _ => return None,
     };
     Some(eco)
@@ -721,7 +725,7 @@ mod tests {
             let name = osv_name(eco).unwrap();
             assert_eq!(parse_ecosystem(name), Some(eco), "{name}");
         }
-        assert!(osv_name(Ecosystem::Go).is_none());
+        assert_eq!(osv_name(Ecosystem::Go), Some("Go"));
         assert!(osv_name(Ecosystem::Cargo).is_none());
     }
 
