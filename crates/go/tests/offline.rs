@@ -243,3 +243,128 @@ fn an_empty_osv_export_is_an_error_not_a_clean_db() {
     std::fs::write(dir.join("GHSA-test-0001.json"), "{}").unwrap();
     assert!(GoDb::load(&dir).is_err());
 }
+
+/// Real-world regression found against osv-scanner on caddy 2.6: an advisory naming two
+/// required modules reports both (GO-2024-2606 names pgx/v4 and pgproto3/v2). Also pinned:
+/// a pseudo-version matches `introduced: 0`, and a pre-release of the introducing release is
+/// flagged (the deliberate fail-loud bias; govulncheck does not flag it).
+#[test]
+fn every_named_module_is_reported() {
+    let root = std::env::temp_dir().join(format!("fleetreach-go-multi-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let db_dir = root.join("Go");
+    let repo = root.join("repo");
+    std::fs::create_dir_all(&db_dir).unwrap();
+    std::fs::create_dir_all(&repo).unwrap();
+    let range = |name: &str, events: &str| {
+        format!(
+            r#"{{"package":{{"name":"{name}","ecosystem":"Go"}},"ranges":[{{"type":"SEMVER","events":{events}}}]}}"#
+        )
+    };
+    std::fs::write(
+        db_dir.join("GO-TEST-0100.json"),
+        format!(
+            r#"{{"id":"GO-TEST-0100","affected":[{},{}]}}"#,
+            range(
+                "example.com/pgproto3",
+                r#"[{"introduced":"0"},{"fixed":"2.3.3"}]"#
+            ),
+            range(
+                "example.com/pgx",
+                r#"[{"introduced":"0"},{"fixed":"4.18.2"}]"#
+            )
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        db_dir.join("GO-TEST-0101.json"),
+        format!(
+            r#"{{"id":"GO-TEST-0101","affected":[{}]}}"#,
+            range(
+                "example.com/etcd",
+                r#"[{"introduced":"3.5.0"},{"fixed":"3.5.30"}]"#
+            )
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        db_dir.join("GO-TEST-0102.json"),
+        format!(
+            r#"{{"id":"GO-TEST-0102","affected":[{}]}}"#,
+            range(
+                "example.com/pseudo",
+                r#"[{"introduced":"0"},{"fixed":"0.1.0"}]"#
+            )
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        repo.join("go.mod"),
+        "module example.com/app\n\ngo 1.21\n\nrequire (\n\texample.com/pgproto3 v2.2.0\n\
+         \texample.com/pgx v4.14.0\n\texample.com/etcd v3.5.0-alpha.0\n\
+         \texample.com/pseudo v0.0.0-20210101000000-abcdefabcdef\n)\n",
+    )
+    .unwrap();
+    let db = GoDb::load(&db_dir).unwrap();
+    let found: Vec<(String, String)> = scan_offline(&repo, &db, &RepoId("app".into()))
+        .unwrap()
+        .iter()
+        .map(|f| match &f.occurrences[0] {
+            Occurrence::InRepo { package, .. } => (f.advisory_id.clone(), package.clone()),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        found,
+        [
+            (
+                "GO-TEST-0100".to_string(),
+                "example.com/pgproto3".to_string()
+            ),
+            ("GO-TEST-0100".to_string(), "example.com/pgx".to_string()),
+            ("GO-TEST-0101".to_string(), "example.com/etcd".to_string()),
+            ("GO-TEST-0102".to_string(), "example.com/pseudo".to_string()),
+        ]
+    );
+}
+
+/// A record can list one module in several entries, one per release line (go-redis/v9 in
+/// GO-2025-3540: 9.5.1-9.5.5, below 9.6.3, 9.7.0-beta.1-9.7.3). A version only a later entry
+/// covers is affected, and its safe versions skip the other lines' vulnerable spans.
+#[test]
+fn every_entry_for_a_module_counts() {
+    let root = std::env::temp_dir().join(format!("fleetreach-go-split-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let db_dir = root.join("Go");
+    let repo = root.join("repo");
+    std::fs::create_dir_all(&db_dir).unwrap();
+    std::fs::create_dir_all(&repo).unwrap();
+    let entry = |events: &str| {
+        format!(
+            r#"{{"package":{{"name":"example.com/redis/v9","ecosystem":"Go"}},"ranges":[{{"type":"SEMVER","events":{events}}}]}}"#
+        )
+    };
+    std::fs::write(
+        db_dir.join("GO-TEST-0200.json"),
+        format!(
+            r#"{{"id":"GO-TEST-0200","affected":[{},{},{}]}}"#,
+            entry(r#"[{"introduced":"9.5.1"},{"fixed":"9.5.5"}]"#),
+            entry(r#"[{"introduced":"0"},{"fixed":"9.6.3"}]"#),
+            entry(r#"[{"introduced":"9.7.0-beta.1"},{"fixed":"9.7.3"}]"#)
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        repo.join("go.mod"),
+        "module example.com/app\n\ngo 1.21\n\nrequire example.com/redis/v9 v9.7.1\n",
+    )
+    .unwrap();
+    let db = GoDb::load(&db_dir).unwrap();
+    let found = scan_offline(&repo, &db, &RepoId("app".into())).unwrap();
+    assert_eq!(found.len(), 1, "{found:?}");
+    let Occurrence::InRepo { patched, .. } = &found[0].occurrences[0] else {
+        panic!("{found:?}");
+    };
+    let patched: Vec<String> = patched.iter().map(ToString::to_string).collect();
+    assert_eq!(patched, [">=9.7.3"]);
+}

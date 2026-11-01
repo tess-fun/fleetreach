@@ -10,7 +10,7 @@ fleetreach licenses -c fleet.toml --fetch      # also look up unknown licenses o
 ```
 
 It reads the same lockfiles and manifests as `scan`, needs no advisory database, and by
-default no network. `fleetreach sbom` fills the CycloneDX `licenses` field from the same data
+default no network (`--maven-fetch` fetches the POMs a `pom.xml` needs, as with `scan`). `fleetreach sbom` fills the CycloneDX `licenses` field from the same data
 (`--fetch-licenses` there).
 
 ## Where licenses come from

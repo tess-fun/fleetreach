@@ -152,7 +152,8 @@ to ten findings per list.
 owner in `--repo`, which should be a repo for this purpose. Each issue lists the owner's
 findings past SLA, every open finding (new ones marked) and those fixed by the newest run.
 A hidden first line, `<!-- fleetreach:campaign=fleetreach;owner=team-b -->`, finds it again
-on the next run, where it is rewritten in place. It is closed when the owner has nothing open
+on the next run, where it is rewritten in place. Each list shows up to 200 findings, fewer
+when needed to stay under GitHub's size limit for an issue, and counts the rest. It is closed when the owner has nothing open
 and reopened when a finding comes back. `--campaign` names a separate set of issues, for
 example per program or quarter. `--dry-run` prints the issues without running `gh` or
 `glab`. Edits made by hand to these issues are overwritten.

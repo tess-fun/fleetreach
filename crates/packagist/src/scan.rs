@@ -89,18 +89,19 @@ fn match_advisory(
 ) -> Option<VulnFinding> {
     // A package is affected if a range covers the version OR the record explicitly lists it.
     // The range path supplies the `fixed` hint; a version-only match has no fix metadata.
-    let fixed = match affected_fixed(version, &adv.ranges) {
-        Match::Affected { fixed } => fixed,
-        Match::NotAffected if adv.versions.binary_search(version).is_ok() => None,
+    match affected_fixed(version, &adv.ranges) {
+        Match::Affected { .. } => {}
+        Match::NotAffected if adv.versions.binary_search(version).is_ok() => {}
         Match::NotAffected => return None,
-    };
+    }
     // The fix and installed version are stored in the shared model's SemVer form (see
     // `to_semver`); detection above used the true Composer comparison.
-    let patched: Vec<VersionReq> = fixed
-        .as_ref()
-        .and_then(|f| VersionReq::parse(&format!(">={}", to_semver(f))).ok())
-        .into_iter()
-        .collect();
+    // Every safe interval above the installed version, so a fix that a later release
+    // branch re-breaks is never taken for safe.
+    let patched: Vec<VersionReq> = fleetreach_core::osv::patched_reqs(
+        &fleetreach_core::osv::safe_intervals(version, &adv.ranges),
+        |v| to_semver(v).to_string(),
+    );
 
     Some(
         TierCFinding {

@@ -162,8 +162,15 @@ pub struct RemediationItem {
 pub fn remediations(report: &FleetReport) -> Vec<RemediationItem> {
     // Key on (ecosystem, package): a crate and a Go module can share a name, and
     // they must never batch into one bump.
+    // An advisory can name several packages (npm's @babel/helpers and @babel/runtime, Go's
+    // pgx/v4 and pgproto3/v2), and each one needs its own bump: split before grouping.
+    let per_package: Vec<VulnFinding> = report
+        .vulnerabilities
+        .iter()
+        .flat_map(split_by_package)
+        .collect();
     let mut groups: BTreeMap<(Ecosystem, String), Vec<&VulnFinding>> = BTreeMap::new();
-    for v in &report.vulnerabilities {
+    for v in &per_package {
         // Skip findings whose every occurrence is already patched — nothing to do.
         if vuln_occ_count(v) == 0 {
             continue;
@@ -199,27 +206,39 @@ pub fn remediations(report: &FleetReport) -> Vec<RemediationItem> {
         // Never suggest a downgrade: the bump must clear the advisory *and* land at
         // or above the newest version any repo already has (an advisory's safe set
         // can include a lower line — smallvec's >=0.6.14 alongside >=1.6.1). The
-        // batched target is the max of each advisory's forward fix; it's a single
-        // valid bump only if every advisory's safe set actually contains it, else
-        // the ranges conflict and we split per-advisory.
+        // batched target starts at the max of each advisory's forward fix; when a
+        // later branch re-introduces one of them there (grpc 1.83.1 fixes one advisory
+        // while 1.83.0-1.83.1 carry another), it moves up to the next fix floor that
+        // every advisory's safe set contains (1.83.2). When none does, the ranges
+        // conflict and we split per-advisory.
         let group_lb = fixable
             .iter()
             .flat_map(|f| installed_versions(f))
             .max()
             .unwrap_or(Version::new(0, 0, 0));
-        let candidate = match fixable
+        let Some(start) = fixable
             .iter()
             .filter_map(|f| finding_target(&finding_patched(f), &group_lb))
             .max()
-        {
-            Some(c) => c,
-            None => continue, // unreachable given the partition, but never panic
+        else {
+            continue; // unreachable given the partition, but never panic
         };
-        let compatible = fixable
+        let mut floors: Vec<Version> = fixable
             .iter()
-            .all(|f| satisfied_by(&finding_patched(f), &candidate));
-
-        if compatible {
+            .flat_map(|f| {
+                finding_patched(f)
+                    .iter()
+                    .filter_map(req_floor)
+                    .collect::<Vec<_>>()
+            })
+            .filter(|v| *v >= start)
+            .collect();
+        floors.sort();
+        floors.dedup();
+        let common = floors
+            .into_iter()
+            .find(|v| fixable.iter().all(|f| satisfied_by(&finding_patched(f), v)));
+        if let Some(candidate) = common {
             let action = upgrade_action(&fixable, &candidate);
             items.push(build(&fixable, action));
         } else {
@@ -521,6 +540,34 @@ fn finding_target(patched: &[VersionReq], lb: &Version) -> Option<Version> {
 /// Whether a version lands in a finding's safe set (matches any patched req).
 fn satisfied_by(patched: &[VersionReq], v: &Version) -> bool {
     patched.iter().any(|r| r.matches(v))
+}
+
+/// One finding per package it names, each holding only that package's occurrences.
+fn split_by_package(f: &VulnFinding) -> Vec<VulnFinding> {
+    let mut by_package: BTreeMap<String, Vec<Occurrence>> = BTreeMap::new();
+    for o in &f.occurrences {
+        by_package
+            .entry(occurrence_package(o).to_string())
+            .or_default()
+            .push(o.clone());
+    }
+    if by_package.len() <= 1 {
+        return vec![f.clone()];
+    }
+    by_package
+        .into_values()
+        .map(|occurrences| VulnFinding {
+            occurrences,
+            ..f.clone()
+        })
+        .collect()
+}
+
+fn occurrence_package(o: &Occurrence) -> &str {
+    match o {
+        Occurrence::InRepo { package, .. } => package,
+        Occurrence::Toolchain { channel, .. } => channel,
+    }
 }
 
 /// The target package key for a finding: the crate name, or a toolchain channel.
@@ -929,6 +976,108 @@ mod tests {
         )]);
         r.package_versions = vec![fleet("foo", versions)];
         remediations(&r).remove(0)
+    }
+
+    #[test]
+    fn a_batch_skips_a_fix_a_later_branch_breaks_again() {
+        // caddy 2.6 on grpc 1.46.0: 1.83.1 fixes GO-2026-6348, but GO-2026-6443 is back in
+        // 1.83.0-1.83.1, so the one bump that clears all of them is 1.83.2.
+        let r = report_of(vec![
+            vuln(
+                "GO-2023-2153",
+                Severity::High,
+                vec![in_repo(
+                    "caddy",
+                    "grpc",
+                    "1.46.0",
+                    &[">=1.56.3, <1.57.0", ">=1.58.3"],
+                )],
+            ),
+            vuln(
+                "GO-2026-6348",
+                Severity::High,
+                vec![in_repo("caddy", "grpc", "1.46.0", &[">=1.83.1"])],
+            ),
+            vuln(
+                "GO-2026-6443",
+                Severity::High,
+                vec![in_repo(
+                    "caddy",
+                    "grpc",
+                    "1.46.0",
+                    &[">=1.82.2, <1.83.0", ">=1.83.2, <1.84.0"],
+                )],
+            ),
+        ]);
+        let items = remediations(&r);
+        assert_eq!(items.len(), 1, "{items:?}");
+        assert_eq!(
+            items[0].action,
+            Action::Upgrade {
+                to: Version::new(1, 83, 2),
+                breaking: false
+            }
+        );
+    }
+
+    #[test]
+    fn a_batch_never_lands_below_an_advisorys_own_fix() {
+        // js-yaml across gitea (3.14.1, 4.1.0) and elysia (4.1.1): GHSA-mh29 is fixed in
+        // 4.1.1, GHSA-2883 only in 4.3.2. The 3.x occurrence's safe set includes its own line,
+        // so it must not let 4.1.1 pass for the batch.
+        let r = report_of(vec![
+            vuln(
+                "GHSA-2883",
+                Severity::High,
+                vec![
+                    in_repo("gitea", "js-yaml", "3.14.1", &[">=3.15.2"]),
+                    in_repo("gitea", "js-yaml", "4.1.0", &[">=4.3.2"]),
+                    in_repo("elysia", "js-yaml", "4.1.1", &[">=4.3.2"]),
+                ],
+            ),
+            vuln(
+                "GHSA-mh29",
+                Severity::High,
+                vec![
+                    in_repo("gitea", "js-yaml", "3.14.1", &[">=3.14.2"]),
+                    in_repo("gitea", "js-yaml", "4.1.0", &[">=4.1.1"]),
+                ],
+            ),
+        ]);
+        let items = remediations(&r);
+        assert_eq!(items.len(), 1, "{items:?}");
+        assert_eq!(
+            items[0].action,
+            Action::Upgrade {
+                to: Version::new(4, 3, 2),
+                breaking: false
+            }
+        );
+    }
+
+    #[test]
+    fn an_advisory_naming_two_packages_gets_a_bump_for_each() {
+        // gitea 1.17: GHSA-968p-4wvh-cqc8 names @babel/helpers and @babel/runtime.
+        let r = report_of(vec![vuln(
+            "GHSA-968p",
+            Severity::Medium,
+            vec![
+                in_repo("app", "helpers", "7.18.0", &[">=7.26.10"]),
+                in_repo("app", "runtime", "7.18.3", &[">=7.26.10"]),
+            ],
+        )]);
+        let items = remediations(&r);
+        let got: Vec<(&str, &[Version])> = items
+            .iter()
+            .map(|i| (i.package.as_str(), i.current.as_slice()))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("helpers", &[Version::new(7, 18, 0)][..]),
+                ("runtime", &[Version::new(7, 18, 3)][..])
+            ]
+        );
     }
 
     #[test]

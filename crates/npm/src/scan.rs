@@ -150,14 +150,15 @@ fn match_advisory(
     dependency_path: &[String],
     repo: &RepoId,
 ) -> Option<VulnFinding> {
-    let Match::Affected { fixed } = affected_fixed(version, &adv.ranges) else {
+    let Match::Affected { .. } = affected_fixed(version, &adv.ranges) else {
         return None;
     };
-    let patched: Vec<VersionReq> = fixed
-        .as_ref()
-        .and_then(|f| VersionReq::parse(&format!(">={f}")).ok())
-        .into_iter()
-        .collect();
+    // Every safe interval above the installed version, so a fix that a later release
+    // branch re-breaks is never taken for safe.
+    let patched: Vec<VersionReq> = fleetreach_core::osv::patched_reqs(
+        &fleetreach_core::osv::safe_intervals(version, &adv.ranges),
+        ToString::to_string,
+    );
 
     Some(
         TierCFinding {

@@ -14,7 +14,7 @@ use fleetreach_report::{sanitize_cell, to_cyclonedx, to_cyclonedx_with_vulns, to
 
 use crate::cli::fail;
 use crate::config::Config;
-use crate::inventory::repo_inventory;
+use crate::inventory::repo_inventory_with;
 use crate::sources;
 
 #[derive(Args)]
@@ -41,6 +41,8 @@ pub struct SbomArgs {
     /// ecosystem, name and version to deps.dev (Google); answers are cached locally
     #[arg(long)]
     fetch_licenses: bool,
+    #[command(flatten)]
+    maven: crate::maven_repo::FetchArgs,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -84,8 +86,12 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
         eprintln!("error: {repo}: {reason}");
         incomplete += 1;
     }
+    let maven = match args.maven.remote(!args.quiet) {
+        Ok(remote) => remote,
+        Err(e) => return fail(&e),
+    };
     for repo in &config.repos {
-        let mut inv = repo_inventory(repo);
+        let mut inv = repo_inventory_with(repo, maven.as_ref());
         crate::licenses::annotate(&mut inv, &repo.path);
         if args.fetch_licenses {
             match crate::licenses::fetch_missing(std::slice::from_mut(&mut inv)) {

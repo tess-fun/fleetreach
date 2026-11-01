@@ -14,6 +14,46 @@ use fleetreach_maven::{LocalRepositories, PomSource};
 
 const CENTRAL: &str = "https://repo.maven.apache.org/maven2";
 
+/// `--maven-fetch` and `--maven-settings`, shared by the commands that resolve `pom.xml`.
+#[derive(clap::Args, Debug, Default, Clone)]
+pub struct FetchArgs {
+    #[arg(
+        long,
+        help = "resolve pom.xml with POMs fetched when they are not in ~/.m2, from the mirror of Maven Central that settings.xml names, else Maven Central (sends each artifact's coordinates there); without it, only local repositories are used"
+    )]
+    pub maven_fetch: bool,
+    #[arg(
+        long,
+        value_name = "FILE",
+        requires = "maven_fetch",
+        help = "the Maven settings.xml whose mirror --maven-fetch uses (default: ~/.m2/settings.xml when present)"
+    )]
+    pub maven_settings: Option<PathBuf>,
+}
+
+impl FetchArgs {
+    /// The remote to fetch from, read once, or `None` without `--maven-fetch`. A mirror that
+    /// is configured but unusable is an error rather than a fallback to Maven Central.
+    ///
+    /// # Errors
+    ///
+    /// As [`Remote::configured`], prefixed with the flag.
+    pub fn remote(&self, verbose: bool) -> Result<Option<Remote>, String> {
+        if !self.maven_fetch {
+            return Ok(None);
+        }
+        let remote = Remote::configured(self.maven_settings.as_deref())
+            .map_err(|e| format!("--maven-fetch: {e}"))?;
+        if verbose {
+            match &remote.mirror {
+                Some(id) => eprintln!("maven: fetching through mirror `{id}` ({})", remote.host()),
+                None => eprintln!("maven: fetching from Maven Central"),
+            }
+        }
+        Ok(Some(remote))
+    }
+}
+
 /// The local repositories, in lookup order.
 pub fn local() -> LocalRepositories {
     let mut roots = Vec::new();

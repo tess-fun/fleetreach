@@ -513,6 +513,87 @@ fn sbom_writes_one_deterministic_cyclonedx_bom_per_repo() {
 }
 
 #[test]
+fn sbom_resolves_a_pom_like_scan_does() {
+    let tmp = std::env::temp_dir().join(format!("fleetreach-sbom-pom-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    let pom = |group: &str, artifact: &str, version: &str, deps: &str| {
+        format!(
+            "<project><modelVersion>4.0.0</modelVersion><groupId>{group}</groupId>\
+             <artifactId>{artifact}</artifactId><version>{version}</version>\
+             <dependencies>{deps}</dependencies></project>"
+        )
+    };
+    let dep = |group: &str, artifact: &str, version: &str| {
+        format!(
+            "<dependency><groupId>{group}</groupId><artifactId>{artifact}</artifactId>\
+             <version>{version}</version></dependency>"
+        )
+    };
+    let write = |rel: &str, text: String| {
+        let path = tmp.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    };
+    write(
+        "app/pom.xml",
+        pom("com.acme", "app", "1.0", &dep("com.example", "lib", "1.0")),
+    );
+    write(
+        "m2/com/example/lib/1.0/lib-1.0.pom",
+        pom(
+            "com.example",
+            "lib",
+            "1.0",
+            &dep("com.example", "core", "2.0"),
+        ),
+    );
+    write(
+        "m2/com/example/core/2.0/core-2.0.pom",
+        pom("com.example", "core", "2.0", ""),
+    );
+    write(
+        "fleet.toml",
+        "[[repo]]\nid = \"app\"\npath = \"app\"\n".to_string(),
+    );
+    let out_dir = tmp.join("boms");
+    let out = run_env(
+        &[
+            "sbom",
+            "-q",
+            "-c",
+            tmp.join("fleet.toml").to_str().unwrap(),
+            "-o",
+            out_dir.to_str().unwrap(),
+        ],
+        &[
+            ("MAVEN_REPO_LOCAL", tmp.join("m2").as_os_str()),
+            ("HOME", tmp.as_os_str()),
+        ],
+    );
+    assert_eq!(code(&out), 0, "stderr: {}", stderr(&out));
+    let bom: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(out_dir.join("app.cdx.json")).unwrap())
+            .unwrap();
+    let purls: Vec<&str> = bom["components"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["purl"].as_str().unwrap())
+        .collect();
+    // The transitive dependency comes from the resolved tree, as in `scan`, not only the
+    // declared one.
+    assert_eq!(
+        purls,
+        vec![
+            "pkg:maven/com.example/core@2.0",
+            "pkg:maven/com.example/lib@1.0"
+        ],
+        "{bom}"
+    );
+    assert_eq!(bom["compositions"][0]["aggregate"], "complete", "{bom}");
+}
+
+#[test]
 fn sbom_embeds_a_saved_scans_findings_in_both_formats() {
     let tmp = std::env::temp_dir().join(format!("fleetreach-sbom-vulns-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
@@ -3033,6 +3114,7 @@ fn fix_apply_bumps_a_go_module_with_go_get() {
         &go,
         r#"#!/bin/sh
 echo "$* GOTOOLCHAIN=$GOTOOLCHAIN GOWORK=$GOWORK GOFLAGS=$GOFLAGS" >> "$FAKE_GO_LOG"
+[ "$1" = "list" ] && exit 0
 [ "$1" = "get" ] || exit 1
 mod="${2%@v*}"; ver="${2##*@v}"
 sed -e "s#^\([[:space:]]*\)$mod v[^[:space:]]*#\1$mod v$ver#" -e 's#^go 1\.21$#go 1.25.0#' \
@@ -3117,7 +3199,8 @@ sed -e "s#^\([[:space:]]*\)$mod v[^[:space:]]*#\1$mod v$ver#" -e 's#^go 1\.21$#g
     let calls = std::fs::read_to_string(&log).unwrap();
     assert_eq!(
         calls.trim(),
-        "get example.com/vuln@v1.2.0 GOTOOLCHAIN=local GOWORK=off GOFLAGS=-mod=mod"
+        "get example.com/vuln@v1.2.0 GOTOOLCHAIN=local GOWORK=off GOFLAGS=-mod=mod\n\
+         list -deps -test ./... GOTOOLCHAIN=local GOWORK=off GOFLAGS=-mod=mod"
     );
     let branch = vuln["branch"].as_str().unwrap();
     let fixed = git_in(&repo, &["show", &format!("{branch}:go.mod")]);

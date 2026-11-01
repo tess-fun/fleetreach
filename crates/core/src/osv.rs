@@ -136,6 +136,79 @@ pub fn affected_fixed_parsed<V: Ord + Clone>(
     Match::NotAffected
 }
 
+/// The versions above `version` that no range leaves affected, as `[from, until)` pairs: each
+/// starts at a `fixed` bound that every range leaves safe and runs up to the next bound where
+/// some range is affected again (`None` = never). Every range counts, not only the one that
+/// matched: a branch fixed per release (grpc's GO-2026-6443: fixed 1.82.2, re-introduced
+/// 1.83.0, fixed 1.83.2) or a record with one `affected` entry per line (js-yaml's
+/// GHSA-2883: 3.x fixed in 3.15.2, 4.x in 4.3.2) is not safe from its first fix on, and a bare
+/// `>=fix` would let a planner pick 1.83.1 or 4.1.1. Empty when `version` is not affected or
+/// no fix is published.
+pub fn safe_intervals<V: Ord + Clone>(
+    version: &V,
+    ranges: &[ParsedRange<V>],
+) -> Vec<(V, Option<V>)> {
+    let affected = |v: &V| {
+        matches!(
+            affected_fixed_parsed(v, ranges, |v, b| v >= b),
+            Match::Affected { .. }
+        )
+    };
+    if !affected(version) {
+        return Vec::new();
+    }
+    // Every bound above `version`, in order; `true` when some range is fixed there.
+    let mut bounds: BTreeMap<&V, bool> = BTreeMap::new();
+    for range in ranges.iter().filter(|r| r.matchable) {
+        for e in &range.events {
+            if let Some(ParsedBound::Version(v)) = &e.introduced {
+                bounds.entry(v).or_insert(false);
+            }
+            if let Some(v) = &e.fixed {
+                bounds.insert(v, true);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    let mut open: Option<&V> = None;
+    for (v, is_fixed) in bounds.range::<V, _>((
+        std::ops::Bound::Excluded(version),
+        std::ops::Bound::Unbounded,
+    )) {
+        match open {
+            None if *is_fixed && !affected(v) => open = Some(v),
+            Some(from) if affected(v) => {
+                out.push((from.clone(), Some((*v).clone())));
+                open = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(from) = open {
+        out.push((from.clone(), None));
+    }
+    out
+}
+
+/// The safe intervals as the model's SemVer requirements (`>=from, <until`), with `show`
+/// rendering a version in SemVer form. An interval whose bounds do not form a valid SemVer
+/// requirement keeps its lower bound alone, as before.
+pub fn patched_reqs<V>(
+    intervals: &[(V, Option<V>)],
+    show: impl Fn(&V) -> String,
+) -> Vec<semver::VersionReq> {
+    intervals
+        .iter()
+        .filter_map(|(from, until)| {
+            let lower = format!(">={}", show(from));
+            until
+                .as_ref()
+                .and_then(|u| semver::VersionReq::parse(&format!("{lower}, <{}", show(u))).ok())
+                .or_else(|| semver::VersionReq::parse(&lower).ok())
+        })
+        .collect()
+}
+
 /// Whether an installed version is covered by an advisory's ranges. Generic over the
 /// version type `V` so it carries back a SemVer or PEP 440 fix verbatim.
 #[derive(Debug, PartialEq, Eq)]
@@ -436,8 +509,10 @@ fn merge<V>(per_file: Vec<Vec<(String, Advisory<V>)>>) -> BTreeMap<String, Vec<A
     by_package
 }
 
-/// The `(normalized name, advisory)` pairs one OSV record contributes: one per `affected[]`
-/// entry whose `package.ecosystem` matches [`Spec::ecosystem`]. Bounds and versions are
+/// The `(normalized name, advisory)` pairs one OSV record contributes: one per package among
+/// its `affected[]` entries whose `package.ecosystem` matches [`Spec::ecosystem`], with the
+/// ranges and versions of every entry for that package (GHSA writes one entry per release
+/// line, and the safe versions of one line depend on the others). Bounds and versions are
 /// parsed once here. Exposed for feeder unit tests.
 pub fn advisories_from<V>(osv: OsvRecord, spec: &Spec<V>) -> Vec<(String, Advisory<V>)>
 where
@@ -451,7 +526,8 @@ where
     }
     let (severity, cvss_score) = (spec.severity)(&osv);
     let cvss_vector = cvss_vector_of(&osv);
-    osv.affected
+    let entries: Vec<(String, Advisory<V>)> = osv
+        .affected
         .iter()
         .filter(|a| a.package.ecosystem.as_deref() == Some(spec.ecosystem))
         .filter_map(|affected| {
@@ -501,7 +577,20 @@ where
                 },
             ))
         })
-        .collect()
+        .collect();
+    let mut merged: Vec<(String, Advisory<V>)> = Vec::new();
+    for (name, adv) in entries {
+        match merged.iter_mut().find(|(n, _)| *n == name) {
+            Some((_, into)) => {
+                into.ranges.extend(adv.ranges);
+                into.versions.extend(adv.versions);
+                into.versions.sort();
+                into.versions.dedup();
+            }
+            None => merged.push((name, adv)),
+        }
+    }
+    merged
 }
 
 /// The record's CVSS vector: the first `CVSS_V3` entry, else the first `CVSS_V4`.
@@ -896,6 +985,69 @@ mod tests {
 
     fn v(s: &str) -> Version {
         Version::parse(s).unwrap()
+    }
+
+    fn parsed(events: &[(&str, &str)]) -> Vec<ParsedRange<Version>> {
+        let range = Range {
+            matchable: true,
+            events: events
+                .iter()
+                .map(|(k, val)| Event {
+                    introduced: (*k == "introduced").then(|| val.to_string()),
+                    fixed: (*k == "fixed").then(|| val.to_string()),
+                    last_affected: (*k == "last_affected").then(|| val.to_string()),
+                })
+                .collect(),
+        };
+        vec![parse_range(&range, |raw| {
+            if raw == "0" {
+                Some(Version::new(0, 0, 0))
+            } else {
+                Version::parse(raw).ok()
+            }
+        })]
+    }
+
+    #[test]
+    fn safe_intervals_stop_where_a_later_branch_reintroduces_the_bug() {
+        // grpc GO-2026-6443: fixed 1.82.2, re-introduced 1.83.0, fixed 1.83.2.
+        let r = parsed(&[
+            ("introduced", "0"),
+            ("fixed", "1.82.2"),
+            ("introduced", "1.83.0"),
+            ("fixed", "1.83.2"),
+        ]);
+        let safe = safe_intervals(&v("1.46.0"), &r);
+        assert_eq!(
+            safe,
+            [(v("1.82.2"), Some(v("1.83.0"))), (v("1.83.2"), None)]
+        );
+        let reqs = patched_reqs(&safe, ToString::to_string);
+        let ok = |s: &str| reqs.iter().any(|r| r.matches(&v(s)));
+        assert!(ok("1.82.5") && ok("1.83.2") && ok("1.90.0"));
+        assert!(!ok("1.83.1"), "re-introduced");
+        // From inside the second interval only the later fix is safe.
+        assert_eq!(safe_intervals(&v("1.83.0"), &r), [(v("1.83.2"), None)]);
+        // Not affected, or no fix: nothing.
+        assert!(safe_intervals(&v("1.82.3"), &r).is_empty());
+        let open = parsed(&[("introduced", "0"), ("last_affected", "2.0.0")]);
+        assert!(safe_intervals(&v("1.0.0"), &open).is_empty());
+    }
+
+    #[test]
+    fn safe_intervals_see_every_range_not_only_the_matching_one() {
+        // js-yaml GHSA-2883: one range per line, 3.x fixed in 3.15.2 and 4.x in 4.3.2.
+        let mut r = parsed(&[("introduced", "4.0.0"), ("fixed", "4.3.2")]);
+        r.extend(parsed(&[("introduced", "3.0.0"), ("fixed", "3.15.2")]));
+        assert_eq!(
+            safe_intervals(&v("3.14.1"), &r),
+            [(v("3.15.2"), Some(v("4.0.0"))), (v("4.3.2"), None)]
+        );
+        assert_eq!(safe_intervals(&v("4.1.0"), &r), [(v("4.3.2"), None)]);
+        // A fix inside another range's affected span is not a safe start.
+        let mut r = parsed(&[("introduced", "0"), ("fixed", "2.0.0")]);
+        r.extend(parsed(&[("introduced", "1.5.0"), ("fixed", "2.1.0")]));
+        assert_eq!(safe_intervals(&v("1.0.0"), &r), [(v("2.1.0"), None)]);
     }
 
     // Plain-SemVer bounds, the simplest instantiation (the npm shape).

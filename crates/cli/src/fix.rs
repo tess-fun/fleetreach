@@ -1002,13 +1002,20 @@ pub(crate) fn run(cmd: &mut Command) -> Result<String, String> {
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
+        // The first few lines: tools such as uv wrap one error over several, framed with
+        // box-drawing characters.
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(stderr
+        let lines: Vec<&str> = stderr
             .lines()
-            .map(str::trim)
-            .find(|l| !l.is_empty())
-            .unwrap_or("failed")
-            .to_string())
+            .map(|l| l.trim_start_matches(['×', '│', '╰', '─', '▶', ' ']).trim())
+            .filter(|l| !l.is_empty())
+            .take(3)
+            .collect();
+        Err(if lines.is_empty() {
+            "failed".to_string()
+        } else {
+            lines.join(" ")
+        })
     }
 }
 
@@ -1117,8 +1124,9 @@ fn npm_bump(work: &Path, edit: &Edit) -> Result<String, String> {
     ))
 }
 
-/// `go get <module>@v<to>` in every module whose `go.mod` requires the module. Go resolves
-/// and downloads module sources but never runs their code; `GOTOOLCHAIN=local` stops a
+/// `go get <module>@v<to>` in every module whose `go.mod` requires the module, then
+/// `go list` to record the checksums the build needs. Go resolves and downloads module
+/// sources but never runs their code; `GOTOOLCHAIN=local` stops a
 /// `toolchain` line from fetching another Go, and `GOWORK=off` keeps the edit to that module.
 fn go_bump(work: &Path, edit: &Edit) -> Result<String, String> {
     let needle = format!("{} v", edit.package);
@@ -1140,6 +1148,16 @@ fn go_bump(work: &Path, edit: &Edit) -> Result<String, String> {
             .env("GOFLAGS", "-mod=mod")
             .args(["get", &target]))
         .map_err(|e| format!("go get {target}: {e}"))?;
+        // `go get` records the module graph, not the checksums of packages the new versions
+        // import: without them the branch fails to build ("missing go.sum entry"). Listing the
+        // build's packages adds them; it compiles nothing.
+        run(Command::new("go")
+            .current_dir(dir)
+            .env("GOTOOLCHAIN", "local")
+            .env("GOWORK", "off")
+            .env("GOFLAGS", "-mod=mod")
+            .args(["list", "-deps", "-test", "./..."]))
+        .map_err(|e| format!("go list after go get {target}: {e}"))?;
         // A newer module can require a newer Go, and `go get` raises the directive to match:
         // a real change for whoever builds the module, so it is named.
         let after = go_directive(&dir.join("go.mod"));
@@ -1193,7 +1211,15 @@ fn uv_bump(work: &Path, edit: &Edit) -> Result<String, String> {
             "--upgrade-package",
             &spec,
         ]))
-        .map_err(|e| format!("uv lock --upgrade-package {spec}: {e}"))?;
+        .map_err(|e| {
+            let hint = if e.contains("is disabled") {
+                " (resolving needs a source build, such as a workspace member with dynamic \
+                 metadata; fix apply never builds, since that runs package code)"
+            } else {
+                ""
+            };
+            format!("uv lock --upgrade-package {spec}: {e}{hint}")
+        })?;
     }
     Ok(format!(
         "uv lock --upgrade-package {spec} in {} dir(s)",
@@ -1373,9 +1399,17 @@ fn verify(edit: &Edit, before: &Scanned, after: &Scanned) -> Result<(), String> 
     if !left.is_empty() {
         return Err(format!("still present: {}", left.join(", ")));
     }
+    // New means an advisory the package did not have before. An open advisory on a package
+    // whose version moved (a transitive bump with no fix yet) is the same finding.
+    let had: BTreeSet<(&str, &str)> = before
+        .findings
+        .iter()
+        .map(|f| (f.0.as_str(), f.1.as_str()))
+        .collect();
     let new: Vec<String> = after
         .findings
-        .difference(&before.findings)
+        .iter()
+        .filter(|f| !had.contains(&(f.0.as_str(), f.1.as_str())))
         .map(|f| format!("{} {}@{}", f.0, f.1, f.2))
         .collect();
     if !new.is_empty() {
@@ -1600,6 +1634,8 @@ mod tests {
         )
         .unwrap_err();
         assert!(new.contains("new findings: RUSTSEC-7"), "{new}");
+        // An unfixed advisory on a package whose version moved is not new.
+        assert!(verify(&edit(), &before, &scanned(&[("RUSTSEC-9", "bar", "2.0.1")])).is_ok());
         let mut errored = scanned(&[]);
         errored.errored = true;
         assert!(verify(&edit(), &before, &errored).is_err());

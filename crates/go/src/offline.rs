@@ -233,8 +233,9 @@ pub fn scan_offline(
             }
         }
     }
-    out.sort_by(|a, b| a.advisory_id.cmp(&b.advisory_id));
-    out.dedup_by(|a, b| a.advisory_id == b.advisory_id);
+    // One finding per (advisory, module, version): an advisory naming several modules (pgx/v4
+    // and pgproto3/v2) needs each of them fixed.
+    osv::sort_dedup_findings(&mut out);
     Ok(out)
 }
 
@@ -249,18 +250,34 @@ fn match_module(
     direct: &std::collections::BTreeSet<String>,
     repo: &RepoId,
 ) -> Option<VulnFinding> {
-    let affected = osv.affected.iter().find(|a| {
-        a.package.ecosystem.as_deref() == Some("Go") && a.package.name.as_deref() == Some(module)
-    })?;
+    // A record can list a module in several entries, one per release line (go-redis/v9 in
+    // GO-2025-3540): the version is affected when any of them says so.
+    let entries: Vec<&Affected> = osv
+        .affected
+        .iter()
+        .filter(|a| {
+            a.package.ecosystem.as_deref() == Some("Go")
+                && a.package.name.as_deref() == Some(module)
+        })
+        .collect();
+    if entries.is_empty() {
+        return None;
+    }
+    let ranges: Vec<osv::Range> = entries.iter().flat_map(|a| osv_ranges(&a.ranges)).collect();
 
-    let Match::Affected { fixed } = affected_fixed(installed, &affected.ranges) else {
+    let Match::Affected { .. } = affected_fixed(installed, &ranges) else {
         return None;
     };
-    let patched: Vec<VersionReq> = fixed
-        .as_ref()
-        .and_then(|f| VersionReq::parse(&format!(">={f}")).ok())
-        .into_iter()
+    // Every safe interval above the installed version, so a fix that a later release branch
+    // re-breaks (grpc GO-2026-6443) is never taken for safe.
+    let parsed: Vec<osv::ParsedRange<Version>> = ranges
+        .iter()
+        .map(|r| osv::parse_range(r, parse_bound))
         .collect();
+    let patched: Vec<VersionReq> = osv::patched_reqs(
+        &osv::safe_intervals(installed, &parsed),
+        ToString::to_string,
+    );
 
     let dependency_kind = dep_kind(direct, declared_path);
 
@@ -284,7 +301,12 @@ fn match_module(
             source: Default::default(),
             scope: Default::default(),
         }],
-        affected_functions: affected.symbols(module),
+        affected_functions: {
+            let mut symbols: Vec<String> = entries.iter().flat_map(|a| a.symbols(module)).collect();
+            symbols.sort();
+            symbols.dedup();
+            symbols
+        },
         reachable: None,
         // Module-level only: no call analysis, so Unknown (never NotReachable). The
         // engine/config tag makes the lower fidelity explicit in the report.
@@ -320,10 +342,15 @@ fn apply_replace(replaces: &[Replace], path: &str, version: &str) -> Option<(Str
 
 /// Evaluate the OSV SEMVER ranges for `version` with Go's bounds (the shared
 /// [`osv::affected_fixed`] skeleton + Go's [`parse_bound`] and the pseudo-version-aware
-/// [`at_or_after_introduced`]). The serde range shape is mapped into the shared
-/// [`osv::Range`] form the matcher consumes.
-fn affected_fixed(version: &Version, ranges: &[Range]) -> Match<Version> {
-    let ranges: Vec<osv::Range> = ranges
+/// [`at_or_after_introduced`]), over ranges already in the shared [`osv::Range`] form (see
+/// [`osv_ranges`]).
+fn affected_fixed(version: &Version, ranges: &[osv::Range]) -> Match<Version> {
+    osv::affected_fixed(version, ranges, parse_bound, at_or_after_introduced)
+}
+
+/// The advisory's ranges in the shared shape; only `SEMVER` ranges are evaluated.
+fn osv_ranges(ranges: &[Range]) -> Vec<osv::Range> {
+    ranges
         .iter()
         .map(|r| osv::Range {
             matchable: r.kind.as_deref() == Some("SEMVER"),
@@ -337,8 +364,7 @@ fn affected_fixed(version: &Version, ranges: &[Range]) -> Match<Version> {
                 })
                 .collect(),
         })
-        .collect();
-    osv::affected_fixed(version, &ranges, parse_bound, at_or_after_introduced)
+        .collect()
 }
 
 /// Parse an OSV range bound. The introduced bound is often the literal `"0"`, which
@@ -362,7 +388,10 @@ fn parse_bound(raw: &str) -> Option<Version> {
 ///   pre-release tag. A plain `version >= bound` would call every pseudo-versioned
 ///   module *not-affected* against `introduced: "0"` and silently miss the vuln. The
 ///   release-tuple compare keeps the lower bound inclusive of pseudo-versions, erring
-///   toward "affected" — the correct bias for a security tool.
+///   toward "affected" — the correct bias for a security tool. (It also flags a
+///   pre-release of the introducing release, such as etcd `3.5.0-alpha.0` against
+///   `introduced: 3.5.0`, which govulncheck does not: a deliberate extra alert rather
+///   than a possible miss.)
 ///
 /// * **Bound is itself a pseudo-version / pre-release** (`introduced:
 ///   0.0.0-20220524220425-…`): every `0.0.0-*` pseudo shares the *same* release tuple
@@ -525,14 +554,23 @@ mod tests {
     fn affected_below_fix_with_patch_reported() {
         let r = ranges(&[("introduced", "0"), ("fixed", "0.3.7")]);
         // 0.3.0 < 0.3.7 -> affected, fix is 0.3.7.
-        assert_eq!(affected_fixed(&v("0.3.0"), &r), affected("0.3.7"));
+        assert_eq!(
+            affected_fixed(&v("0.3.0"), &osv_ranges(&r)),
+            affected("0.3.7")
+        );
     }
 
     #[test]
     fn not_affected_at_or_above_fix() {
         let r = ranges(&[("introduced", "0"), ("fixed", "0.3.7")]);
-        assert_eq!(affected_fixed(&v("0.3.7"), &r), Match::NotAffected);
-        assert_eq!(affected_fixed(&v("1.0.0"), &r), Match::NotAffected);
+        assert_eq!(
+            affected_fixed(&v("0.3.7"), &osv_ranges(&r)),
+            Match::NotAffected
+        );
+        assert_eq!(
+            affected_fixed(&v("1.0.0"), &osv_ranges(&r)),
+            Match::NotAffected
+        );
     }
 
     #[test]
@@ -540,12 +578,12 @@ mod tests {
         // Affected only in [1.2.0, 1.2.5).
         let r = ranges(&[("introduced", "1.2.0"), ("fixed", "1.2.5")]);
         assert_eq!(
-            affected_fixed(&v("1.1.0"), &r),
+            affected_fixed(&v("1.1.0"), &osv_ranges(&r)),
             Match::NotAffected,
             "before introduced"
         );
         assert_eq!(
-            affected_fixed(&v("1.2.3"), &r),
+            affected_fixed(&v("1.2.3"), &osv_ranges(&r)),
             affected("1.2.5"),
             "inside the window"
         );
@@ -560,24 +598,33 @@ mod tests {
             ("introduced", "2.0.0"),
             ("fixed", "2.0.3"),
         ]);
-        assert_eq!(affected_fixed(&v("0.9.0"), &r), affected("1.0.1"));
         assert_eq!(
-            affected_fixed(&v("1.5.0"), &r),
+            affected_fixed(&v("0.9.0"), &osv_ranges(&r)),
+            affected("1.0.1")
+        );
+        assert_eq!(
+            affected_fixed(&v("1.5.0"), &osv_ranges(&r)),
             Match::NotAffected,
             "between windows"
         );
-        assert_eq!(affected_fixed(&v("2.0.1"), &r), affected("2.0.3"));
+        assert_eq!(
+            affected_fixed(&v("2.0.1"), &osv_ranges(&r)),
+            affected("2.0.3")
+        );
     }
 
     #[test]
     fn last_affected_without_fix() {
         let r = ranges(&[("introduced", "1.0.0"), ("last_affected", "1.4.0")]);
         assert_eq!(
-            affected_fixed(&v("1.3.0"), &r),
+            affected_fixed(&v("1.3.0"), &osv_ranges(&r)),
             Match::Affected { fixed: None },
             "affected, no fix named"
         );
-        assert_eq!(affected_fixed(&v("1.5.0"), &r), Match::NotAffected);
+        assert_eq!(
+            affected_fixed(&v("1.5.0"), &osv_ranges(&r)),
+            Match::NotAffected
+        );
     }
 
     #[test]
@@ -587,19 +634,22 @@ mod tests {
         // the vuln. It must be flagged.
         let r = ranges(&[("introduced", "0"), ("fixed", "1.2.5")]);
         assert_eq!(
-            affected_fixed(&v("v0.0.0-20210101000000-abcdef"), &r),
+            affected_fixed(&v("v0.0.0-20210101000000-abcdef"), &osv_ranges(&r)),
             affected("1.2.5"),
             "pseudo-version in [0,1.2.5) must be flagged"
         );
         // A pre-release of the introduced version is included (fail-loud bias).
         let r2 = ranges(&[("introduced", "1.2.0"), ("fixed", "1.2.5")]);
         assert_eq!(
-            affected_fixed(&v("v1.2.0-rc.1"), &r2),
+            affected_fixed(&v("v1.2.0-rc.1"), &osv_ranges(&r2)),
             affected("1.2.5"),
             "1.2.0-rc.1 is at/after introduced 1.2.0"
         );
         // The real fix still clears it (upper bound keeps full SemVer ordering).
-        assert_eq!(affected_fixed(&v("1.2.5"), &r2), Match::NotAffected);
+        assert_eq!(
+            affected_fixed(&v("1.2.5"), &osv_ranges(&r2)),
+            Match::NotAffected
+        );
     }
 
     #[test]
@@ -615,20 +665,20 @@ mod tests {
         ]);
         // 2021 pseudo is BEFORE the 2022 introduced bound -> NOT affected.
         assert_eq!(
-            affected_fixed(&v("v0.0.0-20210520170846-37e1c6afe023"), &r),
+            affected_fixed(&v("v0.0.0-20210520170846-37e1c6afe023"), &osv_ranges(&r)),
             Match::NotAffected,
             "a pseudo-version before the introduced pseudo must not be flagged"
         );
         // A pseudo AFTER introduced and before the fix is affected.
         assert_eq!(
-            affected_fixed(&v("v0.0.0-20220812000000-abcdef000000"), &r),
+            affected_fixed(&v("v0.0.0-20220812000000-abcdef000000"), &osv_ranges(&r)),
             affected("0.1.1-0.20221104162952-702349b0e862"),
             "a pseudo inside the affected window is flagged"
         );
         // The plain `introduced: "0"` case is unchanged: pseudo-versions stay inclusive.
         let zero = ranges(&[("introduced", "0"), ("fixed", "1.2.5")]);
         assert_eq!(
-            affected_fixed(&v("v0.0.0-20210520170846-37e1c6afe023"), &zero),
+            affected_fixed(&v("v0.0.0-20210520170846-37e1c6afe023"), &osv_ranges(&zero)),
             affected("1.2.5"),
             "introduced \"0\" keeps every pseudo-version inclusive (no regression)"
         );
@@ -640,7 +690,7 @@ mod tests {
         // Unparseable `introduced` → treat as affected (fail loud).
         let bad = ranges(&[("introduced", "garbage"), ("fixed", "99.0.0")]);
         assert_eq!(
-            affected_fixed(&v("1.0.0"), &bad),
+            affected_fixed(&v("1.0.0"), &osv_ranges(&bad)),
             affected("99.0.0"),
             "unparseable introduced must be affected, not silently clean"
         );
@@ -653,9 +703,12 @@ mod tests {
                 last_affected: None,
             }],
         }];
-        assert_eq!(affected_fixed(&v("1.5.0"), &no_intro), affected("2.0.0"));
         assert_eq!(
-            affected_fixed(&v("2.0.0"), &no_intro),
+            affected_fixed(&v("1.5.0"), &osv_ranges(&no_intro)),
+            affected("2.0.0")
+        );
+        assert_eq!(
+            affected_fixed(&v("2.0.0"), &osv_ranges(&no_intro)),
             Match::NotAffected,
             "at/above fix is clean"
         );

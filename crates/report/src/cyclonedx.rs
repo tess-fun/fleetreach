@@ -252,20 +252,30 @@ pub(crate) fn bom_vulns<'a>(
 }
 
 /// `1.2` and `1.2.0` are the same release: findings carry SemVer, lockfiles the raw string.
+/// The ecosystems' SemVer forms pad to three segments and keep any further ones as build
+/// metadata, so `1.2.0.0` (PyPI) and `1.2.3.4` (NuGet) are `1.2.0+0` and `1.2.3+4`.
 fn same_version(raw: &str, semver: &str) -> bool {
-    let pad = |v: &str| {
-        let core: Vec<&str> = v.split(['-', '+']).next().unwrap_or(v).split('.').collect();
-        let rest = &v[v.find(['-', '+']).unwrap_or(v.len())..];
-        let mut parts: Vec<String> = core
-            .iter()
-            .map(|p| p.trim_start_matches('v').to_string())
-            .collect();
-        while parts.len() < 3 {
-            parts.push("0".to_string());
-        }
-        format!("{}{rest}", parts.join("."))
+    let v = raw.trim_start_matches('v');
+    let split = v.find(['-', '+']).unwrap_or(v.len());
+    let (core, rest) = v.split_at(split);
+    let (pre, build) = match rest.find('+') {
+        Some(i) => (&rest[..i], &rest[i + 1..]),
+        None => (rest, ""),
     };
-    pad(raw) == semver
+    let mut parts: Vec<&str> = core.split('.').collect();
+    while parts.len() < 3 {
+        parts.push("0");
+    }
+    let extra: Vec<&str> = parts
+        .split_off(3)
+        .into_iter()
+        .chain((!build.is_empty()).then_some(build))
+        .collect();
+    let mut coerced = format!("{}{pre}", parts.join("."));
+    if !extra.is_empty() {
+        coerced = format!("{coerced}+{}", extra.join("."));
+    }
+    coerced == semver
 }
 
 /// The link to an advisory's record.
@@ -575,6 +585,25 @@ mod tests {
             &to_cyclonedx(&inventory(), "1.2.0", Some("2026-10-30T00:00:00Z")).unwrap(),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn raw_versions_match_their_semver_form() {
+        for (raw, semver) in [
+            ("1.2.3", "1.2.3"),
+            ("1.2", "1.2.0"),
+            ("v1.2", "1.2.0"),
+            ("1.2.0.0", "1.2.0+0"),
+            ("1.2.3.4", "1.2.3+4"),
+            ("1.2.3.4.5", "1.2.3+4.5"),
+            ("1.2.3-rc.1", "1.2.3-rc.1"),
+            ("1.2-rc.1", "1.2.0-rc.1"),
+            ("1.2.3.4-beta", "1.2.3-beta+4"),
+        ] {
+            assert!(same_version(raw, semver), "{raw} vs {semver}");
+        }
+        assert!(!same_version("1.2.0.1", "1.2.0+0"));
+        assert!(!same_version("1.2.4", "1.2.3"));
     }
 
     #[test]

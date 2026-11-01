@@ -212,12 +212,15 @@ impl FleetPackage {
 }
 
 /// Every package the fleet's repos read, from the same inventories `sbom` writes.
-pub fn fleet_packages(repos: &[Repo]) -> Vec<FleetPackage> {
+pub fn fleet_packages(
+    repos: &[Repo],
+    maven: Option<&crate::maven_repo::Remote>,
+) -> Vec<FleetPackage> {
     use rayon::prelude::*;
     repos
         .par_iter()
         .flat_map_iter(|repo| {
-            let inv = crate::inventory::repo_inventory(repo);
+            let inv = crate::inventory::repo_inventory_with(repo, maven);
             let id = inv.repo.clone();
             inv.sources
                 .into_iter()
@@ -481,10 +484,17 @@ fn actions(repo_root: &Path, hits: &mut Vec<Hit>) {
 /// # Errors
 ///
 /// When deps.dev lookups are unavailable (no cache directory, no network build).
-pub fn release_age(repos: &[Repo], max_age_secs: i64) -> Result<Vec<WarnFinding>, String> {
+pub fn release_age(
+    repos: &[Repo],
+    max_age_secs: i64,
+    maven: Option<&crate::maven_repo::Remote>,
+) -> Result<Vec<WarnFinding>, String> {
     use crate::depsdev::{infos, system};
     let now = time::OffsetDateTime::now_utc();
-    let inventories: Vec<_> = repos.iter().map(crate::inventory::repo_inventory).collect();
+    let inventories: Vec<_> = repos
+        .iter()
+        .map(|repo| crate::inventory::repo_inventory_with(repo, maven))
+        .collect();
     let mut keys = BTreeSet::new();
     for inv in &inventories {
         for source in &inv.sources {

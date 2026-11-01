@@ -16,7 +16,7 @@ use serde::Serialize;
 
 use crate::cli::fail;
 use crate::config::Config;
-use crate::inventory::repo_inventory;
+use crate::inventory::repo_inventory_with;
 use crate::licenses::{annotate, decide, Category, Decision, Verdict};
 use crate::sources;
 
@@ -40,6 +40,8 @@ pub struct LicensesArgs {
     /// ecosystem, name and version to deps.dev (Google); answers are cached locally
     #[arg(long)]
     fetch: bool,
+    #[command(flatten)]
+    maven: crate::maven_repo::FetchArgs,
 }
 
 #[derive(Serialize)]
@@ -85,11 +87,15 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
         .iter()
         .map(|(repo, why)| format!("{repo}: {why}"))
         .collect();
+    let maven = match args.maven.remote(false) {
+        Ok(remote) => remote,
+        Err(e) => return fail(&e),
+    };
     let mut inventories: Vec<_> = config
         .repos
         .iter()
         .map(|repo| {
-            let mut inv = repo_inventory(repo);
+            let mut inv = repo_inventory_with(repo, maven.as_ref());
             annotate(&mut inv, &repo.path);
             unread.extend(inv.errors.iter().map(|e| format!("{}: {e}", repo.id)));
             inv

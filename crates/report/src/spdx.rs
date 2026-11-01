@@ -212,8 +212,22 @@ pub fn to_spdx(
         namespace_segment(&inventory.repo.0),
         uuid_v8(&digest)
     ));
-    doc["creationInfo"]["created"] = json!(created);
+    doc["creationInfo"]["created"] = json!(whole_seconds(created));
     serde_json::to_string_pretty(&doc)
+}
+
+/// SPDX 2.3 dates are `YYYY-MM-DDThh:mm:ssZ`: validators reject fractional seconds.
+fn whole_seconds(created: &str) -> String {
+    match (created.find('.'), created.strip_suffix('Z')) {
+        (Some(dot), Some(_))
+            if created[dot + 1..created.len() - 1]
+                .bytes()
+                .all(|b| b.is_ascii_digit()) =>
+        {
+            format!("{}Z", &created[..dot])
+        }
+        _ => created.to_string(),
+    }
 }
 
 /// `SPDXRef-Package-<12 hex of the purl's SHA-256>`: stable across runs and package sets.
@@ -274,6 +288,18 @@ mod tests {
 
     fn doc(created: &str) -> Value {
         serde_json::from_str(&to_spdx(&inventory(), None, "1.5.0", created).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn created_has_whole_seconds() {
+        assert_eq!(
+            doc("2026-11-01T04:46:38.175594Z")["creationInfo"]["created"],
+            "2026-11-01T04:46:38Z"
+        );
+        assert_eq!(
+            doc("2026-11-01T04:46:38Z")["creationInfo"]["created"],
+            "2026-11-01T04:46:38Z"
+        );
     }
 
     #[test]

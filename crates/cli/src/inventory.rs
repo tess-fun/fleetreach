@@ -2,7 +2,7 @@
 //! source declares, read with the same repo planning and the same feeder readers as `scan`
 //! (so an SBOM and a scan always see the same sources), but kept whole instead of filtered to
 //! vulnerable packages. Reads lockfiles and manifests only; needs no advisory DB, no
-//! toolchain and no network.
+//! toolchain and no network (Maven POMs are fetched only when the caller passes a remote).
 
 use std::path::Path;
 
@@ -10,11 +10,18 @@ use fleetreach_core::inventory::{Package, RepoInventory, SourceInventory};
 use fleetreach_core::{Coverage, Ecosystem};
 
 use crate::config::Repo;
+use crate::maven_repo::Remote;
 use crate::orchestrate::{discover_lockfiles, plan_repo, ScanUnit};
 
 /// Read every source in `repo`. A source that exists but cannot be read is recorded in
 /// `errors`, never dropped: the caller treats the inventory as incomplete.
 pub fn repo_inventory(repo: &Repo) -> RepoInventory {
+    repo_inventory_with(repo, None)
+}
+
+/// [`repo_inventory`], resolving `pom.xml` with POMs fetched from `maven` when they are not
+/// in a local repository (`--maven-fetch`), as `scan` does.
+pub fn repo_inventory_with(repo: &Repo, maven: Option<&Remote>) -> RepoInventory {
     let plan = plan_repo(repo);
     let mut inv = RepoInventory::new(repo.id.clone());
     inv.errors.extend(
@@ -31,7 +38,7 @@ pub fn repo_inventory(repo: &Repo) -> RepoInventory {
         );
     }
     for unit in &plan.units {
-        match unit_inventory(unit) {
+        match unit_inventory(unit, maven) {
             Ok(sources) => {
                 for mut source in sources {
                     if !unit.rel_dir.is_empty() {
@@ -47,7 +54,7 @@ pub fn repo_inventory(repo: &Repo) -> RepoInventory {
     inv
 }
 
-fn unit_inventory(unit: &ScanUnit) -> Result<Vec<SourceInventory>, String> {
+fn unit_inventory(unit: &ScanUnit, maven: Option<&Remote>) -> Result<Vec<SourceInventory>, String> {
     let dir = unit.repo.path.as_path();
     let one = |source: SourceInventory| Ok(vec![source]);
     match unit.ecosystem {
@@ -163,13 +170,7 @@ fn unit_inventory(unit: &ScanUnit) -> Result<Vec<SourceInventory>, String> {
                     packages,
                 ))
             } else {
-                let text = read(dir, "pom.xml")?;
-                let packages = maven_packages(fleetreach_maven::parse_pom_xml(&text));
-                one(SourceInventory::new(Ecosystem::Maven, "pom.xml", packages).with_gap(
-                    Coverage::DirectOnly,
-                    "pom.xml: declares direct dependencies only; transitive dependencies were not \
-                     resolved",
-                ))
+                one(pom(dir, maven)?)
             }
         }
         Ecosystem::GitHubActions => one(github_actions(dir)?),
@@ -222,6 +223,57 @@ fn git_gems(lock: &str) -> Vec<Package> {
         }
     }
     out
+}
+
+/// A `pom.xml` resolved the way `scan` resolves it (parents, BOMs, mediation) from the local
+/// repositories and `maven`, so the BOM lists what the scan matched. What cannot be resolved
+/// is a partial-coverage note; a POM that cannot be resolved at all falls back to its declared
+/// dependencies, labelled direct-only.
+fn pom(dir: &Path, maven: Option<&Remote>) -> Result<SourceInventory, String> {
+    let local = crate::maven_repo::local();
+    let mut chain: Vec<&dyn fleetreach_maven::PomSource> = vec![&local];
+    if let Some(remote) = maven {
+        chain.push(remote);
+    }
+    let Ok(resolution) = fleetreach_maven::resolve(dir, &fleetreach_maven::Chain(chain)) else {
+        let text = read(dir, "pom.xml")?;
+        let packages = maven_packages(fleetreach_maven::parse_pom_xml(&text));
+        return Ok(
+            SourceInventory::new(Ecosystem::Maven, "pom.xml", packages).with_gap(
+                Coverage::DirectOnly,
+                "pom.xml could not be resolved; only its declared dependencies were read",
+            ),
+        );
+    };
+    let packages = resolution
+        .packages
+        .iter()
+        .map(|p| Package::new(p.name.clone(), p.version.clone(), p.direct, p.dev))
+        .collect();
+    let source =
+        SourceInventory::new(Ecosystem::Maven, "pom.xml", packages).with_graph(&resolution.graph);
+    if resolution.missing.is_empty() {
+        return Ok(source);
+    }
+    let hint = if maven.is_some() {
+        ""
+    } else {
+        "; pass --maven-fetch to fetch missing POMs, or build once so ~/.m2 has them"
+    };
+    Ok(source.with_gap(
+        Coverage::Partial,
+        format!(
+            "pom.xml: {} item(s) not resolved: {}{hint}",
+            resolution.missing.len(),
+            resolution
+                .missing
+                .iter()
+                .take(5)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("; ")
+        ),
+    ))
 }
 
 fn read(dir: &Path, file: &str) -> Result<String, String> {

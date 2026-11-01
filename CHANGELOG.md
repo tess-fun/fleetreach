@@ -89,6 +89,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   chosen with Maven's `mirrorOf` rules, with credentials from the matching `<server>` and
   `${env.NAME}` expansion. A configured mirror that cannot be used (plain HTTP, encrypted
   password, unset variable) stops the scan instead of falling back to Maven Central.
+  `sbom` and `licenses` take `--maven-fetch` and `--maven-settings` too.
 - **Fixes on an older line** (spec 13). Remediation items list `alternatives`: for repos
   still on an older major (or `0.x` minor) than the target, the smallest version on their
   own line that clears their advisories, with what it leaves open and the fleet evidence.
@@ -97,7 +98,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   edits are now marked breaking per repo: a repo on an older line crossing a major is
   breaking even when the fleet's newest version is not.
 - **`fix apply` for Go and uv** (spec 07). Go modules are bumped with `go get
-  <module>@v<to>` (with `GOTOOLCHAIN=local` and `GOWORK=off`) and `uv.lock` with `uv lock
+  <module>@v<to>`, then `go list -deps -test ./...` records the checksums the build needs
+  (both with `GOTOOLCHAIN=local` and `GOWORK=off`), and `uv.lock` with `uv lock
   --upgrade-package <pkg>==<to> --no-build`, so neither runs package code; both are
   verified by the re-scan like Cargo and npm. A raised `go` directive is named in the result,
   the commit and the pull request, which now also say what the update ran.
@@ -107,6 +109,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   vuln.go.dev mirror is needed. `--go-vuln-db=file://` still takes a mirror (or an unzipped
   export). Only `GO-` records are used, so GHSA copies are not double-counted; an export
   with no `GO-` record is an error, not a clean database.
+
+### Fixed
+
+Found by checking each feature against real repos (gitea, caddy, hugo, spring-petclinic,
+elysia, a FastAPI template, pydantic-ai) and independent tools: govulncheck, osv-scanner,
+the osv.dev API, pyspdxtools, and CISA's and CERT/CC's own SSVC data.
+
+- **Go without govulncheck read only a module's first `affected` entry.** 35 Go records list
+  a module once per release line (go-redis/v9 in GO-2025-3540), so a version only a later
+  entry covered was reported clean. Every entry now counts. An advisory naming several
+  modules (GO-2024-2606: pgx/v4 and pgproto3/v2) now reports each of them, not only the
+  first.
+- **Safe versions stop where the bug comes back.** The `patched` versions of a finding, in
+  every OSV ecosystem and Go, ended at the first fix, so a fix that a later release branch
+  re-breaks, or that only covers one of the record's release lines, counted as safe: `fix
+  plan` bumped grpc to 1.83.1, inside GO-2026-6443's re-introduced range, and could batch
+  js-yaml on 4.1.1, which GHSA-2883 still affects. Safe versions now account for every range
+  and every `affected` entry for the package, and a batched bump moves up to the first
+  version safe for all its advisories (grpc 1.83.2, clearing six).
+- **An advisory naming several packages** (`@babel/helpers` and `@babel/runtime`) gets a
+  remediation item for each; one of them used to disappear from the queue.
+- **PyPI bounds with NVD-style suffixes** (`2.6.0-NA`, `2.6.0-cu124`) read as their release,
+  instead of leaving the range open (9 false positives on torch).
+- **SBOM vulnerabilities on four-part versions** (PyPI `1.2.0.0`, NuGet `1.2.3.4`) now point
+  at their component. CycloneDX referenced a component that was not in the BOM, and SPDX
+  left the finding out.
+- **`sbom`, `licenses` and `--signals` read a `pom.xml` the way `scan` does**, resolving
+  parents, BOMs and transitive dependencies, instead of only the declared dependencies:
+  spring-petclinic's SBOM listed 0 packages next to a scan that matched 171.
 
 ## [1.4.0] - 2026-10-31
 

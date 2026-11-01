@@ -101,10 +101,26 @@ pub(crate) fn affected_fixed(version: &Version, ranges: &[ParsedRange<Version>])
     osv::affected_fixed_parsed(version, ranges, |ver, bound| ver >= bound)
 }
 
-/// Parse an OSV range bound. `"0"` (the near-universal lower bound) parses fine as PEP
-/// 440, but is kept explicit for clarity; anything else goes through the PEP 440 parser.
+/// Parse an OSV range bound through the PEP 440 parser. Bounds copied from NVD carry a
+/// non-PEP 440 suffix on the release (`2.6.0-NA`, torch's `2.6.0-cu124`: 16 of the 46
+/// unparseable PyPI bounds on osv.dev in October 2026), which would otherwise leave the range
+/// open-ended and flag every later release (torch 2.13.0 against `last_affected: 2.6.0-cu124`).
+/// Only those two forms are read as their release; any other unparseable bound stays
+/// unparseable, so the range still fails closed.
 pub(crate) fn parse_bound(raw: &str) -> Option<Version> {
-    parse_pypi_version(raw)
+    parse_pypi_version(raw).or_else(|| {
+        let (release, label) = raw.rsplit_once('-')?;
+        let cuda = label
+            .strip_prefix("cu")
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()));
+        let numeric = !release.is_empty()
+            && release
+                .split('.')
+                .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()));
+        (numeric && (label == "NA" || cuda))
+            .then(|| parse_pypi_version(release))
+            .flatten()
+    })
 }
 
 #[cfg(test)]
@@ -163,6 +179,30 @@ mod tests {
         // 1!0.1 (epoch 1) is far above 2.0 (epoch 0): a [0, 2.0) window excludes it.
         let r = ranges(&[("introduced", "0"), ("fixed", "2.0")]);
         assert_eq!(affected_fixed(&v("1!0.1"), &r), Match::NotAffected);
+    }
+
+    #[test]
+    fn nvd_style_bound_suffixes_read_as_their_release() {
+        assert_eq!(parse_bound("2.6.0-NA"), Some(v("2.6.0")));
+        assert_eq!(parse_bound("2.6.0-cu124"), Some(v("2.6.0")));
+        // Anything else stays unparseable (and so fails closed).
+        for raw in [
+            "1.6.5ubuntu0.1",
+            "7.2.0-12.1x",
+            "2024-09-19x",
+            "2.6.0-cu",
+            "-NA",
+            "a.b-NA",
+        ] {
+            assert_eq!(parse_bound(raw), None, "{raw}");
+        }
+        // torch 2.13.0 against PYSEC-2025-189's `last_affected: 2.6.0-cu124`.
+        let r = ranges(&[("introduced", "0"), ("last_affected", "2.6.0-cu124")]);
+        assert_eq!(affected_fixed(&v("2.13.0"), &r), Match::NotAffected);
+        assert!(matches!(
+            affected_fixed(&v("2.5.1"), &r),
+            Match::Affected { .. }
+        ));
     }
 
     #[test]

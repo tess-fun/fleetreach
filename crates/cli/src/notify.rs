@@ -33,6 +33,9 @@ pub const NOTIFY_SCHEMA: &str = "fleetreach-notify/1";
 /// Most findings listed per section of a Slack message or an issue.
 const SLACK_ITEMS: usize = 10;
 const ISSUE_ROWS: usize = 200;
+/// Bytes of rows an issue body may hold: GitHub refuses a body over 65,536 characters, and a
+/// byte count is never below the character count. The rest is headings and the footer.
+const ISSUE_BUDGET: usize = 60_000;
 
 #[derive(Clone, Copy, ValueEnum)]
 pub enum NotifyFormat {
@@ -583,12 +586,19 @@ fn issue_body(campaign: &str, owner: Option<&str>, s: &OwnerState, run: &RunRef)
             "| Advisory | Package | Repo | Severity | {header} |"
         ));
         out.push("|---|---|---|---|---|".to_string());
-        let more = rows.len().saturating_sub(ISSUE_ROWS);
-        out.extend(
-            rows.into_iter()
-                .take(ISSUE_ROWS)
-                .map(|r| format!("| {r} |")),
-        );
+        let mut used: usize = out.iter().map(|l| l.len() + 1).sum();
+        let total = rows.len();
+        let mut shown = 0;
+        for row in rows.into_iter().take(ISSUE_ROWS) {
+            let line = format!("| {row} |");
+            if used + line.len() + 1 > ISSUE_BUDGET {
+                break;
+            }
+            used += line.len() + 1;
+            out.push(line);
+            shown += 1;
+        }
+        let more = total - shown;
         if more > 0 {
             out.push(format!("\n…and {more} more"));
         }
@@ -902,6 +912,48 @@ mod tests {
         let m = marker("q4 --> push", Some("team<a>"));
         assert_eq!(m, "<!-- fleetreach:campaign=q4____push;owner=team_a_ -->");
         assert_eq!(m.matches("-->").count(), 1);
+    }
+
+    #[test]
+    fn a_large_issue_body_stays_under_the_github_limit() {
+        let item = |i: usize| Item {
+            advisory: format!("GO-2026-{i:04}"),
+            ecosystem: Ecosystem::Go,
+            repo: "a-repo-with-a-fairly-long-name".to_string(),
+            package: "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp".to_string(),
+            version: "0.0.0-20220812165438-1d4ff48094d1".to_string(),
+            severity: Severity::High,
+            ssvc: None,
+            first_seen: "2026-08-01T00:00:00Z".to_string(),
+            fixed_at: None,
+            due: Some("2026-08-31T00:00:00Z".to_string()),
+            overdue_days: Some(62.0),
+            url: format!("https://pkg.go.dev/vuln/GO-2026-{i:04}"),
+        };
+        let state = OwnerState {
+            new: Vec::new(),
+            fixed: (0..300).map(item).collect(),
+            breaches: (0..300).map(item).collect(),
+            open: (0..300).map(|i| (item(i), false)).collect(),
+        };
+        let run = RunRef {
+            id: "20261101T000000Z-00000000".to_string(),
+            at: "2026-11-01T00:00:00Z".to_string(),
+            exit_code: 1,
+            gap: false,
+        };
+        let body = issue_body("fleetreach", Some("team-a"), &state, &run);
+        assert!(
+            body.chars().count() <= 65_536,
+            "{} chars",
+            body.chars().count()
+        );
+        assert!(
+            body.contains("### Past SLA (300)"),
+            "the heading counts every row"
+        );
+        assert!(body.contains("more"), "the rows left out are counted");
+        assert!(body.ends_with("are overwritten._"), "the footer survives");
     }
 
     #[test]

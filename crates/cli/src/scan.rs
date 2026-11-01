@@ -63,18 +63,8 @@ pub(crate) struct ScanArgs {
         help = "add supply-chain signals as warnings: install scripts, non-registry sources, unexpected registries, missing checksums, third-party GitHub Actions on movable tags"
     )]
     signals: bool,
-    #[arg(
-        long,
-        help = "resolve pom.xml with POMs fetched when they are not in ~/.m2, from the mirror of Maven Central that settings.xml names, else Maven Central (sends each artifact's coordinates there); without it, only local repositories are used"
-    )]
-    maven_fetch: bool,
-    #[arg(
-        long,
-        value_name = "FILE",
-        requires = "maven_fetch",
-        help = "the Maven settings.xml whose mirror --maven-fetch uses (default: ~/.m2/settings.xml when present)"
-    )]
-    maven_settings: Option<PathBuf>,
+    #[command(flatten)]
+    maven: crate::maven_repo::FetchArgs,
     #[arg(
         long,
         value_name = "DUR",
@@ -610,23 +600,9 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
     };
     // Read once: a mirror that is configured but unusable stops the scan rather than letting
     // POM requests fall back to Maven Central.
-    let maven_remote = if args.maven_fetch {
-        match crate::maven_repo::Remote::configured(args.maven_settings.as_deref()) {
-            Ok(remote) => {
-                if args.verbose {
-                    match &remote.mirror {
-                        Some(id) => {
-                            eprintln!("maven: fetching through mirror `{id}` ({})", remote.host())
-                        }
-                        None => eprintln!("maven: fetching from Maven Central"),
-                    }
-                }
-                Some(remote)
-            }
-            Err(e) => return fail(&format!("--maven-fetch: {e}")),
-        }
-    } else {
-        None
+    let maven_remote = match args.maven.remote(args.verbose) {
+        Ok(remote) => remote,
+        Err(e) => return fail(&e),
     };
     let scan = scan_fleet(
         &db,
@@ -685,7 +661,7 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
     let fleet_packages = args
         .history_dir
         .as_ref()
-        .map(|_| crate::signals::fleet_packages(&config.repos));
+        .map(|_| crate::signals::fleet_packages(&config.repos, maven_remote.as_ref()));
     if let (true, Some(dir), Some(packages)) = (args.signals, &args.history_dir, &fleet_packages) {
         match novelty(dir, packages) {
             Ok(Some(finding)) => scan.warnings.push(finding),
@@ -698,7 +674,7 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             Ok(secs) => secs,
             Err(e) => return fail(&format!("--release-age: {e}")),
         };
-        match crate::signals::release_age(&config.repos, secs) {
+        match crate::signals::release_age(&config.repos, secs, maven_remote.as_ref()) {
             Ok(findings) => scan.warnings.extend(findings),
             Err(e) => return fail(&format!("--release-age: {e}")),
         }

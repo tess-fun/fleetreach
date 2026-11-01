@@ -76,7 +76,7 @@ lock-only update that runs no package code:
 | Cargo | `cargo update -p <pkg>@<from> --precise <to>` in each workspace that locks it |
 | npm | `npm update <pkg> --package-lock-only --ignore-scripts` (the newest version the declared ranges allow) |
 | GitHub Actions | the `uses: <action>@<tag>` reference rewritten to the fixed release tag |
-| Go | `go get <module>@v<to>` in each module whose `go.mod` requires it, with `GOTOOLCHAIN=local` and `GOWORK=off` (Go downloads module sources but never runs them) |
+| Go | `go get <module>@v<to>` in each module whose `go.mod` requires it, then `go list -deps -test ./...` to record the checksums the build needs, with `GOTOOLCHAIN=local` and `GOWORK=off` (Go downloads module sources but never runs them) |
 | PyPI (`uv.lock`) | `uv lock --upgrade-package <pkg>==<to> --no-build` (source builds refused, so no package code runs) |
 
 If the declared version range does not allow the target, the tool refuses and the edit is
@@ -85,7 +85,9 @@ reported `blocked`.
 When a Go update raises the module's `go` directive (a newer module can require a newer Go),
 the result, the commit message and the pull request say so. `poetry.lock`, `Pipfile.lock` and
 requirements files are not updated: Poetry and Pipenv may build source distributions to read
-their metadata, which runs package code. pnpm, yarn, Composer, Bundler, Maven and NuGet are
+their metadata, which runs package code. For the same reason a uv workspace whose members
+compute their metadata at build time (`dynamic = ["version", "dependencies"]` with a VCS
+version plugin) cannot be relocked and is `blocked`, with uv's reason. pnpm, yarn, Composer, Bundler, Maven and NuGet are
 not handled yet. The tool must be on `PATH`; a missing one leaves the edit `blocked` with the
 reason.
 
@@ -93,7 +95,8 @@ reason.
 
 Before and after the update, `fix apply` runs `fleetreach scan` on the work tree with the
 flags given after `--`. The change is **verified** only when every targeted advisory is gone
-for that package, no new finding appeared, and the repo scans without new errors or
+for that package, no new finding appeared (an open advisory on a package whose version moved
+is the same finding, not a new one), and the repo scans without new errors or
 coverage gaps. The commit stays on its branch either way, with a message that says whether
 it was verified; an unverified one is for inspection, not for merging.
 

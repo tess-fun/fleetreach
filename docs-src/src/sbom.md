@@ -27,9 +27,14 @@ official JSON schemas.
   Workspace members and other path dependencies are the project itself and are not listed.
 - **`dependencies`**: the "requires" graph from the lockfiles, rooted at the repo.
 - **`compositions`**: which components come from a complete resolved graph (`complete`)
-  and which from a source read with less than full coverage (`incomplete`: a `pom.xml`, a
-  `.csproj` without restore output, unpinned requirements, a lockfile format fleetreach
-  cannot read). The repo itself is `complete` only when every source was.
+  and which from a source read with less than full coverage (`incomplete`: a `pom.xml`
+  whose POMs could not all be resolved, a `.csproj` without restore output, unpinned
+  requirements, a lockfile format fleetreach cannot read). The repo itself is `complete`
+  only when every source was.
+
+A `pom.xml` is resolved as `scan` resolves it (parents, BOMs, transitive dependencies) from
+the local Maven repositories, so the BOM lists what the scan matched. Add `--maven-fetch`
+(and `--maven-settings FILE`) to fetch the POMs that are not there, as with `scan`.
 
 BOMs are deterministic: components and edges are sorted, and the `serialNumber` is a
 UUID derived from the content. Set `SOURCE_DATE_EPOCH` and two runs over the same
