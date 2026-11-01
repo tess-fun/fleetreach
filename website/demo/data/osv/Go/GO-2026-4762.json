@@ -1,0 +1,62 @@
+{
+ "affected": [
+  {
+   "database_specific": {
+    "source": "https://vuln.go.dev/ID/GO-2026-4762.json"
+   },
+   "ecosystem_specific": {
+    "imports": [
+     {
+      "path": "google.golang.org/grpc",
+      "symbols": [
+       "Server.Serve",
+       "Server.ServeHTTP",
+       "Server.handleStream"
+      ]
+     }
+    ]
+   },
+   "package": {
+    "ecosystem": "Go",
+    "name": "google.golang.org/grpc",
+    "purl": "pkg:golang/google.golang.org/grpc"
+   },
+   "ranges": [
+    {
+     "events": [
+      {
+       "introduced": "0"
+      },
+      {
+       "fixed": "1.79.3"
+      }
+     ],
+     "type": "SEMVER"
+    }
+   ]
+  }
+ ],
+ "aliases": [
+  "CVE-2026-33186",
+  "GHSA-p77j-4mvh-x3m3"
+ ],
+ "database_specific": {
+  "review_status": "REVIEWED",
+  "url": "https://pkg.go.dev/vuln/GO-2026-4762"
+ },
+ "details": "Authorization bypass in gRPC-Go via missing leading slash in :path in google.golang.org/grpc",
+ "id": "GO-2026-4762",
+ "modified": "2026-03-30T17:59:33.960169Z",
+ "published": "2026-03-27T18:39:44Z",
+ "references": [
+  {
+   "type": "ADVISORY",
+   "url": "https://github.com/grpc/grpc-go/security/advisories/GHSA-p77j-4mvh-x3m3"
+  }
+ ],
+ "related": [
+  "CGA-8qwg-3gv7-2fp3"
+ ],
+ "schema_version": "1.7.5",
+ "summary": "Authorization bypass in gRPC-Go via missing leading slash in :path in google.golang.org/grpc"
+}

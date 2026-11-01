@@ -1,0 +1,66 @@
+---
+// Starlight's head plus what search engines and LLM tools read: a markdown copy of the page
+// (written by scripts/postbuild.mjs) and schema.org JSON-LD.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import Default from "@astrojs/starlight/components/Head.astro";
+
+const { entry, id } = Astro.locals.starlightRoute;
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const site = (Astro.site?.toString() ?? "").replace(/\/$/, "");
+const path = id === "" ? "/" : `/${id}/`;
+const url = `${site}${base}${path}`;
+const markdown = `${base}${path}index.md`;
+// The released version, from the workspace manifest, so it never drifts from the crates.
+// Builds run in website/ (npm scripts do), and the bundled page cannot locate itself.
+const cargo = readFileSync(join(process.cwd(), "..", "Cargo.toml"), "utf8");
+const version = cargo.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
+
+const crumbs = id
+  .split("/")
+  .filter(Boolean)
+  .map((part, i, parts) => ({
+    "@type": "ListItem",
+    position: i + 2,
+    name: i === parts.length - 1 ? entry.data.title : part.replace(/-/g, " "),
+    item: `${site}${base}/${parts.slice(0, i + 1).join("/")}/`,
+  }));
+
+const app = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "fleetreach",
+  description: entry.data.description,
+  applicationCategory: "SecurityApplication",
+  operatingSystem: "Linux, macOS",
+  softwareVersion: version,
+  license: "https://github.com/tess-fun/fleetreach#license",
+  codeRepository: "https://github.com/tess-fun/fleetreach",
+  downloadUrl: "https://github.com/tess-fun/fleetreach/releases",
+  url,
+  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+};
+const article = {
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  headline: entry.data.title,
+  description: entry.data.description,
+  url,
+  dateModified: Astro.locals.starlightRoute.lastUpdated?.toISOString(),
+  about: { "@type": "SoftwareApplication", name: "fleetreach" },
+  publisher: { "@type": "Organization", name: "fleetreach", url: `${site}${base}/` },
+};
+const breadcrumbs = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "fleetreach", item: `${site}${base}/` },
+    ...crumbs,
+  ],
+};
+const graph = id === "" ? [app] : [article, breadcrumbs];
+---
+
+<Default />
+{id !== "404" && <link rel="alternate" type="text/markdown" href={markdown} />}
+{id !== "404" && graph.map((item) => <script type="application/ld+json" set:html={JSON.stringify(item)} />)}

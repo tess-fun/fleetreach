@@ -4,8 +4,9 @@ on:
   push:
     branches: [main]
     paths:
-      - "site/**"
-      - "docs-src/**"
+      - "website/**"
+      - "CHANGELOG.md"
+      - "Cargo.toml"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -27,15 +28,23 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      # Build the mdBook docs into site/docs (book.toml sets build-dir = ../site/docs).
-      - name: build docs (mdBook)
+        with:
+          fetch-depth: 0   # "last updated" dates come from git history
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      # The Astro Starlight site: docs, landing page, llms.txt, sitemap. The examples in it
+      # are committed (CI checks them against the binary), so no Rust build is needed here.
+      - name: build website
+        working-directory: website
         run: |
-          curl -sSfL https://github.com/rust-lang/mdBook/releases/download/v0.5.3/mdbook-v0.5.3-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /usr/local/bin mdbook
-          mdbook build docs-src
+          npm ci --ignore-scripts
+          npm run build
       - uses: actions/configure-pages@v5
-      # The landing page (site/index.html) plus the built mdBook docs (site/docs).
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: website/dist
       - id: deployment
         uses: actions/deploy-pages@v4

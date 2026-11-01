@@ -1,0 +1,62 @@
+/* fleetreach brand on top of Starlight: the orange accent and the dark navy of the logo. */
+:root {
+  --sl-color-accent-low: #3a2418;
+  --sl-color-accent: #ff7a45;
+  --sl-color-accent-high: #ffd2bd;
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #eceef2;
+  --sl-color-gray-2: #c0c2c7;
+  --sl-color-gray-3: #888b96;
+  --sl-color-gray-4: #545861;
+  --sl-color-gray-5: #353841;
+  --sl-color-gray-6: #24272f;
+  --sl-color-black: #12161f;
+  --sl-font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+:root[data-theme="light"] {
+  --sl-color-accent-low: #ffe1d3;
+  --sl-color-accent: #c2410c;
+  --sl-color-accent-high: #5a1d05;
+  --sl-color-white: #12161f;
+  --sl-color-gray-1: #24272f;
+  --sl-color-gray-2: #353841;
+  --sl-color-gray-3: #545861;
+  --sl-color-gray-4: #888b96;
+  --sl-color-gray-5: #c0c2c7;
+  --sl-color-gray-6: #eceef2;
+  --sl-color-gray-7: #f5f6f8;
+  --sl-color-black: #ffffff;
+}
+
+/* Terminal output: wide tables scroll inside the block instead of wrapping. */
+.expressive-code pre {
+  white-space: pre;
+}
+
+/* Landing page */
+.fr-lede {
+  font-size: var(--sl-text-xl);
+  color: var(--sl-color-gray-2);
+  max-width: 46rem;
+}
+.fr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.fr-stat {
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+}
+.fr-stat strong {
+  display: block;
+  font-size: var(--sl-text-3xl);
+  color: var(--sl-color-white);
+  line-height: 1.1;
+}
+.fr-stat span {
+  color: var(--sl-color-gray-3);
+  font-size: var(--sl-text-sm);
+}

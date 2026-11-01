@@ -18,7 +18,7 @@ use crate::assemble::{
 use crate::cli::{
     fail, usage_fail, BuildSandbox, Format, OutcomeArg, ReachMode, SeverityArg, VexScopeArg,
 };
-use crate::config::Config;
+use crate::config::{Config, Repo};
 use crate::db::{
     build_provenance, check_db_age, detect_toolchain, fetch_enrichment, load_db_from,
     parse_duration_secs,
@@ -1218,10 +1218,24 @@ fn build_vex_params(
 }
 
 /// `--why`: print every route by which a package enters each repo's dependency
-/// tree. Exits `0` if found anywhere, `2` if it is in no tree.
+/// tree, in every ecosystem. Exits `0` if found anywhere, `2` if it is in no tree.
 fn run_why(config: &Config, package: &str) -> u8 {
+    use fleetreach_report::sanitize_cell;
     let mut found = false;
     for repo in &config.repos {
+        for route in other_routes(repo, package) {
+            found = true;
+            let path: Vec<String> = route.path.iter().map(|s| sanitize_cell(s)).collect();
+            println!(
+                "{} — {} {} ({}, {}):",
+                sanitize_cell(&repo.id.0),
+                sanitize_cell(&route.name),
+                sanitize_cell(&route.version),
+                format!("{:?}", route.ecosystem).to_lowercase(),
+                if route.direct { "direct" } else { "transitive" },
+            );
+            println!("  {}", path.join(" → "));
+        }
         for lockfile in discover_lockfiles(repo).0 {
             match routes_to(&lockfile, package) {
                 Ok(routes) => {
@@ -1230,7 +1244,6 @@ fn run_why(config: &Config, package: &str) -> u8 {
                         let kind = if route.direct { "direct" } else { "transitive" };
                         // package (arg), version + path segments (untrusted lockfile)
                         // are echoed to the terminal; neutralize control sequences.
-                        use fleetreach_report::sanitize_cell;
                         let path: Vec<String> =
                             route.path.iter().map(|s| sanitize_cell(s)).collect();
                         println!(
@@ -1252,4 +1265,55 @@ fn run_why(config: &Config, package: &str) -> u8 {
         eprintln!("`{package}` is not in any repo's dependency tree");
         2
     }
+}
+
+/// One way a non-Cargo package enters a repo, for `--why`.
+struct OtherRoute {
+    ecosystem: Ecosystem,
+    name: String,
+    version: String,
+    direct: bool,
+    path: Vec<String>,
+}
+
+/// `--why` outside Cargo: the package in every other source the repo declares, matched by its
+/// full name or its last segment (`log4j-core` for `org.apache.logging.log4j:log4j-core`,
+/// `grpc` for `google.golang.org/grpc`), case-insensitively, with the shortest chain from the
+/// source's dependency graph. A source without a graph shows the repo and the package alone.
+fn other_routes(repo: &Repo, package: &str) -> Vec<OtherRoute> {
+    use fleetreach_core::depgraph::DepGraph;
+    use fleetreach_core::inventory::ROOT;
+    let wanted = |name: &str| {
+        let last = name.rsplit([':', '/']).next().unwrap_or(name);
+        name.eq_ignore_ascii_case(package) || last.eq_ignore_ascii_case(package)
+    };
+    let inventory = crate::inventory::repo_inventory(repo);
+    for error in &inventory.errors {
+        eprintln!("warning: {}: {error}", repo.id);
+    }
+    let mut routes = Vec::new();
+    for source in &inventory.sources {
+        if source.ecosystem == Ecosystem::Cargo {
+            continue;
+        }
+        let mut graph = DepGraph::new(ROOT);
+        for (from, to) in &source.edges {
+            graph.add_edges(from, [to.as_str()]);
+        }
+        for pkg in source.packages.iter().filter(|p| wanted(&p.name)) {
+            let mut path = graph.chain_to(&pkg.name);
+            if path.is_empty() {
+                path = vec![ROOT.to_string(), pkg.name.clone()];
+            }
+            path[0] = repo.id.0.clone();
+            routes.push(OtherRoute {
+                ecosystem: source.ecosystem,
+                name: pkg.name.clone(),
+                version: pkg.version.clone(),
+                direct: pkg.direct,
+                path,
+            });
+        }
+    }
+    routes
 }

@@ -1,0 +1,12 @@
+[package]
+name = "ledger-svc"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+chrono = "=0.4.19"
+regex = "=1.5.4"
+time = "=0.2.7"
+
+[workspace]

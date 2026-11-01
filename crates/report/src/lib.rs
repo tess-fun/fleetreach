@@ -1747,20 +1747,28 @@ fn dependency_hint(kind: fleetreach_core::DependencyKind, path: &[String]) -> St
 
 /// The title, with a second line naming the specific functions the advisory
 /// scopes itself to (short names) — so you can see at a glance whether to care.
+/// A function path without its module: `regex::Regex::new` → `new`, and for Go, whose symbols
+/// carry the import path, `google.golang.org/grpc/internal/transport.Stream.Read` →
+/// `transport.Stream.Read`.
+fn short_function(path: &str) -> &str {
+    let tail = path.rsplit("::").next().unwrap_or(path);
+    tail.rsplit('/').next().unwrap_or(tail)
+}
+
 fn title_with_functions(v: &VulnFinding) -> String {
     let mut out = truncate(&sanitize_cell(&v.title), 48);
     if !v.affected_functions.is_empty() {
         let names: Vec<String> = v
             .affected_functions
             .iter()
-            .map(|p| sanitize_cell(p.rsplit("::").next().unwrap_or(p.as_str())))
+            .map(|p| sanitize_cell(short_function(p)))
             .collect();
         let shown = if names.len() > 3 {
             format!("{}, +{}", names[..3].join(", "), names.len() - 3)
         } else {
             names.join(", ")
         };
-        out.push_str(&format!("\naffects fn: {shown}"));
+        out.push_str(&format!("\naffects fn: {}", truncate(&shown, 60)));
     }
     out
 }
@@ -1924,6 +1932,21 @@ pub fn sanitize_text(s: &str) -> String {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod function_name_tests {
+    use super::short_function;
+
+    #[test]
+    fn function_names_drop_their_module_path() {
+        assert_eq!(short_function("regex::Regex::new"), "new");
+        assert_eq!(
+            short_function("google.golang.org/grpc/internal/transport.ClientStream.Read"),
+            "transport.ClientStream.Read"
+        );
+        assert_eq!(short_function("plain"), "plain");
+    }
 }
 
 #[cfg(test)]

@@ -60,6 +60,26 @@ jobs:
             (cd "crates/$c" && cargo rdme --check)
           done
 
+  website:
+    name: website (examples, CLI reference, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      # The site's examples are real fleetreach output on website/demo, and the CLI
+      # reference is its --help: both must match what this commit builds.
+      - run: cargo build --release --locked -p fleetreach-cli --features network
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - working-directory: website
+        run: |
+          npm ci --ignore-scripts
+          npm run check
+          npm run build
+
   msrv:
     name: MSRV (1.89)
     runs-on: ubuntu-latest

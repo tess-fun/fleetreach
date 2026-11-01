@@ -1,0 +1,145 @@
+{
+ "affected": [
+  {
+   "database_specific": {
+    "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-5hh8-q8hv-fr38/GHSA-5hh8-q8hv-fr38.json"
+   },
+   "package": {
+    "ecosystem": "Maven",
+    "name": "com.fasterxml.jackson.core:jackson-databind",
+    "purl": "pkg:maven/com.fasterxml.jackson.core/jackson-databind"
+   },
+   "ranges": [
+    {
+     "events": [
+      {
+       "introduced": "2.21.0"
+      },
+      {
+       "fixed": "2.21.4"
+      }
+     ],
+     "type": "ECOSYSTEM"
+    }
+   ],
+   "versions": [
+    "2.21.0",
+    "2.21.1",
+    "2.21.2",
+    "2.21.3"
+   ]
+  },
+  {
+   "database_specific": {
+    "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-5hh8-q8hv-fr38/GHSA-5hh8-q8hv-fr38.json"
+   },
+   "package": {
+    "ecosystem": "Maven",
+    "name": "com.fasterxml.jackson.core:jackson-databind",
+    "purl": "pkg:maven/com.fasterxml.jackson.core/jackson-databind"
+   },
+   "ranges": [
+    {
+     "events": [
+      {
+       "introduced": "3.0.0"
+      },
+      {
+       "fixed": "3.1.4"
+      }
+     ],
+     "type": "ECOSYSTEM"
+    }
+   ]
+  },
+  {
+   "database_specific": {
+    "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-5hh8-q8hv-fr38/GHSA-5hh8-q8hv-fr38.json"
+   },
+   "package": {
+    "ecosystem": "Maven",
+    "name": "tools.jackson.core:jackson-databind",
+    "purl": "pkg:maven/tools.jackson.core/jackson-databind"
+   },
+   "ranges": [
+    {
+     "events": [
+      {
+       "introduced": "3.0.0"
+      },
+      {
+       "fixed": "3.1.4"
+      }
+     ],
+     "type": "ECOSYSTEM"
+    }
+   ],
+   "versions": [
+    "3.0.0",
+    "3.0.1",
+    "3.0.2",
+    "3.0.3",
+    "3.0.4",
+    "3.1.0",
+    "3.1.0-rc1",
+    "3.1.1",
+    "3.1.2",
+    "3.1.3"
+   ]
+  }
+ ],
+ "aliases": [
+  "CVE-2026-54517"
+ ],
+ "database_specific": {
+  "cwe_ids": [
+   "CWE-863"
+  ],
+  "github_reviewed": true,
+  "github_reviewed_at": "2026-06-23T21:24:50Z",
+  "nvd_published_at": "2026-06-23T21:17:02Z",
+  "severity": "MODERATE"
+ },
+ "details": "## Summary\nIn `BeanDeserializer._deserializeUsingPropertyBased`, the active-view (`@JsonView`) filter was applied only to creator properties; the regular property-buffering branch performed no `prop.visibleInView(activeView)` check. A change making `SetterlessProperty.isMerging()` return `true` routed setterless Collection/Map properties through this unguarded path, so a setterless collection annotated with a restricted `@JsonView` is populated from attacker JSON even when the active view excludes it.\n\n## Impact\nView-restricted (e.g. admin-only) setterless collection/map properties can be written from untrusted JSON despite `@JsonView` gating \u2014 an access-control / mass-assignment bypass. No RCE or DoS.\n\n## Affected / Patched (verified via `git tag --contains`)\n- 2.21 line: `>= 2.21.0, < 2.21.4` -> fixed in **2.21.4** (backport `94c5d21`, #5970)\n- 3.x line: `>= 3.0.0, < 3.1.4` -> fixed in **3.1.4** (#5969, `5bf23ed`)\n\n## Severity / CWE\nMaintainer: minor. Reporter: HIGH. CWE-863 (Incorrect Authorization); related CWE-1220.\n\n## Credits\nOmkhar Arasaratnam (@omkhar) - finder.",
+ "id": "GHSA-5hh8-q8hv-fr38",
+ "modified": "2026-09-10T03:51:07.997389778Z",
+ "published": "2026-06-23T21:24:50Z",
+ "references": [
+  {
+   "type": "WEB",
+   "url": "https://github.com/FasterXML/jackson-databind/security/advisories/GHSA-5hh8-q8hv-fr38"
+  },
+  {
+   "type": "ADVISORY",
+   "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-54517"
+  },
+  {
+   "type": "WEB",
+   "url": "https://github.com/FasterXML/jackson-databind/pull/5969"
+  },
+  {
+   "type": "WEB",
+   "url": "https://github.com/FasterXML/jackson-databind/pull/5970"
+  },
+  {
+   "type": "WEB",
+   "url": "https://github.com/FasterXML/jackson-databind/commit/5bf23edb4221f7dd2ec8e71ff6d26c61640f261d"
+  },
+  {
+   "type": "WEB",
+   "url": "https://github.com/FasterXML/jackson-databind/commit/94c5d215b3af1505098c686405d9641f041a9962"
+  },
+  {
+   "type": "PACKAGE",
+   "url": "https://github.com/FasterXML/jackson-databind"
+  }
+ ],
+ "schema_version": "1.9.0",
+ "severity": [
+  {
+   "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+   "type": "CVSS_V3"
+  }
+ ],
+ "summary": "jackson-databind has @JsonView bypass for setterless creator properties"
+}

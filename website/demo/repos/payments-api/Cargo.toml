@@ -1,0 +1,13 @@
+[package]
+name = "payments-api"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+chrono = "=0.4.19"
+regex = "=1.5.4"
+smallvec = "=1.6.0"
+openssl = "=0.10.38"
+
+[workspace]

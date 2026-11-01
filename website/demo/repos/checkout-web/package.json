@@ -1,0 +1,11 @@
+{
+  "name": "checkout-web",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "axios": "0.21.0",
+    "lodash": "4.17.15",
+    "minimist": "1.2.5",
+    "node-fetch": "2.6.0"
+  }
+}

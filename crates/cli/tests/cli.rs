@@ -714,6 +714,97 @@ fn git_in(dir: &std::path::Path, args: &[&str]) -> String {
 }
 
 #[test]
+fn why_finds_a_package_outside_cargo() {
+    // `--why` once read Cargo.lock only, so an npm package was "in no tree".
+    let out = run(&[
+        "scan",
+        "-c",
+        &cfg("fleet-npm.toml"),
+        "--db",
+        &db(),
+        "--why",
+        "lodash",
+    ]);
+    assert_eq!(code(&out), 0, "stderr: {}", stderr(&out));
+    let text = stdout(&out);
+    assert!(text.contains("npm-demo — lodash"), "{text}");
+    assert!(text.contains("(npm, direct)"), "{text}");
+    assert!(text.contains("npm-demo → lodash"), "{text}");
+
+    let out = run(&[
+        "scan",
+        "-c",
+        &cfg("fleet-npm.toml"),
+        "--db",
+        &db(),
+        "--why",
+        "absent",
+    ]);
+    assert_eq!(code(&out), 2);
+}
+
+#[test]
+fn workflows_are_scanned_alongside_a_lockfile() {
+    // A repo with a Cargo.lock AND workflows: the workflows were once scanned only when no
+    // lockfile was found, so their actions were never matched (a silent false clean).
+    let root = std::env::temp_dir().join(format!("fleetreach-gha-poly-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let repo = root.join("app");
+    std::fs::create_dir_all(repo.join(".github/workflows")).unwrap();
+    std::fs::copy(
+        manifest().join("tests/fixtures/repos/repo-clean/Cargo.lock"),
+        repo.join("Cargo.lock"),
+    )
+    .unwrap();
+    std::fs::write(
+        repo.join(".github/workflows/ci.yml"),
+        "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      \
+         - uses: tj-actions/changed-files@v44\n",
+    )
+    .unwrap();
+    let fleet = root.join("fleet.toml");
+    std::fs::write(
+        &fleet,
+        format!("[[repo]]\nid = \"app\"\npath = {:?}\n", repo),
+    )
+    .unwrap();
+    let fleet = fleet.to_str().unwrap().to_string();
+    let osv = file_url("ghactions-osv");
+    let db = db();
+
+    let out = run(&[
+        "scan",
+        "-q",
+        "-c",
+        &fleet,
+        "--db",
+        &db,
+        "--ghactions-vuln-db",
+        &osv,
+        "-f",
+        "json",
+    ]);
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert!(
+        stdout(&out).contains("GHSA-mrrh-fwg8-r2c3"),
+        "{}",
+        value["vulnerabilities"]
+    );
+
+    // Without Actions data the workflows are a partial-coverage gap, not an errored repo.
+    let out = run(&["scan", "-q", "-c", &fleet, "--db", &db, "-f", "json"]);
+    assert_eq!(code(&out), 0, "stderr: {}", stderr(&out));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(value["summary"]["repos_errored"], 0);
+    let coverage = value["coverage"].as_array().unwrap();
+    assert_eq!(coverage.len(), 1, "{coverage:?}");
+    assert_eq!(coverage[0]["source"], ".github/workflows");
+    assert_eq!(coverage[0]["level"], "partial");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn fix_plans_applies_and_verifies_a_lock_bump_on_a_branch() {
     let root = std::env::temp_dir().join(format!("fleetreach-fix-e2e-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);

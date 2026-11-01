@@ -1,0 +1,74 @@
+---
+title: Generate SBOMs
+description: Write a CycloneDX 1.6 or SPDX 2.3 SBOM per repository from the same lockfiles fleetreach scans, with the dependency graph, coverage and optional vulnerabilities.
+sidebar:
+  order: 9
+---
+
+`fleetreach sbom` writes one SBOM per repo, CycloneDX 1.6 or SPDX 2.3 JSON, from the same
+lockfiles and manifests `scan` reads, in every ecosystem. It needs no advisory data and no
+network.
+
+<!-- run: fleetreach sbom -o boms/ 2>&1 -->
+```console
+$ fleetreach sbom -o boms/ 2>&1
+payments-api: 27 package(s) from 1 source(s) -> boms/payments-api.cdx.json
+ledger-svc: 25 package(s) from 1 source(s) -> boms/ledger-svc.cdx.json
+checkout-web: 8 package(s) from 2 source(s) -> boms/checkout-web.cdx.json
+admin-dashboard: 67 package(s) from 1 source(s) -> boms/admin-dashboard.cdx.json
+ml-service: 11 package(s) from 1 source(s) -> boms/ml-service.cdx.json
+data-pipeline: 6 package(s) from 1 source(s), 1 source(s) with incomplete coverage -> boms/data-pipeline.cdx.json
+inventory-svc: 7 package(s) from 1 source(s) -> boms/inventory-svc.cdx.json
+billing: 4 package(s) from 1 source(s) -> boms/billing.cdx.json
+partner-api: 5 package(s) from 1 source(s) -> boms/partner-api.cdx.json
+```
+<!-- /run -->
+
+```sh
+fleetreach sbom -o boms/ -f spdx    # boms/<repo-id>.spdx.json
+```
+
+Both formats pass their official JSON schemas, and SPDX output validates with the SPDX
+tools.
+
+## What each BOM holds
+
+- **The repo** as the root component, with its git remote and commit when it came from a
+  fleet source, and each dependency source it read with its coverage.
+- **One component per resolved package**, identified by its package URL (`pkg:npm`,
+  `pkg:pypi`, `pkg:maven`, `pkg:golang`, `pkg:githubactions` and so on). Development-only
+  packages are marked `excluded`.
+- **The dependency graph** from the lockfiles.
+- **Compositions** that say which parts are complete and which came from a source read only
+  in part, so an incomplete inventory is never presented as complete.
+
+BOMs are deterministic: set `SOURCE_DATE_EPOCH` and two runs over the same lockfiles write
+byte-identical files.
+
+## Add the vulnerabilities
+
+```sh
+fleetreach scan -f json > report.json
+fleetreach sbom -o boms/ --report report.json
+```
+
+CycloneDX gets a `vulnerabilities[]` entry per finding, with ratings, KEV, EPSS and the SSVC
+outcome, and an `analysis.state`: `not_affected` only for the sound signals (a proven
+unreachable function, a dependency that is never compiled), `in_triage` otherwise. SPDX 2.3
+has no vulnerability model, so each affected package gets an advisory reference.
+
+## Scan an SBOM instead of lockfiles
+
+Where fleetreach cannot read a build (Gradle without locking, Bazel) but the build writes an
+SBOM, point the repo at it:
+
+```toml
+[[repo]]
+id   = "android-app"
+path = "../android-app"
+sbom = "build/reports/bom.json"   # CycloneDX 1.4 to 1.6 or SPDX 2.3 JSON
+```
+
+## Next
+
+Send the BOMs to [Dependency-Track](/fleetreach/docs/integrations/dependency-track/).

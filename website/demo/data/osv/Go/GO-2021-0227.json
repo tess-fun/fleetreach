@@ -1,0 +1,74 @@
+{
+ "affected": [
+  {
+   "database_specific": {
+    "source": "https://vuln.go.dev/ID/GO-2021-0227.json"
+   },
+   "ecosystem_specific": {
+    "imports": [
+     {
+      "path": "golang.org/x/crypto/ssh",
+      "symbols": [
+       "NewServerConn",
+       "connection.serverAuthenticate"
+      ]
+     }
+    ]
+   },
+   "package": {
+    "ecosystem": "Go",
+    "name": "golang.org/x/crypto",
+    "purl": "pkg:golang/golang.org/x/crypto"
+   },
+   "ranges": [
+    {
+     "events": [
+      {
+       "introduced": "0"
+      },
+      {
+       "fixed": "0.0.0-20201216223049-8b5274cf687f"
+      }
+     ],
+     "type": "SEMVER"
+    }
+   ]
+  }
+ ],
+ "aliases": [
+  "CVE-2020-29652",
+  "GHSA-3vm4-22fp-5rfm"
+ ],
+ "credits": [
+  {
+   "name": "Joern Schneewesiz (GitLab Security Research Team)"
+  }
+ ],
+ "database_specific": {
+  "review_status": "REVIEWED",
+  "url": "https://pkg.go.dev/vuln/GO-2021-0227"
+ },
+ "details": "Clients can cause a panic in SSH servers. An attacker can craft an authentication request message for the \u201cgssapi-with-mic\u201d method which will cause NewServerConn to panic via a nil pointer dereference if ServerConfig.GSSAPIWithMICConfig is nil.",
+ "id": "GO-2021-0227",
+ "modified": "2026-02-04T03:17:50.287206Z",
+ "published": "2022-02-17T17:35:32Z",
+ "references": [
+  {
+   "type": "FIX",
+   "url": "https://go.dev/cl/278852"
+  },
+  {
+   "type": "FIX",
+   "url": "https://go.googlesource.com/crypto/+/8b5274cf687fd9316b4108863654cc57385531e8"
+  },
+  {
+   "type": "WEB",
+   "url": "https://groups.google.com/g/golang-announce/c/ouZIlBimOsE?pli=1"
+  }
+ ],
+ "related": [
+  "CGA-hp7g-jcw7-c892"
+ ],
+ "schema_version": "1.7.3",
+ "summary": "Panic on crafted authentication request message in golang.org/x/crypto/ssh"
+}

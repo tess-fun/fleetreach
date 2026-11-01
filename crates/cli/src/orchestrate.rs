@@ -360,6 +360,20 @@ pub fn scan_fleet(
                 },
             );
         }
+        if unit.alongside && ghactions_db.is_none() {
+            return RepoResult::scanned(&unit.repo.id, Vec::new(), Vec::new()).with_coverage(
+                CoverageGap {
+                    repo: unit.repo.id.clone(),
+                    source: ".github/workflows".to_string(),
+                    ecosystem: Ecosystem::GitHubActions,
+                    level: Coverage::Partial,
+                    reason: "workflow actions not matched: no GitHub Actions OSV mirror \
+                             (fleetreach db sync --ecosystems gha, or \
+                             --ghactions-vuln-db)"
+                        .to_string(),
+                },
+            );
+        }
         scan_unit(
             db,
             &unit.repo,
@@ -491,6 +505,10 @@ pub(crate) struct ScanUnit {
     pub(crate) rel_dir: String,
     /// Packages from the repo's SBOM (`[[repo]] sbom`) instead of its lockfiles.
     pub(crate) sbom: Option<std::sync::Arc<Result<crate::sbom_input::SbomInput, String>>>,
+    /// Workflows scanned alongside the repo's other ecosystems: without a GitHub Actions
+    /// mirror they are a coverage gap rather than an error, so a fleet scanned with only the
+    /// data its lockfiles need still scans.
+    pub(crate) alongside: bool,
 }
 
 /// Everything found to scan in one repo, plus what could not be.
@@ -557,6 +575,7 @@ fn sbom_plan(repo: &Repo, path: &Path) -> RepoPlan {
             repo: repo.clone(),
             rel_dir: String::new(),
             sbom: Some(shared.clone()),
+            alongside: false,
         });
     }
     plan
@@ -761,8 +780,9 @@ const SKIPPED_DIRS: &[&str] = &["node_modules", ".git"];
 /// detected in the root and, with `glob = true`, in every directory whose lockfile lies within
 /// `glob_max_depth` (the same bound the `Cargo.lock` glob uses), so a polyglot repo or a
 /// monorepo whose lockfiles live below the root is scanned in full instead of as its first
-/// detected ecosystem. GitHub Actions is scanned only when nothing else is found, and a repo
-/// with nothing at all falls back to Cargo, whose "no Cargo.lock found" is the honest gap.
+/// detected ecosystem. Root workflows (`.github/workflows`) are scanned too, alongside
+/// whatever else is found, and a repo with nothing at all falls back to Cargo, whose "no
+/// Cargo.lock found" is the honest gap.
 pub(crate) fn plan_repo(repo: &Repo) -> RepoPlan {
     let unit = |ecosystem: Ecosystem, dir: &Path| {
         let rel_dir = dir
@@ -785,6 +805,7 @@ pub(crate) fn plan_repo(repo: &Repo) -> RepoPlan {
             repo: narrowed,
             rel_dir,
             sbom: None,
+            alongside: false,
         }
     };
     let mut plan = RepoPlan {
@@ -800,6 +821,7 @@ pub(crate) fn plan_repo(repo: &Repo) -> RepoPlan {
             repo: repo.clone(),
             rel_dir: String::new(),
             sbom: None,
+            alongside: false,
         });
         return plan;
     }
@@ -852,13 +874,14 @@ pub(crate) fn plan_repo(repo: &Repo) -> RepoPlan {
         }
     }
 
-    if plan.units.is_empty() {
-        let eco = if repo.path.join(".github").join("workflows").is_dir() {
-            Ecosystem::GitHubActions
-        } else {
-            Ecosystem::Cargo
-        };
-        plan.units.push(unit(eco, &repo.path));
+    if repo.path.join(".github").join("workflows").is_dir() {
+        let alongside = !plan.units.is_empty();
+        plan.units.push(ScanUnit {
+            alongside,
+            ..unit(Ecosystem::GitHubActions, &repo.path)
+        });
+    } else if plan.units.is_empty() {
+        plan.units.push(unit(Ecosystem::Cargo, &repo.path));
     }
     plan
 }

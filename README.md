@@ -7,595 +7,159 @@
 
 [![crates.io](https://img.shields.io/crates/v/fleetreach-cli.svg)](https://crates.io/crates/fleetreach-cli)
 [![CI](https://github.com/tess-fun/fleetreach/actions/workflows/ci.yml/badge.svg)](https://github.com/tess-fun/fleetreach/actions/workflows/ci.yml)
-[![MSRV](https://img.shields.io/badge/MSRV-1.89-blue)](#msrv)
+[![MSRV](https://img.shields.io/badge/MSRV-1.89-blue)](#license)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 
-**A fleet-native dependency security auditor.** Point it at many repositories at
-once and get one deduplicated, ranked, CI-pipeable view of which dependencies
-across your whole fleet carry known advisories (plus supply-chain warnings:
-unmaintained, unsound, notice; and advisories against the Rust toolchain
-itself). On top of that you get blast-radius analysis (which single fix clears
-the most repos, split direct versus transitive), a batched remediation queue,
-`--why` provenance across the fleet, drift tracking between scans, SARIF / JSON /
-OpenVEX output, and a CycloneDX or SPDX SBOM per repo. One binary: no server to run, no SBOM
-pipeline to wire up.
+**Fleet-wide dependency security audit.** fleetreach scans every repository in your
+organisation in one run, across 12 ecosystems, and tells you which fix clears the most of
+them, who owns it, and what changed since the last run. One binary, no server, and never a
+false clean.
 
-It covers 12 ecosystems (Rust, Go, npm, PyPI, RubyGems, Packagist, NuGet, Julia,
-Swift, Hex, Maven, GitHub Actions), including projects without a lockfile (pip
-requirements files, `pylock.toml`, .NET project files and restore output), and labels
-every source it reads as full, partial or direct-only coverage, so a partly-read repo is
-never passed off as fully scanned. For Rust it adds a sound MIR-based reachability analysis
-that proves whether a vulnerable function is actually callable; npm and Python get
-import-graph witness chains (`fastapi → starlette → python-multipart`).
+**[Documentation](https://tess-fun.github.io/fleetreach/)** ·
+[Install](https://tess-fun.github.io/fleetreach/docs/getting-started/installation/) ·
+[First scan](https://tess-fun.github.io/fleetreach/docs/getting-started/first-scan/) ·
+[Guides](https://tess-fun.github.io/fleetreach/docs/guides/find-the-fix-that-clears-the-most-repos/) ·
+[Compare](https://tess-fun.github.io/fleetreach/compare/osv-scanner/) ·
+[Changelog](CHANGELOG.md)
 
-It is **not** a scanner or an advisory database. It is an orchestration and
-correlation layer over audited data sources: the
-[`rustsec`](https://crates.io/crates/rustsec) engine for Rust (the same library
-`cargo-audit` is built on) and the [OSV](https://osv.dev) database for every
-other ecosystem. The trust boundary is "structured advisory data plus your own
-config", never raw HTML, and it fails closed: a gap it cannot scan is never
-reported clean.
+A real run on a demo fleet of nine services in six languages, with CISA KEV and EPSS:
+
+<!-- run: fleetreach scan -f remediation --enrich | head -n 9 -->
+```console
+$ fleetreach scan -f remediation --enrich | head -n 9
+┌────┬──────────────┬───────────────────────────────────────────────────────────────────┬───────────────┬─────────────────────┬───────┬─────────┬───────────────┬────────────────────────┐
+│ #  ┆ SSVC         ┆ Action                                                            ┆ Severity      ┆ Resolves            ┆ Repos ┆ Reach   ┆ Exploit       ┆ Bump risk              │
+╞════╪══════════════╪═══════════════════════════════════════════════════════════════════╪═══════════════╪═════════════════════╪═══════╪═════════╪═══════════════╪════════════════════════╡
+│ 1  ┆ immediate    ┆ bump org.apache.logging.log4j:log4j-core 2.14.1 → 2.25.4          ┆ critical 10.0 ┆ 8 advisories        ┆ 1     ┆ unknown ┆ KEV EPSS 100% ┆ low                    │
+├╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 2  ┆ out-of-cycle ┆ bump tj-actions/changed-files 44.0.0 → 46.0.1 (breaking)          ┆ high 8.6      ┆ GHSA-mrrh-fwg8-r2c3 ┆ 1     ┆ unknown ┆ KEV EPSS 72%  ┆ high                   │
+├╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 3  ┆ out-of-cycle ┆ bump smallvec 1.6.0 → 1.6.1                                       ┆ critical 9.8  ┆ RUSTSEC-2021-0003   ┆ 1     ┆ unknown ┆ EPSS 2%       ┆ low                    │
+├╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+```
+<!-- /run -->
+
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/tess-fun/fleetreach/main/scripts/install.sh | sh
+brew install tess-fun/tap/fleetreach
+cargo install fleetreach-cli --features network
+```
+
+Prebuilt binaries for Linux, macOS and Windows with checksums and attestations, and a
+container image. See [Installation](https://tess-fun.github.io/fleetreach/docs/getting-started/installation/).
+
+## Quick start
+
+```toml
+# fleet.toml: local checkouts, or a whole GitHub or GitLab org
+[[repo]]
+id   = "payments-api"
+path = "../payments-api"
+
+[[source]]
+kind = "github"
+org  = "acme"
+```
+
+```sh
+fleetreach scan                      # every finding, every repo
+fleetreach scan -f packages          # which bump clears the most repos
+fleetreach scan --enrich -f ssvc     # act now, or schedule it?
+fleetreach scan --why lodash         # every repo that has it, and the chain that pulls it in
+```
+
+Exit codes are the CI contract: `0` clean, `1` findings, `2` something could not be read.
+
+## What it does
+
+- **Ranks fixes across the fleet.** Impact, blast radius (direct vs transitive) and a
+  batched fix queue: one bump per package that clears every advisory it has, with a bump
+  risk taken from what the fleet already runs.
+- **Prioritises by real risk.** CISA KEV, FIRST EPSS, and CISA/CERT SSVC decisions from each
+  repo's exposure and impact.
+- **Opens verified fixes.** `fix plan` and `fix apply` make lock-only bumps on branches,
+  re-scan each one, and open pull or merge requests on GitHub or GitLab.
+- **Tracks it over time.** History with no database, SLAs, time to fix, notifications to
+  Slack or webhooks, one issue per owner, and a static HTML report.
+- **Produces the evidence.** CycloneDX 1.6 and SPDX 2.3 SBOMs, OpenVEX, SARIF for GitHub code
+  scanning, and license policy checks.
+- **Proves reachability.** Import-graph witness chains for npm and Python, and a sound MIR
+  call-graph analysis for Rust.
+- **Flags supply-chain risk.** Install scripts, git dependencies, tag-pinned actions,
+  typosquats, brand-new releases and known malware.
+
+## Ecosystems
+
+| | Reads |
+|---|---|
+| Rust | `Cargo.lock` (RustSec) |
+| Go | `go.mod` (osv.dev, or `govulncheck`) |
+| npm | `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock` |
+| Python | `uv.lock`, `poetry.lock`, `Pipfile.lock`, `pylock.toml`, `requirements*.txt` |
+| Java | `gradle.lockfile`, `pom.xml` (resolved like Maven, without Maven) |
+| Ruby, PHP, .NET | `Gemfile.lock`, `composer.lock`, NuGet lock and project files |
+| GitHub Actions | `.github/workflows/*.yml` |
+| Swift, Elixir, Julia | `Package.resolved`, `mix.lock`, `Manifest.toml` |
+
+Each ecosystem uses a port of its own version comparator, checked against the real one
+(Maven's over 710,000 version pairs). Nothing is built and no package code runs, so it is
+safe to point at any repository. See
+[Ecosystems](https://tess-fun.github.io/fleetreach/docs/ecosystems/) and
+[Accuracy](https://tess-fun.github.io/fleetreach/docs/concepts/accuracy/).
+
+## In CI
+
+```yaml
+- uses: actions/checkout@v4
+- uses: tess-fun/fleetreach@v1
+  with:
+    args: "--enrich --fail-on-kev"
+```
+
+Findings go to the GitHub Security tab as SARIF. For a whole org, run one scheduled job over
+a `[[source]]`: see [GitHub Actions](https://tess-fun.github.io/fleetreach/docs/integrations/github-actions/)
+and [GitLab CI](https://tess-fun.github.io/fleetreach/docs/integrations/gitlab-ci/).
 
 ## How it compares
 
-`fleetreach` deliberately occupies a niche the popular scanners leave open:
-lightweight, CLI-native, **fleet-wide** auditing.
-
-- **vs `osv-scanner` (Google), Trivy, Grype.** Those scan one project at a time
-  and answer "is *this project* vulnerable?". `fleetreach` scans many repos in
-  one pass and answers the fleet question: *which single fix clears the most
-  repos, and how do I sequence the work?* (the `impact` / `blast` / `packages` /
-  `remediation` views). It keeps a smaller surface on purpose: no container or OS
-  scanning (use Trivy/Grype for that), and no advisory database of its own.
-- **vs OWASP Dependency-Track.** That is the portfolio incumbent, but it is a
-  *server you operate*: stand up the platform, ingest CycloneDX SBOMs, host a
-  database and a web UI. `fleetreach` is a single binary you run from CI or a
-  shell against a `fleet.toml`. No server, no SBOM pipeline, no state to host.
-  It also writes the CycloneDX SBOMs Dependency-Track ingests (`fleetreach sbom`), so the
-  two can be paired rather than chosen between.
-- **For Rust specifically.** It adds a *sound* static reachability mode (a MIR
-  call-graph analysis with a witness chain) that most open-source scanners lack,
-  on top of a fail-closed CI contract where a falsely-clean report is treated as
-  the worst possible output.
-
-If you want container scanning, a hosted dashboard, or single-repo CI checks, the
-tools above fit better. If you want one command that answers "what is my
-*fleet's* dependency risk, and what do I fix first", that is what this is for.
-
-## Installation
-
-Prebuilt binaries for Linux, macOS and Windows (x86-64 and ARM where available) are attached
-to every [GitHub release](https://github.com/tess-fun/fleetreach/releases), with a
-`SHA256SUMS` file and signed build provenance. They include the `network` feature.
-
-```sh
-# Linux or macOS: download, verify the checksum, install to ~/.local/bin
-curl -fsSL https://raw.githubusercontent.com/tess-fun/fleetreach/main/scripts/install.sh | sh
-
-# Homebrew
-brew install tess-fun/tap/fleetreach
-
-# Container image (mount a volume on /cache to keep downloads between runs)
-docker run --rm -v "$PWD:/work" -v fleetreach-cache:/cache ghcr.io/tess-fun/fleetreach scan -c fleet.toml
-
-# From crates.io
-cargo install fleetreach-cli --features network   # the `fleetreach` binary, with DB fetch + enrichment
-```
-
-Verify a downloaded archive's provenance with
-`gh attestation verify <archive> --repo tess-fun/fleetreach`.
-
-The default build is **pure-Rust** (no vendored-C TLS stack): it has no network
-support and expects a local advisory-db clone via `--db <PATH>`. The opt-in
-`network` feature adds advisory-DB fetch and KEV/EPSS/NVD enrichment (pulling a
-`rustls` TLS stack). Install with `--features network` for the usual fetch-on-run
-behavior; omit it for a minimal, dependency-light, offline (`--db`) build.
-
-Or build from source:
-
-```sh
-git clone https://github.com/tess-fun/fleetreach
-cargo install --path crates/cli --features network   # omit --features network for the pure-Rust offline build
-```
-
-## Usage
-
-```sh
-fleetreach scan -c fleet.toml          # human table (default)
-fleetreach scan -c fleet.toml -f json  # machine payload on stdout, clean for | jq
-fleetreach scan -c fleet.toml -f sarif # SARIF 2.1.0 for GitHub code scanning
-fleetreach scan -c fleet.toml -f impact      # advisories ranked by repos affected
-fleetreach scan -c fleet.toml -f blast       # blast radius split direct vs transitive
-fleetreach scan -c fleet.toml -f packages    # dependencies ranked by fleet reach
-fleetreach scan -c fleet.toml -f fix-first   # advisories ranked by what to patch first
-fleetreach scan -c fleet.toml -f remediation # the fix queue: what to bump, batched
-fleetreach scan -c fleet.toml -f packages-json    # the packages rollup as JSON
-fleetreach scan -c fleet.toml -f remediation-json # the fix queue as JSON
-fleetreach scan --why serde            # how does `serde` get into the tree?
-
-fleetreach db sync                     # fetch the OSV exports the fleet needs (network build)
-fleetreach db status                   # what is cached, and how old
-fleetreach fleet sync                  # clone/refresh repos named by [[source]] entries
-fleetreach sbom -c fleet.toml -o boms/ # one CycloneDX 1.6 (or -f spdx) SBOM per repo
-fleetreach licenses -c fleet.toml      # license inventory; policy violations with [settings.licenses]
-fleetreach fix plan -c fleet.toml --report report.json > plan.json  # the fix queue as edits
-fleetreach fix apply -c fleet.toml plan.json -- --db ./advisory-db  # verified local branches
-fleetreach scan -c fleet.toml --history-dir history/  # keep this run for trends and SLAs
-fleetreach history sla --history-dir history/ -c fleet.toml  # exit 1 on a breach of [settings.sla]
-fleetreach notify --history-dir history/ -c fleet.toml -f slack --webhook "$SLACK_WEBHOOK"  # new, fixed, past SLA
-fleetreach report html --history-dir history/ -c fleet.toml -o fleet-report.html  # static dashboard
-fleetreach scan -c fleet.toml --sync   # sync sources, then scan
-fleetreach scan -c fleet.toml --osv-dir ./osv  # air-gapped: one dir of osv.dev exports
-fleetreach scan -c fleet.toml --require-full-coverage  # exit 2 if any source was only partly read
-fleetreach scan -c fleet.toml --npm-vuln-db file://./npm-osv  # also audit npm repos
-fleetreach scan -c fleet.toml --pypi-vuln-db file://./pypi-osv # also audit Python repos
-fleetreach scan -c fleet.toml --packagist-vuln-db file://./packagist-osv # also audit PHP/Composer repos
-fleetreach scan -c fleet.toml --rubygems-vuln-db file://./rubygems-osv # also audit Ruby repos
-fleetreach scan -c fleet.toml --nuget-vuln-db file://./nuget-osv  # also audit .NET/NuGet repos
-fleetreach scan -c fleet.toml --julia-vuln-db file://./julia-osv  # also audit Julia repos
-fleetreach scan -c fleet.toml --swift-vuln-db file://./swift-osv  # also audit Swift repos
-fleetreach scan -c fleet.toml --hex-vuln-db file://./hex-osv      # also audit Elixir/Hex repos
-fleetreach scan -c fleet.toml --ghactions-vuln-db file://./gha-osv # also audit GitHub Actions pins
-fleetreach scan -c fleet.toml --maven-vuln-db file://./maven-osv # also audit Java (gradle.lockfile/pom.xml)
-fleetreach diff old.json new.json      # what changed between two scans
-```
-
-The `impact` view answers the fleet-scale question (*which fix clears the most
-repos?*) by ranking advisories on how many of your crates they hit. The
-examples below come from a ten-repo example fleet (see
-[`examples/demo-fleet.toml`](examples/demo-fleet.toml)):
-
-```
-Repos  Severity      Advisory            Affected                  Title
-2      medium 6.2    RUSTSEC-2020-0071   payments-api, scheduler   Potential segfault in time
-1      critical 9.8  RUSTSEC-2021-0003   ingest-worker             SmallVec::insert_many overflow
-1      critical 9.8  RUSTSEC-2021-0097   ls-replacement            SM2 decryption buffer overflow
-1      high 8.6      RUSTSEC-2024-0013   ls-replacement            libgit2 memory corruption
-1      high 7.5      RUSTSEC-2022-0013   search-svc                regex repetition DoS
-```
-
-The lead row is a *medium*, not a critical: the `time` segfault is the one
-advisory present in two repos, so a single bump clears both `payments-api` and
-`scheduler`. That ordering is the question single-repo tooling cannot answer.
-
-The `blast` view keeps that same ranking but splits each advisory's reach into
-**direct** vs **transitive** repos and adds a fix-path hint, because *how* you fix
-it depends on the split: an advisory hitting most of its repos transitively can't be
-fixed by editing those repos' manifests (you need an upstream bump or a dependency
-override → `upstream`), whereas a direct one can (`manifest`). A corpus study of the
-real Go ecosystem found ~3 in 4 vulnerable-dependency exposures are transitive, so a
-plain affected-repo count hides the fix strategy.
-
-```
-Repos  Direct  Transitive  Fix       Severity      Advisory            Title
-2      1       1           mixed     unknown       RUSTSEC-2025-0004   ssl select_next_proto UAF
-1      1       0           manifest  critical 9.8  RUSTSEC-2021-0003   SmallVec::insert_many overflow
-1      0       1           upstream  medium 6.2    RUSTSEC-2020-0071   Potential segfault in time
-```
-
-The `packages` view rolls those rows up one level — to the *dependency*. One package
-often carries many advisories across many repos, and a single bump clears them all, so
-this answers "which dependency is my biggest fleet liability?". It ranks vulnerable
-dependencies by fleet reach, with the same direct/transitive split plus how many
-advisories one bump would resolve:
-
-```
-Repos  Direct  Transitive  Advisories  Severity  Fix       Package
-3      0       3           2           medium    upstream  time
-2      1       1           7           unknown   mixed     openssl
-1      1       0           1           critical  manifest  smallvec
-```
-
-Here a single `openssl` bump clears seven advisories — the rollup the per-advisory
-views can't show. (`-f json` carries `dependency_kind` per occurrence, and SARIF
-results gain a `dependencyKind` property, so a CI consumer gets the same signal.)
-
-The `fix-first` view answers the complementary question (*what do I patch
-first?*). It is severity-dominant: actively-exploited (KEV) findings lead, then
-strict severity bands, and only *within* a band does blast radius break the tie.
-That keeps a critical CVE in one repo above an unsound-but-low lint hitting
-thousands — the opposite trade-off from `impact`, which would float the
-wide-but-informational warning to the top.
-
-The `remediation` view goes one step further. Where `fix-first` ranks *which
-advisory*, this prints *what to do about it*: the concrete dependency bump. Each
-row is **batched**, so a single `bump tokio 1.0 → 1.38` row clears every advisory
-that one upgrade resolves across every repo, and breaking (semver-major) jumps are
-flagged so low-churn fixes can go first. Advisories with no published fix are
-called out honestly (`no fix: …`) rather than dressed up as an upgrade. When static
-reachability has run (`--reachability=static`), advisories that are *soundly*
-unreachable drop to an informational tail (shown, but never queued as work), so
-dead-code findings never crowd out the bumps that matter.
-
-### Tracking drift over time
-
-`fleetreach diff <baseline.json> <current.json>` compares two saved reports (each
-from `scan -f json`) and splits the findings into **new**, **fixed**, and
-**still-open** — the question a single scan can't answer: *did this branch make the
-fleet better or worse?* New advisories are regressions; fixed ones are wins; a
-still-open advisory that shrank or grew its repo footprint shows the `±` blast-radius
-drift. It is pure (no scanning, DB, or network — just two JSON files), so it drops
-into CI as a cheap gate:
-
-```
-1 new, 1 fixed, 1 still open.
-
-New (1):
-  critical  RUSTSEC-2026-9999  2 (+2)  brand new critical
-```
-
-The exit code mirrors `scan`: `0` clean, `1` a *new* finding tripped the gate, `2` a
-file could not be read. `--fail-on <severity>` sets the floor a new vulnerability must
-reach to gate (default `low`; Unknown always counts, fail-closed), `--fail-on-warnings`
-also gates on a newly introduced warning, and `--exit-zero` makes it report-only.
-`-f json` emits the full structured diff for automation.
-
-### GitHub Action
-
-Drop findings into the Security tab and PR annotations with the bundled
-composite action (see [`.github/workflows/audit-example.yml`](.github/workflows/audit-example.yml)):
-
-```yaml
-- uses: tess-fun/fleetreach@v1
-  with:
-    args: "--enrich --resolve-features"
-```
-
-`fleet.toml` lists the repos to scan:
-
-```toml
-[[repo]]
-id   = "core-lib"
-path = "../core-lib"            # repo root; Cargo.lock located within
-
-[[repo]]
-id   = "services"
-path = "../services"
-glob = true                     # discover **/Cargo.lock under the tree
-glob_max_depth = 4              # bounded; default 3
-
-[[repo]]
-id        = "billing-api"
-path      = "../billing-api"    # a go.mod repo; scanned via govulncheck
-ecosystem = "go"                # optional; auto-detected from the manifests
-
-[[repo]]
-id        = "web-frontend"
-path      = "../web-frontend"   # a package-lock.json repo; toolchain-free OSV match
-ecosystem = "npm"               # optional; auto-detected from the manifests
-
-[[repo]]
-id        = "ml-service"
-path      = "../ml-service"     # a uv.lock/poetry.lock/pylock.toml/requirements repo; toolchain-free
-ecosystem = "pypi"              # optional; auto-detected from the manifests
-
-[[repo]]
-id        = "storefront"
-path      = "../storefront"     # a composer.lock repo; toolchain-free OSV match
-ecosystem = "packagist"         # optional; auto-detected from the manifests
-
-[[repo]]
-id        = "payments-dotnet"
-path      = "../payments-dotnet" # a packages.lock.json repo; toolchain-free OSV match
-ecosystem = "nuget"             # optional; auto-detected from the manifests
-
-[[repo]]
-id        = "sim-pipeline"
-path      = "../sim-pipeline"   # a Manifest.toml repo; toolchain-free OSV match
-ecosystem = "julia"             # optional; auto-detected from the manifests
-
-[[repo]]
-id        = "ios-client"
-path      = "../ios-client"     # a Package.resolved repo; toolchain-free OSV match
-ecosystem = "swift"             # optional; auto-detected from the manifests
-
-[[repo]]
-id        = "billing-api"
-path      = "../billing-api"    # a Gemfile.lock repo; toolchain-free OSV match
-ecosystem = "rubygems"          # optional; auto-detected from the manifests
-
-[[repo]]
-id        = "chat-service"
-path      = "../chat-service"   # a mix.lock repo; toolchain-free OSV match
-ecosystem = "hex"               # optional; auto-detected from the manifests
-
-[[repo]]
-id        = "analytics-jvm"
-path      = "../analytics-jvm"  # a gradle.lockfile/pom.xml repo; toolchain-free OSV match
-ecosystem = "maven"             # optional; auto-detected from the manifests
-
-[[repo]]
-id        = "ci-config"
-path      = "../ci-config"      # a .github/workflows repo; scans pinned `uses:` actions
-ecosystem = "githubactions"     # set explicitly to scan a package repo's workflows too
-
-[[settings.ignore]]
-id     = "RUSTSEC-2020-0071"
-reason = "dev-dependency only, not in any shipped path"   # REQUIRED, non-empty
-```
-
-Instead of listing local clones, a `[[source]]` discovers repos from a GitHub organization
-(or user), a GitLab group with its subgroups (or user), or a list of https URLs. `fleetreach fleet sync` (or `scan --sync`) keeps a cheap
-checkout of each under `~/.cache/fleetreach/checkouts/`: a shallow, blob-less, sparse clone
-holding only the lockfiles and manifests the feeders read. Each report records the commit
-scanned. A listing that fails stops the run, and a repo that cannot be cloned is an errored
-gap.
-
-```toml
-[[source]]
-kind     = "github"                 # or "gitlab", or "git" with urls = ["https://..."]
-org      = "acme"                   # GitHub org or user; GitLab group (with subgroups) or user
-include  = ["svc-*"]                # globs on the repo name
-exclude  = ["*-sandbox"]
-topics   = ["production"]           # all must be present
-checkout = "lockfiles"              # or "full" (needed for reachability)
-# api_url = "https://ghe.example.com/api/v3", token_env = "GHE_TOKEN"
-```
-
-`GITHUB_TOKEN` or `GH_TOKEN` (GitHub) and `GITLAB_TOKEN` (GitLab) are used when set (needed
-for private repos and higher rate limits); `api_url` points at GitHub Enterprise or a
-self-managed GitLab. `git` runs with hooks, submodules and the `file://` transport disabled, and the
-token is passed in an environment-supplied header, never on the command line.
-
-A repo with a `go.mod` (and no `Cargo.lock`) is scanned by `govulncheck` and folds
-into the same fleet report, so a mixed Rust+Go fleet yields one unified, blast-radius
-and reachability-aware remediation queue. Because govulncheck compiles the module, Go
-scanning needs `--allow-untrusted-builds` and a `govulncheck` binary (`--govulncheck`,
-or on `PATH`/`$GOPATH/bin`); without them a Go repo is reported as an errored gap
-rather than silently skipped. A confirmed Go call site is marked `reachable` (the
-analysis is sound-positive), while present-but-uncalled stays `unknown`, never a false
-"not reachable".
-
-No Go toolchain? A degraded **module-level** mode reads `go.mod` and matches each
-dependency against a vuln.go.dev mirror (`--go-vuln-db=file://<mirror>`) — it compiles
-nothing, so no `--allow-untrusted-builds` is needed. It is module-level only (findings
-are `unknown` reachability, no symbol analysis) and can't see Go stdlib advisories, but
-its matching has been validated differentially against govulncheck on real modules with
-**zero false-cleans**.
-
-Every other ecosystem is scanned the same **toolchain-free** way: `fleetreach` reads the
-lockfile (the full transitive tree, already pinned to exact versions) and matches each
-package against the osv.dev export for its ecosystem. A project with no lockfile is read
-from what it has (pip requirements and `pylock.toml`; .NET `obj/project.assets.json`,
-`packages.config` or project files with central package management; `pom.xml`), and each
-such source carries a coverage label in the report and the summary line:
-`--require-full-coverage` turns anything below full into exit 2. Exports come from osv.dev
-(`all.zip`, read directly with no unzip needed); network builds fetch exactly the exports your fleet needs into
-`~/.cache/fleetreach/osv/` and keep them fresh, so a polyglot fleet needs no database flags.
-For air-gapped use, `fleetreach db sync --all --osv-dir <dir>` on a connected host builds a
-directory laid out like the osv.dev bucket (`<dir>/<Ecosystem>/all.zip`, also OSV-Scanner's
-offline layout), and `--osv-dir <dir>` scans against it. A per-ecosystem
-`--<ecosystem>-vuln-db=file://<path>` still overrides either. `fleetreach db status` shows
-what is cached and how old it is, and `--max-db-age` applies to every OSV export as it does
-to the RustSec DB. It runs no package manager and no
-install or build scripts, so like the Go module-level mode it is safe by construction and
-needs no `--allow-untrusted-builds`; without an export the repo is an honest errored gap,
-never silently skipped. Severity comes from the GHSA band or a CVSS vector, direct versus
-transitive comes from the lockfile, and findings are `unknown` reachability unless a
-reachability mode runs.
-
-| Ecosystem | Lockfile(s) | Flag | Version semantics |
-|-----------|-------------|------|-------------------|
-| npm | `package-lock.json` / `pnpm-lock.yaml` / `yarn.lock` (v1 and berry) | `--npm-vuln-db` | SemVer |
-| PyPI | `uv.lock` / `poetry.lock` / `Pipfile.lock` / `pylock.toml` / `requirements*.txt` | `--pypi-vuln-db` | PEP 440 (PEP 503 names) |
-| RubyGems | `Gemfile.lock` | `--rubygems-vuln-db` | `Gem::Version` |
-| Packagist | `composer.lock` | `--packagist-vuln-db` | Composer `version_compare` |
-| NuGet | `packages.lock.json` / `obj/project.assets.json` / `packages.config` / `*.csproj` | `--nuget-vuln-db` | four-part `NuGetVersion` |
-| Julia | `Manifest.toml` | `--julia-vuln-db` | `VersionNumber` |
-| Swift | `Package.resolved` | `--swift-vuln-db` | URL-identified SemVer |
-| Hex | `mix.lock` | `--hex-vuln-db` | SemVer |
-| Maven | `gradle.lockfile` / `pom.xml` | `--maven-vuln-db` | `ComparableVersion` |
-| GitHub Actions | `.github/workflows/*.yml` | `--ghactions-vuln-db` | tag SemVer |
-
-A few specifics that do not fit a cell. Where an advisory enumerates affected versions
-instead of a range (notably malware `MAL-` records), the matcher consults both lists. PyPI
-normalizes names per PEP 503, so `Flask` and `flask` match. For GitHub Actions only
-version-pinned `uses:` references are matched (e.g. the `tj-actions/changed-files`
-supply-chain advisory), while SHA and branch pins are skipped as honest gaps. Each bespoke
-comparator is validated differentially against the real upstream library where one exists:
-the Maven comparator agrees with Apache Maven's own `ComparableVersion` over 710,000+ version
-pairs, and npm/PyPI/RubyGems matching was validated at 100% recall with zero false-cleans
-against the OSV exports.
-
-A mixed-ecosystem fleet — Rust, Go, and any of the toolchain-free feeders — folds into one
-unified, blast-radius-ranked remediation queue.
-
-`fleetreach sbom -c fleet.toml -o boms/` writes one CycloneDX 1.6 SBOM per repo from the
-same sources: a component per package with its purl, the lockfiles' dependency graph,
-dev-only packages as `scope: excluded`, and `compositions` that mark partly-read sources
-incomplete. `-f spdx` writes SPDX 2.3 instead, and `--report report.json` embeds a saved
-scan's findings (CycloneDX `vulnerabilities[]` with `not_affected` only for sound verdicts).
-The output is deterministic and ready to upload to Dependency-Track; see
-[SBOM output](https://tess-fun.github.io/fleetreach/docs/sbom.html).
-
-Key flags: `--db <PATH>` (use a local advisory-db clone), `--offline`,
-`--max-db-age 7d`, `--min-severity high`, `--fail-on critical`,
-`--fail-on-warnings`. See `fleetreach scan --help`.
-
-### Prioritize by real-world risk
-
-`--enrich` annotates each finding with **CISA KEV** (actively exploited in the
-wild) and **FIRST EPSS** (exploit probability), re-ranks them into an action
-queue, and adds a `Risk` column:
-
-```
-Severity      Risk      Advisory            Fix                       Title
-critical 9.8  epss 88%  RUSTSEC-2021-0097   openssl-src → 111.16.0    SM2 decryption buffer overflow
-high 7.5      epss 71%  RUSTSEC-2022-0014   openssl-src → 111.18.0    infinite loop in BN_mod_sqrt
-high 7.4      epss 50%  RUSTSEC-2021-0098   openssl-src → 111.16.0    ASN.1 read buffer overruns
-high 7.5      epss 14%  RUSTSEC-2022-0013   regex 1.5.4 → 1.5.5       regex repetition DoS
-critical 9.8  epss 2%   RUSTSEC-2021-0003   smallvec 1.6.0 → 0.6.14   SmallVec::insert_many overflow
-```
-
-The two `critical 9.8`s are tied by CVSS, but EPSS breaks the tie: the openssl
-overflow (88% exploit probability) rises to the top of the queue while the
-smallvec one (2%) falls near the bottom. A finding that is on CISA's
-known-exploited list renders as `KEV epss NN%` in the `Risk` column.
-
-Gate on it with `--fail-on-kev` (fail if anything is actively exploited) or
-`--min-epss 0.5`. Both feeds can be supplied offline via `--kev-file` /
-`--epss-file`.
-
-### Act now or schedule it: repo context and SSVC
-
-KEV and EPSS describe the vulnerability, not where it runs. Add each repo's exposure and
-impact to `fleet.toml` and every finding gets a CISA [SSVC](https://certcc.github.io/SSVC/)
-deployer decision (`immediate`, `out-of-cycle`, `scheduled` or `defer`):
-
-```toml
-[[repo]]
-id = "payments-api"
-path = "../payments-api"
-exposure = "open"                 # small | controlled | open
-mission_impact = "mission-failure"
-safety_impact = "negligible"
-owner = "team-payments"
-```
-
-The same KEV finding is `immediate` in an internet-facing payments API and `scheduled` in a
-small internal tool. `-f ssvc` lists the decisions with their vector, `fix-first` and
-`remediation` sort by them, `-f owners` splits the fix queue by owner, and
-`--fail-on-ssvc out-of-cycle` gates on them. Decisions need `--enrich` (or `--kev-file`);
-without KEV data fleetreach decides nothing rather than guess.
-
-Findings whose advisory carries no severity get a CVSS score from NVD. Without an API key
-NVD allows about one request every 6 seconds, so set `NVD_API_KEY` (free from NVD) to cut
-that roughly 8x; answers are cached per CVE under `~/.cache/fleetreach/nvd/`, so later runs
-only ask about new CVEs.
-
-Every finding shows its **dependency provenance**: whether the flagged package
-is a direct or transitive dependency, and the chain that pulls it in:
-
-```
-fleetreach/proc-macro-error2@2.0.1 (via fleetreach-scan → … → defmt-macros)
-```
-
-The full chain is in the JSON (`occurrences[].dependency_path`), so you can see
-*who pulls a package in* without reaching for `cargo tree -i`. `--why <crate>`
-asks that question across the whole fleet at once:
-
-```
-$ fleetreach scan --why serde
-cli-tools — serde 1.0.228 (direct):
-  ripgrep → serde
-docs-builder — serde 1.0.228 (transitive):
-  guide-helper → serde_json → serde
-file-finder — serde 1.0.228 (transitive):
-  fd-find → globset → bstr → serde
-```
-
-With **`--resolve-features`** (opt-in, needs the repo's buildable source), each
-finding is also marked built vs. a phantom `Cargo.lock`-only optional dependency
-that is never compiled; the table flags those with `⚠ not in default build` and
-the JSON adds `occurrences[].active`. Default scans stay lockfile-only and
-portable.
-
-This repo dogfoods itself: the committed [`fleet.toml`](fleet.toml) points at the
-repo root, so `fleetreach scan` from here audits fleetreach's own dependency
-tree (it reports zero vulnerabilities).
-
-## Exit codes (CI contract)
-
-Evaluated top-down, first match wins:
-
-| Code | Meaning |
-|------|---------|
-| `3`  | Usage / argument error. |
-| `2`  | Could not complete a trustworthy scan: invalid config · advisory DB unloadable · DB older than `--max-db-age` · zero repos scanned · **any repo errored** (a gap means we cannot claim the fleet is clean). |
-| `1`  | Trustworthy scan; a finding tripped the gate (`--fail-on`, or `--fail-on-warnings`). |
-| `0`  | Trustworthy scan; nothing met the failure threshold. |
-
-A falsely-clean report is the worst possible output, so the tool never exits `0`
-unless it completed a scan it can stand behind.
-
-## Design decisions (fail-closed)
-
-`fleetreach` errs toward noise over silence: when it cannot *prove* something is
-safe, it surfaces it rather than passing quietly.
-
-- **Unknown-severity vulnerabilities always gate.** An advisory with no CVSS
-  score is reported as `unknown` severity. It still trips `--fail-on` and still
-  survives `--min-severity` filtering; we cannot prove it sits below the
-  threshold, so we never silently drop it.
-- **`--db-rev` requires `--db`.** Pinning the advisory DB to an exact commit
-  works only against a local advisory-db git clone (`rustsec` 0.33 exposes no
-  open-at-revision constructor; the pin is performed by checking out the clone).
-- **`--max-db-age` refuses when age is unknown.** If the DB carries no commit
-  timestamp, freshness cannot be verified, so the run exits `2` rather than
-  assuming the DB is current.
-
-## Architecture
-
-```
-cli  →  report  →  correlate  →  scan  →  core
-```
-
-Dependencies point strictly inward. `core` (the domain model and JSON wire
-contract) has no in-workspace dependencies and no `rustsec` types in its public
-API, so future enrichment lands as additive fields without breaking
-`schema_version: 1`. `scan` is the only crate that touches `rustsec`. Every
-crate forbids `unsafe` and denies the `unwrap`/`expect`/`panic` family on
-externally-derived values.
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full data flow and the
-fail-closed spine, and [CHANGELOG.md](CHANGELOG.md) for release notes.
-
-## Reachability
-
-`--reachability` (bare, or `=heuristic`) is a labelled source-presence
-*heuristic* that greps your source and never builds anything. For Rust it greps
-for the advisory's affected function names; for the toolchain-free feeders it
-greps for an import/use of each **direct** dependency — exact for npm/Julia/RubyGems
-(coordinate = import name), and via a per-ecosystem name heuristic for
-PyPI/NuGet/Maven/Packagist/Swift/Hex (dist→module, package-id→namespace,
-group→Java-package, vendor/pkg→PSR-4, repo→Swift-module, `foo_bar`→`FooBar`). For
-GitHub Actions a `uses:` reference is an active CI step (sound-positive). The
-heuristic only ever *raises* a finding to reachable on a positive match — it never
-marks a Tier-C finding unreachable, so a missed import can't hide a vulnerability
-(and `--reachable-only` never drops one on a grep miss). All 12 ecosystems now
-produce a reachability signal (Go via govulncheck; Cargo also has a sound static
-mode below).
-
-**npm import graph.** Under `--reachability`, npm uses a build-free *module import
-graph* instead of the flat grep: it parses every `require`/`import` in your source
-and (when `node_modules` is present) in each installed package, then reports a
-vulnerable package as `Reachable` with a witness import-chain (`your-dep → … →
-vuln`) — including transitive packages. `--npm-prune-unreachable` additionally
-marks a package `NotReachable` when `node_modules` is present and no import path
-reaches it (so `--reachable-only` drops it). That negative is best-effort sound: a
-dynamic `require(expr)` or a framework autoload it can't see may make a
-`NotReachable` wrong, which is why it is a separate explicit opt-in.
-
-`--reachability=static` is a sound MIR call-graph analysis that proves whether a
-vulnerable function is callable, with a witness chain.
-
-> ⚠️ **`--reachability=static` COMPILES each scanned repo.** Building Rust runs
-> the repo's (and its dependencies') `build.rs` scripts and proc-macros, i.e.
-> **arbitrary code, with your full user privileges**. This is unlike the rest of
-> fleetreach, which only *reads* `Cargo.lock`. Because of that it is gated behind
-> an explicit `--allow-untrusted-builds` and prints a warning before any build.
-> **Only point it at repositories you trust.** For untrusted code, run it inside
-> a sandbox/container with no network and no secrets. It also needs the pinned
-> nightly `fleetreach-reach-driver` built and passed via `--reach-driver`.
-
-## MSRV
-
-The minimum supported Rust version is **1.89** (driven by the dependency
-closure, not just `rustsec`), verified in CI.
+osv-scanner, Trivy and Grype answer "is this project vulnerable?" one target at a time, and
+also scan container images, which fleetreach does not. Dependabot and Renovate keep each repo
+current. Dependency-Track is a server you feed SBOMs. fleetreach reads all your repositories
+directly and answers fleet questions, and works alongside each of them (it writes the SBOMs
+for Dependency-Track and the OpenVEX that Trivy and Grype read).
+[Detailed, dated comparisons](https://tess-fun.github.io/fleetreach/compare/osv-scanner/).
+
+## Design
+
+- **Fails closed.** A repo it cannot read is an error, a partly read source is labelled, and
+  exit code `2` means "not complete". A false clean is the worst output a security tool can
+  give.
+- **Reads, never runs.** Lockfiles and manifests only. The two features that compile code
+  (`--reachability=static`, Go's `govulncheck`) need `--allow-untrusted-builds`.
+- **No server, no lock-in.** Files in, files out: JSON, SARIF, OpenVEX, CycloneDX, SPDX, HTML.
+- **Audited data.** RustSec and OSV, plus KEV, EPSS and Vulnrichment. Works offline.
+
+The workspace is pure Rust with `unsafe` forbidden; see [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## For AI agents
+
+The documentation is published as [`llms.txt`](https://tess-fun.github.io/fleetreach/llms.txt)
+and [`llms-full.txt`](https://tess-fun.github.io/fleetreach/llms-full.txt), with a Markdown
+copy of every page. `fleetreach scan -f json` and `remediation-json` are stable inputs for
+agents that triage or fix dependencies.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). The website lives in [`website/`](website/), and its
+examples are real output regenerated by `npm run examples`.
 
 ## License
 
-Licensed under either of
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
+[MIT license](LICENSE-MIT) at your option. MSRV is Rust 1.89.
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or
-  http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or
-  http://opensource.org/licenses/MIT)
-
-at your option.
-
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
-dual licensed as above, without any additional terms or conditions.
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion
+in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above,
+without any additional terms or conditions.
