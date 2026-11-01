@@ -157,14 +157,10 @@ pub(crate) fn build_provenance(meta: &DatabaseMeta) -> Provenance {
         db_timestamp: meta.timestamp.clone(),
         host_os: std::env::consts::OS.to_string(),
         host_arch: std::env::consts::ARCH.to_string(),
-        generated_at: now_rfc3339(),
+        // SOURCE_DATE_EPOCH when set, like every other timestamp fleetreach writes, so a
+        // recorded history run (whose id hashes the report) is reproducible.
+        generated_at: crate::history::format_time(crate::history::now()),
         osv: Vec::new(),
         sources: Vec::new(),
     }
-}
-
-fn now_rfc3339() -> String {
-    time::OffsetDateTime::now_utc()
-        .format(&time::format_description::well_known::Rfc3339)
-        .unwrap_or_default()
 }

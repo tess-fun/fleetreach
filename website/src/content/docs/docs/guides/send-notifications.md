@@ -19,6 +19,32 @@ fleetreach notify --history-dir history/ -c fleet.toml --gitlab-issues --repo ac
 
 Run it right after `scan --history-dir`, in the same job.
 
+Printed without `--webhook`, for the demo fleet's history (the start of the payload):
+
+<!-- run: fleetreach notify --history-dir history/ -c fleet.toml | head -n 18 -->
+```console
+$ fleetreach notify --history-dir history/ -c fleet.toml | head -n 18
+{
+  "owners": [
+    {
+      "breaches": [
+        {
+          "advisory": "GHSA-6q48-6c7w-9gw2",
+          "due": "2026-09-15T09:00:00Z",
+          "ecosystem": "pypi",
+          "first_seen": "2026-09-01T09:00:00Z",
+          "overdue_days": 47.0,
+          "package": "certifi",
+          "repo": "data-pipeline",
+          "severity": "critical",
+          "ssvc": "defer",
+          "url": "https://osv.dev/vulnerability/GHSA-6q48-6c7w-9gw2",
+          "version": "2022.9.24"
+        },
+        {
+```
+<!-- /run -->
+
 ## What it reports
 
 - **new**: open in the newest run and not open before it (first seen, back after a fix, or

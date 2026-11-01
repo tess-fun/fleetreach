@@ -1,10 +1,26 @@
 # The demo fleet behind every example on the website and in the README.
-# Eight small repos for a made-up company, Acme, across five ecosystems.
+# Nine small repos for a made-up company, Acme, in six languages. before/ holds billing as it
+# was at the first recorded run, for the history examples (scripts/examples.mjs).
 # The advisory data is frozen in ./data, so the output only changes when fleetreach does.
 # Regenerate the examples with: node website/scripts/examples.mjs
 
 [settings.osv]
 dir = "data/osv"
+
+[settings.sla]
+immediate      = "2d"
+"out-of-cycle" = "14d"
+scheduled      = "60d"
+critical       = "14d"
+high           = "30d"
+medium         = "90d"
+
+[[settings.vex_assertion]]
+id            = "RUSTSEC-2020-0071"
+repo          = "ledger-svc"
+justification = "vulnerable_code_not_in_execute_path"
+reason        = "ledger-svc never formats local time; it only uses UTC timestamps"
+approved_by   = "security@acme.example"
 
 [settings.context.defaults]
 exposure       = "controlled"

@@ -18,6 +18,27 @@ fleetreach diff baseline.json current.json --fail-on high
 Its exit code mirrors `scan`: `1` when a new finding meets `--fail-on`. `--exit-zero` makes
 it report-only.
 
+On the demo fleet, between a scan on 1 September and one on 15 October: billing moved to a
+newer rack (fixed) and partner-api joined the fleet (new).
+
+<!-- run: fleetreach diff before.json report.json | head -n 12 -->
+```console
+$ fleetreach diff before.json report.json | head -n 12
+29 new, 12 fixed, 183 still open.
+
+New (29):
+
+┌──────────┬─────────────────────┬────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Severity ┆ Advisory            ┆ Repos  ┆ Title                                                                                                                                         │
+╞══════════╪═════════════════════╪════════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╡
+│ critical ┆ GHSA-7rjr-3q55-vv33 ┆ 1 (+1) ┆ Incomplete fix for Apache Log4j vulnerability                                                                                                 │
+├╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ critical ┆ GHSA-jfh8-c2jp-5v3q ┆ 1 (+1) ┆ Remote code injection in Log4j                                                                                                                │
+├╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ high     ┆ GHSA-57j2-w4cx-62h2 ┆ 1 (+1) ┆ Deeply nested json in jackson-databind                                                                                                        │
+```
+<!-- /run -->
+
 ## Keep a baseline
 
 The usual pattern: the default branch saves its report as an artifact (or commits it), and

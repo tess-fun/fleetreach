@@ -153,6 +153,11 @@ the osv.dev API, pyspdxtools, and CISA's and CERT/CC's own SSVC data.
   with its version, ecosystem, direct or transitive, and the chain that pulls it in.
 - **Go findings made tables hundreds of columns wide.** Affected function names are shown
   without their package path, and the list is cut at 60 characters.
+- **History runs were not reproducible under `SOURCE_DATE_EPOCH`.** The report's
+  `generated_at` used the clock, and a run's id hashes the report, so the same scan recorded
+  twice got different ids. It now follows `SOURCE_DATE_EPOCH` like every other timestamp.
+- **`history mttr` showed 0.0 days for a group with nothing fixed**, which read as fixed at
+  once. The table shows `-`; JSON is unchanged.
 
 ## [1.4.0] - 2026-10-31
 

@@ -2473,6 +2473,16 @@ fn history_tracks_fixes_age_sla_and_never_trusts_a_gap_run() {
         .unwrap();
     assert_eq!(team_a["fixed"], 1);
     assert_eq!(team_a["mean_days"], 10.0);
+    // A group with nothing fixed has no time to fix, not 0.0 days.
+    let (_, table, _) = query(&["mttr", "--by", "owner"]);
+    let team_b: Vec<&str> = table
+        .lines()
+        .find(|l| l.contains("team-b"))
+        .unwrap_or_default()
+        .split('┆')
+        .map(|c| c.trim_matches(|ch: char| ch == '│' || ch.is_whitespace()))
+        .collect();
+    assert_eq!(team_b.get(1..4), Some(&["0", "-", "-"][..]), "{table}");
 
     let config = fleet.to_str().unwrap();
     let (code_sla, out, _) = query(&["sla", "-c", config]);

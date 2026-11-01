@@ -306,11 +306,19 @@ fn run_mttr(args: &MttrArgs) -> u8 {
         "Still open",
     ]);
     for r in &rows {
+        // Nothing fixed has no time to fix; 0.0 would read as "fixed at once".
+        let days = |d: f64| {
+            if r.fixed == 0 {
+                "-".to_string()
+            } else {
+                format!("{d:.1}")
+            }
+        };
         t.add_row(vec![
             sanitize_cell(&r.group),
             r.fixed.to_string(),
-            format!("{:.1}", r.mean_days),
-            format!("{:.1}", r.median_days),
+            days(r.mean_days),
+            days(r.median_days),
             r.open.to_string(),
         ]);
     }
