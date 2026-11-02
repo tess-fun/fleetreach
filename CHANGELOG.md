@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-01
+
 ### Added
 
 - **Repo context and SSVC decisions** (spec 08). `[[repo]]` takes `exposure`,
@@ -834,7 +836,8 @@ Initial release. Fleet-wide Rust dependency advisory audit built on `rustsec`.
   targets on the two untrusted-byte surfaces (`fleet.toml`, lockfile content);
   black-box tests over the compiled binary's exit-code and stream contract.
 
-[Unreleased]: https://github.com/tess-fun/fleetreach/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/tess-fun/fleetreach/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/tess-fun/fleetreach/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/tess-fun/fleetreach/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/tess-fun/fleetreach/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/tess-fun/fleetreach/compare/v1.1.0...v1.2.0

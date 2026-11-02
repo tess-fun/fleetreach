@@ -769,7 +769,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-cli"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -810,7 +810,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-core"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "cvss 3.0.0",
  "rayon",
@@ -823,7 +823,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-correlate"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "proptest",
@@ -831,7 +831,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-ghactions"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "serde",
@@ -842,7 +842,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-go"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "fleetreach-reach",
@@ -855,7 +855,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-hex"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "serde",
@@ -865,7 +865,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-julia"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "serde",
@@ -876,7 +876,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-maven"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "roxmltree",
@@ -887,7 +887,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-npm"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "saphyr",
@@ -899,7 +899,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-nuget"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "roxmltree",
@@ -910,7 +910,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-packagist"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "serde",
@@ -920,7 +920,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-pypi"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "pep440_rs",
@@ -932,7 +932,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-reach"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -943,7 +943,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-report"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "comfy-table",
  "fleetreach-core",
@@ -955,7 +955,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-rubygems"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "serde",
@@ -965,7 +965,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-scan"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "rustsec",
@@ -975,7 +975,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-swift"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "serde",
