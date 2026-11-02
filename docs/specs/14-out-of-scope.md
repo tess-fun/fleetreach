@@ -1,6 +1,6 @@
 # Spec 14: Decisions on the remaining gaps
 
-Status: draft · Gaps: #11, #12 and two smaller items
+Status: draft; the container and curated-research decisions were reversed on 2026-11-02, see [spec 16](16-a-plus.md) · Gaps: #11, #12 and two smaller items
 
 These gaps from the competitive analysis do not get a feature spec. Each has a decision and
 the small amount of work that decision implies.

@@ -25,6 +25,7 @@ shared contracts, the dependency graph and a proposed order to discuss.
 | 12 | [JVM reachability (research)](12-jvm-reachability.md) | no function-level reach beyond Rust/Go | validation | M then L | medium, uncertain |
 | 13 | [Upgrade safety](13-upgrade-safety.md) | no "will this bump break me" | mobilization | S to L | medium |
 | 14 | [Decisions on the rest](14-out-of-scope.md) | containers, proprietary intel, NVD speed | n/a | S | low |
+| 16 | [A+ on every row by 1.8.0](16-a-plus.md) | every matrix row below A+; the current plan, over 1.6.0, 1.7.0 and 1.8.0 | all | XL | very high |
 
 The A+ bar for each of the 28 capabilities in the competitive matrix, and the work that no
 spec covers yet, is in [capability-excellence.md](capability-excellence.md).
