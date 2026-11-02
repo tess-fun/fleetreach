@@ -11,6 +11,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+use fleetreach_core::osv::TierCScan;
 use fleetreach_core::semver::Version;
 use fleetreach_core::{
     Coverage, CoverageGap, Ecosystem, Occurrence, RepoId, RepoOutcome, ScanStatus, VulnFinding,
@@ -491,7 +492,7 @@ fn scan_sbom_unit(
         }
     }
     let g = &input.graph;
-    let scan = (|| -> Result<fleetreach_core::osv::TierCScan, String> {
+    let scan = (|| -> Result<TierCScan, String> {
         Ok(match ecosystem {
             Ecosystem::Npm => fleetreach_npm::scan_installed(
                 &pkgs
@@ -880,16 +881,64 @@ fn scan_unit(
 ) -> RepoResult {
     match ecosystem {
         Ecosystem::Go => return scan_go_repo(repo, go, dbs.go.as_ref()),
-        Ecosystem::Npm => return scan_npm_repo(repo, dbs.npm.as_ref()),
-        Ecosystem::Pypi => return scan_pypi_repo(repo, dbs.pypi.as_ref()),
-        Ecosystem::RubyGems => return scan_rubygems_repo(repo, dbs.rubygems.as_ref()),
-        Ecosystem::Packagist => return scan_packagist_repo(repo, dbs.packagist.as_ref()),
-        Ecosystem::NuGet => return scan_nuget_repo(repo, dbs.nuget.as_ref()),
-        Ecosystem::Julia => return scan_julia_repo(repo, dbs.julia.as_ref()),
-        Ecosystem::Swift => return scan_swift_repo(repo, dbs.swift.as_ref()),
-        Ecosystem::Hex => return scan_hex_repo(repo, dbs.hex.as_ref()),
+        Ecosystem::Npm => {
+            return scan_tier_c(repo, ecosystem, dbs.npm.as_ref(), &NPM, |db| {
+                whole(fleetreach_npm::scan_offline(&repo.path, db, &repo.id))
+            })
+        }
+        Ecosystem::Pypi => {
+            return scan_tier_c(repo, ecosystem, dbs.pypi.as_ref(), &PYPI, |db| {
+                fleetreach_pypi::scan_offline_with_coverage(&repo.path, db, &repo.id).map(|s| {
+                    let gaps = s.coverage.into_iter();
+                    (
+                        s.scan,
+                        gaps.map(|g| (g.source, g.level, g.reason)).collect(),
+                    )
+                })
+            })
+        }
+        Ecosystem::RubyGems => {
+            return scan_tier_c(repo, ecosystem, dbs.rubygems.as_ref(), &RUBYGEMS, |db| {
+                whole(fleetreach_rubygems::scan_offline(&repo.path, db, &repo.id))
+            })
+        }
+        Ecosystem::Packagist => {
+            return scan_tier_c(repo, ecosystem, dbs.packagist.as_ref(), &PACKAGIST, |db| {
+                whole(fleetreach_packagist::scan_offline(&repo.path, db, &repo.id))
+            })
+        }
+        Ecosystem::NuGet => {
+            return scan_tier_c(repo, ecosystem, dbs.nuget.as_ref(), &NUGET, |db| {
+                fleetreach_nuget::scan_offline_with_coverage(&repo.path, db, &repo.id).map(|s| {
+                    let gaps = s.coverage.into_iter();
+                    (
+                        s.scan,
+                        gaps.map(|g| (g.source, g.level, g.reason)).collect(),
+                    )
+                })
+            })
+        }
+        Ecosystem::Julia => {
+            return scan_tier_c(repo, ecosystem, dbs.julia.as_ref(), &JULIA, |db| {
+                whole(fleetreach_julia::scan_offline(&repo.path, db, &repo.id))
+            })
+        }
+        Ecosystem::Swift => {
+            return scan_tier_c(repo, ecosystem, dbs.swift.as_ref(), &SWIFT, |db| {
+                whole(fleetreach_swift::scan_offline(&repo.path, db, &repo.id))
+            })
+        }
+        Ecosystem::Hex => {
+            return scan_tier_c(repo, ecosystem, dbs.hex.as_ref(), &HEX, |db| {
+                whole(fleetreach_hex::scan_offline(&repo.path, db, &repo.id))
+            })
+        }
         Ecosystem::Maven => return scan_maven_repo(repo, dbs.maven.as_ref(), maven_remote),
-        Ecosystem::GitHubActions => return scan_ghactions_repo(repo, dbs.ghactions.as_ref()),
+        Ecosystem::GitHubActions => {
+            return scan_tier_c(repo, ecosystem, dbs.ghactions.as_ref(), &GHACTIONS, |db| {
+                whole(fleetreach_ghactions::scan_offline(&repo.path, db, &repo.id))
+            })
+        }
         Ecosystem::Cargo => {}
     }
     let (lockfiles, walk_errors) = discover_lockfiles(repo);
@@ -993,244 +1042,145 @@ fn scan_go_repo(repo: &Repo, go: &GoScan, go_db: Option<&Result<GoDb, GoError>>)
     }
 }
 
-/// Scan an npm repo with the toolchain-free Tier-C matcher: read `package-lock.json`
-/// and match each package version against the preloaded OSV DB. Builds nothing, so it
-/// needs no consent and no sandbox. `npm_db` is the once-loaded DB: `None` means no
-/// `file://` mirror was given (an honest gap), `Some(Err)` a mirror that failed to
-/// load (the reason is surfaced, never a false-clean).
-fn scan_npm_repo(repo: &Repo, npm_db: Option<&Result<NpmDb, NpmError>>) -> RepoResult {
-    let errored = |reason: String| RepoResult::errored(&repo.id, reason);
+/// How a toolchain-free ecosystem names itself when a repo of it cannot be scanned: what its
+/// OSV DB is called, the prefix of a scan error, and the gap when no mirror was given (the
+/// files it reads and how to supply a mirror).
+struct TierC {
+    db: &'static str,
+    scan: &'static str,
+    no_mirror: &'static str,
+}
 
-    let db = match npm_db {
-        Some(Ok(db)) => db,
-        Some(Err(e)) => return errored(format!("npm OSV DB: {e}")),
-        None => {
-            return errored(
-                "npm repo (package-lock.json/pnpm-lock.yaml/yarn.lock/bun.lock): no OSV DB mirror for the toolchain-free \
-                 matcher (pass --osv-dir=<dir> or --npm-vuln-db=file://<dir>, e.g. an unzipped osv.dev npm export)"
-                    .to_string(),
-            )
-        }
-    };
-    match fleetreach_npm::scan_offline(&repo.path, db, &repo.id) {
-        Ok(scan) => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
-            .with_skipped(scan.skipped_unparseable),
-        Err(e) => errored(format!("npm tier-c scan: {e}")),
+const NPM: TierC = TierC {
+    db: "npm",
+    scan: "npm",
+    no_mirror: "npm repo (package-lock.json/pnpm-lock.yaml/yarn.lock/bun.lock): no OSV DB mirror for the toolchain-free \
+         matcher (pass --osv-dir=<dir> or --npm-vuln-db=file://<dir>, e.g. an unzipped osv.dev npm export)",
+};
+
+const PYPI: TierC = TierC {
+    db: "PyPI",
+    scan: "pypi",
+    no_mirror: "PyPI repo (uv.lock/poetry.lock/Pipfile.lock/pylock.toml/requirements): no OSV DB mirror for the \
+         toolchain-free matcher (pass --osv-dir=<dir> or --pypi-vuln-db=file://<path>, e.g. the osv.dev \
+         PyPI export all.zip or an unzipped directory)",
+};
+
+const RUBYGEMS: TierC = TierC {
+    db: "RubyGems",
+    scan: "rubygems",
+    no_mirror: "RubyGems repo (Gemfile.lock): no OSV DB mirror for the toolchain-free \
+         matcher (pass --osv-dir=<dir> or --rubygems-vuln-db=file://<path>, e.g. the osv.dev RubyGems \
+         export all.zip or an unzipped directory)",
+};
+
+const PACKAGIST: TierC = TierC {
+    db: "Packagist",
+    scan: "packagist",
+    no_mirror: "Packagist repo (composer.lock): no OSV DB mirror for the toolchain-free \
+         matcher (pass --osv-dir=<dir> or --packagist-vuln-db=file://<path>, e.g. the osv.dev Packagist \
+         export all.zip or an unzipped directory)",
+};
+
+const NUGET: TierC = TierC {
+    db: "NuGet",
+    scan: "nuget",
+    no_mirror: "NuGet repo (packages.lock.json/project.assets.json/packages.config/.csproj): no OSV DB mirror for the toolchain-free \
+         matcher (pass --osv-dir=<dir> or --nuget-vuln-db=file://<path>, e.g. the osv.dev NuGet export \
+         all.zip or an unzipped directory)",
+};
+
+const JULIA: TierC = TierC {
+    db: "Julia",
+    scan: "julia",
+    no_mirror: "Julia repo (Manifest.toml): no OSV DB mirror for the toolchain-free matcher \
+         (pass --osv-dir=<dir> or --julia-vuln-db=file://<path>, e.g. the osv.dev Julia export all.zip or \
+         an unzipped directory)",
+};
+
+const SWIFT: TierC = TierC {
+    db: "Swift",
+    scan: "swift",
+    no_mirror: "Swift repo (Package.resolved): no OSV DB mirror for the toolchain-free matcher \
+         (pass --osv-dir=<dir> or --swift-vuln-db=file://<path>, e.g. the osv.dev SwiftURL export all.zip \
+         or an unzipped directory)",
+};
+
+const HEX: TierC = TierC {
+    db: "Hex",
+    scan: "hex",
+    no_mirror: "Hex repo (mix.lock): no OSV DB mirror for the toolchain-free matcher (pass \
+         --osv-dir=<dir> or --hex-vuln-db=file://<path>, e.g. the osv.dev Hex export all.zip or an \
+         unzipped directory)",
+};
+
+const GHACTIONS: TierC = TierC {
+    db: "GitHub Actions",
+    scan: "github-actions",
+    no_mirror: "GitHub Actions repo (.github/workflows): no OSV DB mirror for the \
+         toolchain-free matcher (pass --osv-dir=<dir> or --ghactions-vuln-db=file://<path>, e.g. the \
+         osv.dev GitHub Actions export all.zip or an unzipped directory)",
+};
+
+const MAVEN: TierC = TierC {
+    db: "Maven",
+    scan: "maven",
+    no_mirror: "Maven repo (gradle.lockfile/pom.xml): no OSV DB mirror for the toolchain-free \
+         matcher (pass --osv-dir=<dir> or --maven-vuln-db=file://<path>, e.g. the osv.dev Maven export \
+         all.zip or an unzipped directory)",
+};
+
+/// The once-loaded DB, or why a repo cannot be scanned: no `file://` mirror was given (an
+/// honest gap) or the mirror failed to load (surfaced, never a false-clean).
+fn tier_c_db<'a, D, E: std::fmt::Display>(
+    db: Option<&'a Result<D, E>>,
+    eco: &TierC,
+) -> Result<&'a D, String> {
+    match db {
+        Some(Ok(db)) => Ok(db),
+        Some(Err(e)) => Err(format!("{} OSV DB: {e}", eco.db)),
+        None => Err(eco.no_mirror.to_string()),
     }
 }
 
-/// Scan a PyPI repo with the toolchain-free Tier-C matcher: read the Python lockfile
-/// (`uv.lock`/`poetry.lock`/`Pipfile.lock`), else `pylock.toml`, else requirements files, and
-/// match each package version against the preloaded OSV DB. Requirements files that are not a
-/// full resolved set are reported as coverage gaps (C1). Builds nothing, so it needs no consent and no sandbox. `pypi_db` is
-/// the once-loaded DB: `None` means no `file://` mirror was given (an honest gap),
-/// `Some(Err)` a mirror that failed to load (the reason is surfaced, never a false-clean).
-fn scan_pypi_repo(repo: &Repo, pypi_db: Option<&Result<PyPiDb, PyPiError>>) -> RepoResult {
-    let errored = |reason: String| RepoResult::errored(&repo.id, reason);
+/// A source a matcher read with less than full coverage: `(source, level, reason)`.
+type Gap = (String, Coverage, String);
 
-    let db = match pypi_db {
-        Some(Ok(db)) => db,
-        Some(Err(e)) => return errored(format!("PyPI OSV DB: {e}")),
-        None => {
-            return errored(
-                "PyPI repo (uv.lock/poetry.lock/Pipfile.lock/pylock.toml/requirements): no OSV DB mirror for the \
-                 toolchain-free matcher (pass --osv-dir=<dir> or --pypi-vuln-db=file://<path>, e.g. the osv.dev \
-                 PyPI export all.zip or an unzipped directory)"
-                    .to_string(),
-            )
-        }
+/// Scan a repo with a toolchain-free Tier-C matcher: it reads the repo's lockfiles and
+/// matches each package version against the preloaded OSV DB, building nothing, so it needs
+/// no consent and no sandbox. `scan` gives the findings and any sources read only in part.
+fn scan_tier_c<D, E: std::fmt::Display, S: std::fmt::Display>(
+    repo: &Repo,
+    ecosystem: Ecosystem,
+    db: Option<&Result<D, E>>,
+    eco: &TierC,
+    scan: impl FnOnce(&D) -> Result<(TierCScan, Vec<Gap>), S>,
+) -> RepoResult {
+    let db = match tier_c_db(db, eco) {
+        Ok(db) => db,
+        Err(reason) => return RepoResult::errored(&repo.id, reason),
     };
-    match fleetreach_pypi::scan_offline_with_coverage(&repo.path, db, &repo.id) {
-        Ok(scan) => scan.coverage.into_iter().fold(
-            RepoResult::scanned(&repo.id, scan.scan.findings, Vec::new())
-                .with_skipped(scan.scan.skipped_unparseable),
-            |result, gap| {
+    match scan(db) {
+        Ok((scan, gaps)) => gaps.into_iter().fold(
+            RepoResult::scanned(&repo.id, scan.findings, Vec::new())
+                .with_skipped(scan.skipped_unparseable),
+            |result, (source, level, reason)| {
                 result.with_coverage(CoverageGap {
                     repo: repo.id.clone(),
-                    source: gap.source,
-                    ecosystem: Ecosystem::Pypi,
-                    level: gap.level,
-                    reason: gap.reason,
+                    source,
+                    ecosystem,
+                    level,
+                    reason,
                 })
             },
         ),
-        Err(e) => errored(format!("pypi tier-c scan: {e}")),
+        Err(e) => RepoResult::errored(&repo.id, format!("{} tier-c scan: {e}", eco.scan)),
     }
 }
 
-/// Scan a RubyGems repo with the toolchain-free Tier-C matcher: read `Gemfile.lock` and
-/// match each gem version against the preloaded OSV DB. Builds nothing, so it needs no
-/// consent and no sandbox. `rubygems_db` is the once-loaded DB: `None` means no `file://`
-/// mirror was given (an honest gap), `Some(Err)` a mirror that failed to load (the reason
-/// is surfaced, never a false-clean).
-fn scan_rubygems_repo(
-    repo: &Repo,
-    rubygems_db: Option<&Result<RubyGemsDb, RubyGemsError>>,
-) -> RepoResult {
-    let errored = |reason: String| RepoResult::errored(&repo.id, reason);
-
-    let db = match rubygems_db {
-        Some(Ok(db)) => db,
-        Some(Err(e)) => return errored(format!("RubyGems OSV DB: {e}")),
-        None => {
-            return errored(
-                "RubyGems repo (Gemfile.lock): no OSV DB mirror for the toolchain-free \
-                 matcher (pass --osv-dir=<dir> or --rubygems-vuln-db=file://<path>, e.g. the osv.dev RubyGems \
-                 export all.zip or an unzipped directory)"
-                    .to_string(),
-            )
-        }
-    };
-    match fleetreach_rubygems::scan_offline(&repo.path, db, &repo.id) {
-        Ok(scan) => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
-            .with_skipped(scan.skipped_unparseable),
-        Err(e) => errored(format!("rubygems tier-c scan: {e}")),
-    }
-}
-
-/// Scan a Packagist (Composer/PHP) repo with the toolchain-free Tier-C matcher: read
-/// `composer.lock` and match each package version against the preloaded OSV DB. Builds
-/// nothing, so it needs no consent and no sandbox. `packagist_db` is the once-loaded DB:
-/// `None` means no `file://` mirror was given (an honest gap), `Some(Err)` a mirror that
-/// failed to load (the reason is surfaced, never a false-clean).
-fn scan_packagist_repo(
-    repo: &Repo,
-    packagist_db: Option<&Result<PackagistDb, PackagistError>>,
-) -> RepoResult {
-    let errored = |reason: String| RepoResult::errored(&repo.id, reason);
-
-    let db = match packagist_db {
-        Some(Ok(db)) => db,
-        Some(Err(e)) => return errored(format!("Packagist OSV DB: {e}")),
-        None => {
-            return errored(
-                "Packagist repo (composer.lock): no OSV DB mirror for the toolchain-free \
-                 matcher (pass --osv-dir=<dir> or --packagist-vuln-db=file://<path>, e.g. the osv.dev Packagist \
-                 export all.zip or an unzipped directory)"
-                    .to_string(),
-            )
-        }
-    };
-    match fleetreach_packagist::scan_offline(&repo.path, db, &repo.id) {
-        Ok(scan) => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
-            .with_skipped(scan.skipped_unparseable),
-        Err(e) => errored(format!("packagist tier-c scan: {e}")),
-    }
-}
-
-/// Scan a NuGet (.NET) repo with the toolchain-free Tier-C matcher: read
-/// `packages.lock.json` and match each package version against the preloaded OSV DB. Builds
-/// nothing, so it needs no consent and no sandbox. `nuget_db` is the once-loaded DB: `None`
-/// means no `file://` mirror was given (an honest gap), `Some(Err)` a mirror that failed to
-/// load (the reason is surfaced, never a false-clean).
-fn scan_nuget_repo(repo: &Repo, nuget_db: Option<&Result<NuGetDb, NuGetError>>) -> RepoResult {
-    let errored = |reason: String| RepoResult::errored(&repo.id, reason);
-
-    let db = match nuget_db {
-        Some(Ok(db)) => db,
-        Some(Err(e)) => return errored(format!("NuGet OSV DB: {e}")),
-        None => {
-            return errored(
-                "NuGet repo (packages.lock.json/project.assets.json/packages.config/.csproj): no OSV DB mirror for the toolchain-free \
-                 matcher (pass --osv-dir=<dir> or --nuget-vuln-db=file://<path>, e.g. the osv.dev NuGet export \
-                 all.zip or an unzipped directory)"
-                    .to_string(),
-            )
-        }
-    };
-    match fleetreach_nuget::scan_offline_with_coverage(&repo.path, db, &repo.id) {
-        Ok(scan) => scan.coverage.into_iter().fold(
-            RepoResult::scanned(&repo.id, scan.scan.findings, Vec::new())
-                .with_skipped(scan.scan.skipped_unparseable),
-            |result, gap| {
-                result.with_coverage(CoverageGap {
-                    repo: repo.id.clone(),
-                    source: gap.source,
-                    ecosystem: Ecosystem::NuGet,
-                    level: gap.level,
-                    reason: gap.reason,
-                })
-            },
-        ),
-        Err(e) => errored(format!("nuget tier-c scan: {e}")),
-    }
-}
-
-/// Scan a Julia repo with the toolchain-free Tier-C matcher: read `Manifest.toml` and match
-/// each package version against the preloaded OSV DB. Builds nothing, so it needs no consent
-/// and no sandbox. `julia_db` is the once-loaded DB: `None` means no `file://` mirror was
-/// given (an honest gap), `Some(Err)` a mirror that failed to load (the reason is surfaced).
-fn scan_julia_repo(repo: &Repo, julia_db: Option<&Result<JuliaDb, JuliaError>>) -> RepoResult {
-    let errored = |reason: String| RepoResult::errored(&repo.id, reason);
-
-    let db = match julia_db {
-        Some(Ok(db)) => db,
-        Some(Err(e)) => return errored(format!("Julia OSV DB: {e}")),
-        None => {
-            return errored(
-                "Julia repo (Manifest.toml): no OSV DB mirror for the toolchain-free matcher \
-                 (pass --osv-dir=<dir> or --julia-vuln-db=file://<path>, e.g. the osv.dev Julia export all.zip or \
-                 an unzipped directory)"
-                    .to_string(),
-            )
-        }
-    };
-    match fleetreach_julia::scan_offline(&repo.path, db, &repo.id) {
-        Ok(scan) => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
-            .with_skipped(scan.skipped_unparseable),
-        Err(e) => errored(format!("julia tier-c scan: {e}")),
-    }
-}
-
-/// Scan a Swift repo with the toolchain-free Tier-C matcher: read `Package.resolved` and match
-/// each package version against the preloaded OSV DB. Builds nothing, so it needs no consent
-/// and no sandbox. `swift_db` is the once-loaded DB: `None` means no `file://` mirror was given
-/// (an honest gap), `Some(Err)` a mirror that failed to load (the reason is surfaced).
-fn scan_swift_repo(repo: &Repo, swift_db: Option<&Result<SwiftDb, SwiftError>>) -> RepoResult {
-    let errored = |reason: String| RepoResult::errored(&repo.id, reason);
-
-    let db =
-        match swift_db {
-            Some(Ok(db)) => db,
-            Some(Err(e)) => return errored(format!("Swift OSV DB: {e}")),
-            None => return errored(
-                "Swift repo (Package.resolved): no OSV DB mirror for the toolchain-free matcher \
-                 (pass --osv-dir=<dir> or --swift-vuln-db=file://<path>, e.g. the osv.dev SwiftURL export all.zip \
-                 or an unzipped directory)"
-                    .to_string(),
-            ),
-        };
-    match fleetreach_swift::scan_offline(&repo.path, db, &repo.id) {
-        Ok(scan) => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
-            .with_skipped(scan.skipped_unparseable),
-        Err(e) => errored(format!("swift tier-c scan: {e}")),
-    }
-}
-
-/// Scan a Hex (Elixir) repo with the toolchain-free Tier-C matcher: read `mix.lock` and match
-/// each package version against the preloaded OSV DB. Builds nothing, so it needs no consent
-/// and no sandbox. `hex_db` is the once-loaded DB: `None` means no `file://` mirror was given
-/// (an honest gap), `Some(Err)` a mirror that failed to load (the reason is surfaced).
-fn scan_hex_repo(repo: &Repo, hex_db: Option<&Result<HexDb, HexError>>) -> RepoResult {
-    let errored = |reason: String| RepoResult::errored(&repo.id, reason);
-
-    let db = match hex_db {
-        Some(Ok(db)) => db,
-        Some(Err(e)) => return errored(format!("Hex OSV DB: {e}")),
-        None => {
-            return errored(
-                "Hex repo (mix.lock): no OSV DB mirror for the toolchain-free matcher (pass \
-                 --osv-dir=<dir> or --hex-vuln-db=file://<path>, e.g. the osv.dev Hex export all.zip or an \
-                 unzipped directory)"
-                    .to_string(),
-            )
-        }
-    };
-    match fleetreach_hex::scan_offline(&repo.path, db, &repo.id) {
-        Ok(scan) => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
-            .with_skipped(scan.skipped_unparseable),
-        Err(e) => errored(format!("hex tier-c scan: {e}")),
-    }
+/// A matcher's scan with no partial sources.
+fn whole<E>(scan: Result<TierCScan, E>) -> Result<(TierCScan, Vec<Gap>), E> {
+    scan.map(|scan| (scan, Vec::new()))
 }
 
 /// Scan a Maven (Java) repo with the toolchain-free Tier-C matcher: read `gradle.lockfile` or
@@ -1244,17 +1194,10 @@ fn scan_maven_repo(
 ) -> RepoResult {
     let errored = |reason: String| RepoResult::errored(&repo.id, reason);
 
-    let db =
-        match maven_db {
-            Some(Ok(db)) => db,
-            Some(Err(e)) => return errored(format!("Maven OSV DB: {e}")),
-            None => return errored(
-                "Maven repo (gradle.lockfile/pom.xml): no OSV DB mirror for the toolchain-free \
-                 matcher (pass --osv-dir=<dir> or --maven-vuln-db=file://<path>, e.g. the osv.dev Maven export \
-                 all.zip or an unzipped directory)"
-                    .to_string(),
-            ),
-        };
+    let db = match tier_c_db(maven_db, &MAVEN) {
+        Ok(db) => db,
+        Err(reason) => return errored(reason),
+    };
     // `gradle.lockfile` is the resolved closure. A `pom.xml` is resolved like Maven would
     // (parents, BOMs, mediation) from local repositories, plus Maven Central with
     // `--maven-fetch`; whatever cannot be resolved is named as partial coverage. A POM that
@@ -1319,37 +1262,7 @@ fn scan_maven_repo(
             }),
         Ok(scan) => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
             .with_skipped(scan.skipped_unparseable),
-        Err(e) => errored(format!("maven tier-c scan: {e}")),
-    }
-}
-
-/// Scan a GitHub Actions repo with the toolchain-free Tier-C matcher: read
-/// `.github/workflows/*.yml` and match each pinned `uses:` action against the preloaded OSV
-/// DB. Builds nothing, so it needs no consent and no sandbox. `ghactions_db` is the
-/// once-loaded DB: `None` means no `file://` mirror was given (an honest gap), `Some(Err)` a
-/// mirror that failed to load (the reason is surfaced).
-fn scan_ghactions_repo(
-    repo: &Repo,
-    ghactions_db: Option<&Result<GhActionsDb, GhaError>>,
-) -> RepoResult {
-    let errored = |reason: String| RepoResult::errored(&repo.id, reason);
-
-    let db = match ghactions_db {
-        Some(Ok(db)) => db,
-        Some(Err(e)) => return errored(format!("GitHub Actions OSV DB: {e}")),
-        None => {
-            return errored(
-                "GitHub Actions repo (.github/workflows): no OSV DB mirror for the \
-                 toolchain-free matcher (pass --osv-dir=<dir> or --ghactions-vuln-db=file://<path>, e.g. the \
-                 osv.dev GitHub Actions export all.zip or an unzipped directory)"
-                    .to_string(),
-            )
-        }
-    };
-    match fleetreach_ghactions::scan_offline(&repo.path, db, &repo.id) {
-        Ok(scan) => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
-            .with_skipped(scan.skipped_unparseable),
-        Err(e) => errored(format!("github-actions tier-c scan: {e}")),
+        Err(e) => errored(format!("{} tier-c scan: {e}", MAVEN.scan)),
     }
 }
 
@@ -1403,4 +1316,40 @@ pub fn discover_lockfiles(repo: &Repo) -> (Vec<PathBuf>, Vec<String>) {
         }
     }
     (paths, errors)
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_toolchain_free_repo_without_a_usable_mirror_says_how_to_get_one() {
+        let ecosystems = [
+            (&NPM, "--npm-vuln-db"),
+            (&PYPI, "--pypi-vuln-db"),
+            (&RUBYGEMS, "--rubygems-vuln-db"),
+            (&PACKAGIST, "--packagist-vuln-db"),
+            (&NUGET, "--nuget-vuln-db"),
+            (&JULIA, "--julia-vuln-db"),
+            (&SWIFT, "--swift-vuln-db"),
+            (&HEX, "--hex-vuln-db"),
+            (&GHACTIONS, "--ghactions-vuln-db"),
+            (&MAVEN, "--maven-vuln-db"),
+        ];
+        for (eco, flag) in ecosystems {
+            let missing = tier_c_db::<(), String>(None, eco).unwrap_err();
+            assert!(missing.contains("no OSV DB mirror"), "{missing}");
+            assert!(
+                missing.contains("--osv-dir") && missing.contains(flag),
+                "{missing}"
+            );
+            assert!(
+                !missing.contains("  "),
+                "a line continuation kept its indent: {missing}"
+            );
+            let broken = tier_c_db::<(), String>(Some(&Err("bad zip".into())), eco).unwrap_err();
+            assert_eq!(broken, format!("{} OSV DB: bad zip", eco.db));
+        }
+    }
 }

@@ -458,6 +458,71 @@ fn locate_govulncheck(explicit: Option<&Path>) -> Option<PathBuf> {
 }
 
 pub(crate) fn run_scan(args: ScanArgs) -> u8 {
+    match scan_and_report(&args) {
+        Ok(code) | Err(code) => code,
+    }
+}
+
+/// The scan pipeline, phase by phase. Each phase that can stop the run returns `Err` with
+/// the exit code, having already said why.
+fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
+    refuse_narrowed_history(args)?;
+    // --explain short-circuits (§10.1): load DB, print one advisory, exit.
+    // It needs no fleet.toml.
+    if let Some(id) = &args.explain {
+        return explain(args, id);
+    }
+    let (config, materialized) = load_fleet(args)?;
+    // --why short-circuits (§10.1): a dependency-tree query, no advisory DB.
+    if let Some(package) = &args.why {
+        return Ok(run_why(&config, package));
+    }
+    let db = advisory_db(args)?;
+    let feeds = Feeds::resolve(args, &config)?;
+    let mut scan = scan_fleet(
+        &db,
+        &config,
+        feeds.toolchain.as_ref(),
+        feeds.host.as_deref(),
+        &feeds.go(args),
+        &feeds.mirrors(),
+    );
+    let fleet_packages = add_fleet_signals(args, &config, &feeds, &materialized, &mut scan)?;
+    note_scan(args, &scan);
+    let coverage_incomplete = !scan.coverage.is_empty();
+    let Assembled {
+        report: mut fleet_report,
+        suppressed,
+    } = assemble_report(args, &config, &db, &feeds, &materialized, scan);
+    let exploitation_known = enrich_report(args, &mut fleet_report);
+    assess_reachability(args, &config, &mut fleet_report)?;
+    let baseline_new = apply_baseline(args, &mut fleet_report)?;
+    // 5b2. Fleet evidence for upgrades (spec 13): the versions of each vulnerable package
+    //      every repo runs, so the fix queue can say which bumps the fleet already survived.
+    crate::evidence::annotate(&mut fleet_report, &config.repos);
+    decide_ssvc(args, &config, &mut fleet_report, exploitation_known)?;
+
+    // 6. Render: machine payload to stdout, human summary to stderr.
+    let payload = render(args, &config, &fleet_report, &suppressed)?;
+    println!("{payload}");
+    if !args.quiet {
+        eprintln!("{}", report::summary_line(&fleet_report));
+    }
+
+    let code = gate(args, &fleet_report, baseline_new, coverage_incomplete);
+    record_history(
+        args,
+        &config,
+        &fleet_report,
+        &suppressed,
+        code,
+        fleet_packages,
+    )?;
+    Ok(code)
+}
+
+/// `--history-dir` records the whole fleet, so it refuses the flags that drop findings.
+fn refuse_narrowed_history(args: &ScanArgs) -> Result<(), u8> {
     if args.history_dir.is_some() {
         let narrowing = [
             (args.baseline.is_some(), "--baseline"),
@@ -473,45 +538,41 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             .map(|(_, f)| *f)
             .collect();
         if !used.is_empty() {
-            return usage_fail(&format!(
+            return Err(usage_fail(&format!(
                 "--history-dir records the whole fleet; {} would drop findings that history \
                  would then count as fixed",
                 used.join(", ")
-            ));
+            )));
         }
     }
-    // --explain short-circuits (§10.1): load DB, print one advisory, exit.
-    // It needs no fleet.toml.
-    if let Some(id) = &args.explain {
-        let db = match load_db(&args) {
-            Ok(db) => db,
-            Err(e) => return fail(&e),
-        };
-        return match db.explain(id) {
-            Ok(Some(detail)) => {
-                // The advisory detail is untrusted DB markdown; neutralize terminal
-                // control sequences while keeping newlines so it still reads.
-                println!("{}", fleetreach_report::sanitize_text(&detail));
-                0
-            }
-            Ok(None) => fail(&format!("advisory {id} not found in the database")),
-            Err(e) => fail(&e.to_string()),
-        };
-    }
+    Ok(())
+}
 
+/// `--explain`: one advisory from the DB, sanitized for the terminal.
+fn explain(args: &ScanArgs, id: &str) -> Result<u8, u8> {
+    let db = load_db(args).map_err(|e| fail(&e))?;
+    Ok(match db.explain(id) {
+        Ok(Some(detail)) => {
+            // The advisory detail is untrusted DB markdown; neutralize terminal
+            // control sequences while keeping newlines so it still reads.
+            println!("{}", fleetreach_report::sanitize_text(&detail));
+            0
+        }
+        Ok(None) => fail(&format!("advisory {id} not found in the database")),
+        Err(e) => fail(&e.to_string()),
+    })
+}
+
+/// The fleet: `fleet.toml` plus the repos its `[[source]]` entries expand to.
+fn load_fleet(args: &ScanArgs) -> Result<(Config, sources::Materialized), u8> {
     // 1. Config (§10.2): any failure is a could-not-scan -> 2.
-    let mut config = match Config::load(&args.config) {
-        Ok(c) => c,
-        Err(e) => return fail(&e.to_string()),
-    };
+    let mut config = Config::load(&args.config).map_err(|e| fail(&e.to_string()))?;
 
     // 1a. Fleet sources (spec 06): expand `[[source]]` into repos. With --sync, list afresh
     //     and clone/refresh; without, use the cached listing and existing checkouts. A
     //     listing that cannot be read stops the run: the fleet itself is unknown.
-    let materialized = match sources::materialize(&config, args.sync, args.quiet) {
-        Ok(m) => m,
-        Err(e) => return fail(&e),
-    };
+    let materialized =
+        sources::materialize(&config, args.sync, args.quiet).map_err(|e| fail(&e))?;
     config.repos.extend(materialized.repos.iter().cloned());
     for (id, context) in &materialized.context {
         config
@@ -523,167 +584,187 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         for (repo, reason) in &materialized.failed {
             eprintln!("error: {repo}: {reason}");
         }
-        return fail("no fleet-source repo could be checked out");
+        return Err(fail("no fleet-source repo could be checked out"));
     }
 
-    // --why short-circuits (§10.1): a dependency-tree query, no advisory DB.
-    if let Some(package) = &args.why {
-        return run_why(&config, package);
-    }
+    Ok((config, materialized))
+}
 
+/// The RustSec DB, held to `--max-db-age`.
+fn advisory_db(args: &ScanArgs) -> Result<AdvisoryDb, u8> {
     // 2. Advisory DB (§10.3): network failure / unusable -> 2, loud, never clean.
-    let db = match load_db(&args) {
-        Ok(db) => db,
-        Err(e) => return fail(&e),
-    };
+    let db = load_db(args).map_err(|e| fail(&e))?;
 
     // 3. Freshness gate (§3): cannot prove freshness -> 2.
     if let Some(spec) = &args.max_db_age {
-        if let Err(e) = check_db_age(&db, spec) {
-            return fail(&e);
-        }
+        check_db_age(&db, spec).map_err(|e| fail(&e))?;
     }
+    Ok(db)
+}
 
-    // 4. Scan the fleet, plus the toolchain if rustc is detectable. With
-    //    --resolve-features, also annotate findings built/phantom for the host.
-    let toolchain = detect_toolchain();
-    // --ignore-phantom needs the build set, so it implies feature resolution.
-    let host = if args.resolve_features || args.ignore_phantom {
-        let detected = resolve::host_triple();
-        if detected.is_none() {
-            eprintln!("warning: feature resolution requested but host triple undetected; skipping");
-        }
-        detected
-    } else {
-        None
-    };
-    // Go repos are scanned by govulncheck, which compiles the module — gate it on
-    // the same consent as static reachability. Absent consent, Go repos surface as
-    // an honest Errored gap (handled in orchestrate), never silently skipped.
-    let go_govulncheck = if args.allow_untrusted_builds {
-        locate_govulncheck(args.govulncheck.as_deref())
-    } else {
-        None
-    };
-    // The Go vuln-DB mirror: the explicit flag wins, else the conventional
-    // GOVULNDB env var. A `file://` value lets a confined Go scan run offline.
-    let go_vuln_db = args
-        .go_vuln_db
-        .clone()
-        .or_else(|| std::env::var("GOVULNDB").ok())
-        .filter(|s| !s.is_empty());
-    // The OSV exports for the toolchain-free feeders (spec 01). Each ecosystem resolves from
-    // its explicit flag (or env var), then the one OSV directory, then the default cache,
-    // which network builds keep fresh. Only ecosystems the fleet actually has are resolved,
-    // so a Rust-only fleet never touches the network for them.
-    let mut needed = fleet_ecosystems(&config);
-    // Go needs the osv.dev export only for its offline matcher: not when govulncheck runs,
-    // and not when a `file://` vuln.go.dev mirror is given.
-    if go_govulncheck.is_some()
-        || go_vuln_db
-            .as_deref()
-            .is_some_and(|d| d.starts_with("file://"))
-    {
-        needed.retain(|e| *e != Ecosystem::Go);
-    }
-    let explicit = explicit_osv_dbs(&args);
-    let osv_opts = osvdb::Options {
-        dir: args
-            .osv_dir
-            .clone()
-            .or_else(|| std::env::var_os(osvdb::DIR_ENV).map(PathBuf::from))
-            .or_else(|| config.osv.dir.clone()),
-        cache: osvdb::default_cache_dir(),
-        sync: cfg!(feature = "network") && !args.offline && osvdb::sync_enabled_by_env(),
-        refresh: config.osv.refresh.unwrap_or(osvdb::DEFAULT_REFRESH),
-        quiet: args.quiet,
-    };
-    let (osv_sources, osv_warnings) = osvdb::resolve_all(&needed, &explicit, &osv_opts);
-    for warning in &osv_warnings {
-        eprintln!("warning: {warning}");
-    }
-    let unresolved: Vec<&str> = needed
-        .iter()
-        .filter(|eco| !osv_sources.contains_key(eco) && !explicit.contains_key(eco))
-        .filter_map(|&eco| osvdb::osv_name(eco))
-        .collect();
-    if !unresolved.is_empty() {
-        eprintln!(
-            "note: no OSV export for {}; run `fleetreach db sync` (network build) or pass \
-             --osv-dir <dir> laid out as <dir>/<Ecosystem>/all.zip",
-            unresolved.join(", ")
-        );
-    }
-    // Freshness gate for OSV data, same contract as the RustSec gate above.
-    if let Some(spec) = &args.max_db_age {
-        let limit = match parse_duration_secs(spec) {
-            Ok(limit) => limit,
-            Err(e) => return fail(&e),
+/// What each ecosystem is scanned with: the toolchain, the host for feature resolution,
+/// govulncheck and the Go DB, the OSV export of every toolchain-free ecosystem the fleet
+/// has, and the Maven POM remote.
+struct Feeds {
+    toolchain: Option<crate::orchestrate::Toolchain>,
+    host: Option<String>,
+    go_govulncheck: Option<PathBuf>,
+    go_db: Option<String>,
+    osv_sources: BTreeMap<Ecosystem, osvdb::OsvSource>,
+    urls: BTreeMap<Ecosystem, String>,
+    maven_remote: Option<crate::maven_repo::Remote>,
+}
+
+impl Feeds {
+    fn resolve(args: &ScanArgs, config: &Config) -> Result<Feeds, u8> {
+        // 4. Scan the fleet, plus the toolchain if rustc is detectable. With
+        //    --resolve-features, also annotate findings built/phantom for the host.
+        let toolchain = detect_toolchain();
+        // --ignore-phantom needs the build set, so it implies feature resolution.
+        let host = if args.resolve_features || args.ignore_phantom {
+            let detected = resolve::host_triple();
+            if detected.is_none() {
+                eprintln!(
+                    "warning: feature resolution requested but host triple undetected; skipping"
+                );
+            }
+            detected
+        } else {
+            None
         };
-        if let Err(e) = osvdb::check_ages(&osv_sources, limit, std::time::SystemTime::now()) {
-            return fail(&e);
+        // Go repos are scanned by govulncheck, which compiles the module — gate it on
+        // the same consent as static reachability. Absent consent, Go repos surface as
+        // an honest Errored gap (handled in orchestrate), never silently skipped.
+        let go_govulncheck = if args.allow_untrusted_builds {
+            locate_govulncheck(args.govulncheck.as_deref())
+        } else {
+            None
+        };
+        // The Go vuln-DB mirror: the explicit flag wins, else the conventional
+        // GOVULNDB env var. A `file://` value lets a confined Go scan run offline.
+        let go_vuln_db = args
+            .go_vuln_db
+            .clone()
+            .or_else(|| std::env::var("GOVULNDB").ok())
+            .filter(|s| !s.is_empty());
+        // The OSV exports for the toolchain-free feeders (spec 01). Each ecosystem resolves from
+        // its explicit flag (or env var), then the one OSV directory, then the default cache,
+        // which network builds keep fresh. Only ecosystems the fleet actually has are resolved,
+        // so a Rust-only fleet never touches the network for them.
+        let mut needed = fleet_ecosystems(config);
+        // Go needs the osv.dev export only for its offline matcher: not when govulncheck runs,
+        // and not when a `file://` vuln.go.dev mirror is given.
+        if go_govulncheck.is_some()
+            || go_vuln_db
+                .as_deref()
+                .is_some_and(|d| d.starts_with("file://"))
+        {
+            needed.retain(|e| *e != Ecosystem::Go);
+        }
+        let explicit = explicit_osv_dbs(args);
+        let osv_opts = osvdb::Options {
+            dir: args
+                .osv_dir
+                .clone()
+                .or_else(|| std::env::var_os(osvdb::DIR_ENV).map(PathBuf::from))
+                .or_else(|| config.osv.dir.clone()),
+            cache: osvdb::default_cache_dir(),
+            sync: cfg!(feature = "network") && !args.offline && osvdb::sync_enabled_by_env(),
+            refresh: config.osv.refresh.unwrap_or(osvdb::DEFAULT_REFRESH),
+            quiet: args.quiet,
+        };
+        let (osv_sources, osv_warnings) = osvdb::resolve_all(&needed, &explicit, &osv_opts);
+        for warning in &osv_warnings {
+            eprintln!("warning: {warning}");
+        }
+        let unresolved: Vec<&str> = needed
+            .iter()
+            .filter(|eco| !osv_sources.contains_key(eco) && !explicit.contains_key(eco))
+            .filter_map(|&eco| osvdb::osv_name(eco))
+            .collect();
+        if !unresolved.is_empty() {
+            eprintln!(
+                "note: no OSV export for {}; run `fleetreach db sync` (network build) or pass \
+                 --osv-dir <dir> laid out as <dir>/<Ecosystem>/all.zip",
+                unresolved.join(", ")
+            );
+        }
+        // Freshness gate for OSV data, same contract as the RustSec gate above.
+        if let Some(spec) = &args.max_db_age {
+            let limit = match parse_duration_secs(spec) {
+                Ok(limit) => limit,
+                Err(e) => return Err(fail(&e)),
+            };
+            if let Err(e) = osvdb::check_ages(&osv_sources, limit, std::time::SystemTime::now()) {
+                return Err(fail(&e));
+            }
+        }
+        // Each toolchain-free ecosystem's mirror: the resolved export, else its explicit flag.
+        let mut urls: BTreeMap<Ecosystem, String> = explicit;
+        for (eco, source) in &osv_sources {
+            urls.insert(*eco, source.url());
+        }
+        // govulncheck takes the configured DB as is; the offline matcher takes a `file://`
+        // vuln.go.dev mirror, else the osv.dev Go export.
+        let go_db = if go_govulncheck.is_some() {
+            go_vuln_db.clone()
+        } else {
+            go_vuln_db
+                .clone()
+                .filter(|d| d.starts_with("file://"))
+                .or_else(|| urls.get(&Ecosystem::Go).cloned())
+        };
+        // Read once: a mirror that is configured but unusable stops the scan rather than letting
+        // POM requests fall back to Maven Central.
+        let maven_remote = args.maven.remote(args.verbose).map_err(|e| fail(&e))?;
+        Ok(Feeds {
+            toolchain,
+            host,
+            go_govulncheck,
+            go_db,
+            osv_sources,
+            urls,
+            maven_remote,
+        })
+    }
+
+    fn go<'a>(&'a self, args: &'a ScanArgs) -> GoScan<'a> {
+        GoScan {
+            govulncheck: self.go_govulncheck.as_deref(),
+            sandbox: args.build_sandbox.into(),
+            vuln_db: self.go_db.as_deref(),
+            offline: args.offline,
         }
     }
-    let osv_url = |eco: Ecosystem| {
-        osv_sources
-            .get(&eco)
-            .map(osvdb::OsvSource::url)
-            .or_else(|| explicit.get(&eco).cloned())
-    };
-    let npm_vuln_db = osv_url(Ecosystem::Npm);
-    let pypi_vuln_db = osv_url(Ecosystem::Pypi);
-    let rubygems_vuln_db = osv_url(Ecosystem::RubyGems);
-    let packagist_vuln_db = osv_url(Ecosystem::Packagist);
-    let nuget_vuln_db = osv_url(Ecosystem::NuGet);
-    let julia_vuln_db = osv_url(Ecosystem::Julia);
-    let swift_vuln_db = osv_url(Ecosystem::Swift);
-    let hex_vuln_db = osv_url(Ecosystem::Hex);
-    let ghactions_vuln_db = osv_url(Ecosystem::GitHubActions);
-    let maven_vuln_db = osv_url(Ecosystem::Maven);
-    // govulncheck takes the configured DB as is; the offline matcher takes a `file://`
-    // vuln.go.dev mirror, else the osv.dev Go export.
-    let go_db = if go_govulncheck.is_some() {
-        go_vuln_db.clone()
-    } else {
-        go_vuln_db
-            .clone()
-            .filter(|d| d.starts_with("file://"))
-            .or_else(|| osv_url(Ecosystem::Go))
-    };
-    // Read once: a mirror that is configured but unusable stops the scan rather than letting
-    // POM requests fall back to Maven Central.
-    let maven_remote = match args.maven.remote(args.verbose) {
-        Ok(remote) => remote,
-        Err(e) => return fail(&e),
-    };
-    let scan = scan_fleet(
-        &db,
-        &config,
-        toolchain.as_ref(),
-        host.as_deref(),
-        &GoScan {
-            govulncheck: go_govulncheck.as_deref(),
-            sandbox: args.build_sandbox.into(),
-            vuln_db: go_db.as_deref(),
-            offline: args.offline,
-        },
-        &Mirrors {
-            npm: npm_vuln_db.as_deref(),
-            pypi: pypi_vuln_db.as_deref(),
-            rubygems: rubygems_vuln_db.as_deref(),
-            packagist: packagist_vuln_db.as_deref(),
-            nuget: nuget_vuln_db.as_deref(),
-            julia: julia_vuln_db.as_deref(),
-            swift: swift_vuln_db.as_deref(),
-            hex: hex_vuln_db.as_deref(),
-            ghactions: ghactions_vuln_db.as_deref(),
-            maven: maven_vuln_db.as_deref(),
-            maven_remote: maven_remote.as_ref(),
-        },
-    );
 
-    // Discovered repos that could not be checked out are gaps, never silently absent.
-    let mut scan = scan;
+    fn mirrors(&self) -> Mirrors<'_> {
+        let url = |eco| self.urls.get(&eco).map(String::as_str);
+        Mirrors {
+            npm: url(Ecosystem::Npm),
+            pypi: url(Ecosystem::Pypi),
+            rubygems: url(Ecosystem::RubyGems),
+            packagist: url(Ecosystem::Packagist),
+            nuget: url(Ecosystem::NuGet),
+            julia: url(Ecosystem::Julia),
+            swift: url(Ecosystem::Swift),
+            hex: url(Ecosystem::Hex),
+            ghactions: url(Ecosystem::GitHubActions),
+            maven: url(Ecosystem::Maven),
+            maven_remote: self.maven_remote.as_ref(),
+        }
+    }
+}
+
+/// Supply-chain signals, fleet novelty and release age, plus the fleet-source repos that
+/// could not be checked out. Returns the fleet's packages when history will record them.
+fn add_fleet_signals(
+    args: &ScanArgs,
+    config: &Config,
+    feeds: &Feeds,
+    materialized: &sources::Materialized,
+    scan: &mut crate::orchestrate::ScanData,
+) -> Result<Option<Vec<crate::signals::FleetPackage>>, u8> {
+    let maven_remote = feeds.maven_remote.as_ref();
     if args.signals {
         scan.warnings.extend(crate::signals::fleet_signals(
             &config.repos,
@@ -695,7 +776,7 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
     let fleet_packages = args
         .history_dir
         .as_ref()
-        .map(|_| crate::signals::fleet_packages(&config.repos, maven_remote.as_ref()));
+        .map(|_| crate::signals::fleet_packages(&config.repos, maven_remote));
     if let (true, Some(dir), Some(packages)) = (args.signals, &args.history_dir, &fleet_packages) {
         match novelty(dir, packages) {
             Ok(Some(finding)) => scan.warnings.push(finding),
@@ -706,11 +787,11 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
     if let Some(spec) = &args.release_age {
         let secs = match parse_duration_secs(spec) {
             Ok(secs) => secs,
-            Err(e) => return fail(&format!("--release-age: {e}")),
+            Err(e) => return Err(fail(&format!("--release-age: {e}"))),
         };
-        match crate::signals::release_age(&config.repos, secs, maven_remote.as_ref()) {
+        match crate::signals::release_age(&config.repos, secs, maven_remote) {
             Ok(findings) => scan.warnings.extend(findings),
-            Err(e) => return fail(&format!("--release-age: {e}")),
+            Err(e) => return Err(fail(&format!("--release-age: {e}"))),
         }
     }
     scan.outcomes.extend(
@@ -725,6 +806,11 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             }),
     );
 
+    Ok(fleet_packages)
+}
+
+/// What the scan could not do in full, on stderr.
+fn note_scan(args: &ScanArgs, scan: &crate::orchestrate::ScanData) {
     if args.verbose {
         for outcome in &scan.outcomes {
             eprintln!("  {} — {:?}", outcome.repo, outcome.status);
@@ -762,12 +848,23 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             );
         }
     }
-    let coverage_incomplete = !scan.coverage.is_empty();
+}
 
+/// The report: findings with ignores and VEX assertions applied, then phantom and dev-only
+/// findings dropped when asked.
+fn assemble_report(
+    args: &ScanArgs,
+    config: &Config,
+    db: &AdvisoryDb,
+    feeds: &Feeds,
+    materialized: &sources::Materialized,
+    scan: crate::orchestrate::ScanData,
+) -> Assembled {
     // 5. Assemble. Ignores + vex_assertions suppress findings; the removed
     //    occurrences are captured for VEX promotion (used only by `-f vex`).
     let mut provenance = build_provenance(&db.meta());
-    provenance.osv = osv_sources
+    provenance.osv = feeds
+        .osv_sources
         .values()
         .map(osvdb::OsvSource::provenance)
         .collect();
@@ -783,19 +880,17 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             .iter()
             .map(Suppression::from_assertion),
     );
-    let Assembled {
-        report: mut fleet_report,
-        suppressed,
-    } = assemble(
+    let mut assembled = assemble(
         scan,
         &suppressions,
         args.min_severity.map(Severity::from),
         provenance,
     );
+    let fleet_report = &mut assembled.report;
 
     // 5a. Suppress phantom findings (unbuilt optional deps), if requested.
     if args.ignore_phantom {
-        let dropped = drop_phantom(&mut fleet_report);
+        let dropped = drop_phantom(fleet_report);
         if dropped > 0 && !args.quiet {
             eprintln!("suppressed {dropped} finding(s) on packages not in the default build");
         }
@@ -803,12 +898,16 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
 
     // 5a1. Suppress dev/build-only findings, if requested.
     if args.ignore_dev_deps {
-        let dropped = drop_dev(&mut fleet_report);
+        let dropped = drop_dev(fleet_report);
         if dropped > 0 && !args.quiet {
             eprintln!("suppressed {dropped} finding(s) on dev/build-only packages");
         }
     }
+    assembled
+}
 
+/// Exploit-risk enrichment (KEV and EPSS). Returns whether SSVC Exploitation is known.
+fn enrich_report(args: &ScanArgs, fleet_report: &mut FleetReport) -> bool {
     // 5a2. Exploit-risk enrichment (KEV + EPSS), opt-in. Annotate, optionally
     //      filter by EPSS, then re-rank by exploit risk (the action queue).
     let enrich_requested = args.enrich
@@ -833,7 +932,7 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
                     .to_string(),
             )
         } else {
-            fetch_enrichment(&fleet_report)
+            fetch_enrichment(fleet_report)
         };
         match loaded {
             Ok(enrichment) => {
@@ -844,7 +943,7 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
                 // max_severity (e.g. `unknown` for a fleet that is actually critical).
                 fleet_report.refresh_summary();
                 if let Some(min) = args.min_epss {
-                    let dropped = retain_min_epss(&mut fleet_report, min);
+                    let dropped = retain_min_epss(fleet_report, min);
                     if !dropped.is_empty() && !args.quiet {
                         // A network-sourced EPSS score hides a finding, so list
                         // exactly which advisories it suppressed (auditable).
@@ -862,7 +961,15 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             Err(e) => eprintln!("warning: enrichment failed: {e}"),
         }
     }
+    exploitation_known
+}
 
+/// Reachability, when asked for, and `--reachable-only`.
+fn assess_reachability(
+    args: &ScanArgs,
+    config: &Config,
+    fleet_report: &mut FleetReport,
+) -> Result<(), u8> {
     // 5a3. Reachability (opt-in). `--reachable-only` implies the heuristic when no
     //      mode is given. The static engine sets the legacy `reachable` bool too,
     //      so `--reachable-only` drops a sound `NotReachable` via the same path.
@@ -874,24 +981,20 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             ReachMode::Heuristic => {
                 // npm and PyPI are assessed by their import-graph engines below, which
                 // resolve first-party imports themselves, so the grep skips them.
-                reach::assess_except(
-                    &mut fleet_report,
-                    &config,
-                    &[Ecosystem::Npm, Ecosystem::Pypi],
-                );
+                reach::assess_except(fleet_report, config, &[Ecosystem::Npm, Ecosystem::Pypi]);
                 // npm gets the richer module-import-graph engine (transitive reachability +
                 // a witness chain; sound-positive, with an opt-in best-effort NotReachable),
                 // overriding the grep heuristic for npm findings.
                 npm_reach::assess(
-                    &mut fleet_report,
-                    &config,
+                    fleet_report,
+                    config,
                     &npm_reach::Options {
                         prune: args.npm_prune_unreachable,
                     },
                 );
                 // PyPI likewise gets a package import graph over the repo's virtualenv(s):
                 // transitive reachability with a witness chain, positive-only.
-                py_reach::assess(&mut fleet_report, &config);
+                py_reach::assess(fleet_report, config);
             }
             ReachMode::Static => {
                 // Static reachability COMPILES each repo, which runs its build
@@ -899,14 +1002,14 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
                 // rest of the tool (which only reads Cargo.lock), this requires
                 // explicit, informed consent and warns loudly before any build.
                 if !args.allow_untrusted_builds {
-                    return fail(
+                    return Err(fail(
                         "--reachability=static COMPILES each scanned repo, executing its build \
                          scripts and proc-macros (arbitrary code). Re-run with \
                          --allow-untrusted-builds only if you trust every repo in the fleet.",
-                    );
+                    ));
                 }
                 let Some(driver) = args.reach_driver.as_deref() else {
-                    return fail("--reachability=static requires --reach-driver <PATH>");
+                    return Err(fail("--reachability=static requires --reach-driver <PATH>"));
                 };
                 let sandbox = args.build_sandbox.into();
                 let confinement = match args.build_sandbox {
@@ -930,8 +1033,8 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
                     features: args.features.clone(),
                 };
                 static_reach::assess(
-                    &mut fleet_report,
-                    &config,
+                    fleet_report,
+                    config,
                     &static_reach::Options {
                         driver,
                         features,
@@ -942,7 +1045,7 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             }
         }
         if args.reachable_only {
-            let dropped = retain_reachable(&mut fleet_report);
+            let dropped = retain_reachable(fleet_report);
             if dropped > 0 && !args.quiet {
                 let how = match mode {
                     ReachMode::Heuristic => "not found in your source (heuristic)",
@@ -952,30 +1055,39 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             }
         }
     }
+    Ok(())
+}
 
+/// `--baseline`: keep only findings new since the prior report. Returns whether any are.
+fn apply_baseline(args: &ScanArgs, fleet_report: &mut FleetReport) -> Result<bool, u8> {
     // 5b. Baseline diff (§10.7): keep only findings new since the prior report.
     let mut baseline_new = false;
     if let Some(path) = &args.baseline {
         let json = match std::fs::read_to_string(path) {
             Ok(json) => json,
-            Err(e) => return fail(&format!("reading baseline `{}`: {e}", path.display())),
+            Err(e) => return Err(fail(&format!("reading baseline `{}`: {e}", path.display()))),
         };
         let ids = match report::baseline_ids_from_json(&json) {
             Ok(ids) => ids,
-            Err(e) => return fail(&format!("parsing baseline `{}`: {e}", path.display())),
+            Err(e) => return Err(fail(&format!("parsing baseline `{}`: {e}", path.display()))),
         };
-        retain_new(&mut fleet_report, &ids);
+        retain_new(fleet_report, &ids);
         baseline_new =
             !fleet_report.vulnerabilities.is_empty() || !fleet_report.warnings.is_empty();
     }
+    Ok(baseline_new)
+}
 
-    // 5b2. Fleet evidence for upgrades (spec 13): the versions of each vulnerable package
-    //      every repo runs, so the fix queue can say which bumps the fleet already survived.
-    crate::evidence::annotate(&mut fleet_report, &config.repos);
-
+/// Exposure context and SSVC decisions, and the `--fail-on-ssvc` precondition.
+fn decide_ssvc(
+    args: &ScanArgs,
+    config: &Config,
+    fleet_report: &mut FleetReport,
+    exploitation_known: bool,
+) -> Result<(), u8> {
     // 5c. Exposure context and SSVC decisions (spec 08), on what is left to report. CISA's
     //     own assessments (Vulnrichment) are looked up only when there is something to decide.
-    let cisa = if crate::ssvc::enabled(&config) && exploitation_known {
+    let cisa = if crate::ssvc::enabled(config) && exploitation_known {
         let cves: Vec<String> = fleet_report
             .vulnerabilities
             .iter()
@@ -993,8 +1105,8 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         Default::default()
     };
     crate::ssvc::annotate(
-        &mut fleet_report,
-        &config,
+        fleet_report,
+        config,
         crate::ssvc::Inputs {
             exploitation_known,
             poc_epss: config.ssvc_poc_epss,
@@ -1017,7 +1129,7 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
                     threshold.0
                 );
             }
-            return 2;
+            return Err(2);
         }
     }
     if !args.quiet {
@@ -1041,19 +1153,27 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             }
         }
     }
+    Ok(())
+}
 
-    // 6. Render: machine payload to stdout, human summary to stderr.
-    // Color only a TTY table — never JSON, never piped output (§7).
-    let payload = match args.format {
-        Format::Json => match report::to_json(&fleet_report) {
+/// The report in the requested format. Color only a TTY table — never JSON, never piped
+/// output (§7).
+fn render(
+    args: &ScanArgs,
+    config: &Config,
+    fleet_report: &FleetReport,
+    suppressed: &[SuppressedOccurrence],
+) -> Result<String, u8> {
+    Ok(match args.format {
+        Format::Json => match report::to_json(fleet_report) {
             Ok(json) => json,
-            Err(e) => return fail(&format!("serializing report: {e}")),
+            Err(e) => return Err(fail(&format!("serializing report: {e}"))),
         },
         Format::Sarif => {
             // SARIF suppressions (§11): machine not_affected is computed in
             // to_sarif; approved human assertions are injected here.
-            let product_ids = vex::resolve_product_ids(&config);
-            let assertions = vex::build_human_assertions(&suppressed, &product_ids, false);
+            let product_ids = vex::resolve_product_ids(config);
+            let assertions = vex::build_human_assertions(suppressed, &product_ids, false);
             let paths: BTreeMap<&str, &Path> = config
                 .repos
                 .iter()
@@ -1062,46 +1182,50 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             let locate = |repo: &fleetreach_core::RepoId, ecosystem: Ecosystem, package: &str| {
                 sarif_source(paths.get(repo.0.as_str()).copied(), ecosystem, package)
             };
-            match report::to_sarif_located(&fleet_report, &assertions, &locate) {
+            match report::to_sarif_located(fleet_report, &assertions, &locate) {
                 Ok(sarif) => sarif,
-                Err(e) => return fail(&format!("serializing SARIF: {e}")),
+                Err(e) => return Err(fail(&format!("serializing SARIF: {e}"))),
             }
         }
-        Format::Table => report::to_table(&fleet_report, std::io::stdout().is_terminal()),
-        Format::Impact => report::to_impact(&fleet_report, std::io::stdout().is_terminal()),
-        Format::Blast => report::to_blast(&fleet_report, std::io::stdout().is_terminal()),
-        Format::Packages => report::to_packages(&fleet_report, std::io::stdout().is_terminal()),
-        Format::PackagesJson => match report::to_packages_json(&fleet_report) {
+        Format::Table => report::to_table(fleet_report, std::io::stdout().is_terminal()),
+        Format::Impact => report::to_impact(fleet_report, std::io::stdout().is_terminal()),
+        Format::Blast => report::to_blast(fleet_report, std::io::stdout().is_terminal()),
+        Format::Packages => report::to_packages(fleet_report, std::io::stdout().is_terminal()),
+        Format::PackagesJson => match report::to_packages_json(fleet_report) {
             Ok(json) => json,
-            Err(e) => return fail(&format!("serializing packages: {e}")),
+            Err(e) => return Err(fail(&format!("serializing packages: {e}"))),
         },
-        Format::FixFirst => report::to_fix_first(&fleet_report, std::io::stdout().is_terminal()),
+        Format::FixFirst => report::to_fix_first(fleet_report, std::io::stdout().is_terminal()),
         Format::Remediation => {
-            report::to_remediation(&fleet_report, std::io::stdout().is_terminal())
+            report::to_remediation(fleet_report, std::io::stdout().is_terminal())
         }
-        Format::Ssvc => report::to_ssvc(&fleet_report, std::io::stdout().is_terminal()),
-        Format::Owners => report::to_owners(&fleet_report, std::io::stdout().is_terminal()),
-        Format::RemediationJson => match report::to_remediation_json(&fleet_report) {
+        Format::Ssvc => report::to_ssvc(fleet_report, std::io::stdout().is_terminal()),
+        Format::Owners => report::to_owners(fleet_report, std::io::stdout().is_terminal()),
+        Format::RemediationJson => match report::to_remediation_json(fleet_report) {
             Ok(json) => json,
-            Err(e) => return fail(&format!("serializing remediation: {e}")),
+            Err(e) => return Err(fail(&format!("serializing remediation: {e}"))),
         },
         Format::Vex => {
             // Author/timestamp resolution fails closed as a usage error (§7.3 edge 8).
-            let params = match build_vex_params(&args, &config, &fleet_report, &suppressed) {
+            let params = match build_vex_params(args, config, fleet_report, suppressed) {
                 Ok(params) => params,
-                Err(e) => return usage_fail(&e),
+                Err(e) => return Err(usage_fail(&e)),
             };
-            match report::to_vex(&fleet_report, &params) {
+            match report::to_vex(fleet_report, &params) {
                 Ok(doc) => doc,
-                Err(e) => return fail(&format!("serializing VEX: {e}")),
+                Err(e) => return Err(fail(&format!("serializing VEX: {e}"))),
             }
         }
-    };
-    println!("{payload}");
-    if !args.quiet {
-        eprintln!("{}", report::summary_line(&fleet_report));
-    }
+    })
+}
 
+/// The exit code per §8, plus the opt-in KEV, SSVC, baseline and full-coverage gates.
+fn gate(
+    args: &ScanArgs,
+    fleet_report: &FleetReport,
+    baseline_new: bool,
+    coverage_incomplete: bool,
+) -> u8 {
     // 7. Exit per §8, plus the opt-in KEV and baseline gates. `combine_baseline`
     //    elevates a clean/gated code to >=1 on its flag while preserving the
     //    untrustworthy `2`; we reuse it for KEV (any actively-exploited finding).
@@ -1113,7 +1237,7 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
         .or_else(|| args.fail_on_ssvc.is_none().then_some(SeverityArg::Low));
     let gated;
     let gated_report = match severity_gate {
-        Some(_) => &fleet_report,
+        Some(_) => fleet_report,
         None => {
             let mut only_malware = fleet_report.clone();
             only_malware
@@ -1132,7 +1256,7 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
     );
     let ssvc_hit = args
         .fail_on_ssvc
-        .is_some_and(|t| crate::ssvc::gate_hit(&fleet_report, t.0));
+        .is_some_and(|t| crate::ssvc::gate_hit(fleet_report, t.0));
     let code = combine_baseline(combine_baseline(code, kev_hit), baseline_new);
     let code = combine_baseline(code, ssvc_hit);
     // --require-full-coverage: a source read only partly means the fleet cannot be called
@@ -1145,10 +1269,21 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
     } else {
         code
     };
-    // 8. Scan history (spec 09): the run as it gated. Failing to record what was asked for
-    //    is a failed run.
+    code
+}
+
+/// Scan history (spec 09): the run as it gated. Failing to record what was asked for is a
+/// failed run.
+fn record_history(
+    args: &ScanArgs,
+    config: &Config,
+    fleet_report: &FleetReport,
+    suppressed: &[SuppressedOccurrence],
+    code: u8,
+    fleet_packages: Option<Vec<crate::signals::FleetPackage>>,
+) -> Result<(), u8> {
     if let Some(dir) = &args.history_dir {
-        let keys = crate::history::suppressed_keys(&fleet_report, &suppressed);
+        let keys = crate::history::suppressed_keys(fleet_report, suppressed);
         let mut names: Vec<crate::history::PackageName> = fleet_packages
             .iter()
             .flatten()
@@ -1156,7 +1291,7 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             .collect();
         names.sort();
         names.dedup();
-        match crate::history::record(dir, &fleet_report, keys, code, config.history_keep, names) {
+        match crate::history::record(dir, fleet_report, keys, code, config.history_keep, names) {
             Ok((path, notes)) => {
                 for note in notes {
                     eprintln!("note: {note}");
@@ -1165,10 +1300,10 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
                     eprintln!("history: recorded {}", path.display());
                 }
             }
-            Err(e) => return fail(&format!("recording history: {e}")),
+            Err(e) => return Err(fail(&format!("recording history: {e}"))),
         }
     }
-    code
+    Ok(())
 }
 
 /// The `new-to-fleet` finding against the history in `dir`. `Err` explains why there is no
