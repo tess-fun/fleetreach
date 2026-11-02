@@ -6,6 +6,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Container images** (spec 16, row 10, phase 1). `[[image]]` in `fleet.toml` (`id`, `path`,
+  optional `platform` and `distro`, and the repo context fields) and `scan --image <path>`
+  (repeatable; no `fleet.toml` needed) scan a `docker save` or OCI-layout tarball, an
+  OCI-layout directory, or a root filesystem. Layers merge with OCI whiteouts, and layers
+  named by digest are verified. Nothing in the image runs. The distribution comes from
+  `/etc/os-release`: Debian, Ubuntu (with Ubuntu Pro for `+esm` packages), Alpine, Wolfi,
+  Chainguard, MinimOS, Alpaquita, Echo, CleanStart, and Root's patched packages. dpkg
+  `status`, distroless `status.d` and apk `installed` are read, each binary package matched
+  under its source package against the osv.dev distro export, with dpkg's and apk-tools'
+  version orderings. Unfixed Debian and Ubuntu advisories are findings marked `no fix yet`
+  with their urgency; `--distro-ignore-unimportant` drops the `unimportant` and `negligible`
+  ones. Lockfiles and installed Python and npm packages in the image go through the
+  language matchers, skipping files an OS package owns. Fail-closed: an unreadable image or a
+  missing distro export is an errored target, and an unknown distribution or release, an
+  unreadable package database, or Java archives and gems no matcher reads yet are coverage
+  gaps. New crate `fleetreach-os`.
+- `db sync --distros Debian:12,Wolfi` fetches distro exports one distribution at a time (the
+  per-release export where osv.dev has one, else the whole distribution's), and a plain
+  `db sync` fetches what the fleet's images need. `db status` lists the distro exports present.
+
+### Compatibility
+
+- `fleetreach_core::Ecosystem` gains the `Deb` and `Apk` variants (JSON `deb`, `apk`). The
+  enum is not `#[non_exhaustive]`, so an exhaustive `match` on it in code that depends on
+  `fleetreach-core` needs a new arm. No existing variant or JSON value changes.
+- `fleetreach_cli::config::Config` gains a public `images` field (as 1.5.0 added `sboms` and
+  `context`); code building a `Config` literal adds `images: Vec::new()`.
+
 ## [1.5.0] - 2026-11-01
 
 ### Added

@@ -440,6 +440,13 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     as an opt-in, Trivy's default). An unknown distro or release is a coverage gap. Language
     packages inside the image go through the existing feeders; files owned by an OS package
     are not reported twice (Trivy's rule).
+    **Status: implemented, unreleased** (crate `fleetreach-os`). Comparators: 0 differences
+    over 619,997 dpkg and 619,999 apk pairs from the exports (apk validity agrees on all
+    42,587 distinct versions). Installed sets equal `dpkg-query -W` / `apk info -v` on 8 real
+    images, and findings equal an independent real-tool evaluation of the exports on 11.
+    Still open: fuzzing the layer merge, Java archives and gems inside images (reported as
+    coverage gaps), and the language records some hardened-image exports carry
+    (`Echo:PyPI`, `Root:npm`).
   - **Phase 2 (1.7.0)**: rpm family: read-only SQLite, BDB and NDB readers, RPM header
     parsing, `rpmvercmp` comparator; Red Hat, Alma, Rocky, CentOS, SUSE, openSUSE, SLE
     Micro, Azure Linux, openEuler, Mageia, TuxCare. Unfixed statuses (affected, will not fix,

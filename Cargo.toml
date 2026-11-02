@@ -17,6 +17,7 @@ members = [
     "crates/hex",
     "crates/ghactions",
     "crates/maven",
+    "crates/os",
     "crates/cli",
 ]
 # `reach-driver` links `rustc_private` and builds ONLY on its own pinned nightly

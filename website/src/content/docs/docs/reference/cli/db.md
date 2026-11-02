@@ -33,7 +33,8 @@ Usage: fleetreach db sync [OPTIONS]
 Options:
   -c, --config <CONFIG>    fleet.toml whose ecosystems decide what to fetch (ignored with --all/--ecosystems) [default: ./fleet.toml]
       --ecosystems <ECOS>  fetch these ecosystems (comma-separated, e.g. npm,pypi,maven)
-      --all                fetch every osv.dev export fleetreach can read
+      --all                fetch every language osv.dev export fleetreach can read (distro exports are fetched only by name or for a fleet's images: some are over a gigabyte)
+      --distros <DISTROS>  fetch the exports for these distro releases (comma-separated, e.g. Debian:12,Wolfi): the per-release export where osv.dev has one, else the whole distribution's
       --osv-dir <DIR>      sync into this directory instead of the default cache (e.g. to copy to an air-gapped host)
       --force              re-download even if the cached export was checked recently
   -q, --quiet              no progress output

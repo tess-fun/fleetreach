@@ -76,6 +76,7 @@ fn config() -> Config {
         sources: Vec::new(),
         licenses: None,
         signal_registries: Vec::new(),
+        images: Vec::new(),
         sboms: Default::default(),
         context: Default::default(),
         context_defaults: None,

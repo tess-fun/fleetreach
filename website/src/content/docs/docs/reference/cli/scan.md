@@ -167,6 +167,12 @@ Options:
       --osv-dir <DIR>
           one directory holding the osv.dev exports for every toolchain-free ecosystem, laid out like the osv.dev bucket: <DIR>/<Ecosystem>/all.zip (or an unzipped <DIR>/<Ecosystem>/). A per-ecosystem --<eco>-vuln-db flag still wins. Also FLEETREACH_OSV_DIR or settings.osv.dir. Without it, the default cache (~/.cache/fleetreach/osv) is used and, in network builds, kept fresh automatically (set FLEETREACH_OSV_SYNC=off or --offline to stop that).
 
+      --image <PATH>
+          also scan this container image: a `docker save` or OCI-layout tarball, an OCI-layout directory, or a root filesystem (directory or tarball). Repeatable; its id is the file name. Its OS packages are matched against the osv.dev distro export for its release (synced per distro, or from --osv-dir), its lockfiles and installed Python and npm packages with the language matchers. With only --image, no fleet.toml is needed.
+
+      --distro-ignore-unimportant
+          drop Debian advisories the security tracker marks unimportant and Ubuntu ones it rates negligible (by default they are reported, with that urgency in the title)
+
       --build-sandbox <MODE>
           confine the untrusted build (--reachability=static AND govulncheck for Go repos, both of which compile scanned code): `auto` sandboxes when a mechanism is available (sandbox-exec/bwrap/firejail) else warns; `require` fails without one; `off` runs unconfined. Confinement denies network + writes outside a scratch dir. A confined Go scan is therefore offline: `auto` falls back to an online unconfined scan unless --go-vuln-db=file://<mirror> is set, while `require` needs the mirror or fails closed.
 

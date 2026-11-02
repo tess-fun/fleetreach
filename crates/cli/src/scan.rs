@@ -24,7 +24,7 @@ use crate::db::{
     parse_duration_secs,
 };
 use crate::enrich::{self, Enrichment};
-use crate::orchestrate::{discover_lockfiles, fleet_ecosystems, scan_fleet, GoScan, Mirrors};
+use crate::orchestrate::{discover_lockfiles, fleet_ecosystems, scan_fleet_with, GoScan, Mirrors};
 use crate::{npm_reach, osvdb, py_reach, reach, resolve, sources, static_reach, vex};
 
 #[derive(Parser)]
@@ -233,6 +233,17 @@ pub(crate) struct ScanArgs {
         help = "one directory holding the osv.dev exports for every toolchain-free ecosystem, laid out like the osv.dev bucket: <DIR>/<Ecosystem>/all.zip (or an unzipped <DIR>/<Ecosystem>/). A per-ecosystem --<eco>-vuln-db flag still wins. Also FLEETREACH_OSV_DIR or settings.osv.dir. Without it, the default cache (~/.cache/fleetreach/osv) is used and, in network builds, kept fresh automatically (set FLEETREACH_OSV_SYNC=off or --offline to stop that)."
     )]
     osv_dir: Option<PathBuf>,
+    #[arg(
+        long = "image",
+        value_name = "PATH",
+        help = "also scan this container image: a `docker save` or OCI-layout tarball, an OCI-layout directory, or a root filesystem (directory or tarball). Repeatable; its id is the file name. Its OS packages are matched against the osv.dev distro export for its release (synced per distro, or from --osv-dir), its lockfiles and installed Python and npm packages with the language matchers. With only --image, no fleet.toml is needed."
+    )]
+    images: Vec<PathBuf>,
+    #[arg(
+        long,
+        help = "drop Debian advisories the security tracker marks unimportant and Ubuntu ones it rates negligible (by default they are reported, with that urgency in the title)"
+    )]
+    distro_ignore_unimportant: bool,
     #[arg(
         long,
         value_enum,
@@ -478,15 +489,19 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         return Ok(run_why(&config, package));
     }
     let db = advisory_db(args)?;
-    let feeds = Feeds::resolve(args, &config)?;
-    let mut scan = scan_fleet(
+    let images = crate::images::prepare_all(&config.images);
+    let feeds = Feeds::resolve(args, &config, &images)?;
+    let mut scan = scan_fleet_with(
         &db,
         &config,
         feeds.toolchain.as_ref(),
         feeds.host.as_deref(),
         &feeds.go(args),
         &feeds.mirrors(),
+        &feeds.images(args, &images),
     );
+    // The images' temporary lockfile copies are removed here.
+    drop(images);
     let fleet_packages = add_fleet_signals(args, &config, &feeds, &materialized, &mut scan)?;
     note_scan(args, &scan);
     let coverage_incomplete = !scan.coverage.is_empty();
@@ -566,7 +581,33 @@ fn explain(args: &ScanArgs, id: &str) -> Result<u8, u8> {
 /// The fleet: `fleet.toml` plus the repos its `[[source]]` entries expand to.
 fn load_fleet(args: &ScanArgs) -> Result<(Config, sources::Materialized), u8> {
     // 1. Config (§10.2): any failure is a could-not-scan -> 2.
-    let mut config = Config::load(&args.config).map_err(|e| fail(&e.to_string()))?;
+    // With only `--image`, a missing fleet.toml means an empty fleet.
+    let mut config = if !args.images.is_empty() && !args.config.exists() {
+        Config::from_str("", Path::new("."), "<no fleet.toml>")
+    } else {
+        Config::load(&args.config)
+    }
+    .map_err(|e| fail(&e.to_string()))?;
+    for path in &args.images {
+        if !path.exists() {
+            return Err(fail(&format!(
+                "--image {}: no such file or directory",
+                path.display()
+            )));
+        }
+        let image = crate::images::from_arg(path);
+        let taken = config.repos.iter().any(|r| r.id == image.id)
+            || config.images.iter().any(|i| i.id == image.id);
+        if taken {
+            return Err(fail(&format!(
+                "--image {}: id `{}` is already used by the fleet; declare it as an [[image]] \
+                 with its own id instead",
+                path.display(),
+                image.id.0
+            )));
+        }
+        config.images.push(image);
+    }
 
     // 1a. Fleet sources (spec 06): expand `[[source]]` into repos. With --sync, list afresh
     //     and clone/refresh; without, use the cached listing and existing checkouts. A
@@ -611,12 +652,19 @@ struct Feeds {
     go_govulncheck: Option<PathBuf>,
     go_db: Option<String>,
     osv_sources: BTreeMap<Ecosystem, osvdb::OsvSource>,
+    /// The distro exports the images need, and the distro ecosystems with none.
+    distro_sources: Vec<osvdb::DistroSource>,
+    distro_missing: std::collections::BTreeSet<String>,
     urls: BTreeMap<Ecosystem, String>,
     maven_remote: Option<crate::maven_repo::Remote>,
 }
 
 impl Feeds {
-    fn resolve(args: &ScanArgs, config: &Config) -> Result<Feeds, u8> {
+    fn resolve(
+        args: &ScanArgs,
+        config: &Config,
+        images: &[crate::images::Prepared],
+    ) -> Result<Feeds, u8> {
         // 4. Scan the fleet, plus the toolchain if rustc is detectable. With
         //    --resolve-features, also annotate findings built/phantom for the host.
         let toolchain = detect_toolchain();
@@ -652,6 +700,9 @@ impl Feeds {
         // which network builds keep fresh. Only ecosystems the fleet actually has are resolved,
         // so a Rust-only fleet never touches the network for them.
         let mut needed = fleet_ecosystems(config);
+        needed.extend(crate::images::language_ecosystems(images));
+        needed.sort();
+        needed.dedup();
         // Go needs the osv.dev export only for its offline matcher: not when govulncheck runs,
         // and not when a `file://` vuln.go.dev mirror is given.
         if go_govulncheck.is_some()
@@ -699,6 +750,19 @@ impl Feeds {
                 return Err(fail(&e));
             }
         }
+        // The distro exports of the images, each distro fetched on its own (never all of them:
+        // some are over a gigabyte). A distro with no export errors its images in the scan.
+        let distro_ecosystems = crate::images::distro_ecosystems(images);
+        let (distro_sources, distro_warnings, distro_missing) =
+            osvdb::resolve_distros(&distro_ecosystems, &osv_opts);
+        for warning in &distro_warnings {
+            eprintln!("warning: {warning}");
+        }
+        if let Some(spec) = &args.max_db_age {
+            let limit = parse_duration_secs(spec).map_err(|e| fail(&e))?;
+            osvdb::check_distro_ages(&distro_sources, limit, std::time::SystemTime::now())
+                .map_err(|e| fail(&e))?;
+        }
         // Each toolchain-free ecosystem's mirror: the resolved export, else its explicit flag.
         let mut urls: BTreeMap<Ecosystem, String> = explicit;
         for (eco, source) in &osv_sources {
@@ -723,6 +787,8 @@ impl Feeds {
             go_govulncheck,
             go_db,
             osv_sources,
+            distro_sources,
+            distro_missing: distro_missing.into_iter().collect(),
             urls,
             maven_remote,
         })
@@ -734,6 +800,21 @@ impl Feeds {
             sandbox: args.build_sandbox.into(),
             vuln_db: self.go_db.as_deref(),
             offline: args.offline,
+        }
+    }
+
+    fn images<'a>(
+        &self,
+        args: &ScanArgs,
+        prepared: &'a [crate::images::Prepared],
+    ) -> crate::orchestrate::Images<'a> {
+        crate::orchestrate::Images {
+            prepared,
+            exports: self.distro_sources.iter().map(|s| s.path.clone()).collect(),
+            missing: self.distro_missing.clone(),
+            opts: fleetreach_os::ScanOptions {
+                ignore_unimportant: args.distro_ignore_unimportant,
+            },
         }
     }
 
@@ -867,6 +948,12 @@ fn assemble_report(
         .osv_sources
         .values()
         .map(osvdb::OsvSource::provenance)
+        .chain(
+            feeds
+                .distro_sources
+                .iter()
+                .map(osvdb::DistroSource::provenance),
+        )
         .collect();
     provenance.sources = materialized.provenance.clone();
     let mut suppressions: Vec<Suppression> = config

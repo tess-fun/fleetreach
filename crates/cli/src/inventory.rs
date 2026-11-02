@@ -174,6 +174,9 @@ fn unit_inventory(unit: &ScanUnit, maven: Option<&Remote>) -> Result<Vec<SourceI
             }
         }
         Ecosystem::GitHubActions => one(github_actions(dir)?),
+        Ecosystem::Deb | Ecosystem::Apk => {
+            Err("OS packages are read from container images, not repos".to_string())
+        }
     }
 }
 

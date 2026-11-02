@@ -62,7 +62,7 @@ pub fn osv_name(eco: Ecosystem) -> Option<&'static str> {
         Ecosystem::GitHubActions => "GitHub Actions",
         Ecosystem::Maven => "Maven",
         Ecosystem::Go => "Go",
-        Ecosystem::Cargo => return None,
+        Ecosystem::Cargo | Ecosystem::Deb | Ecosystem::Apk => return None,
     })
 }
 
@@ -514,8 +514,11 @@ mod net {
     }
 
     fn url_for(name: &str) -> String {
-        // Object names contain spaces (`GitHub Actions`).
-        format!("{OSV_BUCKET}/{}/all.zip", name.replace(' ', "%20"))
+        // Object names contain spaces (`GitHub Actions`) and colons (`Debian:12`).
+        format!(
+            "{OSV_BUCKET}/{}/all.zip",
+            name.replace(' ', "%20").replace(':', "%3A")
+        )
     }
 
     pub(super) fn download(
@@ -525,7 +528,18 @@ mod net {
         quiet: bool,
     ) -> Result<(), String> {
         let name = osv_name(eco).ok_or("no osv.dev export for this ecosystem")?;
-        let dir = root.join(name);
+        download_name(root, name, force, quiet)
+    }
+
+    /// Download the export `<bucket>/<name>/all.zip` into `<root>/<dir_name(name)>/`. An
+    /// export osv.dev does not publish fails with a message containing `HTTP 404`.
+    pub(super) fn download_name(
+        root: &Path,
+        name: &str,
+        force: bool,
+        quiet: bool,
+    ) -> Result<(), String> {
+        let dir = root.join(super::dir_name(name));
         create_private_dir(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
         let zip = dir.join("all.zip");
         let url = url_for(name);
@@ -651,6 +665,226 @@ fn now_rfc3339() -> String {
         .unwrap_or_default()
 }
 
+// ---- Distro exports (container images) ----
+
+/// The local directory name of an osv.dev export: the bucket name, with `:` (not allowed in
+/// Windows file names) written as `_`. Lookups accept both spellings, so a directory laid out
+/// exactly like the bucket also works.
+pub fn dir_name(export: &str) -> String {
+    export.replace(':', "_")
+}
+
+/// The export directory for `export` under `root`, in either spelling.
+fn locate_export(root: &Path, export: &str) -> Option<PathBuf> {
+    [export.to_string(), dir_name(export)]
+        .into_iter()
+        .map(|n| root.join(n))
+        .find_map(|dir| {
+            let zip = dir.join("all.zip");
+            if zip.is_file() {
+                return Some(zip);
+            }
+            let has_records = std::fs::read_dir(&dir).ok()?.flatten().any(|e| {
+                e.path().extension().and_then(|x| x.to_str()) == Some("json")
+                    && !e.file_name().to_string_lossy().ends_with(".meta.json")
+            });
+            has_records.then_some(dir)
+        })
+}
+
+/// One resolved distro export.
+#[derive(Debug, Clone)]
+pub struct DistroSource {
+    /// The osv.dev export name (`Debian:12`, `Wolfi`).
+    pub export: String,
+    pub kind: SourceKind,
+    pub path: PathBuf,
+    pub meta: Option<Meta>,
+}
+
+impl DistroSource {
+    fn as_osv(&self) -> OsvSource {
+        OsvSource {
+            ecosystem: Ecosystem::Cargo,
+            kind: self.kind,
+            path: self.path.clone(),
+            meta: self.meta.clone(),
+        }
+    }
+
+    /// Age in seconds and its basis, as for language exports.
+    pub fn age_seconds(&self, now: SystemTime) -> Option<(u64, &'static str)> {
+        self.as_osv().age_seconds(now)
+    }
+
+    /// The report's provenance record for this export.
+    pub fn provenance(&self) -> OsvProvenance {
+        OsvProvenance {
+            ecosystem: self.export.clone(),
+            ..self.as_osv().provenance()
+        }
+    }
+}
+
+/// Whether the cached distro export `export` was checked within `refresh`.
+fn export_fresh(root: &Path, export: &str, refresh: Duration) -> bool {
+    let zip = root.join(dir_name(export)).join("all.zip");
+    zip.is_file()
+        && read_meta(&zip)
+            .and_then(|m| m.fetched_time())
+            .and_then(|t| SystemTime::now().duration_since(t).ok())
+            .is_some_and(|age| age < refresh)
+}
+
+/// Fetch the smallest export serving `ecosystem` into `root`: the per-release one where
+/// osv.dev publishes it, else the whole distribution. Returns the export name now cached.
+#[cfg(feature = "network")]
+fn sync_distro(
+    root: &Path,
+    ecosystem: &str,
+    opts: &Options,
+    force: bool,
+) -> Result<String, String> {
+    let candidates = fleetreach_os::distro::export_candidates(ecosystem);
+    if !force {
+        if let Some(fresh) = candidates
+            .iter()
+            .find(|c| export_fresh(root, c, opts.refresh))
+        {
+            return Ok(fresh.clone());
+        }
+    }
+    let mut last = String::new();
+    for c in &candidates {
+        match net::download_name(root, c, force, opts.quiet) {
+            Ok(()) => return Ok(c.clone()),
+            Err(e) if e.contains("HTTP 404") => {
+                // Not published for this release: drop the directory made for it.
+                let _ = std::fs::remove_dir(root.join(dir_name(c)));
+                last = e;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Err(last)
+}
+
+#[cfg(not(feature = "network"))]
+fn sync_distro(
+    root: &Path,
+    ecosystem: &str,
+    opts: &Options,
+    force: bool,
+) -> Result<String, String> {
+    let candidates = fleetreach_os::distro::export_candidates(ecosystem);
+    if !force {
+        if let Some(fresh) = candidates
+            .iter()
+            .find(|c| export_fresh(root, c, opts.refresh))
+        {
+            return Ok(fresh.clone());
+        }
+    }
+    let _ = root;
+    Err("this build has no network support (install with `--features network`)".to_string())
+}
+
+/// Resolve the exports serving each distro ecosystem (`Debian:12`, `Root:Debian:12`, ...):
+/// `--osv-dir` first, then the default cache, synced per distribution (never every distro at
+/// once: Chainguard's export alone is 1.1 GB). Exports shared by several ecosystems are
+/// returned once. Ecosystems with no export are absent from `.1`'s complement, listed in
+/// `.2`, and stay a gap in the scan.
+pub fn resolve_distros(
+    ecosystems: &[String],
+    opts: &Options,
+) -> (Vec<DistroSource>, Vec<String>, Vec<String>) {
+    let mut found: BTreeMap<String, DistroSource> = BTreeMap::new();
+    let mut warnings = Vec::new();
+    let mut missing = Vec::new();
+    for eco in ecosystems {
+        let candidates = fleetreach_os::distro::export_candidates(eco);
+        let from_dir = opts.dir.as_deref().and_then(|d| {
+            candidates
+                .iter()
+                .find_map(|c| locate_export(d, c).map(|p| (c.clone(), p, SourceKind::Dir)))
+        });
+        let resolved = from_dir.or_else(|| {
+            let cache = opts.cache.as_deref()?;
+            if opts.sync {
+                if let Err(e) = sync_distro(cache, eco, opts, false) {
+                    warnings.push(format!("could not refresh the OSV {eco} export: {e}"));
+                }
+            }
+            candidates
+                .iter()
+                .find_map(|c| locate_export(cache, c).map(|p| (c.clone(), p, SourceKind::Cache)))
+        });
+        match resolved {
+            Some((export, path, kind)) => {
+                found.entry(export.clone()).or_insert_with(|| DistroSource {
+                    meta: read_meta(&path),
+                    export,
+                    kind,
+                    path,
+                });
+            }
+            None => missing.push(eco.clone()),
+        }
+    }
+    (found.into_values().collect(), warnings, missing)
+}
+
+/// `--max-db-age` for distro exports; unknown age refuses.
+pub fn check_distro_ages(
+    sources: &[DistroSource],
+    limit: i64,
+    now: SystemTime,
+) -> Result<(), String> {
+    for src in sources {
+        match src.age_seconds(now) {
+            Some((age, basis)) if i64::try_from(age).unwrap_or(i64::MAX) > limit => {
+                return Err(format!(
+                    "OSV {} export at {} is {age}s old ({basis}), older than --max-db-age \
+                     {limit}s; refresh it with `fleetreach db sync`",
+                    src.export,
+                    src.path.display()
+                ));
+            }
+            Some(_) => {}
+            None => {
+                return Err(format!(
+                    "cannot determine the age of the OSV {} export at {}; refusing under \
+                     --max-db-age",
+                    src.export,
+                    src.path.display()
+                ))
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `db sync --distros`: fetch the exports for these distro ecosystems into `root`.
+pub fn sync_distros(
+    root: &Path,
+    ecosystems: &[String],
+    refresh: Duration,
+    force: bool,
+    quiet: bool,
+) -> Vec<(String, Result<String, String>)> {
+    let opts = Options {
+        dir: None,
+        cache: Some(root.to_path_buf()),
+        sync: true,
+        refresh,
+        quiet,
+    };
+    ecosystems
+        .iter()
+        .map(|e| (e.clone(), sync_distro(root, e, &opts, force)))
+        .collect()
+}
+
 /// One row of `fleetreach db status`.
 pub fn status_rows(root: &Path, now: SystemTime) -> Vec<[String; 5]> {
     OSV_ECOSYSTEMS
@@ -686,6 +920,49 @@ pub fn status_rows(root: &Path, now: SystemTime) -> Vec<[String; 5]> {
                 .as_ref()
                 .map_or(String::new(), |m| m.sha256.chars().take(12).collect());
             Some([name.to_string(), "present".to_string(), age, size, sha])
+        })
+        .chain(distro_status_rows(root, now))
+        .collect()
+}
+
+/// `db status` rows for the distro exports present under `root` (only those fetched: there is
+/// no fixed list of releases to call missing).
+fn distro_status_rows(root: &Path, now: SystemTime) -> Vec<[String; 5]> {
+    let mut names: Vec<String> = std::fs::read_dir(root)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .filter_map(|e| e.file_name().into_string().ok())
+        .map(|n| n.replace('_', ":"))
+        .filter(|n| fleetreach_os::distro::known_ecosystem(n))
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+        .into_iter()
+        .filter_map(|export| {
+            let path = locate_export(root, &export)?;
+            let src = DistroSource {
+                export: export.clone(),
+                kind: SourceKind::Cache,
+                meta: read_meta(&path),
+                path,
+            };
+            let age = src
+                .age_seconds(now)
+                .map_or("unknown".to_string(), |(s, basis)| {
+                    format!("{} ({basis})", human_age(s))
+                });
+            let size = src
+                .meta
+                .as_ref()
+                .map_or(String::new(), |m| human_size(m.size));
+            let sha = src
+                .meta
+                .as_ref()
+                .map_or(String::new(), |m| m.sha256.chars().take(12).collect());
+            Some([export, "present".to_string(), age, size, sha])
         })
         .collect()
 }

@@ -56,7 +56,7 @@ jobs:
       # Library READMEs are generated from lib.rs doc comments; fail if stale.
       - name: library READMEs match lib.rs
         run: |
-          for c in core scan correlate report reach go npm pypi rubygems packagist nuget julia swift hex ghactions maven; do
+          for c in core scan correlate report reach go npm pypi rubygems packagist nuget julia swift hex ghactions maven os; do
             (cd "crates/$c" && cargo rdme --check)
           done
 
