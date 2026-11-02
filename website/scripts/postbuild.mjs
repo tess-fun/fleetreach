@@ -6,7 +6,7 @@
 // - redirects from the old mdBook addresses (/docs/<page>.html)
 // - every internal link in the built site must resolve, or the build fails
 
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BASE, SITE } from "../astro.config.mjs";
@@ -111,8 +111,8 @@ writeFileSync(join(dist, "robots.txt"), `User-agent: *\nAllow: /\n\nSitemap: ${r
 
 // ---- Redirects from the mdBook site ----
 
+// docs/index.html is not here: it is the Overview page itself, and /docs/index.html serves it.
 const moved = {
-  "index.html": "docs/",
   "introduction.html": "docs/",
   "installation.html": "docs/getting-started/installation/",
   "quickstart.html": "docs/getting-started/first-scan/",
@@ -130,8 +130,11 @@ const moved = {
 };
 for (const [from, to] of Object.entries(moved)) {
   const target = `${BASE}/${to}`;
+  const file = join(dist, "docs", from);
+  // A redirect must never replace a real page, or the page becomes a redirect to itself.
+  if (existsSync(file)) throw new Error(`postbuild: redirect ${from} would overwrite a built page`);
   writeFileSync(
-    join(dist, "docs", from),
+    file,
     `<!doctype html><meta charset="utf-8"><title>Moved</title><link rel="canonical" href="${root}/${to}"><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url=${target}"><p>Moved to <a href="${target}">${root}/${to}</a>.</p>\n`,
   );
 }
