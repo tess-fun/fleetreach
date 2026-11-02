@@ -22,6 +22,8 @@ allow = [
     "ISC",
     "Unicode-3.0",
     "Zlib",
+    # Zero-clause BSD (public-domain equivalent): `cafebabe`, the class-file reader in sinks.
+    "0BSD",
     # Pulled by the opt-in `network` feature's TLS stack (rustls/webpki CA bundle):
     # MPL-2.0 is file-level copyleft (fine to use as a dependency), CDLA-Permissive-2.0
     # is the Mozilla CA-data license. Both are permissive for our use.

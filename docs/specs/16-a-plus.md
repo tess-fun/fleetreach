@@ -1,6 +1,6 @@
 # Spec 16: A+ on every matrix row by 1.8.0
 
-Status: plan, not started · Written 2026-11-02 after the 1.5.0 release, revised the same day
+Status: in progress (1.6.0: E2 jar-diff run done, gate missed) · Written 2026-11-02 after the 1.5.0 release, revised the same day
 (three releases instead of two; a path to A+ researched for every row) · Supersedes the
 "out of scope" parts of [spec 14](14-out-of-scope.md) for containers, curated research,
 hosted triage and malware analysis (user decisions of 2026-11-02, not re-argued here)
@@ -142,6 +142,60 @@ Narrowing the diff to the vulnerable methods uses evidence that is all open and 
 This makes JVM sink data plausible for most advisories, not half. It must still pass E2
 (precision on a labelled sample). The same diff works for npm, PyPI, NuGet and RubyGems
 packages, which ship code in the artifact.
+
+### E2 result: jar-diff sink precision, run 2026-11-02 (gate MISSED)
+
+Setup (scripts and data in `~/fa-testbed/e2/`, differ in `crates/sinks`):
+
+- **Labels**: 100 high/critical Maven advisories, seeded sample (seed 16) of the 390 that
+  join SAP project-kb fix commits with the OSV Maven export. Label = every non-test Java
+  method whose body changes in the fix commit(s), from a comment- and string-aware source
+  parser (`label.py`). 100 of 102 tried got labels; median 4 methods; 46 have 3 or fewer,
+  78 have 10 or fewer, 4 have more than 40. A hand check of 10 found the small sets right
+  (Netty `readHeaders`, RESTEasy `isValid`, Jackson `SubTypeValidator.<clinit>`) and the
+  large ones padded with refactoring, so labels are a slight overestimate of the true sinks.
+- **Differ**: `fleetreach-sinks` (`cafebabe` 0.9, pure Rust): methods fingerprinted from
+  opcodes with constant-pool references resolved, debug attributes ignored, lambdas folded
+  into their declaring method, bridges and other synthetic methods skipped. Last affected
+  version = the newest below the fixed one by the validated `ComparableVersion` port.
+- **Strategies**: S1 smallest single diff; S2 twin intersection across fix lines, else S1;
+  S3 S2 narrowed to classes or methods named in the advisory text.
+
+| | S1 | S2 twins | S3 + text |
+|---|---|---|---|
+| Advisories with a candidate set | 80 | 80 | 80 |
+| Median set size | 11.5 | 7 | 4.5 |
+| Set contains a true sink | 60 | 56 | 49 |
+| **Set at least 90% precise (bar: 80)** | **10** | **12** | **14** |
+| Same, abstaining above 5 methods | 7 | 9 | 12 |
+
+Why it misses:
+
+- **Releases carry more than the fix.** Where the true sink is in the diff (63 of 100), it
+  sits among a median of 11 other changed methods. Twin intersection applies to 44 and
+  helps little; a majority vote over lines (at least 2) does no better (3 of 15 precise).
+- **The named artifact is often not where the fix is** (16): OSV lists `netty-handler`
+  for a fix in `netty-codec-http`, `micronaut-http-client` for `micronaut-http`. Diffing
+  every sibling artifact in the groupId lifts full recall from 46 to 51 but triples the
+  candidate set (median 43 to 117 methods).
+- **No diffable pair** (20): the fixed jar is not on Central (11, often a qualifier OSV
+  dropped that a `.RELEASE`/`.Final` mapping only partly recovers), no earlier version
+  under that coordinate (6), or no bytecode change (3).
+- **Deny-list fixes** (Jackson and similar): the changed method is a static initializer;
+  the reachable sink is the deserialization entry point, which no diff shows.
+
+Recall, which matters for sound suppression, is not good enough either: the release diff
+covers every labelled method for only 46 of the 80 diffable advisories.
+
+**Decision (autonomous, for the user to confirm)**: jar diffs alone do not produce sink data
+good enough to suppress on, and do not meet the bar. They stay useful as a cross-check and
+as a mapping step (commit methods to the shipped artifact and its descriptors). The sink
+pipeline becomes **commit-first**: OSV/project-kb fix commits, then Prospector-style search
+for the rest, restricted to methods the release diff confirms. Its precision cannot be
+measured on these labels (they come from the same commits), so the next experiment needs
+independently hand-labelled sinks. Until a commit-first E2 passes, JVM function-level
+reachability is planned as **witnesses only** in 1.7.0, and the matrix keeps row 13 at its
+measured grade.
 
 ### Competitors, as of Nov 2026
 
@@ -551,6 +605,9 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Research gate**: E2 decides whether the sink data is good enough (1.6.0); E3 decides
   whether JVM suppression is worth shipping or JVM ships witnesses only. A miss is
   published with its number, as for Python's 3%.
+- **E2 outcome (2026-11-02)**: jar diffs alone MISSED (14 of 100 at 90% precision against a
+  bar of 80); see "E2 result" under Research findings. Next: a commit-first E2 on
+  independently labelled sinks; E3 waits for it.
 
 #### 14. Import-graph witness chains (A- to A+)
 

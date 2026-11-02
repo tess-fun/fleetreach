@@ -1,0 +1,22 @@
+[package]
+name = "fleetreach-sinks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Vulnerable-function (sink) data for fleetreach from artifact diffs: method-level diffs of the last affected and first fixed release."
+# Not published until the E2 precision experiment (spec 16, row 13) decides its shape.
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+cafebabe = "0.9"
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }

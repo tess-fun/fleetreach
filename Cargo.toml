@@ -18,6 +18,7 @@ members = [
     "crates/ghactions",
     "crates/maven",
     "crates/cli",
+    "crates/sinks",
 ]
 # `reach-driver` links `rustc_private` and builds ONLY on its own pinned nightly
 # (see crates/reach-driver/rust-toolchain.toml). It is deliberately excluded from
