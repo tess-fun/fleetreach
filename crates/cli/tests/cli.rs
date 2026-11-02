@@ -3448,3 +3448,70 @@ sed -e "s#^version = \"3\.1\.2\"#version = \"$ver\"#" uv.lock > uv.lock.new && m
         "lock --quiet --no-build --upgrade-package jinja2==3.1.5"
     );
 }
+
+// ---- one-repo scans without a fleet.toml ----
+
+#[test]
+fn repo_flag_scans_one_directory_without_a_config() {
+    let repo = manifest().join("tests/fixtures/repos/repo-vuln");
+    let out = run(&[
+        "scan",
+        "--repo",
+        repo.to_str().unwrap(),
+        "--db",
+        &db(),
+        "-f",
+        "json",
+    ]);
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(json["summary"]["repos_scanned"], 1);
+    let repos: Vec<&str> = json["vulnerabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|v| v["occurrences"].as_array().unwrap())
+        .map(|o| o["repo"].as_str().unwrap())
+        .collect();
+    assert!(!repos.is_empty() && repos.iter().all(|r| *r == "repo-vuln"));
+}
+
+#[test]
+fn repo_flag_conflicts_with_config() {
+    let out = run(&["scan", "--repo", ".", "-c", &cfg("fleet-clean.toml")]);
+    assert_eq!(code(&out), 3, "usage error; stderr: {}", stderr(&out));
+    assert!(stderr(&out).contains("cannot be used with"));
+}
+
+#[test]
+fn no_config_scans_the_git_work_tree_around_the_working_directory() {
+    let root = std::env::temp_dir().join(format!("fleetreach-here-{}/my-svc", std::process::id()));
+    let nested = root.join("src/deep");
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::create_dir_all(root.join(".git")).unwrap();
+    std::fs::copy(
+        manifest().join("tests/fixtures/repos/repo-vuln/Cargo.lock"),
+        root.join("Cargo.lock"),
+    )
+    .unwrap();
+    let out = Command::cargo_bin("fleetreach")
+        .unwrap()
+        .args(["scan", "--db", &db(), "-f", "json"])
+        .current_dir(&nested)
+        .env("FLEETREACH_OSV_SYNC", "off")
+        .env("XDG_CACHE_HOME", empty_cache())
+        .env_remove("FLEETREACH_OSV_DIR")
+        .output()
+        .unwrap();
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    assert!(
+        stderr(&out).contains("no ./fleet.toml; scanning"),
+        "{}",
+        stderr(&out)
+    );
+    let json: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(
+        json["vulnerabilities"][0]["occurrences"][0]["repo"],
+        "my-svc"
+    );
+}

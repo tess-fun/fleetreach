@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `fleetreach scan` without a `fleet.toml` scans the git work tree around the current
+  directory as a one-repo fleet (a note on stderr says so); `scan --repo <DIR>` does the same
+  for any directory. An explicit `-c` that does not exist is still an error.
+
 ## [1.5.0] - 2026-11-01
 
 ### Added

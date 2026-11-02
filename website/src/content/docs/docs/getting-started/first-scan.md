@@ -31,6 +31,22 @@ repo with a `Cargo.lock`, a `package-lock.json` and GitHub workflows is read in 
 scan a whole GitHub or GitLab organisation without cloning it yourself, see
 [Scan a GitHub or GitLab org](/fleetreach/docs/guides/scan-a-github-or-gitlab-org/).
 
+To list repos by URL instead of by path, use a source: fleetreach clones only the
+lockfiles it needs into its cache, so `fleet.toml` holds no local paths.
+
+```toml title="fleet.toml"
+[[source]]
+kind = "git"
+urls = ["https://github.com/acme/payments-api", "https://github.com/acme/checkout-web"]
+```
+
+Run `fleetreach scan --sync` to clone or refresh them.
+
+**Just one repo?** Run `fleetreach scan` anywhere inside it without a `fleet.toml`: the
+git work tree around the current directory is scanned as a one-repo fleet, named after
+its directory, with lockfiles below the root included. `fleetreach scan --repo <dir>` does
+the same for any directory.
+
 ## 2. Scan
 
 ```sh

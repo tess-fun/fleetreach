@@ -545,6 +545,24 @@ impl Config {
         Self::from_str(&text, base_dir, &path.display().to_string())
     }
 
+    /// A one-repo fleet for `dir` with every default, as if a `fleet.toml` held only
+    /// `[[repo]] path = "."` with `glob = true` so nested lockfiles are found. The repo id is
+    /// the directory's name.
+    pub fn single_repo(dir: &Path) -> Result<Self, ConfigError> {
+        let dir = std::fs::canonicalize(dir).map_err(|e| ConfigError::PathMissing {
+            repo: dir.display().to_string(),
+            path: format!("{} ({e})", dir.display()),
+        })?;
+        let id = dir
+            .file_name()
+            .map_or_else(|| "repo".to_string(), |n| n.to_string_lossy().into_owned());
+        let text = format!(
+            "[[repo]]\nid = {}\npath = \".\"\nglob = true\n",
+            toml::Value::String(id)
+        );
+        Self::from_str(&text, &dir, &dir.display().to_string())
+    }
+
     /// Parse and validate config text with an explicit base directory for
     /// resolving repo paths. Split out from [`Config::load`] for testing.
     pub fn from_str(text: &str, base_dir: &Path, label: &str) -> Result<Self, ConfigError> {

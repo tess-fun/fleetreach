@@ -29,8 +29,13 @@ use crate::{npm_reach, osvdb, py_reach, reach, resolve, sources, static_reach, v
 
 #[derive(Parser)]
 pub(crate) struct ScanArgs {
-    #[arg(short, long, default_value = "./fleet.toml")]
-    config: PathBuf,
+    /// The fleet config [default: ./fleet.toml; without one, the current repo is scanned
+    /// as a one-repo fleet]
+    #[arg(short, long)]
+    config: Option<PathBuf>,
+    /// Scan only this directory as a one-repo fleet, without a fleet.toml
+    #[arg(long, value_name = "DIR", conflicts_with = "config")]
+    repo: Option<PathBuf>,
     #[arg(short, long, value_enum, default_value_t = Format::Table)]
     format: Format,
 
@@ -563,10 +568,39 @@ fn explain(args: &ScanArgs, id: &str) -> Result<u8, u8> {
     })
 }
 
+/// The git work tree around the working directory (the nearest ancestor holding `.git`, a
+/// directory or a worktree's file), else the working directory itself.
+fn current_repo_root() -> Result<PathBuf, String> {
+    let cwd =
+        std::env::current_dir().map_err(|e| format!("cannot read the working directory: {e}"))?;
+    Ok(cwd
+        .ancestors()
+        .find(|d| d.join(".git").exists())
+        .unwrap_or(&cwd)
+        .to_path_buf())
+}
+
 /// The fleet: `fleet.toml` plus the repos its `[[source]]` entries expand to.
 fn load_fleet(args: &ScanArgs) -> Result<(Config, sources::Materialized), u8> {
     // 1. Config (§10.2): any failure is a could-not-scan -> 2.
-    let mut config = Config::load(&args.config).map_err(|e| fail(&e.to_string()))?;
+    //    No `-c` and no ./fleet.toml: the repo around the working directory is the fleet.
+    let default = Path::new("fleet.toml");
+    let mut config = match (&args.repo, &args.config) {
+        (Some(dir), _) => Config::single_repo(dir),
+        (None, Some(path)) => Config::load(path),
+        (None, None) if default.exists() => Config::load(default),
+        (None, None) => {
+            let dir = current_repo_root().map_err(|e| fail(&e))?;
+            if !args.quiet {
+                eprintln!(
+                    "note: no ./fleet.toml; scanning {} as a one-repo fleet",
+                    dir.display()
+                );
+            }
+            Config::single_repo(&dir)
+        }
+    }
+    .map_err(|e| fail(&e.to_string()))?;
 
     // 1a. Fleet sources (spec 06): expand `[[source]]` into repos. With --sync, list afresh
     //     and clone/refresh; without, use the cached listing and existing checkouts. A
