@@ -34,3 +34,28 @@ into exit 2.
 
 Matching uses both the advisory ranges and its enumerated version list: range-only matching
 missed 220 of 600 real PyPI cases during validation.
+
+## Example
+
+The demo fleet's [`ml-service`](https://github.com/tess-fun/fleetreach/tree/main/website/demo/repos/ml-service) and [`data-pipeline`](https://github.com/tess-fun/fleetreach/tree/main/website/demo/repos/data-pipeline): a `uv.lock` and a `requirements.txt` (the second gets a coverage label, below). `ecosystems/pypi.toml` is a fleet file naming just those repos, and the output is real, generated on frozen advisory data.
+
+<!-- run: fleetreach scan -c ecosystems/pypi.toml -f packages -->
+```console
+$ fleetreach scan -c ecosystems/pypi.toml -f packages
+┌───────┬────────┬────────────┬────────────┬──────────┬──────────┬─────────┬─────────────────┐
+│ Repos ┆ Direct ┆ Transitive ┆ Advisories ┆ Severity ┆ Fix      ┆ Exploit ┆ Package         │
+╞═══════╪════════╪════════════╪════════════╪══════════╪══════════╪═════════╪═════════════════╡
+│ 2     ┆ 2      ┆ 0          ┆ 10         ┆ high     ┆ manifest ┆ -       ┆ urllib3 (pypi)  │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 2     ┆ 2      ┆ 0          ┆ 4          ┆ medium   ┆ manifest ┆ -       ┆ requests (pypi) │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 4          ┆ critical ┆ manifest ┆ -       ┆ certifi (pypi)  │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 5          ┆ high     ┆ manifest ┆ -       ┆ jinja2 (pypi)   │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 2          ┆ high     ┆ manifest ┆ -       ┆ flask (pypi)    │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 2          ┆ high     ┆ manifest ┆ -       ┆ idna (pypi)     │
+└───────┴────────┴────────────┴────────────┴──────────┴──────────┴─────────┴─────────────────┘
+```
+<!-- /run -->

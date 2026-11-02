@@ -158,6 +158,21 @@ the osv.dev API, pyspdxtools, and CISA's and CERT/CC's own SSVC data.
   twice got different ids. It now follows `SOURCE_DATE_EPOCH` like every other timestamp.
 - **`history mttr` showed 0.0 days for a group with nothing fixed**, which read as fixed at
   once. The table shows `-`; JSON is unchanged.
+- **SARIF results all pointed at `Cargo.lock`**, a file most non-Rust repos do not have, so
+  code scanning annotated nothing useful. Each result now names the file its package was read
+  from: the repo's lockfile in the order its reader tries them (`bun.lock`, `uv.lock`,
+  `requirements.txt` and so on), and for a GitHub Action the workflow that uses it.
+- **The upgrade target could be a downgrade.** The `→` hint in tables, the SARIF message and
+  the VEX action took the first patched range, so `smallvec 1.6.0` (patched in `>= 0.6.14,
+  < 1.0.0` and `>= 1.6.1`) was told to move to 0.6.14. It is now the nearest fix above the
+  installed version. The fix queue already did this.
+- **Hex: every package in a real `mix.lock` was direct.** mix writes each dependency with an
+  options list, `{:plug, "~> 1.14", [hex: :plug, ...]}`, and the reader took the options list
+  for the dependency list, so it found none, and provenance chains were lost. Optional
+  dependencies also no longer make a package transitive: mix installs one only when something
+  requires it.
+- **Advisory titles kept stray spaces from osv.dev** (` cowlib cow_http_te module: ...`),
+  which showed in tables. Whitespace in titles is now collapsed.
 
 ## [1.4.0] - 2026-10-31
 

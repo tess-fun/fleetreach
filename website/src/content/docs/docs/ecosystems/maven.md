@@ -28,3 +28,24 @@ Anything that cannot be resolved makes the source partial coverage, with the ite
 On a Spring Boot 2.7 project every one of 85 artifacts matched `mvn dependency:list`.
 
 The comparator agrees with Apache Maven's `ComparableVersion` on over 710,000 version pairs.
+
+## Example
+
+The demo fleet's [`partner-api`](https://github.com/tess-fun/fleetreach/tree/main/website/demo/repos/partner-api): a `pom.xml` resolved without Maven. `ecosystems/maven.toml` is a fleet file naming just that repo, and the output is real, generated on frozen advisory data.
+
+<!-- run: fleetreach scan -c ecosystems/maven.toml -f packages -->
+```console
+$ fleetreach scan -c ecosystems/maven.toml -f packages
+┌───────┬────────┬────────────┬────────────┬──────────┬──────────┬─────────┬─────────────────────────────────────────────────────┐
+│ Repos ┆ Direct ┆ Transitive ┆ Advisories ┆ Severity ┆ Fix      ┆ Exploit ┆ Package                                             │
+╞═══════╪════════╪════════════╪════════════╪══════════╪══════════╪═════════╪═════════════════════════════════════════════════════╡
+│ 1     ┆ 1      ┆ 0          ┆ 8          ┆ critical ┆ manifest ┆ -       ┆ org.apache.logging.log4j:log4j-core (maven)         │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 14         ┆ high     ┆ manifest ┆ -       ┆ com.fasterxml.jackson.core:jackson-databind (maven) │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 0      ┆ 1          ┆ 3          ┆ high     ┆ upstream ┆ -       ┆ com.fasterxml.jackson.core:jackson-core (maven)     │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 0      ┆ 1          ┆ 1          ┆ medium   ┆ upstream ┆ -       ┆ org.apache.logging.log4j:log4j-api (maven)          │
+└───────┴────────┴────────────┴────────────┴──────────┴──────────┴─────────┴─────────────────────────────────────────────────────┘
+```
+<!-- /run -->

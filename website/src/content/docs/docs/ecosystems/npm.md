@@ -28,3 +28,36 @@ edit from a popular package name are flagged. See
 
 Validated at 100% recall with zero false cleans on 565 real lockfiles against the full npm
 export, using real lockfiles generated with node and npm as the oracle.
+
+## Example
+
+The demo fleet's [`admin-dashboard`](https://github.com/tess-fun/fleetreach/tree/main/website/demo/repos/admin-dashboard): a `package-lock.json`. `ecosystems/npm.toml` is a fleet file naming just that repo, and the output is real, generated on frozen advisory data.
+
+<!-- run: fleetreach scan -c ecosystems/npm.toml -f packages -->
+```console
+$ fleetreach scan -c ecosystems/npm.toml -f packages
+┌───────┬────────┬────────────┬────────────┬──────────┬──────────┬─────────┬──────────────────────┐
+│ Repos ┆ Direct ┆ Transitive ┆ Advisories ┆ Severity ┆ Fix      ┆ Exploit ┆ Package              │
+╞═══════╪════════╪════════════╪════════════╪══════════╪══════════╪═════════╪══════════════════════╡
+│ 1     ┆ 1      ┆ 0          ┆ 25         ┆ high     ┆ manifest ┆ -       ┆ axios (npm)          │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 6          ┆ high     ┆ manifest ┆ -       ┆ lodash (npm)         │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 0      ┆ 1          ┆ 5          ┆ high     ┆ upstream ┆ -       ┆ qs (npm)             │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 0      ┆ 1          ┆ 3          ┆ high     ┆ upstream ┆ -       ┆ body-parser (npm)    │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 3          ┆ high     ┆ manifest ┆ -       ┆ jsonwebtoken (npm)   │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 0      ┆ 1          ┆ 2          ┆ high     ┆ upstream ┆ -       ┆ path-to-regexp (npm) │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 2          ┆ medium   ┆ manifest ┆ -       ┆ express (npm)        │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 0      ┆ 1          ┆ 1          ┆ low      ┆ upstream ┆ -       ┆ cookie (npm)         │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 0      ┆ 1          ┆ 1          ┆ low      ┆ upstream ┆ -       ┆ send (npm)           │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 0      ┆ 1          ┆ 1          ┆ low      ┆ upstream ┆ -       ┆ serve-static (npm)   │
+└───────┴────────┴────────────┴────────────┴──────────┴──────────┴─────────┴──────────────────────┘
+```
+<!-- /run -->

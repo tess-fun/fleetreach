@@ -36,7 +36,38 @@ fails. Inputs: `args`, `config`, `sarif-file`, `upload` and `version`.
 
 Each SARIF result has a stable fingerprint built from the advisory, ecosystem, repo and
 package, not the version, so an alert survives a bump that does not fix it. Findings proven
-`not_affected` carry a suppression and are greyed out instead of alerting.
+`not_affected` carry a suppression and are greyed out instead of alerting. Each result points
+at the file its package was read from: the repo's lockfile, or for an action the workflow
+that uses it. One result from the demo fleet:
+
+<!-- run: fleetreach scan -f sarif | jq '.runs[0].results[0]' -->
+```console
+$ fleetreach scan -f sarif | jq '.runs[0].results[0]'
+{
+  "ruleId": "GHSA-353f-x4gh-cqq8",
+  "level": "error",
+  "message": {
+    "text": "Nokogiri patches vendored libxml2 to resolve multiple CVEs — nokogiri 1.16.2 in billing; fix: update to 1.18.9"
+  },
+  "locations": [
+    {
+      "physicalLocation": {
+        "artifactLocation": {
+          "uri": "Gemfile.lock"
+        }
+      }
+    }
+  ],
+  "properties": {
+    "dependencyKind": "direct"
+  },
+  "partialFingerprints": {
+    "fleetreach/v1": "114e37f6cad6f06dee0a896f7bf8f26f",
+    "primaryLocationLineHash": "114e37f6cad6f06dee0a896f7bf8f26f:1"
+  }
+}
+```
+<!-- /run -->
 
 ## The whole org, nightly
 
@@ -78,5 +109,20 @@ gate. See [Track drift between scans](/fleetreach/docs/guides/track-drift-betwee
 | `--fail-on-kev` | a finding is on CISA's KEV list (with `--enrich`) |
 | `--min-epss 0.5` | a finding's EPSS score is at least 0.5 (with `--enrich`) |
 | `--fail-on-ssvc out-of-cycle` | the SSVC decision is at least out-of-cycle |
+
+The demo fleet has critical findings, so a critical gate fails it. The notes say one source
+was only partly read (a failure only with `--require-full-coverage`) and that SSVC needs
+exploitation data (`--enrich`):
+
+<!-- run: fleetreach scan --fail-on critical >/dev/null; echo "exit $?" -->
+```console
+$ fleetreach scan --fail-on critical >/dev/null; echo "exit $?"
+note: 1 source(s) scanned with incomplete coverage (findings outside what was read were never matched):
+  data-pipeline: requirements.txt [partial] every requirement is pinned, but nothing shows the file lists the full transitive set (no pip-compile or uv header, `# via` annotations or hashes); dependencies of these packages may be missing
+note: SSVC decisions not computed: no exploitation data: run with --enrich, or --kev-file offline
+Scanned 9 repo(s) (0 errored): 211 vulns, 1 warning(s); max severity critical. Incomplete coverage: 1 source(s) in 1 repo(s).
+exit 1
+```
+<!-- /run -->
 | `--fail-on-warnings` | any supply-chain warning is present |
 | `--require-full-coverage` | any source was only partly read |

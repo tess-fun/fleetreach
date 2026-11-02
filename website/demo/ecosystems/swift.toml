@@ -1,0 +1,7 @@
+# The fleet for the Swift page: a repo in this ecosystem. Paths are relative to this file.
+[settings.osv]
+dir = "../data/osv"
+
+[[repo]]
+id   = "notifications-gateway"
+path = "../repos/notifications-gateway"

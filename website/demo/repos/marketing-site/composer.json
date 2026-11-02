@@ -1,0 +1,11 @@
+{
+    "name": "acme/marketing-site",
+    "type": "project",
+    "require": {
+        "php": ">=8.1",
+        "guzzlehttp/guzzle": "^7.4.4",
+        "twig/twig": "^3.4.1",
+        "league/commonmark": "^2.3.3",
+        "monolog/monolog": "^2.7.0"
+    }
+}

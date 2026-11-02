@@ -1,0 +1,11 @@
+# The fleet for the PyPI page: a uv.lock repo and a requirements.txt repo. Paths are relative to this file.
+[settings.osv]
+dir = "../data/osv"
+
+[[repo]]
+id   = "ml-service"
+path = "../repos/ml-service"
+
+[[repo]]
+id   = "data-pipeline"
+path = "../repos/data-pipeline"

@@ -28,3 +28,30 @@ which denies network; a confined scan needs a local `--go-vuln-db` mirror.
 `go list -deps -test ./...` to record checksums, with `GOTOOLCHAIN=local` and `GOWORK=off`.
 Go downloads module sources but never runs them. When an update raises the module's `go`
 directive, the commit and pull request say so.
+
+## Example
+
+The demo fleet's [`inventory-svc`](https://github.com/tess-fun/fleetreach/tree/main/website/demo/repos/inventory-svc): a Go service's `go.mod`, read without the Go toolchain. `ecosystems/go.toml` is a fleet file naming just that repo, and the output is real, generated on frozen advisory data.
+
+<!-- run: fleetreach scan -c ecosystems/go.toml -f packages -->
+```console
+$ fleetreach scan -c ecosystems/go.toml -f packages
+┌───────┬────────┬────────────┬────────────┬──────────┬──────────┬─────────┬─────────────────────────────────┐
+│ Repos ┆ Direct ┆ Transitive ┆ Advisories ┆ Severity ┆ Fix      ┆ Exploit ┆ Package                         │
+╞═══════╪════════╪════════════╪════════════╪══════════╪══════════╪═════════╪═════════════════════════════════╡
+│ 1     ┆ 0      ┆ 1          ┆ 23         ┆ unknown  ┆ upstream ┆ -       ┆ golang.org/x/crypto (go)        │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 21         ┆ unknown  ┆ manifest ┆ -       ┆ golang.org/x/net (go)           │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 6          ┆ unknown  ┆ manifest ┆ -       ┆ google.golang.org/grpc (go)     │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 0      ┆ 1          ┆ 2          ┆ unknown  ┆ upstream ┆ -       ┆ golang.org/x/text (go)          │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 1          ┆ unknown  ┆ manifest ┆ -       ┆ github.com/gin-gonic/gin (go)   │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 0      ┆ 1          ┆ 1          ┆ unknown  ┆ upstream ┆ -       ┆ golang.org/x/sys (go)           │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 1          ┆ unknown  ┆ manifest ┆ -       ┆ google.golang.org/protobuf (go) │
+└───────┴────────┴────────────┴────────────┴──────────┴──────────┴─────────┴─────────────────────────────────┘
+```
+<!-- /run -->

@@ -17,7 +17,7 @@ sidebar:
 | `MAVEN_REPO_LOCAL` | the local Maven repository, instead of `~/.m2/repository` |
 | `NUGET_PACKAGES` | the NuGet global packages folder, for license lookups |
 | `GOVULNDB` | vulnerability database for `govulncheck`, as `--go-vuln-db` |
-| `SOURCE_DATE_EPOCH` | fixed timestamps in SBOMs, VEX and HTML reports, for reproducible output |
+| `SOURCE_DATE_EPOCH` | fixed timestamps in SBOMs, VEX, HTML reports, JSON reports and recorded history runs, for reproducible output |
 
 A `[[source]]` can name another variable with `token_env`. Tokens reach `git` as an HTTP header in its environment, scoped to the forge host,
 never on the command line or in a remote URL.

@@ -880,7 +880,8 @@ impl TierCFinding<'_> {
             advisory_id: self.advisory_id.clone(),
             aliases: self.aliases,
             ecosystem: self.ecosystem,
-            title: self.title,
+            // Some summaries carry stray spaces (` cowlib cow_http_te module: ...`).
+            title: self.title.split_whitespace().collect::<Vec<_>>().join(" "),
             severity: self.severity,
             cvss_score: self.cvss_score,
             cvss_vector: self.cvss_vector,

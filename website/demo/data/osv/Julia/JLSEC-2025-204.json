@@ -1,0 +1,84 @@
+{
+ "affected": [
+  {
+   "database_specific": {
+    "source": "https://github.com/JuliaLang/SecurityAdvisories.jl/tree/generated/osv/2025/JLSEC-2025-204.json"
+   },
+   "package": {
+    "ecosystem": "Julia",
+    "name": "MbedTLS_jll",
+    "purl": "pkg:julia/MbedTLS_jll?uuid=c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+   },
+   "ranges": [
+    {
+     "events": [
+      {
+       "introduced": "0"
+      },
+      {
+       "fixed": "2.16.8+0"
+      }
+     ],
+     "type": "SEMVER"
+    }
+   ]
+  }
+ ],
+ "database_specific": {
+  "license": "CC-BY-4.0",
+  "sources": [
+   {
+    "database_specific": {
+     "status": "Modified"
+    },
+    "html_url": "https://nvd.nist.gov/vuln/detail/CVE-2020-36421",
+    "id": "CVE-2020-36421",
+    "imported": "2026-07-17T20:44:40.315Z",
+    "modified": "2026-06-17T03:15:27.207Z",
+    "published": "2021-07-19T17:15:11.133Z",
+    "url": "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2020-36421"
+   }
+  ]
+ },
+ "details": "An issue was discovered in Arm Mbed TLS before 2.23.0. Because of a side channel in modular exponentiation, an RSA private key used in a secure enclave could be disclosed.",
+ "id": "JLSEC-2025-204",
+ "modified": "2026-07-18T00:00:56.002759439Z",
+ "published": "2025-11-21T15:59:04.054Z",
+ "references": [
+  {
+   "type": "WEB",
+   "url": "https://bugs.gentoo.org/730752"
+  },
+  {
+   "type": "WEB",
+   "url": "https://github.com/ARMmbed/mbedtls/issues/3394"
+  },
+  {
+   "type": "WEB",
+   "url": "https://github.com/ARMmbed/mbedtls/releases/tag/v2.16.7"
+  },
+  {
+   "type": "WEB",
+   "url": "https://github.com/ARMmbed/mbedtls/releases/tag/v2.23.0"
+  },
+  {
+   "type": "WEB",
+   "url": "https://lists.debian.org/debian-lts-announce/2022/12/msg00036.html"
+  }
+ ],
+ "schema_version": "1.7.5",
+ "severity": [
+  {
+   "score": "AV:N/AC:L/Au:N/C:P/I:N/A:N",
+   "type": "CVSS_V2"
+  },
+  {
+   "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+   "type": "CVSS_V3"
+  }
+ ],
+ "summary": "An issue was discovered in Arm Mbed TLS before 2.23.0",
+ "upstream": [
+  "CVE-2020-36421"
+ ]
+}

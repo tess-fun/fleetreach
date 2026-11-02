@@ -343,6 +343,61 @@ pub(crate) struct ScanArgs {
     verbose: bool,
 }
 
+/// The file a SARIF result points at, relative to the repo root: the first of the files the
+/// ecosystem is read from that the repo has, in the order its reader tries them, and for a
+/// GitHub Action the workflow that uses it. Falls back to the usual file when none is found.
+fn sarif_source(repo: Option<&Path>, ecosystem: Ecosystem, package: &str) -> String {
+    let fallback = || report::default_source(ecosystem).to_string();
+    let Some(repo) = repo else {
+        return fallback();
+    };
+    let candidates: &[&str] = match ecosystem {
+        Ecosystem::Npm => &[
+            "package-lock.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            "bun.lock",
+        ],
+        Ecosystem::Pypi => &[
+            "uv.lock",
+            "poetry.lock",
+            "Pipfile.lock",
+            "pylock.toml",
+            "requirements.txt",
+        ],
+        Ecosystem::NuGet => &[
+            "packages.lock.json",
+            "obj/project.assets.json",
+            "packages.config",
+        ],
+        Ecosystem::Maven => &["gradle.lockfile", "pom.xml"],
+        Ecosystem::GitHubActions => {
+            let dir = repo.join(".github/workflows");
+            let mut workflows: Vec<PathBuf> = std::fs::read_dir(&dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|x| x == "yml" || x == "yaml"))
+                .collect();
+            workflows.sort();
+            let uses = format!("{package}@");
+            return workflows
+                .iter()
+                .find(|p| std::fs::read_to_string(p).is_ok_and(|t| t.contains(&uses)))
+                .and_then(|p| p.file_name())
+                .map_or_else(fallback, |name| {
+                    format!(".github/workflows/{}", name.to_string_lossy())
+                });
+        }
+        _ => return fallback(),
+    };
+    candidates
+        .iter()
+        .find(|c| repo.join(c).is_file())
+        .map_or_else(fallback, |c| (*c).to_string())
+}
+
 fn load_db(args: &ScanArgs) -> Result<AdvisoryDb, String> {
     load_db_from(args.db.as_deref(), args.db_rev.as_deref(), args.offline)
 }
@@ -1020,7 +1075,15 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             // to_sarif; approved human assertions are injected here.
             let product_ids = vex::resolve_product_ids(&config);
             let assertions = vex::build_human_assertions(&suppressed, &product_ids, false);
-            match report::to_sarif(&fleet_report, &assertions) {
+            let paths: BTreeMap<&str, &Path> = config
+                .repos
+                .iter()
+                .map(|r| (r.id.0.as_str(), r.path.as_path()))
+                .collect();
+            let locate = |repo: &fleetreach_core::RepoId, ecosystem: Ecosystem, package: &str| {
+                sarif_source(paths.get(repo.0.as_str()).copied(), ecosystem, package)
+            };
+            match report::to_sarif_located(&fleet_report, &assertions, &locate) {
                 Ok(sarif) => sarif,
                 Err(e) => return fail(&format!("serializing SARIF: {e}")),
             }

@@ -51,6 +51,8 @@ struct RawEntry {
     name: String,
     version: String,
     deps: Vec<String>,
+    /// The subset of `deps` marked `optional: true`.
+    optional: Vec<String>,
 }
 
 /// Scan every `:hex` tuple out of `mix.lock`, capturing name, version, and the sixth-element
@@ -84,12 +86,15 @@ fn raw_entries(mix_lock: &str) -> Vec<RawEntry> {
         // (including multi-element deps lists) without ever reading into the next package.
         let after_version = &vtail[q2 + 1..];
         let tuple_end = after_version.find("{:hex,").unwrap_or(after_version.len());
-        let deps = parse_deps_list(&after_version[..tuple_end]);
+        let listed = parse_deps_list(&after_version[..tuple_end]);
+        let optional = listed.iter().filter(|d| d.1).map(|d| d.0.clone()).collect();
+        let deps = listed.into_iter().map(|d| d.0).collect();
         if !name.is_empty() && !version.is_empty() {
             out.push(RawEntry {
                 name,
                 version,
                 deps,
+                optional,
             });
         }
         rest = &after_version[tuple_end..];
@@ -97,37 +102,55 @@ fn raw_entries(mix_lock: &str) -> Vec<RawEntry> {
     out
 }
 
-/// Extract the dependency atom names from the part of a Hex tuple that follows the version
-/// (i.e. `, "<outer-hash>", [:mix], [{:plug, "~> 1.10"}, ...], "hexpm", "<inner-hash>"`,
-/// truncated at the tuple's `}`). The deps list is the bracketed group that precedes the
-/// `"hexpm"` registry string; each `{:atom,` inside it names one direct dependency. Robust to
-/// an empty list `[]` and to the build-tools list (`[:mix, :rebar3]`), which holds bare atoms
-/// but no `{` tuples and so contributes no names.
-fn parse_deps_list(tuple_tail: &str) -> Vec<String> {
-    // The deps list sits between the build-tools list and the `"hexpm"` registry string, and
-    // is the LAST `[...]` group before that registry string. The quoted strings around it are
-    // the outer hash (before the lists) and `"hexpm"`/inner-hash (after). To stay clear of the
-    // trailing `"hexpm", "<hash>"` strings, bound the scan at the last `[` .. matching `]`.
-    let Some(open) = tuple_tail.rfind('[') else {
-        return Vec::new();
-    };
-    let after_open = &tuple_tail[open..];
-    let close = after_open.find(']').unwrap_or(after_open.len());
-    let region = &after_open[..close];
-    // Within the deps list, each direct dep is introduced by `{:`. The build-tools list is a
-    // separate (earlier) `[...]` group and is never reached, so its bare atoms are ignored.
+/// Extract the dependency atom names from the part of a Hex tuple that follows the version:
+///
+/// ```text
+/// , "<inner-hash>", [:mix], [{:plug, "~> 1.14", [hex: :plug, repo: "hexpm", optional: false]}], "hexpm", "<outer-hash>"}
+/// ```
+///
+/// The deps list is the **second** top-level `[...]` group (the first is the build tools).
+/// mix writes each dependency as `{:name, "<requirement>", [<options>]}`, so the list holds
+/// nested `[...]` options of its own: brackets are matched by depth, skipping quoted strings,
+/// and only a `{:atom` directly inside the deps list names a dependency. Each comes back with
+/// whether its options say `optional: true`.
+fn parse_deps_list(tuple_tail: &str) -> Vec<(String, bool)> {
     let mut deps = Vec::new();
-    let mut scan = region;
-    while let Some(p) = scan.find("{:") {
-        let atom = &scan[p + 2..];
-        let end = atom
-            .find(|c: char| !(c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'))
-            .unwrap_or(atom.len());
-        let name = &atom[..end];
-        if !name.is_empty() {
-            deps.push(name.to_string());
+    let (mut depth, mut group, mut quoted) = (0usize, 0usize, false);
+    let mut chars = tuple_tail.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        match c {
+            '"' => quoted = !quoted,
+            '\\' if quoted => {
+                chars.next();
+            }
+            _ if quoted => {}
+            '[' => {
+                if depth == 0 {
+                    group += 1;
+                }
+                depth += 1;
+            }
+            ']' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 && group == 2 {
+                    break;
+                }
+            }
+            '{' if depth == 1 && group == 2 => {
+                let atom = tuple_tail[i + 1..].strip_prefix(':').unwrap_or_default();
+                let end = atom
+                    .find(|c: char| !(c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'))
+                    .unwrap_or(atom.len());
+                if end > 0 {
+                    // A dependency tuple holds no `}` of its own before its end.
+                    let tuple = &atom[..atom.find('}').unwrap_or(atom.len())];
+                    deps.push((atom[..end].to_string(), tuple.contains("optional: true")));
+                }
+            }
+            // The tuple closes before a deps list was seen (an older 6-element entry).
+            '}' if depth == 0 => break,
+            _ => {}
         }
-        scan = &atom[end..];
     }
     deps
 }
@@ -138,15 +161,16 @@ fn parse_deps_list(tuple_tail: &str) -> Vec<String> {
 /// the caller only reaches here once the file has been read.
 ///
 /// The `direct` flag is inferred from the lockfile's own dependency lists: a package is direct
-/// iff no other package depends on it. The returned [`DepGraph`] is rooted at `(root)`, with an
+/// iff no other package requires it. An optional dependency does not count: mix installs one
+/// only when something requires it, so if no package does, the project itself must. The returned [`DepGraph`] is rooted at `(root)`, with an
 /// edge to each inferred top-level package, so `chain_to(name)` gives full provenance.
 pub fn installed_packages(mix_lock: &str) -> (Vec<InstalledPackage>, DepGraph) {
     let entries = raw_entries(mix_lock);
 
-    // Every package that appears as someone else's dependency is, by definition, not top-level.
+    // Every package another one requires (not just optionally) is not top-level.
     let mut depended_on: BTreeSet<String> = BTreeSet::new();
     for e in &entries {
-        for d in &e.deps {
+        for d in e.deps.iter().filter(|d| !e.optional.contains(d)) {
             depended_on.insert(d.clone());
         }
     }
@@ -263,6 +287,33 @@ mod tests {
         // Direct: (root) -> phoenix.
         assert_eq!(graph.chain_to("phoenix"), vec!["(root)", "phoenix"]);
         assert_eq!(graph.chain_to("decimal"), vec!["(root)", "decimal"]);
+    }
+
+    #[test]
+    fn reads_deps_lists_as_mix_writes_them() {
+        // mix writes each dependency with its own options list. The last `[` in the tuple is
+        // then an options list, not the deps list, which once left every package "direct".
+        let lock = r#"%{
+  "cowboy": {:hex, :cowboy, "2.10.0", "ff9ffeff91dae4ae270dd975642997afe2a1179d94b1887863e43f681a203e26", [:make, :rebar3], [{:cowlib, "2.12.1", [hex: :cowlib, repo: "hexpm", optional: false]}, {:ranch, "1.8.0", [hex: :ranch, repo: "hexpm", optional: false]}], "hexpm", "3afdccb7183cc6f143cb14d3cf51fa00e53db9ec80cdcd525482f5e99bc41d6b"},
+  "cowlib": {:hex, :cowlib, "2.12.1", "a9fa9a625f1d2025fe6b462cb865881329b5caff8f1854d1cbc9f9533f00e1e1", [:make, :rebar3], [], "hexpm", "163b73f6367a7341b33c794c4e88e7dbfe6498ac42dcd69ef44c5bc5507c8db0"},
+  "phoenix": {:hex, :phoenix, "1.7.10", "02189140a61b2ce85bb633a9b6fd02dff705a5f1596869547aeb2b2b95edd729", [:mix], [{:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: true]}, {:plug, "~> 1.14", [hex: :plug, repo: "hexpm", optional: false]}, {:plug_cowboy, "~> 2.6", [hex: :plug_cowboy, repo: "hexpm", optional: true]}], "hexpm", "cf784932e010fd736d656d7fead6a584a4498efefe5b8227e9f383bf15bb79d0"},
+  "plug": {:hex, :plug, "1.15.2", "94cf1fa375526f30ff8770837cb804798e0045fd97185f0bb9e5fcd858c792a3", [:mix], [], "hexpm", "02731fa0c2dcb03d8d21a1d941bdbbe99c2946c0db098eee31008e04c6283615"},
+  "plug_cowboy": {:hex, :plug_cowboy, "2.6.1", "9a3bbfceeb65eff5f39dab529e5cd79137ac36e913c02067dba3963a26efe9b2", [:mix], [{:cowboy, "~> 2.7", [hex: :cowboy, repo: "hexpm", optional: false]}, {:plug, "~> 1.14", [hex: :plug, repo: "hexpm", optional: false]}], "hexpm", "de36e1a21f451a18b790f37765db198075c25875c64834bcc82d90b309eb6613"},
+  "ranch": {:hex, :ranch, "1.8.0", "8c7a100a139fd57f17327b6413e4167ac559fbc04ca7448e9be9057311597a1d", [:make, :rebar3], [], "hexpm", "49fbcfd3682fab1f5d109351b61257676da1a2fdbe295904176d5e521a2ddfe5"},
+}"#;
+        let (pkgs, graph) = installed_packages(lock);
+        let direct: Vec<&str> = pkgs
+            .iter()
+            .filter(|p| p.direct)
+            .map(|p| p.name.as_str())
+            .collect();
+        // plug_cowboy is only an optional dependency of phoenix, so the project requires it.
+        assert_eq!(direct, vec!["phoenix", "plug_cowboy"]);
+        assert_eq!(
+            graph.chain_to("ranch"),
+            vec!["(root)", "plug_cowboy", "cowboy", "ranch"]
+        );
+        assert_eq!(graph.chain_to("plug"), vec!["(root)", "phoenix", "plug"]);
     }
 
     #[test]

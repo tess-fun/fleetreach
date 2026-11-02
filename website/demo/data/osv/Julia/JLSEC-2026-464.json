@@ -1,0 +1,74 @@
+{
+ "affected": [
+  {
+   "database_specific": {
+    "source": "https://github.com/JuliaLang/SecurityAdvisories.jl/tree/generated/osv/2026/JLSEC-2026-464.json"
+   },
+   "package": {
+    "ecosystem": "Julia",
+    "name": "MbedTLS_jll",
+    "purl": "pkg:julia/MbedTLS_jll?uuid=c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+   },
+   "ranges": [
+    {
+     "events": [
+      {
+       "introduced": "0"
+      }
+     ],
+     "type": "SEMVER"
+    }
+   ]
+  }
+ ],
+ "database_specific": {
+  "license": "CC-BY-4.0",
+  "sources": [
+   {
+    "database_specific": {
+     "status": "Analyzed"
+    },
+    "html_url": "https://nvd.nist.gov/vuln/detail/CVE-2026-25835",
+    "id": "CVE-2026-25835",
+    "imported": "2026-07-17T21:56:49.824Z",
+    "modified": "2026-06-17T10:25:18.663Z",
+    "published": "2026-04-01T19:16:28.663Z",
+    "url": "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2026-25835"
+   },
+   {
+    "html_url": "https://euvd.enisa.europa.eu/vulnerability/EUVD-2026-17999",
+    "id": "EUVD-2026-17999",
+    "imported": "2026-07-17T21:56:56.115Z",
+    "modified": "2026-04-01T20:07:53Z",
+    "published": "2026-04-01T00:00:00Z",
+    "url": "https://euvdservices.enisa.europa.eu/api/enisaid?id=EUVD-2026-17999"
+   }
+  ]
+ },
+ "details": "Mbed TLS before 3.6.6 and TF-PSA-Crypto before 1.1.0 misuse seeds in a Pseudo-Random Number Generator (PRNG).",
+ "id": "JLSEC-2026-464",
+ "modified": "2026-07-18T00:02:02.250549804Z",
+ "published": "2026-05-07T16:17:33.752Z",
+ "references": [
+  {
+   "type": "WEB",
+   "url": "https://mbed-tls.readthedocs.io/en/latest/security-advisories/"
+  },
+  {
+   "type": "WEB",
+   "url": "https://mbed-tls.readthedocs.io/en/latest/security-advisories/mbedtls-security-advisory-2026-03-rng-cloning/"
+  }
+ ],
+ "schema_version": "1.7.5",
+ "severity": [
+  {
+   "score": "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+   "type": "CVSS_V3"
+  }
+ ],
+ "summary": "Mbed TLS might use cloned PSA random generator states",
+ "upstream": [
+  "CVE-2026-25835",
+  "EUVD-2026-17999"
+ ]
+}

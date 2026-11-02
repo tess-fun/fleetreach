@@ -30,6 +30,48 @@ fleetreach scan --reachability
 The table's `Reach` column shows the chain, for example
 `imported via fastapi → starlette → python-multipart`.
 
+The demo fleet's [`admin-dashboard`](https://github.com/tess-fun/fleetreach/tree/main/website/demo/repos/admin-dashboard) has one Express server,
+`src/server.js`, that requires express, axios, jsonwebtoken and lodash. The packages it
+imports are reached; what express pulls in stays `?` without `node_modules` to follow:
+
+<!-- run: fleetreach scan -c ecosystems/npm.toml --reachability | head -n 11 -->
+```console
+$ fleetreach scan -c ecosystems/npm.toml --reachability | head -n 11
+┌──────────┬───────────────────────────┬─────────────────────┬──────────────────────────────────────────────────┬─────────────────────────────────────────────────────────────┐
+│ Severity ┆ Reach                     ┆ Advisory            ┆ Title                                            ┆ Locations                                                   │
+╞══════════╪═══════════════════════════╪═════════════════════╪══════════════════════════════════════════════════╪═════════════════════════════════════════════════════════════╡
+│ high     ┆ ?                         ┆ GHSA-27r3-jxmh-p828 ┆ body-parser vulnerable to Denial of Service via… ┆ admin-dashboard/body-parser@1.19.0 → 1.20.9 (via express)   │
+├╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ high     ┆ imported via lodash       ┆ GHSA-35jh-r3h4-6jhm ┆ Command Injection in lodash                      ┆ admin-dashboard/lodash@4.17.15 → 4.17.21 (direct)           │
+├╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ high     ┆ ?                         ┆ GHSA-37ch-88jc-xwx2 ┆ path-to-regexp vulnerable to Regular Expression… ┆ admin-dashboard/path-to-regexp@0.1.7 → 0.1.13 (via express) │
+├╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ high     ┆ imported via axios        ┆ GHSA-3g43-6gmg-66jw ┆ axios Vulnerable to Credential Theft and Respon… ┆ admin-dashboard/axios@0.21.0 → 0.31.1 (direct)              │
+├╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+```
+<!-- /run -->
+
+For Rust, [`payments-api`](https://github.com/tess-fun/fleetreach/tree/main/website/demo/repos/payments-api) calls `SmallVec::insert_many`, the function
+RUSTSEC-2021-0003 names, and never calls `time`'s local-offset functions:
+
+<!-- run: fleetreach scan -c ecosystems/rust.toml --reachability | head -n 9 -->
+```console
+$ fleetreach scan -c ecosystems/rust.toml --reachability | head -n 9
+┌──────────────┬───────────┬───────────────────┬────────────────────────────────────────────────────────────────┬─────────────────────────────────────────────────┐
+│ Severity     ┆ Reach     ┆ Advisory          ┆ Title                                                          ┆ Locations                                       │
+╞══════════════╪═══════════╪═══════════════════╪════════════════════════════════════════════════════════════════╪═════════════════════════════════════════════════╡
+│ critical 9.8 ┆ in source ┆ RUSTSEC-2021-0003 ┆ Buffer overflow in SmallVec::insert_many                       ┆ payments-api/smallvec@1.6.0 → 1.6.1 (direct)    │
+│              ┆           ┆                   ┆ affects fn: insert_many                                        ┆                                                 │
+├╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ high 7.5     ┆ ?         ┆ RUSTSEC-2022-0013 ┆ Regexes with large repetitions on empty sub-exp…               ┆ payments-api/regex@1.5.4 → 1.5.5 (direct)       │
+├╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ medium 6.2   ┆ not found ┆ RUSTSEC-2020-0071 ┆ Potential segfault in the time crate                           ┆ payments-api/time@0.1.45 → 0.2.23 (via chrono)  │
+```
+<!-- /run -->
+
+`in source` raises the finding; `not found` is shown but never lowers it, because a grep can
+miss a call.
+
 ## Sound static analysis for Rust
 
 ```sh

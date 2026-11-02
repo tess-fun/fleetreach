@@ -284,7 +284,7 @@ fn statement_for(v: &VulnFinding, occ: &Occurrence, params: &VexParams) -> Optio
         MachineStatus::Affected => (
             "affected",
             None,
-            Some(upgrade_action(package, patched)),
+            Some(upgrade_action(package, installed, patched)),
             Some(reach_note(v, "a path to the vulnerable function exists")),
         ),
         MachineStatus::UnderInvestigation { reason } => {
@@ -530,8 +530,12 @@ fn purl_encode(s: &str) -> String {
 
 /// The `affected` action: the concrete upgrade target, or a generic note when no
 /// fix is published.
-fn upgrade_action(package: &str, patched: &[fleetreach_core::semver::VersionReq]) -> String {
-    match crate::fix_target(patched) {
+fn upgrade_action(
+    package: &str,
+    installed: &fleetreach_core::semver::Version,
+    patched: &[fleetreach_core::semver::VersionReq],
+) -> String {
+    match crate::fix_target(installed, patched) {
         Some(target) => format!("Upgrade {package} to >= {target}."),
         None => format!("No fixed version of {package} is published; remove or replace it."),
     }

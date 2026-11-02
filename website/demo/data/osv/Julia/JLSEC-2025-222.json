@@ -1,0 +1,76 @@
+{
+ "affected": [
+  {
+   "database_specific": {
+    "source": "https://github.com/JuliaLang/SecurityAdvisories.jl/tree/generated/osv/2025/JLSEC-2025-222.json"
+   },
+   "package": {
+    "ecosystem": "Julia",
+    "name": "MbedTLS_jll",
+    "purl": "pkg:julia/MbedTLS_jll?uuid=c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+   },
+   "ranges": [
+    {
+     "events": [
+      {
+       "introduced": "0"
+      },
+      {
+       "fixed": "2.28.6+0"
+      }
+     ],
+     "type": "SEMVER"
+    }
+   ]
+  }
+ ],
+ "database_specific": {
+  "license": "CC-BY-4.0",
+  "sources": [
+   {
+    "database_specific": {
+     "status": "Modified"
+    },
+    "html_url": "https://nvd.nist.gov/vuln/detail/CVE-2023-43615",
+    "id": "CVE-2023-43615",
+    "imported": "2026-07-17T20:46:43.974Z",
+    "modified": "2026-06-17T06:26:04.340Z",
+    "published": "2023-10-07T01:15:10.783Z",
+    "url": "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2023-43615"
+   }
+  ]
+ },
+ "details": "Mbed TLS 2.x before 2.28.5 and 3.x before 3.5.0 has a Buffer Overflow.",
+ "id": "JLSEC-2025-222",
+ "modified": "2026-07-18T00:01:07.180957234Z",
+ "published": "2025-11-21T15:59:04.054Z",
+ "references": [
+  {
+   "type": "WEB",
+   "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/BDSHAANRULB57GVS5B3DZHXL5KCC7OWQ/"
+  },
+  {
+   "type": "WEB",
+   "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/GGRB5MO2KUJKYPMGXMIZH2WRH6QR5UZS/"
+  },
+  {
+   "type": "WEB",
+   "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/O7SB7L6A56QZALDTOZ6O4X7PTC4I647R/"
+  },
+  {
+   "type": "WEB",
+   "url": "https://mbed-tls.readthedocs.io/en/latest/security-advisories/mbedtls-security-advisory-2023-10-1/"
+  }
+ ],
+ "schema_version": "1.7.5",
+ "severity": [
+  {
+   "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+   "type": "CVSS_V3"
+  }
+ ],
+ "summary": "Mbed TLS 2.x before 2.28.5 and 3.x before 3.5.0 has a Buffer Overflow.",
+ "upstream": [
+  "CVE-2023-43615"
+ ]
+}

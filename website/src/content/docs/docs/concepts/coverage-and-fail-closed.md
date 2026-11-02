@@ -24,7 +24,20 @@ ecosystem, or a failed clone is an errored gap, listed in the report, never coun
 | direct-only | a requirements file with ranges, `.csproj` files without `project.assets.json` |
 
 What was read is still matched; the gap is named in the report with the reason. Pass
-`--require-full-coverage` to turn any label below full into exit 2.
+`--require-full-coverage` to turn any label below full into exit 2. On the demo fleet's
+[`data-pipeline`](https://github.com/tess-fun/fleetreach/tree/main/website/demo/repos/data-pipeline), a pinned `requirements.txt` with no sign a resolver
+wrote it:
+
+<!-- run: fleetreach scan -c ecosystems/pypi.toml --require-full-coverage >/dev/null; echo "exit $?" -->
+```console
+$ fleetreach scan -c ecosystems/pypi.toml --require-full-coverage >/dev/null; echo "exit $?"
+note: 1 source(s) scanned with incomplete coverage (findings outside what was read were never matched):
+  data-pipeline: requirements.txt [partial] every requirement is pinned, but nothing shows the file lists the full transitive set (no pip-compile or uv header, `# via` annotations or hashes); dependencies of these packages may be missing
+Scanned 2 repo(s) (0 errored): 27 vulns, 0 warning(s); max severity critical. Incomplete coverage: 1 source(s) in 1 repo(s).
+error: incomplete coverage under --require-full-coverage (see note above)
+exit 2
+```
+<!-- /run -->
 
 **Unknowns count.** A finding without a severity counts as at least the gate's level. A
 finding without KEV data gets no SSVC decision, and `--fail-on-ssvc` then exits 2.

@@ -23,3 +23,22 @@ the nearest `Directory.Build.props`. Conditions are not evaluated, an `<Import>`
 file is named as a gap, and floating versions (`1.*`) are listed, never guessed.
 
 Validated against `NuGet.Versioning` itself.
+
+## Example
+
+The demo fleet's [`reporting-svc`](https://github.com/tess-fun/fleetreach/tree/main/website/demo/repos/reporting-svc): a .NET 8 service with a `packages.lock.json`. `ecosystems/nuget.toml` is a fleet file naming just that repo, and the output is real, generated on frozen advisory data.
+
+<!-- run: fleetreach scan -c ecosystems/nuget.toml -f packages -->
+```console
+$ fleetreach scan -c ecosystems/nuget.toml -f packages
+┌───────┬────────┬────────────┬────────────┬──────────┬──────────┬─────────┬──────────────────────────────┐
+│ Repos ┆ Direct ┆ Transitive ┆ Advisories ┆ Severity ┆ Fix      ┆ Exploit ┆ Package                      │
+╞═══════╪════════╪════════════╪════════════╪══════════╪══════════╪═════════╪══════════════════════════════╡
+│ 1     ┆ 1      ┆ 0          ┆ 11         ┆ high     ┆ manifest ┆ -       ┆ sixlabors.imagesharp (nuget) │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 1          ┆ high     ┆ manifest ┆ -       ┆ newtonsoft.json (nuget)      │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 1          ┆ high     ┆ manifest ┆ -       ┆ npgsql (nuget)               │
+└───────┴────────┴────────────┴────────────┴──────────┴──────────┴─────────┴──────────────────────────────┘
+```
+<!-- /run -->

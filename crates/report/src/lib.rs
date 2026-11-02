@@ -59,7 +59,8 @@ use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, Table};
 use fleetreach_core::{
     remediations, Action, DependencyKind, Ecosystem, Exploitability, FleetReport, Occurrence,
-    ReachTier, ReachVerdict, Reachability, RemediationItem, Severity, VulnFinding, WarnFinding,
+    ReachTier, ReachVerdict, Reachability, RemediationItem, RepoId, Severity, VulnFinding,
+    WarnFinding,
 };
 use serde::Serialize;
 
@@ -80,7 +81,8 @@ pub fn to_json(report: &FleetReport) -> Result<String, serde_json::Error> {
 }
 
 /// SARIF 2.1.0 for GitHub code scanning: one rule per advisory, one result per
-/// occurrence, located at `Cargo.lock`.
+/// occurrence, located at the file each ecosystem is usually read from
+/// ([`default_source`]). [`to_sarif_located`] takes the real file instead.
 ///
 /// §11: a machine-sound `not_affected` (static `NotReachable` or a phantom dep)
 /// carries a `suppressions[]` entry so the Security tab greys it out; each
@@ -89,6 +91,38 @@ pub fn to_json(report: &FleetReport) -> Result<String, serde_json::Error> {
 pub fn to_sarif(
     report: &FleetReport,
     approved: &[HumanAssertion],
+) -> Result<String, serde_json::Error> {
+    to_sarif_located(report, approved, &|_, ecosystem, _| {
+        default_source(ecosystem).to_string()
+    })
+}
+
+/// The file, relative to the repo root, that an ecosystem is usually read from: where a
+/// SARIF result points when the caller cannot look in the repo.
+#[must_use]
+pub fn default_source(ecosystem: Ecosystem) -> &'static str {
+    match ecosystem {
+        Ecosystem::Cargo => "Cargo.lock",
+        Ecosystem::Go => "go.mod",
+        Ecosystem::Npm => "package-lock.json",
+        Ecosystem::Pypi => "requirements.txt",
+        Ecosystem::RubyGems => "Gemfile.lock",
+        Ecosystem::Packagist => "composer.lock",
+        Ecosystem::NuGet => "packages.lock.json",
+        Ecosystem::Julia => "Manifest.toml",
+        Ecosystem::Swift => "Package.resolved",
+        Ecosystem::Hex => "mix.lock",
+        Ecosystem::Maven => "pom.xml",
+        Ecosystem::GitHubActions => ".github/workflows",
+    }
+}
+
+/// [`to_sarif`] with each result located by `locate(repo, ecosystem, package)`: the source
+/// file the package was read from, relative to the repo root.
+pub fn to_sarif_located(
+    report: &FleetReport,
+    approved: &[HumanAssertion],
+    locate: &dyn Fn(&RepoId, Ecosystem, &str) -> String,
 ) -> Result<String, serde_json::Error> {
     let mut rules = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
@@ -151,9 +185,10 @@ pub fn to_sarif(
                 v.advisory_id.clone(),
                 level,
                 &v.title,
-                &format!("{:?}", v.ecosystem),
+                v.ecosystem,
                 occ,
                 suppression,
+                locate,
             );
             if let (Some(d), Some(props)) = (decision, result.properties.as_mut()) {
                 props.ssvc = Some(d.outcome.label());
@@ -165,13 +200,15 @@ pub fn to_sarif(
     for w in &report.warnings {
         let id = warn_rule_id(w);
         for occ in &w.occurrences {
+            // Warnings carry no ecosystem; most are RustSec's informational kinds.
             results.push(sarif_result(
                 id.clone(),
                 "warning",
                 &w.title,
-                "Cargo",
+                Ecosystem::Cargo,
                 occ,
                 None,
+                locate,
             ));
         }
     }
@@ -326,7 +363,7 @@ struct SarifPhysical {
 
 #[derive(Serialize)]
 struct SarifArtifact {
-    uri: &'static str,
+    uri: String,
 }
 
 /// A SARIF `suppressions[]` entry (§11): `kind: external` because it comes from VEX.
@@ -352,7 +389,7 @@ fn human_sarif_result(a: &HumanAssertion) -> SarifResult {
                 a.package, a.version
             ),
         },
-        locations: [location("Cargo.lock")],
+        locations: [location("Cargo.lock".to_string())],
         suppressions: vec![SarifSuppression {
             kind: "external",
             justification: format!("VEX not_affected: {reason}; approved_by {approver}"),
@@ -368,7 +405,7 @@ fn warn_rule_id(w: &WarnFinding) -> String {
         .unwrap_or_else(|| format!("{:?}", w.kind).to_lowercase())
 }
 
-fn location(uri: &'static str) -> SarifLocation {
+fn location(uri: String) -> SarifLocation {
     SarifLocation {
         physical_location: SarifPhysical {
             artifact_location: SarifArtifact { uri },
@@ -380,9 +417,10 @@ fn sarif_result(
     rule_id: String,
     level: &'static str,
     title: &str,
-    ecosystem: &str,
+    ecosystem: Ecosystem,
     occ: &Occurrence,
     suppression: Option<String>,
+    locate: &dyn Fn(&RepoId, Ecosystem, &str) -> String,
 ) -> SarifResult {
     let (text, uri) = match occ {
         Occurrence::InRepo {
@@ -393,7 +431,7 @@ fn sarif_result(
             patched,
             ..
         } => {
-            let fix = fix_target(patched)
+            let fix = fix_target(installed, patched)
                 .map(|t| format!("; fix: update to {t}"))
                 .unwrap_or_default();
             let via = if dependency_path.len() > 2 {
@@ -406,7 +444,7 @@ fn sarif_result(
             };
             (
                 format!("{title} — {package} {installed} in {repo}{via}{fix}"),
-                "Cargo.lock",
+                locate(repo, ecosystem, package),
             )
         }
         Occurrence::Toolchain {
@@ -419,7 +457,7 @@ fn sarif_result(
                     .map(ToString::to_string)
                     .unwrap_or_default()
             ),
-            "rust-toolchain.toml",
+            "rust-toolchain.toml".to_string(),
         ),
     };
     let properties = match occ {
@@ -437,7 +475,7 @@ fn sarif_result(
     };
     let partial_fingerprints = match occ {
         Occurrence::InRepo { repo, package, .. } => {
-            fingerprints(&[&rule_id, ecosystem, &repo.0, package])
+            fingerprints(&[&rule_id, &format!("{ecosystem:?}"), &repo.0, package])
         }
         // The channel names the toolchain version, which an upgrade changes.
         Occurrence::Toolchain { .. } => fingerprints(&[&rule_id, "toolchain"]),
@@ -1817,7 +1855,7 @@ fn locations(occurrences: &[Occurrence]) -> String {
             } => {
                 // The upgrade target — the lower bound of the patched range —
                 // shows exactly what to bump to (`cargo update -p pkg --precise T`).
-                let upgrade = fix_target(patched)
+                let upgrade = fix_target(installed, patched)
                     .map(|t| format!(" → {t}"))
                     .unwrap_or_default();
                 // `--resolve-features` flags packages that are in Cargo.lock but
@@ -1856,20 +1894,28 @@ fn locations(occurrences: &[Occurrence]) -> String {
         .join("\n")
 }
 
-/// The upgrade target for a finding: the lower bound of the first patched
-/// requirement (e.g. `>=1.2.3` → `1.2.3`). `None` when no fix is published.
-pub(crate) fn fix_target(patched: &[fleetreach_core::semver::VersionReq]) -> Option<String> {
-    use fleetreach_core::semver::Op;
-    let req = patched.first()?;
-    req.comparators.iter().find_map(|c| match c.op {
-        Op::GreaterEq | Op::Greater | Op::Caret | Op::Tilde | Op::Exact => Some(format!(
-            "{}.{}.{}",
-            c.major,
-            c.minor.unwrap_or(0),
-            c.patch.unwrap_or(0)
-        )),
-        _ => None,
-    })
+/// The upgrade target for a finding: the nearest lower bound of a patched requirement above
+/// the installed version (`>=1.2.3` → `1.2.3`). An advisory can be patched on several lines
+/// (`>= 0.6.14, < 1.0.0` and `>= 1.6.1`), and a bound below the installed version would be a
+/// downgrade to an older line. `None` when no fix above the installed version is published.
+pub(crate) fn fix_target(
+    installed: &fleetreach_core::semver::Version,
+    patched: &[fleetreach_core::semver::VersionReq],
+) -> Option<String> {
+    use fleetreach_core::semver::{Op, Version};
+    patched
+        .iter()
+        .filter_map(|req| {
+            req.comparators.iter().find_map(|c| match c.op {
+                Op::GreaterEq | Op::Greater | Op::Caret | Op::Tilde | Op::Exact => Some(
+                    Version::new(c.major, c.minor.unwrap_or(0), c.patch.unwrap_or(0)),
+                ),
+                _ => None,
+            })
+        })
+        .filter(|bound| bound > installed)
+        .min()
+        .map(|v| v.to_string())
 }
 
 fn severity_label(severity: Severity) -> &'static str {
@@ -1946,6 +1992,28 @@ mod function_name_tests {
             "transport.ClientStream.Read"
         );
         assert_eq!(short_function("plain"), "plain");
+    }
+}
+
+#[cfg(test)]
+mod fix_target_tests {
+    #![allow(clippy::unwrap_used)]
+    use super::fix_target;
+    use fleetreach_core::semver::{Version, VersionReq};
+
+    #[test]
+    fn the_target_is_the_nearest_fix_above_the_installed_version() {
+        // RUSTSEC-2021-0003 (smallvec) is patched on two lines, the older one listed first.
+        let patched = [
+            VersionReq::parse(">= 0.6.14, < 1.0.0").unwrap(),
+            VersionReq::parse(">= 1.6.1").unwrap(),
+        ];
+        let at = |v: &str| fix_target(&Version::parse(v).unwrap(), &patched);
+        assert_eq!(at("1.6.0").as_deref(), Some("1.6.1"));
+        assert_eq!(at("0.6.10").as_deref(), Some("0.6.14"));
+        // Nothing patched above the installed version: no target rather than a downgrade.
+        let older = [VersionReq::parse(">= 0.6.14, < 1.0.0").unwrap()];
+        assert_eq!(fix_target(&Version::parse("1.6.0").unwrap(), &older), None);
     }
 }
 

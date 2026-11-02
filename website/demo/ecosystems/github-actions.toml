@@ -1,0 +1,8 @@
+# The fleet for the GitHub Actions page: a repo in this ecosystem. Paths are relative to this file.
+[settings.osv]
+dir = "../data/osv"
+
+[[repo]]
+id   = "checkout-web"
+path = "../repos/checkout-web"
+ecosystem = "actions"

@@ -43,3 +43,13 @@ environments that require it. It needs `--db` and `--osv-dir`.
    `--offline` or `FLEETREACH_OSV_SYNC=off`.
 
 Without data for an ecosystem the fleet uses, its repos are errored gaps, never clean.
+Here the demo fleet's Elixir repo is scanned against a directory with no Hex export:
+
+<!-- run: fleetreach scan -c ecosystems/hex.toml --osv-dir no-such-dir >/dev/null; echo "exit $?" -->
+```console
+$ fleetreach scan -c ecosystems/hex.toml --osv-dir no-such-dir >/dev/null; echo "exit $?"
+note: no OSV export for Hex; run `fleetreach db sync` (network build) or pass --osv-dir <dir> laid out as <dir>/<Ecosystem>/all.zip
+Scanned 0 repo(s) (1 errored): 0 vulns, 0 warning(s); max severity unknown.
+exit 2
+```
+<!-- /run -->

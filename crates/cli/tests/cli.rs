@@ -136,6 +136,32 @@ fn bun_lock_is_read_like_any_npm_lockfile() {
     );
 }
 
+#[test]
+fn sarif_points_at_the_lockfile_the_repo_has() {
+    // A bun repo: its findings are in bun.lock, not Cargo.lock or package-lock.json.
+    let out = run(&[
+        "scan",
+        "-c",
+        &cfg("fleet-bun.toml"),
+        "--db",
+        &db(),
+        "--npm-vuln-db",
+        &file_url("npm-osv"),
+        "-f",
+        "sarif",
+        "-q",
+    ]);
+    let v: serde_json::Value = serde_json::from_str(&stdout(&out)).expect("valid SARIF");
+    let uris: Vec<&str> = v["runs"][0]["results"]
+        .as_array()
+        .expect("results")
+        .iter()
+        .filter_map(|r| r["locations"][0]["physicalLocation"]["artifactLocation"]["uri"].as_str())
+        .collect();
+    assert!(!uris.is_empty());
+    assert!(uris.iter().all(|u| *u == "bun.lock"), "{uris:?}");
+}
+
 /// Lay out a temp OSV directory the way osv.dev's bucket does, with the npm fixture records
 /// under `npm/`.
 fn osv_dir_with_npm(tag: &str) -> PathBuf {

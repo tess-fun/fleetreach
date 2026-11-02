@@ -20,3 +20,24 @@ Composer orders `dev < alpha < beta < RC < stable < patch`, so `2.4.5-p1` sorts 
 case-insensitively.
 
 The comparator agrees with the real `composer/semver` library on 185,000 version pairs.
+
+## Example
+
+The demo fleet's [`marketing-site`](https://github.com/tess-fun/fleetreach/tree/main/website/demo/repos/marketing-site): a PHP site on Guzzle, Twig and CommonMark. `ecosystems/packagist.toml` is a fleet file naming just that repo, and the output is real, generated on frozen advisory data.
+
+<!-- run: fleetreach scan -c ecosystems/packagist.toml -f packages -->
+```console
+$ fleetreach scan -c ecosystems/packagist.toml -f packages
+┌───────┬────────┬────────────┬────────────┬──────────┬──────────┬─────────┬───────────────────────────────┐
+│ Repos ┆ Direct ┆ Transitive ┆ Advisories ┆ Severity ┆ Fix      ┆ Exploit ┆ Package                       │
+╞═══════╪════════╪════════════╪════════════╪══════════╪══════════╪═════════╪═══════════════════════════════╡
+│ 1     ┆ 1      ┆ 0          ┆ 15         ┆ critical ┆ manifest ┆ -       ┆ twig/twig (packagist)         │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 15         ┆ high     ┆ manifest ┆ -       ┆ league/commonmark (packagist) │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 11         ┆ high     ┆ manifest ┆ -       ┆ guzzlehttp/guzzle (packagist) │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 0      ┆ 1          ┆ 5          ┆ medium   ┆ upstream ┆ -       ┆ guzzlehttp/psr7 (packagist)   │
+└───────┴────────┴────────────┴────────────┴──────────┴──────────┴─────────┴───────────────────────────────┘
+```
+<!-- /run -->

@@ -24,7 +24,7 @@ checked against the installed `rustc`.
 
 `--resolve-features` asks `cargo tree` which optional dependencies are really compiled with
 the default features. A finding on one that never is gets `⚠ not in default build`, and
-`--suppress-phantom` drops it. Both need buildable source.
+`--ignore-phantom` drops it. Both need buildable source.
 
 ## Proving reachability
 
@@ -32,3 +32,26 @@ the default features. A finding on one that never is gets `⚠ not in default bu
 the advisory's affected functions can be called, with a witness chain. A `NotReachable`
 verdict is sound and becomes `not_affected` in VEX and SARIF. See
 [Check reachability](/fleetreach/docs/guides/check-reachability/).
+
+## Example
+
+The demo fleet's [`payments-api`](https://github.com/tess-fun/fleetreach/tree/main/website/demo/repos/payments-api): a Rust service's `Cargo.lock`. `ecosystems/rust.toml` is a fleet file naming just that repo, and the output is real, generated on frozen advisory data.
+
+<!-- run: fleetreach scan -c ecosystems/rust.toml -f packages -->
+```console
+$ fleetreach scan -c ecosystems/rust.toml -f packages
+┌───────┬────────┬────────────┬────────────┬──────────┬──────────┬─────────┬──────────┐
+│ Repos ┆ Direct ┆ Transitive ┆ Advisories ┆ Severity ┆ Fix      ┆ Exploit ┆ Package  │
+╞═══════╪════════╪════════════╪════════════╪══════════╪══════════╪═════════╪══════════╡
+│ 1     ┆ 1      ┆ 0          ┆ 1          ┆ critical ┆ manifest ┆ -       ┆ smallvec │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 1          ┆ high     ┆ manifest ┆ -       ┆ regex    │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 0      ┆ 1          ┆ 1          ┆ medium   ┆ upstream ┆ -       ┆ time     │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 6          ┆ unknown  ┆ manifest ┆ -       ┆ openssl  │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 1          ┆ unknown  ┆ manifest ┆ -       ┆ chrono   │
+└───────┴────────┴────────────┴────────────┴──────────┴──────────┴─────────┴──────────┘
+```
+<!-- /run -->

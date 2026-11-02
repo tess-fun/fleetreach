@@ -1,0 +1,7 @@
+# The fleet for the Hex page: a repo in this ecosystem. Paths are relative to this file.
+[settings.osv]
+dir = "../data/osv"
+
+[[repo]]
+id   = "chat-svc"
+path = "../repos/chat-svc"

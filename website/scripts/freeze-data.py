@@ -1,10 +1,16 @@
 """Freeze the advisory data behind the website's demo fleet.
 
 Copies, from a full osv.dev export cache and a RustSec advisory-db clone, every record that
-names a package the demo fleet uses, into website/demo/data. The examples are then generated
+names a package the demo fleet (fleet.toml, and the one-ecosystem fleets in ecosystems/) uses,
+into website/demo/data. The examples are then generated
 against that frozen copy, so they only change when fleetreach does.
 
     python3 -I website/scripts/freeze-data.py ~/.cache/fleetreach/osv ~/.cargo/advisory-db
+
+With --only, only the named osv.dev ecosystems are frozen again and everything else in
+website/demo/data is left as it is, so adding an ecosystem does not move the other examples:
+
+    python3 -I website/scripts/freeze-data.py ~/.cache/fleetreach/osv --only Hex,Julia
 
 Run from the repository root, with a fleetreach binary on PATH (or FLEETREACH=<path>).
 """
@@ -29,6 +35,11 @@ ECOSYSTEMS = {
     "golang": "Go",
     "githubactions": "GitHub Actions",
     "maven": "Maven",
+    "composer": "Packagist",
+    "nuget": "NuGet",
+    "swift": "SwiftURL",
+    "hex": "Hex",
+    "julia": "Julia",
 }
 
 
@@ -39,22 +50,30 @@ def norm(eco, name):
     return name
 
 
+def configs():
+    eco = os.path.join(DEMO, "ecosystems")
+    return [os.path.join(DEMO, "fleet.toml")] + [
+        os.path.join(eco, f) for f in sorted(os.listdir(eco)) if f.endswith(".toml")
+    ]
+
+
 def fleet_packages(binary):
     """{ecosystem dir: {normalised name}} and the set of crate names, from per-repo SBOMs."""
     scratch = tempfile.mkdtemp()
-    out = os.path.join(scratch, "out")
     # A fresh HOME and cache: the POMs the Java repo needs are fetched into the cache, then
     # kept as data/m2, which the examples use as the local Maven repository.
     env = dict(os.environ, HOME=scratch, XDG_CACHE_HOME=scratch, FLEETREACH_OSV_SYNC="off")
-    subprocess.run(
-        [binary, "sbom", "-q", "--maven-fetch", "-c", os.path.join(DEMO, "fleet.toml"), "-o", out],
-        check=True,
-        env=env,
-    )
+    boms = []
+    for i, config in enumerate(configs()):
+        out = os.path.join(scratch, f"out{i}")
+        subprocess.run(
+            [binary, "sbom", "-q", "--maven-fetch", "-c", config, "-o", out], check=True, env=env
+        )
+        boms += [os.path.join(out, f) for f in os.listdir(out)]
     poms = os.path.join(scratch, "fleetreach", "maven")
     names, crates = {}, set()
-    for f in os.listdir(out):
-        bom = json.load(open(os.path.join(out, f)))
+    for f in boms:
+        bom = json.load(open(f))
         for c in bom.get("components", []):
             purl = c.get("purl", "")
             kind = purl[4:].split("/", 1)[0]
@@ -152,9 +171,17 @@ def freeze_signals(cves):
 
 
 def main():
+    binary = os.environ.get("FLEETREACH", "fleetreach")
+    if len(sys.argv) == 4 and sys.argv[2] == "--only":
+        only = sys.argv[3].split(",")
+        names, _, scratch, _ = fleet_packages(binary)
+        shutil.rmtree(scratch)
+        for eco in only:
+            shutil.rmtree(os.path.join(DATA, "osv", eco), ignore_errors=True)
+        freeze_osv(sys.argv[1], {e: names.get(e, set()) for e in only})
+        return
     if len(sys.argv) != 3:
         sys.exit(__doc__)
-    binary = os.environ.get("FLEETREACH", "fleetreach")
     names, crates, scratch, poms = fleet_packages(binary)
     shutil.rmtree(DATA, ignore_errors=True)
     freeze_osv(sys.argv[1], names)

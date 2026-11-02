@@ -16,7 +16,8 @@
 // website/demo/data, so the output only changes when fleetreach does. What the page shows is
 // the command as a reader would type it; the flags that point it at the frozen data are added
 // here (see `actual`). Supported after the command: `| head -n N`, `| tail -n N`,
-// `| jq '<filter>'` and `2>&1`.
+// `| jq '<filter>'`, `2>&1` and `>/dev/null` (only what goes to stderr is shown), and at the
+// very end `; echo "exit $?"`, which prints the exit status the way a shell would.
 // The repository's README.md is filled the same way.
 //
 // Before the examples run, two scans are recorded as if made on 1 September and 15 October
@@ -89,10 +90,15 @@ function pipeline(line) {
 
 /** Split `fleetreach scan -f x | head -n 5 2>&1` into argv and the post-processing. */
 function parse(line) {
+  const EXIT = '; echo "exit $?"';
+  const exit = line.endsWith(EXIT);
+  if (exit) line = line.slice(0, -EXIT.length);
   const [command, ...pipes] = pipeline(line);
   let words = command.trim().split(/\s+/);
   const merge = words.at(-1) === "2>&1";
   if (merge) words = words.slice(0, -1);
+  const discard = words.at(-1) === ">/dev/null";
+  if (discard) words = words.slice(0, -1);
   if (words[0] !== "fleetreach") throw new Error(`not a fleetreach command: ${line}`);
   const filters = pipes.map((pipe) => {
     const lines = pipe.trim().match(/^(head|tail) -n (\d+)$/);
@@ -101,7 +107,7 @@ function parse(line) {
     if (jq) return { kind: "jq", filter: jq[1] };
     throw new Error(`unsupported pipe in: ${line}`);
   });
-  return { argv: words.slice(1), merge, filters };
+  return { argv: words.slice(1), merge, discard, filters, exit };
 }
 
 // A fixed `rustc` first on PATH: scan reads the toolchain version for the Rust toolchain's own
@@ -117,7 +123,7 @@ const RUN_2 = "1792054800"; // 2026-10-15T09:00:00Z
 const NOW = "1793523600"; // 2026-11-01T09:00:00Z
 
 function run(line, at = NOW) {
-  const { argv, merge, filters } = parse(line);
+  const { argv, merge, discard, filters, exit } = parse(line);
   const home = mkdtempSync(join(tmpdir(), "fleetreach-examples-"));
   mkdirSync(join(home, ".m2"));
   const result = spawnSync(binary, actual(argv), {
@@ -136,7 +142,7 @@ function run(line, at = NOW) {
   });
   rmSync(home, { recursive: true, force: true });
   if (result.error) throw result.error;
-  let text = merge ? result.stderr + result.stdout : result.stdout;
+  let text = discard ? result.stderr : merge ? result.stderr + result.stdout : result.stdout;
   let lines = text.replace(/\s+$/, "").split("\n");
   for (const { kind, n, filter } of filters) {
     if (kind === "head") lines = lines.slice(0, n);
@@ -147,6 +153,8 @@ function run(line, at = NOW) {
       lines = jq.stdout.replace(/\s+$/, "").split("\n");
     }
   }
+  // A pipeline's status is its last command's, so only a bare command shows fleetreach's.
+  if (exit) lines.push(`exit ${filters.length ? 0 : result.status}`);
   const body = lines.join("\n").replaceAll(demo, "~/acme");
   return { body, raw: result.stdout, status: result.status };
 }
