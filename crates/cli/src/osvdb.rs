@@ -174,23 +174,23 @@ pub struct Meta {
 }
 
 impl Meta {
-    fn upstream_time(&self) -> Option<SystemTime> {
+    pub(crate) fn upstream_time(&self) -> Option<SystemTime> {
         self.last_modified.as_deref().and_then(parse_http_date)
     }
 
-    fn fetched_time(&self) -> Option<SystemTime> {
+    pub(crate) fn fetched_time(&self) -> Option<SystemTime> {
         (self.fetched_unix > 0)
             .then(|| SystemTime::UNIX_EPOCH + Duration::from_secs(self.fetched_unix))
     }
 }
 
-fn meta_path(zip: &Path) -> PathBuf {
+pub(crate) fn meta_path(zip: &Path) -> PathBuf {
     let mut name = zip.file_name().unwrap_or_default().to_os_string();
     name.push(".meta.json");
     zip.with_file_name(name)
 }
 
-fn read_meta(zip: &Path) -> Option<Meta> {
+pub(crate) fn read_meta(zip: &Path) -> Option<Meta> {
     let text = std::fs::read_to_string(meta_path(zip)).ok()?;
     serde_json::from_str(&text).ok()
 }
@@ -637,15 +637,13 @@ mod net {
     }
 }
 
-#[cfg(any(feature = "network", test))]
-fn now_unix() -> u64 {
+pub(crate) fn now_unix() -> u64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
 }
 
-#[cfg(any(feature = "network", test))]
-fn now_rfc3339() -> String {
+pub(crate) fn now_rfc3339() -> String {
     time::OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap_or_default()
@@ -690,14 +688,14 @@ pub fn status_rows(root: &Path, now: SystemTime) -> Vec<[String; 5]> {
         .collect()
 }
 
-fn human_size(bytes: u64) -> String {
+pub(crate) fn human_size(bytes: u64) -> String {
     match bytes {
         b if b < 1_000_000 => format!("{} KB", b.div_ceil(1000)),
         b => format!("{} MB", b / 1_000_000),
     }
 }
 
-fn human_age(secs: u64) -> String {
+pub(crate) fn human_age(secs: u64) -> String {
     match secs {
         s if s < 3600 => format!("{}m", s / 60),
         s if s < 86_400 => format!("{}h", s / 3600),

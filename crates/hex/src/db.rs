@@ -61,6 +61,25 @@ impl HexDb {
             .map_err(|e| HexError::db(e.path, e.source))
     }
 
+    /// [`HexDb::load`] with an organization's own OSV records from `overlay` layered on top:
+    /// a record with an upstream id replaces it, a new id adds one, a withdrawn one retracts
+    /// (see [`osv::load_with_overlay`]).
+    ///
+    /// # Errors
+    ///
+    /// As [`HexDb::load`], plus an unreadable overlay directory or an overlay record that is
+    /// not valid OSV JSON.
+    pub fn load_with_overlay(root: &Path, overlay: Option<&Path>) -> Result<HexDb, HexError> {
+        osv::load_with_overlay(root, overlay, &spec())
+            .map(HexDb)
+            .map_err(|e| HexError::db(e.path, e.source))
+    }
+
+    /// Every `(package key, advisory)` pair, in key order (for `db quality`).
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Advisory)> {
+        self.0.iter()
+    }
+
     /// The advisories indexed under `package` (verbatim), or an empty slice if none.
     pub fn advisories_for(&self, package: &str) -> &[Advisory] {
         self.0.advisories_for(package)

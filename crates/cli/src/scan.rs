@@ -613,6 +613,8 @@ struct Feeds {
     osv_sources: BTreeMap<Ecosystem, osvdb::OsvSource>,
     urls: BTreeMap<Ecosystem, String>,
     maven_remote: Option<crate::maven_repo::Remote>,
+    /// `[settings.advisories] dir`, read and checked once (spec 16, row 12).
+    overlay: Option<crate::overlay::Overlay>,
 }
 
 impl Feeds {
@@ -699,6 +701,18 @@ impl Feeds {
                 return Err(fail(&e));
             }
         }
+        // The organization's own advisories: a configured overlay that cannot be read stops
+        // the scan, since a correction silently not applied could hide a finding.
+        let overlay = match config.osv.advisories.as_deref() {
+            Some(dir) => {
+                let overlay = crate::overlay::inspect(dir).map_err(|e| fail(&e))?;
+                for warning in overlay.warnings() {
+                    eprintln!("warning: {warning}");
+                }
+                Some(overlay)
+            }
+            None => None,
+        };
         // Each toolchain-free ecosystem's mirror: the resolved export, else its explicit flag.
         let mut urls: BTreeMap<Ecosystem, String> = explicit;
         for (eco, source) in &osv_sources {
@@ -725,6 +739,7 @@ impl Feeds {
             osv_sources,
             urls,
             maven_remote,
+            overlay,
         })
     }
 
@@ -867,6 +882,12 @@ fn assemble_report(
         .osv_sources
         .values()
         .map(osvdb::OsvSource::provenance)
+        .chain(
+            feeds
+                .overlay
+                .as_ref()
+                .map(crate::overlay::Overlay::provenance),
+        )
         .collect();
     provenance.sources = materialized.provenance.clone();
     let mut suppressions: Vec<Suppression> = config

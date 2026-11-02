@@ -62,6 +62,25 @@ impl JuliaDb {
             .map_err(|e| JuliaError::db(e.path, e.source))
     }
 
+    /// [`JuliaDb::load`] with an organization's own OSV records from `overlay` layered on top:
+    /// a record with an upstream id replaces it, a new id adds one, a withdrawn one retracts
+    /// (see [`osv::load_with_overlay`]).
+    ///
+    /// # Errors
+    ///
+    /// As [`JuliaDb::load`], plus an unreadable overlay directory or an overlay record that is
+    /// not valid OSV JSON.
+    pub fn load_with_overlay(root: &Path, overlay: Option<&Path>) -> Result<JuliaDb, JuliaError> {
+        osv::load_with_overlay(root, overlay, &spec())
+            .map(JuliaDb)
+            .map_err(|e| JuliaError::db(e.path, e.source))
+    }
+
+    /// Every `(package key, advisory)` pair, in key order (for `db quality`).
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Advisory)> {
+        self.0.iter()
+    }
+
     /// The advisories indexed under `package` (verbatim, case-sensitive), or an empty slice.
     pub fn advisories_for(&self, package: &str) -> &[Advisory] {
         self.0.advisories_for(package)

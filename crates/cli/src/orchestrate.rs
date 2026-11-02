@@ -113,13 +113,20 @@ struct Dbs {
 impl Dbs {
     /// Load every DB the fleet needs at the same time: each load is parallel inside but
     /// leaves cores idle on its own, so one after another a polyglot fleet waited for the sum.
-    fn load(has: &(dyn Fn(Ecosystem) -> bool + Sync), go: &GoScan, m: &Mirrors) -> Dbs {
+    fn load(
+        has: &(dyn Fn(Ecosystem) -> bool + Sync),
+        go: &GoScan,
+        m: &Mirrors,
+        overlay: Option<&Path>,
+    ) -> Dbs {
+        // Every OSV feeder layers the organization's own records (`[settings.advisories]`)
+        // over its export; Go's offline matcher reads its own format and does not.
         fn spawn<'s, D: Send>(
             scope: &rayon::Scope<'s>,
             slot: &'s mut Option<D>,
             wanted: bool,
             root: Option<PathBuf>,
-            load: fn(&Path) -> D,
+            load: impl FnOnce(&Path) -> D + Send + 's,
         ) {
             if let (true, Some(root)) = (wanted, root) {
                 scope.spawn(move |_| *slot = Some(load(&root)));
@@ -142,7 +149,9 @@ impl Dbs {
         let root = |mirror: Option<&str>, path: fn(&str) -> Option<PathBuf>| mirror.and_then(path);
         rayon::scope(|s| {
             use Ecosystem as E;
-            spawn(s, npm, has(E::Npm), root(m.npm, npm_db_path), NpmDb::load);
+            spawn(s, npm, has(E::Npm), root(m.npm, npm_db_path), |r: &Path| {
+                NpmDb::load_with_overlay(r, overlay)
+            });
             // The Go mirror is only the Tier-C fallback, unused when govulncheck runs.
             let go_wanted = go.govulncheck.is_none() && has(E::Go);
             let go_root = root(go.vuln_db, fleetreach_go::offline_db_path);
@@ -152,60 +161,54 @@ impl Dbs {
                 pypi,
                 has(E::Pypi),
                 root(m.pypi, pypi_db_path),
-                PyPiDb::load,
+                |r: &Path| PyPiDb::load_with_overlay(r, overlay),
             );
             let rubygems_root = root(m.rubygems, rubygems_db_path);
-            spawn(
-                s,
-                rubygems,
-                has(E::RubyGems),
-                rubygems_root,
-                RubyGemsDb::load,
-            );
+            spawn(s, rubygems, has(E::RubyGems), rubygems_root, |r: &Path| {
+                RubyGemsDb::load_with_overlay(r, overlay)
+            });
             let packagist_root = root(m.packagist, packagist_db_path);
             spawn(
                 s,
                 packagist,
                 has(E::Packagist),
                 packagist_root,
-                PackagistDb::load,
+                |r: &Path| PackagistDb::load_with_overlay(r, overlay),
             );
             spawn(
                 s,
                 nuget,
                 has(E::NuGet),
                 root(m.nuget, nuget_db_path),
-                NuGetDb::load,
+                |r: &Path| NuGetDb::load_with_overlay(r, overlay),
             );
             spawn(
                 s,
                 julia,
                 has(E::Julia),
                 root(m.julia, julia_db_path),
-                JuliaDb::load,
+                |r: &Path| JuliaDb::load_with_overlay(r, overlay),
             );
             spawn(
                 s,
                 swift,
                 has(E::Swift),
                 root(m.swift, swift_db_path),
-                SwiftDb::load,
+                |r: &Path| SwiftDb::load_with_overlay(r, overlay),
             );
-            spawn(s, hex, has(E::Hex), root(m.hex, hex_db_path), HexDb::load);
+            spawn(s, hex, has(E::Hex), root(m.hex, hex_db_path), |r: &Path| {
+                HexDb::load_with_overlay(r, overlay)
+            });
             let gha_root = root(m.ghactions, ghactions_db_path);
-            spawn(
-                s,
-                ghactions,
-                has(E::GitHubActions),
-                gha_root,
-                GhActionsDb::load,
-            );
+            spawn(s, ghactions, has(E::GitHubActions), gha_root, |r: &Path| {
+                GhActionsDb::load_with_overlay(r, overlay)
+            });
             spawn(
                 s,
                 maven,
                 has(E::Maven),
                 root(m.maven, maven_db_path),
-                MavenDb::load,
+                |r: &Path| MavenDb::load_with_overlay(r, overlay),
             );
         });
         dbs
@@ -242,7 +245,7 @@ pub fn scan_fleet(
             .any(|p| p.units.iter().any(|u| u.ecosystem == eco))
     };
 
-    let dbs = Dbs::load(&has, go, mirrors);
+    let dbs = Dbs::load(&has, go, mirrors, config.osv.advisories.as_deref());
 
     // Each repo is independent and shares only the read-only advisory DBs, so the
     // per-repo scan (dominated by lockfile parsing) fans out across cores. Results

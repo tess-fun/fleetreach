@@ -98,6 +98,12 @@ approved_by   = "security@acme.example"
 | `dir` | a directory of osv.dev exports, `<dir>/<Ecosystem>/all.zip` |
 | `refresh` | how stale the default cache may get before a re-check (default `6h`) |
 
+## `[settings.advisories]`
+
+| Key | Meaning |
+|-----|---------|
+| `dir` | your own OSV records, searched recursively: same id replaces an upstream record, a new id adds one, `withdrawn` retracts. See [Correct and extend advisory data](/fleetreach/docs/guides/correct-and-extend-advisory-data/) |
+
 ## `[settings.context.defaults]`
 
 `exposure`, `mission_impact`, `safety_impact`, `owner` and `tags` for every repo that does

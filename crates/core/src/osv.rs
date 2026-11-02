@@ -349,6 +349,12 @@ impl<V> OsvDb<V> {
     pub fn len(&self) -> usize {
         self.by_package.values().map(Vec::len).sum()
     }
+    /// Every `(index key, advisory)` pair, in key order (for data-quality checks).
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Advisory<V>)> {
+        self.by_package
+            .iter()
+            .flat_map(|(key, advs)| advs.iter().map(move |a| (key.as_str(), a)))
+    }
     /// Whether the DB indexed no advisories at all.
     pub fn is_empty(&self) -> bool {
         self.by_package.is_empty()
@@ -429,14 +435,105 @@ pub fn load<V>(root: &Path, spec: &Spec<V>) -> Result<OsvDb<V>, LoadError>
 where
     V: Ord + Clone + Send,
 {
+    load_skipping(root, spec, &BTreeSet::new())
+}
+
+/// [`load`] with an organization's own OSV records layered on top (`overlay`, a directory
+/// searched recursively for `*.json`). An overlay record whose `id` matches an upstream record
+/// **replaces** it, in every ecosystem; one with a new id is an addition; one with
+/// `withdrawn` set retracts the upstream record of that id (withdrawn records never match).
+/// Overlay records are indexed after the upstream ones.
+///
+/// # Errors
+///
+/// As [`load`], plus an unreadable overlay directory or an overlay record that is not valid
+/// OSV JSON: a broken correction fails closed rather than being dropped.
+pub fn load_with_overlay<V>(
+    root: &Path,
+    overlay: Option<&Path>,
+    spec: &Spec<V>,
+) -> Result<OsvDb<V>, LoadError>
+where
+    V: Ord + Clone + Send,
+{
+    let Some(overlay) = overlay else {
+        return load(root, spec);
+    };
+    let records = read_overlay(overlay)?;
+    let replaced: BTreeSet<String> = records.iter().map(|r| r.id.clone()).collect();
+    let mut db = load_skipping(root, spec, &replaced)?;
+    for record in records {
+        for (name, advisory) in advisories_from(record, spec) {
+            db.by_package.entry(name).or_default().push(advisory);
+        }
+    }
+    Ok(db)
+}
+
+/// Every `*.json` OSV record under `dir` (recursively, in path order, hidden entries
+/// skipped), as layered by [`load_with_overlay`].
+///
+/// # Errors
+///
+/// A directory that cannot be read or a record that is not valid OSV JSON.
+pub fn read_overlay(dir: &Path) -> Result<Vec<OsvRecord>, LoadError> {
+    let mut paths = Vec::new();
+    collect_json(dir, &mut paths)?;
+    paths.sort();
+    paths
+        .iter()
+        .map(|path| {
+            let body = std::fs::read_to_string(path).map_err(|e| LoadError::new(path, e))?;
+            serde_json::from_str(&body).map_err(|e| LoadError::new(path, e))
+        })
+        .collect()
+}
+
+fn collect_json(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), LoadError> {
+    for entry in std::fs::read_dir(dir).map_err(|e| LoadError::new(dir, e))? {
+        let entry = entry.map_err(|e| LoadError::new(dir, e))?;
+        let path = entry.path();
+        if entry.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
+        let kind = entry.file_type().map_err(|e| LoadError::new(&path, e))?;
+        if kind.is_dir() {
+            collect_json(&path, out)?;
+        } else if path.extension().and_then(|e| e.to_str()) == Some("json") {
+            out.push(path);
+        }
+    }
+    Ok(())
+}
+
+fn load_skipping<V>(
+    root: &Path,
+    spec: &Spec<V>,
+    skip: &BTreeSet<String>,
+) -> Result<OsvDb<V>, LoadError>
+where
+    V: Ord + Clone + Send,
+{
     if root.is_dir() {
-        load_dir(root, spec)
+        load_dir(root, spec, skip)
     } else {
-        load_zip(root, spec)
+        load_zip(root, spec, skip)
     }
 }
 
-fn load_dir<V>(root: &Path, spec: &Spec<V>) -> Result<OsvDb<V>, LoadError>
+/// The record's advisories, or none when an overlay replaces its id.
+fn unless_skipped<V: Ord + Clone>(
+    osv: OsvRecord,
+    spec: &Spec<V>,
+    skip: &BTreeSet<String>,
+) -> Vec<(String, Advisory<V>)> {
+    if skip.contains(&osv.id) {
+        return Vec::new();
+    }
+    advisories_from(osv, spec)
+}
+
+fn load_dir<V>(root: &Path, spec: &Spec<V>, skip: &BTreeSet<String>) -> Result<OsvDb<V>, LoadError>
 where
     V: Ord + Clone + Send,
 {
@@ -453,7 +550,7 @@ where
             let body = std::fs::read_to_string(path).map_err(|e| LoadError::new(path, e))?;
             let osv: OsvRecord =
                 serde_json::from_str(&body).map_err(|e| LoadError::new(path, e))?;
-            Ok(advisories_from(osv, spec))
+            Ok(unless_skipped(osv, spec, skip))
         })
         .collect::<Result<_, LoadError>>()?;
 
@@ -462,7 +559,7 @@ where
     })
 }
 
-fn load_zip<V>(path: &Path, spec: &Spec<V>) -> Result<OsvDb<V>, LoadError>
+fn load_zip<V>(path: &Path, spec: &Spec<V>, skip: &BTreeSet<String>) -> Result<OsvDb<V>, LoadError>
 where
     V: Ord + Clone + Send,
 {
@@ -487,7 +584,7 @@ where
                     .map_err(|e| LoadError::new(path, e))?;
                 let osv: OsvRecord =
                     serde_json::from_str(&body).map_err(|e| LoadError::new(path, e))?;
-                Ok(advisories_from(osv, spec))
+                Ok(unless_skipped(osv, spec, skip))
             },
         )
         .collect::<Result<_, LoadError>>()?;
@@ -1340,5 +1437,79 @@ mod tests {
                 ("PYSEC-1".to_string(), "1.0.0".to_string()),
             ]
         );
+    }
+
+    fn semver_spec() -> Spec<Version> {
+        Spec {
+            ecosystem: "npm",
+            range_type: "SEMVER",
+            parse_version: |s| Version::parse(if s == "0" { "0.0.0" } else { s }).ok(),
+            normalize_name: |n| n.to_string(),
+            use_versions: false,
+            severity: default_severity,
+        }
+    }
+
+    fn record(id: &str, name: &str, fixed: &str, extra: &str) -> String {
+        format!(
+            r#"{{"id":"{id}"{extra},"affected":[{{"package":{{"ecosystem":"npm","name":"{name}"}},
+            "ranges":[{{"type":"SEMVER","events":[{{"introduced":"0"}},{{"fixed":"{fixed}"}}]}}]}}]}}"#
+        )
+    }
+
+    #[test]
+    fn overlay_replaces_adds_and_retracts() {
+        let root = std::env::temp_dir().join(format!("fr-core-overlay-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (up, ov) = (root.join("npm"), root.join("advisories"));
+        std::fs::create_dir_all(&up).unwrap();
+        std::fs::create_dir_all(ov.join("nested")).unwrap();
+        std::fs::write(up.join("GHSA-1.json"), record("GHSA-1", "a", "1.0.0", "")).unwrap();
+        std::fs::write(up.join("GHSA-2.json"), record("GHSA-2", "b", "2.0.0", "")).unwrap();
+        std::fs::write(up.join("GHSA-3.json"), record("GHSA-3", "c", "3.0.0", "")).unwrap();
+        // Correct GHSA-1's fix, retract GHSA-2, add ORG-1 (in a subdirectory).
+        std::fs::write(ov.join("GHSA-1.json"), record("GHSA-1", "a", "1.5.0", "")).unwrap();
+        std::fs::write(
+            ov.join("GHSA-2.json"),
+            record(
+                "GHSA-2",
+                "b",
+                "2.0.0",
+                r#","withdrawn":"2025-01-01T00:00:00Z""#,
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            ov.join("nested/ORG-1.json"),
+            record("ORG-1", "d", "4.0.0", ""),
+        )
+        .unwrap();
+        std::fs::write(ov.join(".hidden.json"), "not json").unwrap();
+
+        let spec = semver_spec();
+        let plain = load(&up, &spec).unwrap();
+        assert_eq!(plain.len(), 3);
+        let db = load_with_overlay(&up, Some(&ov), &spec).unwrap();
+        let fixes = |key: &str| -> Vec<String> {
+            db.advisories_for(key)
+                .iter()
+                .flat_map(|a| &a.ranges)
+                .flat_map(|r| &r.events)
+                .filter_map(|e| e.fixed.as_ref().map(ToString::to_string))
+                .collect()
+        };
+        assert_eq!(fixes("a"), ["1.5.0"], "replaced, not duplicated");
+        assert!(db.advisories_for("b").is_empty(), "retracted");
+        assert_eq!(fixes("c"), ["3.0.0"], "untouched");
+        assert_eq!(fixes("d"), ["4.0.0"], "added");
+        assert_eq!(db.iter().count(), 3);
+        assert!(load_with_overlay(&up, None, &spec).unwrap().len() == 3);
+
+        // A broken overlay record fails the load rather than being skipped.
+        std::fs::write(ov.join("bad.json"), "{").unwrap();
+        let err = load_with_overlay(&up, Some(&ov), &spec).unwrap_err();
+        assert!(err.path.ends_with("bad.json"));
+        assert!(load_with_overlay(&up, Some(&root.join("missing")), &spec).is_err());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

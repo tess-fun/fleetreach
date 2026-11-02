@@ -12,7 +12,7 @@ Generated from `fleetreach --help`; each command's page has its full help.
 | [`scan`](/fleetreach/docs/reference/cli/scan/) | Scan the fleet for advisories |
 | [`diff`](/fleetreach/docs/reference/cli/diff/) | Compare two saved JSON reports: new vs. fixed vs. still-open findings |
 | [`vex`](/fleetreach/docs/reference/cli/vex/) | Operate on OpenVEX documents (drift gate, witness verification) |
-| [`db`](/fleetreach/docs/reference/cli/db/) | Manage the osv.dev exports the toolchain-free ecosystems match against |
+| [`db`](/fleetreach/docs/reference/cli/db/) | Manage the advisory data: osv.dev exports, CVE 5.x and vendor CSAF indexes, quality |
 | [`fleet`](/fleetreach/docs/reference/cli/fleet/) | Discover and check out the repos named by `[[source]]` entries |
 | [`sbom`](/fleetreach/docs/reference/cli/sbom/) | Write a CycloneDX 1.6 or SPDX 2.3 SBOM per repo from the same sources `scan` reads |
 | [`licenses`](/fleetreach/docs/reference/cli/licenses/) | License inventory and policy violations across the fleet |
@@ -30,7 +30,7 @@ Commands:
   scan      Scan the fleet for advisories
   diff      Compare two saved JSON reports: new vs. fixed vs. still-open findings
   vex       Operate on OpenVEX documents (drift gate, witness verification)
-  db        Manage the osv.dev exports the toolchain-free ecosystems match against
+  db        Manage the advisory data: osv.dev exports, CVE 5.x and vendor CSAF indexes, quality
   fleet     Discover and check out the repos named by `[[source]]` entries
   sbom      Write a CycloneDX 1.6 or SPDX 2.3 SBOM per repo from the same sources `scan` reads
   licenses  License inventory and policy violations across the fleet

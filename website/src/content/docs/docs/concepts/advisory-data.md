@@ -1,6 +1,6 @@
 ---
 title: Advisory data
-description: Where fleetreach's vulnerability data comes from (RustSec, osv.dev exports, vuln.go.dev, CISA KEV, FIRST EPSS, Vulnrichment, NVD), how it is cached, and how to pin or mirror it.
+description: Where fleetreach's vulnerability data comes from (RustSec, osv.dev exports, vuln.go.dev, CVE 5.x, Red Hat CSAF, CISA KEV, FIRST EPSS, Vulnrichment, NVD, your own overlay), how it is cached, and how to pin or mirror it.
 sidebar:
   order: 4
 ---
@@ -17,6 +17,9 @@ scrapes web pages.
 | Exploit probability | [FIRST EPSS](https://www.first.org/epss/) | `--enrich`, ranking, `--min-epss` |
 | CISA's SSVC inputs | [Vulnrichment](https://github.com/cisagov/vulnrichment) | SSVC Exploitation and Automatable |
 | Missing severities | [NVD](https://nvd.nist.gov) | CVSS when the advisory has none |
+| CNA data and ADP enrichment | [CVE 5.x records](https://github.com/CVEProject/cvelistV5) | `db quality`, `db crosscheck` |
+| Vendor statuses | [Red Hat CSAF VEX](https://security.access.redhat.com/data/csaf/v2/vex/) | `db crosscheck`; OS packages later |
+| Your corrections | OSV files in `[settings.advisories] dir` | layered over every OSV export |
 | Licenses | lockfiles and local package caches, else deps.dev with `licenses --fetch` | `fleetreach licenses`, SBOMs |
 
 **Caching.** osv.dev exports live in `~/.cache/fleetreach/osv/` and are re-checked every 6
@@ -28,6 +31,10 @@ shows their age. `--max-db-age 7d` refuses stale data.
 
 **Withdrawn advisories** are skipped, and an advisory published under several ids (a
 `PYSEC-` and a `GHSA-`) counts once.
+
+**Corrections and quality.** Your own OSV records replace, add to or retract upstream
+records, and `db quality` reports data problems instead of hiding them. See
+[Correct and extend advisory data](/fleetreach/docs/guides/correct-and-extend-advisory-data/).
 
 **Offline.** Every source can be a file. See
 [Run offline or air-gapped](/fleetreach/docs/guides/run-offline-or-air-gapped/).

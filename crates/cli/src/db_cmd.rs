@@ -10,6 +10,7 @@ use fleetreach_core::Ecosystem;
 
 use crate::cli::fail;
 use crate::config::Config;
+use crate::curated;
 use crate::orchestrate::fleet_ecosystems;
 use crate::osvdb;
 use crate::sources;
@@ -28,11 +29,70 @@ pub struct DbSyncArgs {
     /// sync into this directory instead of the default cache (e.g. to copy to an air-gapped host)
     #[arg(long, value_name = "DIR")]
     osv_dir: Option<PathBuf>,
+    /// what to fetch: `osv` (the exports), `cve` (cvelistV5) and `csaf:<provider>`
+    /// (vendor CSAF VEX; `csaf:redhat`)
+    #[arg(
+        long,
+        value_delimiter = ',',
+        value_name = "SOURCES",
+        default_value = "osv"
+    )]
+    source: Vec<String>,
     /// re-download even if the cached export was checked recently
     #[arg(long)]
     force: bool,
     #[arg(short, long, help = "no progress output")]
     quiet: bool,
+}
+
+#[derive(Args)]
+pub struct DbImportArgs {
+    /// a cvelistV5 checkout, its `cves.zip`, or a release's `*_all_CVEs_at_midnight.zip.zip`
+    #[arg(long, value_name = "PATH", required_unless_present = "csaf")]
+    cve: Option<PathBuf>,
+    /// a directory of CSAF documents, or a `.tar.zst` archive (Red Hat's `csaf_vex_<date>.tar.zst`)
+    #[arg(long, value_name = "PATH")]
+    csaf: Option<PathBuf>,
+    /// the provider name the CSAF index is filed under
+    #[arg(long, default_value = "redhat", requires = "csaf")]
+    provider: String,
+    /// index into this directory instead of the default cache
+    #[arg(long, value_name = "DIR")]
+    osv_dir: Option<PathBuf>,
+    #[arg(short, long, help = "no progress output")]
+    quiet: bool,
+}
+
+#[derive(Args)]
+pub struct DbQualityArgs {
+    /// fleet.toml whose `[settings.advisories] dir` overlay to check with the data (optional)
+    #[arg(short, long)]
+    config: Option<PathBuf>,
+    /// check this overlay directory (overrides the config's)
+    #[arg(long, value_name = "DIR")]
+    advisories_dir: Option<PathBuf>,
+    /// read this directory instead of the default cache
+    #[arg(long, value_name = "DIR")]
+    osv_dir: Option<PathBuf>,
+    /// print every issue as JSON instead of the summary
+    #[arg(long)]
+    json: bool,
+    /// examples to print per check
+    #[arg(long, default_value_t = 5)]
+    limit: usize,
+}
+
+#[derive(Args)]
+pub struct DbCrosscheckArgs {
+    /// read this directory instead of the default cache
+    #[arg(long, value_name = "DIR")]
+    osv_dir: Option<PathBuf>,
+    /// print the measurements as JSON
+    #[arg(long)]
+    json: bool,
+    /// examples to keep per kind
+    #[arg(long, default_value_t = 5)]
+    limit: usize,
 }
 
 #[derive(Args)]
@@ -62,6 +122,111 @@ pub fn run_db_sync(args: DbSyncArgs) -> u8 {
         Ok(dir) => dir,
         Err(e) => return fail(&e),
     };
+    let mut osv = false;
+    let mut cve = false;
+    let mut providers: Vec<&str> = Vec::new();
+    for source in &args.source {
+        match source.trim() {
+            "osv" => osv = true,
+            "cve" => cve = true,
+            other => match other.strip_prefix("csaf:") {
+                Some(provider) if !providers.contains(&provider) => providers.push(provider),
+                Some(_) => {}
+                None => {
+                    return fail(&format!(
+                        "`{other}` is not a source (osv, cve, csaf:<provider>)"
+                    ))
+                }
+            },
+        }
+    }
+    let mut failed = false;
+    if osv {
+        match sync_osv(&args, &dir) {
+            Ok(ok) => failed |= !ok,
+            Err(code) => return code,
+        }
+    }
+    if cve || !providers.is_empty() {
+        if let Err(e) = osvdb::create_private_dir(&dir) {
+            return fail(&format!("creating {}: {e}", dir.display()));
+        }
+    }
+    let refresh = osvdb::DEFAULT_REFRESH;
+    let mut report = |name: &str, result: Result<curated::Indexed, String>| match result {
+        Ok(indexed) if !args.quiet && indexed.documents > 0 => eprintln!(
+            "  {name}: indexed {} record(s) from {} document(s)",
+            indexed.records, indexed.documents
+        ),
+        Ok(_) if !args.quiet => eprintln!("  {name}: ok (unchanged)"),
+        Ok(_) => {}
+        Err(e) => {
+            failed = true;
+            eprintln!("  {name}: FAILED: {e}");
+        }
+    };
+    if cve {
+        report(
+            "cvelistV5",
+            curated::sync_cve(&dir, refresh, args.force, args.quiet),
+        );
+    }
+    for provider in providers {
+        let result = curated::sync_csaf(&dir, provider, refresh, args.force, args.quiet);
+        report(&format!("csaf:{provider}"), result);
+    }
+    // A partial sync is not a usable mirror: fail closed so a scripted refresh notices.
+    u8::from(failed) * 2
+}
+
+/// `db import`: index a local CVE or CSAF copy, for hosts that cannot fetch them.
+pub fn run_db_import(args: DbImportArgs) -> u8 {
+    let dir = match target_dir(args.osv_dir.as_deref()) {
+        Ok(dir) => dir,
+        Err(e) => return fail(&e),
+    };
+    if let Err(e) = osvdb::create_private_dir(&dir) {
+        return fail(&format!("creating {}: {e}", dir.display()));
+    }
+    let mut jobs: Vec<(String, Result<curated::Indexed, String>)> = Vec::new();
+    if let Some(input) = &args.cve {
+        jobs.push((
+            "cvelistV5".to_string(),
+            curated::import_cve(&dir, input, None),
+        ));
+    }
+    if let Some(input) = &args.csaf {
+        let result = curated::import_csaf(&dir, &args.provider, input, None);
+        jobs.push((format!("csaf:{}", args.provider), result));
+    }
+    let mut failed = false;
+    for (name, result) in jobs {
+        match result {
+            Ok(indexed) => {
+                if !args.quiet {
+                    eprintln!(
+                        "  {name}: indexed {} record(s) from {} document(s){}",
+                        indexed.records,
+                        indexed.documents,
+                        if indexed.skipped > 0 {
+                            format!(", {} file(s) were not records", indexed.skipped)
+                        } else {
+                            String::new()
+                        }
+                    );
+                }
+            }
+            Err(e) => {
+                failed = true;
+                eprintln!("  {name}: FAILED: {e}");
+            }
+        }
+    }
+    u8::from(failed) * 2
+}
+
+/// The osv.dev half of `db sync`. `Ok(false)` when some export failed.
+fn sync_osv(args: &DbSyncArgs, dir: &Path) -> Result<bool, u8> {
     let ecosystems: Vec<Ecosystem> = if args.all {
         osvdb::OSV_ECOSYSTEMS.to_vec()
     } else if !args.ecosystems.is_empty() {
@@ -71,9 +236,9 @@ pub fn run_db_sync(args: DbSyncArgs) -> u8 {
                 Some(eco) if !out.contains(&eco) => out.push(eco),
                 Some(_) => {}
                 None => {
-                    return fail(&format!(
+                    return Err(fail(&format!(
                         "`{name}` is not an ecosystem with an osv.dev export"
-                    ))
+                    )))
                 }
             }
         }
@@ -85,9 +250,9 @@ pub fn run_db_sync(args: DbSyncArgs) -> u8 {
                 .filter(|&eco| osvdb::osv_name(eco).is_some())
                 .collect(),
             Err(e) => {
-                return fail(&format!(
+                return Err(fail(&format!(
                     "{e} (pass --all or --ecosystems to sync without a fleet.toml)"
-                ))
+                )))
             }
         }
     };
@@ -95,13 +260,13 @@ pub fn run_db_sync(args: DbSyncArgs) -> u8 {
         if !args.quiet {
             eprintln!("nothing to sync: the fleet has no toolchain-free ecosystem");
         }
-        return 0;
+        return Ok(true);
     }
-    if let Err(e) = osvdb::create_private_dir(&dir) {
-        return fail(&format!("creating {}: {e}", dir.display()));
+    if let Err(e) = osvdb::create_private_dir(dir) {
+        return Err(fail(&format!("creating {}: {e}", dir.display())));
     }
     let results = osvdb::sync_many(
-        &dir,
+        dir,
         &ecosystems,
         osvdb::DEFAULT_REFRESH,
         args.force,
@@ -125,8 +290,7 @@ pub fn run_db_sync(args: DbSyncArgs) -> u8 {
     if !args.quiet {
         eprintln!("OSV exports in {}", dir.display());
     }
-    // A partial sync is not a usable mirror: fail closed so a scripted refresh notices.
-    u8::from(failed) * 2
+    Ok(!failed)
 }
 
 pub fn run_db_status(args: DbStatusArgs) -> u8 {
@@ -138,7 +302,11 @@ pub fn run_db_status(args: DbStatusArgs) -> u8 {
     let header = ["Ecosystem", "Status", "Age", "Size", "sha256"];
     let [name, status, age, size, sha] = header;
     println!("{name:<16} {status:<8} {age:<16} {size:>8}  {sha}");
-    for [name, status, age, size, sha] in osvdb::status_rows(&dir, SystemTime::now()) {
+    let now = SystemTime::now();
+    for [name, status, age, size, sha] in osvdb::status_rows(&dir, now)
+        .into_iter()
+        .chain(curated::status_rows(&dir, now))
+    {
         println!("{name:<16} {status:<8} {age:<16} {size:>8}  {sha}");
     }
     0
@@ -223,4 +391,152 @@ fn print_fleet(config: &Config, materialized: &sources::Materialized) {
             sanitize_cell(reason)
         );
     }
+}
+
+/// `db quality`: data-quality issues in the local advisory data. Exit 1 when an issue is an
+/// error (an overlay record nothing applies), 2 when the data cannot be read.
+pub fn run_db_quality(args: DbQualityArgs) -> u8 {
+    use crate::quality::{self, Level};
+    let dir = match target_dir(args.osv_dir.as_deref()) {
+        Ok(dir) => dir,
+        Err(e) => return fail(&e),
+    };
+    let overlay = match (&args.advisories_dir, &args.config) {
+        (Some(dir), _) => Some(dir.clone()),
+        (None, Some(path)) => match Config::load(path) {
+            Ok(config) => config.osv.advisories,
+            Err(e) => return fail(&e.to_string()),
+        },
+        (None, None) => None,
+    };
+    let cve_index = crate::cve5::index_path(&dir);
+    let cves = if cve_index.is_file() {
+        match crate::cve5::read_index(&cve_index) {
+            Ok(cves) => Some(cves),
+            Err(e) => return fail(&e),
+        }
+    } else {
+        eprintln!("note: no CVE index in {}; `rejected-cve-alias` is not checked (`db sync --source cve`)", dir.display());
+        None
+    };
+    let inputs = quality::Inputs {
+        dir: &dir,
+        overlay: overlay.as_deref(),
+        cves: cves.as_deref(),
+    };
+    let issues = match quality::run(&inputs) {
+        Ok(issues) => issues,
+        Err(e) => return fail(&e),
+    };
+    let errors = issues.iter().any(|i| i.level == Level::Error);
+    if args.json {
+        match serde_json::to_string_pretty(&issues) {
+            Ok(json) => println!("{json}"),
+            Err(e) => return fail(&e.to_string()),
+        }
+        return u8::from(errors);
+    }
+    use fleetreach_report::sanitize_cell;
+    println!("{:<26} {:<8} {:>8}  Description", "Check", "Level", "Count");
+    for (check, level, description) in quality::CHECKS {
+        let count = issues.iter().filter(|i| i.check == *check).count();
+        println!(
+            "{check:<26} {:<8} {count:>8}  {description}",
+            format!("{level:?}").to_lowercase()
+        );
+    }
+    for (check, _, _) in quality::CHECKS {
+        let mut shown = issues
+            .iter()
+            .filter(|i| i.check == *check)
+            .take(args.limit)
+            .peekable();
+        if shown.peek().is_none() {
+            continue;
+        }
+        println!("\n{check}:");
+        for i in shown {
+            println!(
+                "  {:<14} {:<28} {:<30} {}",
+                sanitize_cell(&i.ecosystem),
+                sanitize_cell(&i.id),
+                sanitize_cell(i.package.as_deref().unwrap_or("")),
+                sanitize_cell(&i.detail)
+            );
+        }
+    }
+    u8::from(errors)
+}
+
+/// `db crosscheck`: what the CVE and CSAF indexes add to or contradict in the OSV exports.
+pub fn run_db_crosscheck(args: DbCrosscheckArgs) -> u8 {
+    use crate::crosscheck;
+    let dir = match target_dir(args.osv_dir.as_deref()) {
+        Ok(dir) => dir,
+        Err(e) => return fail(&e),
+    };
+    let records = match crate::osvrecords::load_dir(&dir, None) {
+        Ok(records) => records,
+        Err(e) => return fail(&e),
+    };
+    let ecosystems: std::collections::BTreeSet<String> = records
+        .values()
+        .map(|(export, _)| export.clone())
+        .filter(|e| e != "Red Hat")
+        .collect();
+    let mut out = serde_json::Map::new();
+    let cve_index = crate::cve5::index_path(&dir);
+    if cve_index.is_file() {
+        let cves = match crate::cve5::read_index(&cve_index) {
+            Ok(cves) => cves,
+            Err(e) => return fail(&e),
+        };
+        let report = crosscheck::cve_vs_osv(&cves, &records, &ecosystems, args.limit);
+        out.insert(
+            "cve".into(),
+            serde_json::to_value(report).unwrap_or_default(),
+        );
+    } else {
+        eprintln!(
+            "note: no CVE index in {} (`db sync --source cve` or `db import --cve`)",
+            dir.display()
+        );
+    }
+    for provider in curated::CSAF_PROVIDERS {
+        let index = crate::csaf::index_path(&dir, provider);
+        if !index.is_file() {
+            eprintln!("note: no CSAF index for {provider} in {}", dir.display());
+            continue;
+        }
+        if !records.values().any(|(export, _)| export == "Red Hat") && *provider == "redhat" {
+            eprintln!(
+                "note: no OSV `Red Hat` export in {}; CSAF counts only",
+                dir.display()
+            );
+        }
+        let error = std::cell::RefCell::new(None);
+        let vex = match crate::cve5::stream_jsonl_gz(&index, &error) {
+            Ok(vex) => vex,
+            Err(e) => return fail(&e),
+        };
+        let report = crosscheck::csaf_vs_osv(provider, vex, &records, args.limit);
+        if let Some(e) = error.into_inner() {
+            return fail(&e);
+        }
+        out.insert(
+            format!("csaf:{provider}"),
+            serde_json::to_value(report).unwrap_or_default(),
+        );
+    }
+    if out.is_empty() {
+        return fail("nothing to cross-check: neither a CVE nor a CSAF index is present");
+    }
+    if !args.json {
+        eprintln!("(the cross-check is printed as JSON; it is a measurement, not a table)");
+    }
+    match serde_json::to_string_pretty(&serde_json::Value::Object(out)) {
+        Ok(json) => println!("{json}"),
+        Err(e) => return fail(&e.to_string()),
+    }
+    0
 }

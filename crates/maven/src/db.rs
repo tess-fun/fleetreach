@@ -60,6 +60,25 @@ impl MavenDb {
             .map_err(|e| MavenError::db(e.path, e.source))
     }
 
+    /// [`MavenDb::load`] with an organization's own OSV records from `overlay` layered on top:
+    /// a record with an upstream id replaces it, a new id adds one, a withdrawn one retracts
+    /// (see [`osv::load_with_overlay`]).
+    ///
+    /// # Errors
+    ///
+    /// As [`MavenDb::load`], plus an unreadable overlay directory or an overlay record that is
+    /// not valid OSV JSON.
+    pub fn load_with_overlay(root: &Path, overlay: Option<&Path>) -> Result<MavenDb, MavenError> {
+        osv::load_with_overlay(root, overlay, &spec())
+            .map(MavenDb)
+            .map_err(|e| MavenError::db(e.path, e.source))
+    }
+
+    /// Every `(package key, advisory)` pair, in key order (for `db quality`).
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Advisory)> {
+        self.0.iter()
+    }
+
     /// The advisories indexed under `coordinate` (`group:artifact`, verbatim), or an empty
     /// slice if none.
     pub fn advisories_for(&self, coordinate: &str) -> &[Advisory] {

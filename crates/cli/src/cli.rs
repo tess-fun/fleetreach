@@ -7,7 +7,10 @@ use clap::{Parser, Subcommand, ValueEnum};
 use fleetreach_core::Severity;
 use fleetreach_report as report;
 
-use crate::db_cmd::{DbStatusArgs, DbSyncArgs, FleetListArgs, FleetSyncArgs};
+use crate::db_cmd::{
+    DbCrosscheckArgs, DbImportArgs, DbQualityArgs, DbStatusArgs, DbSyncArgs, FleetListArgs,
+    FleetSyncArgs,
+};
 use crate::diff::DiffArgs;
 use crate::scan::ScanArgs;
 use crate::vex::{VexCheckArgs, VexVerifyArgs};
@@ -35,7 +38,7 @@ enum Commands {
     /// Operate on OpenVEX documents (drift gate, witness verification).
     #[command(subcommand)]
     Vex(VexCommand),
-    /// Manage the osv.dev exports the toolchain-free ecosystems match against.
+    /// Manage the advisory data: osv.dev exports, CVE 5.x and vendor CSAF indexes, quality.
     #[command(subcommand)]
     Db(DbCommand),
     /// Discover and check out the repos named by `[[source]]` entries.
@@ -70,8 +73,14 @@ enum FleetCommand {
 enum DbCommand {
     /// Fetch or refresh the exports the fleet needs (or --all / --ecosystems).
     Sync(DbSyncArgs),
+    /// Index a local cvelistV5 or vendor CSAF copy (for hosts that cannot fetch them).
+    Import(DbImportArgs),
     /// Show which exports are present and how old they are.
     Status(DbStatusArgs),
+    /// Report data-quality issues in the local advisory data and overlay.
+    Quality(DbQualityArgs),
+    /// Measure what the CVE and CSAF indexes add to or contradict in the OSV data (JSON).
+    Crosscheck(DbCrosscheckArgs),
 }
 
 #[derive(Subcommand)]
@@ -90,7 +99,10 @@ pub fn dispatch(cli: Cli) -> u8 {
         Commands::Vex(VexCommand::Check(args)) => crate::vex::run_vex_check(args),
         Commands::Vex(VexCommand::Verify(args)) => crate::vex::run_vex_verify(args),
         Commands::Db(DbCommand::Sync(args)) => crate::db_cmd::run_db_sync(args),
+        Commands::Db(DbCommand::Import(args)) => crate::db_cmd::run_db_import(args),
         Commands::Db(DbCommand::Status(args)) => crate::db_cmd::run_db_status(args),
+        Commands::Db(DbCommand::Quality(args)) => crate::db_cmd::run_db_quality(args),
+        Commands::Db(DbCommand::Crosscheck(args)) => crate::db_cmd::run_db_crosscheck(args),
         Commands::Fleet(FleetCommand::Sync(args)) => crate::db_cmd::run_fleet_sync(args),
         Commands::Fleet(FleetCommand::List(args)) => crate::db_cmd::run_fleet_list(args),
         Commands::Sbom(args) => crate::sbom::run_sbom(args),

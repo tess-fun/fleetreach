@@ -66,6 +66,10 @@ rayon = "1"
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 # Gzip for scan history snapshots (spec 09): the same pure-Rust zlib-rs backend, no C.
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+# Red Hat's CSAF VEX archive is a `.tar.zst` (spec 16, row 12): pure-Rust zstd decoder and
+# tar reader (no xattr support needed, so no default features).
+ruzstd = "0.9"
+tar = { version = "0.4", default-features = false }
 
 [dev-dependencies]
 assert_cmd = "2"

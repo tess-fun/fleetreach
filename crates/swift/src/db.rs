@@ -65,6 +65,25 @@ impl SwiftDb {
             .map_err(|e| SwiftError::db(e.path, e.source))
     }
 
+    /// [`SwiftDb::load`] with an organization's own OSV records from `overlay` layered on top:
+    /// a record with an upstream id replaces it, a new id adds one, a withdrawn one retracts
+    /// (see [`osv::load_with_overlay`]).
+    ///
+    /// # Errors
+    ///
+    /// As [`SwiftDb::load`], plus an unreadable overlay directory or an overlay record that is
+    /// not valid OSV JSON.
+    pub fn load_with_overlay(root: &Path, overlay: Option<&Path>) -> Result<SwiftDb, SwiftError> {
+        osv::load_with_overlay(root, overlay, &spec())
+            .map(SwiftDb)
+            .map_err(|e| SwiftError::db(e.path, e.source))
+    }
+
+    /// Every `(package key, advisory)` pair, in key order (for `db quality`).
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Advisory)> {
+        self.0.iter()
+    }
+
     /// The advisories indexed under `url` (pass a normalized URL — see
     /// [`crate::normalize_package_url`]), or an empty slice if none.
     pub fn advisories_for(&self, url: &str) -> &[Advisory] {
