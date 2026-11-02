@@ -12,8 +12,11 @@ use std::path::PathBuf;
 use clap::{Args, ValueEnum};
 use fleetreach_report::{sanitize_cell, to_cyclonedx, to_cyclonedx_with_vulns, to_spdx};
 
+use fleetreach_core::inventory::RepoInventory;
+use rayon::prelude::*;
+
 use crate::cli::fail;
-use crate::config::Config;
+use crate::config::{Config, Repo};
 use crate::inventory::repo_inventory_with;
 use crate::sources;
 
@@ -90,23 +93,20 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
         Ok(remote) => remote,
         Err(e) => return fail(&e),
     };
-    for repo in &config.repos {
+    // Inventories and BOMs are built in parallel; messages print afterwards in fleet order,
+    // so the output is the same as a serial run. Licenses from the machine-wide caches are
+    // read once per package for the whole fleet.
+    let cache = crate::licenses::LicenseCache::new();
+    let inventory = |repo: &Repo| {
         let mut inv = repo_inventory_with(repo, maven.as_ref());
-        crate::licenses::annotate(&mut inv, &repo.path);
-        if args.fetch_licenses {
-            match crate::licenses::fetch_missing(std::slice::from_mut(&mut inv)) {
-                Ok((_, _, failed)) if failed > 0 => eprintln!(
-                    "warning: {}: {failed} deps.dev license lookup(s) failed",
-                    repo.id
-                ),
-                Ok(_) => {}
-                Err(e) => return fail(&e),
-            }
-        }
+        crate::licenses::annotate(&mut inv, &repo.path, &cache);
         if let Some(p) = materialized.provenance.iter().find(|p| p.repo == repo.id) {
             inv.url = Some(p.url.clone());
             inv.commit = Some(p.commit.clone());
         }
+        inv
+    };
+    let write = |repo: &Repo, inv: RepoInventory| -> Result<Written, String> {
         let version = env!("CARGO_PKG_VERSION");
         let (bom, extension) = match (args.format, &report) {
             (BomFormat::Cyclonedx, None) => (to_cyclonedx(&inv, version, Some(&timestamp)), "cdx"),
@@ -116,43 +116,74 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
             ),
             (BomFormat::Spdx, r) => (to_spdx(&inv, r.as_ref(), version, &timestamp), "spdx"),
         };
-        let bom = match bom {
-            Ok(bom) => bom,
-            Err(e) => return fail(&format!("{}: {e}", repo.id)),
-        };
+        let bom = bom.map_err(|e| format!("{}: {e}", repo.id))?;
         let file = args
             .out_dir
             .join(format!("{}.{extension}.json", file_stem(&repo.id.0)));
-        if let Err(e) = std::fs::write(&file, bom) {
-            return fail(&format!("{}: {e}", file.display()));
+        std::fs::write(&file, bom).map_err(|e| format!("{}: {e}", file.display()))?;
+        Ok(Written {
+            file,
+            packages: inv.sources.iter().map(|s| s.packages.len()).sum(),
+            sources: inv.sources.len(),
+            gaps: inv
+                .sources
+                .iter()
+                .filter(|s| s.coverage != fleetreach_core::Coverage::Full)
+                .count(),
+            errors: inv.errors,
+        })
+    };
+    let written: Vec<Result<Written, String>> = if args.fetch_licenses {
+        // deps.dev is asked once for the whole fleet, so a package many repos share is
+        // looked up once.
+        let mut inventories: Vec<RepoInventory> = config.repos.par_iter().map(inventory).collect();
+        match crate::licenses::fetch_missing(&mut inventories) {
+            Ok((_, _, failed)) if failed > 0 => {
+                eprintln!("warning: {failed} deps.dev license lookup(s) failed")
+            }
+            Ok(_) => {}
+            Err(e) => return fail(&e),
         }
-        let packages: usize = inv.sources.iter().map(|s| s.packages.len()).sum();
-        let gaps = inv
-            .sources
-            .iter()
-            .filter(|s| s.coverage != fleetreach_core::Coverage::Full)
-            .count();
-        for error in &inv.errors {
+        config
+            .repos
+            .par_iter()
+            .zip(inventories.into_par_iter())
+            .map(|(repo, inv)| write(repo, inv))
+            .collect()
+    } else {
+        config
+            .repos
+            .par_iter()
+            .map(|repo| write(repo, inventory(repo)))
+            .collect()
+    };
+    for (repo, written) in config.repos.iter().zip(written) {
+        let w = match written {
+            Ok(w) => w,
+            Err(e) => return fail(&e),
+        };
+        for error in &w.errors {
             eprintln!(
                 "error: {}: {}",
                 sanitize_cell(&repo.id.0),
                 sanitize_cell(error)
             );
         }
-        if !inv.errors.is_empty() {
+        if !w.errors.is_empty() {
             incomplete += 1;
         }
         if !args.quiet {
-            let note = if gaps > 0 {
-                format!(", {gaps} source(s) with incomplete coverage")
+            let note = if w.gaps > 0 {
+                format!(", {} source(s) with incomplete coverage", w.gaps)
             } else {
                 String::new()
             };
             eprintln!(
-                "{}: {packages} package(s) from {} source(s){note} -> {}",
+                "{}: {} package(s) from {} source(s){note} -> {}",
                 sanitize_cell(&repo.id.0),
-                inv.sources.len(),
-                file.display()
+                w.packages,
+                w.sources,
+                w.file.display()
             );
         }
     }
@@ -165,6 +196,15 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
 
 /// A repo id as a file name: `owner/name` becomes `owner__name`, and anything outside
 /// `[A-Za-z0-9._-]` becomes `_`, so an id can never escape the output directory.
+/// What one repo's BOM came to, for the messages printed after the parallel build.
+struct Written {
+    file: PathBuf,
+    packages: usize,
+    sources: usize,
+    gaps: usize,
+    errors: Vec<String>,
+}
+
 fn file_stem(id: &str) -> String {
     let stem: String = id
         .replace('/', "__")

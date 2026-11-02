@@ -6,10 +6,7 @@
 use std::path::PathBuf;
 
 use fleetreach_cli::config::Config;
-use fleetreach_cli::orchestrate::{
-    scan_fleet, GhActionsScan, GoScan, HexScan, JuliaScan, MavenScan, NpmScan, NuGetScan,
-    PackagistScan, PyPiScan, RubyGemsScan, SwiftScan, Toolchain,
-};
+use fleetreach_cli::orchestrate::{scan_fleet, GoScan, Mirrors, Toolchain};
 use fleetreach_core::semver::Version;
 use fleetreach_core::{Occurrence, RepoId, ScanStatus};
 use fleetreach_go::SandboxPolicy;
@@ -22,59 +19,6 @@ fn go() -> GoScan<'static> {
         sandbox: SandboxPolicy::Off,
         vuln_db: None,
         offline: false,
-    }
-}
-
-/// Neutral npm scan config: these Cargo-only fixtures never reach the npm path.
-fn npm() -> NpmScan<'static> {
-    NpmScan { vuln_db: None }
-}
-
-/// Neutral PyPI scan config: these Cargo-only fixtures never reach the PyPI path.
-fn pypi() -> PyPiScan<'static> {
-    PyPiScan { vuln_db: None }
-}
-
-/// Neutral RubyGems scan config: these Cargo-only fixtures never reach the RubyGems path.
-fn rubygems() -> RubyGemsScan<'static> {
-    RubyGemsScan { vuln_db: None }
-}
-
-/// Neutral Packagist scan config: these Cargo-only fixtures never reach the Packagist path.
-fn packagist() -> PackagistScan<'static> {
-    PackagistScan { vuln_db: None }
-}
-
-/// Neutral NuGet scan config: these Cargo-only fixtures never reach the NuGet path.
-fn nuget() -> NuGetScan<'static> {
-    NuGetScan { vuln_db: None }
-}
-
-/// Neutral Julia scan config: these Cargo-only fixtures never reach the Julia path.
-fn julia() -> JuliaScan<'static> {
-    JuliaScan { vuln_db: None }
-}
-
-/// Neutral Swift scan config: these Cargo-only fixtures never reach the Swift path.
-fn swift() -> SwiftScan<'static> {
-    SwiftScan { vuln_db: None }
-}
-
-/// Neutral Hex scan config: these Cargo-only fixtures never reach the Hex path.
-fn hex() -> HexScan<'static> {
-    HexScan { vuln_db: None }
-}
-
-/// Neutral GitHub Actions scan config: these Cargo-only fixtures never reach that path.
-fn ghactions() -> GhActionsScan<'static> {
-    GhActionsScan { vuln_db: None }
-}
-
-/// Neutral Maven scan config: these Cargo-only fixtures never reach the Maven path.
-fn maven() -> MavenScan<'static> {
-    MavenScan {
-        vuln_db: None,
-        remote: None,
     }
 }
 
@@ -130,16 +74,7 @@ fn each_repo_degrades_independently() {
         None,
         None,
         &go(),
-        &npm(),
-        &pypi(),
-        &rubygems(),
-        &packagist(),
-        &nuget(),
-        &julia(),
-        &swift(),
-        &hex(),
-        &ghactions(),
-        &maven(),
+        &Mirrors::default(),
     );
 
     assert_eq!(data.outcomes.len(), 4);
@@ -172,16 +107,7 @@ fn glob_discovery_respects_the_depth_bound() {
         None,
         None,
         &go(),
-        &npm(),
-        &pypi(),
-        &rubygems(),
-        &packagist(),
-        &nuget(),
-        &julia(),
-        &swift(),
-        &hex(),
-        &ghactions(),
-        &maven(),
+        &Mirrors::default(),
     );
     // svc-a/Cargo.lock is at depth 2 (found); svc-a/deep/Cargo.lock is at depth
     // 3 (excluded). So exactly one lockfile, one vuln.
@@ -202,16 +128,7 @@ fn aggregates_findings_across_the_fleet() {
         None,
         None,
         &go(),
-        &npm(),
-        &pypi(),
-        &rubygems(),
-        &packagist(),
-        &nuget(),
-        &julia(),
-        &swift(),
-        &hex(),
-        &ghactions(),
-        &maven(),
+        &Mirrors::default(),
     );
     // repo-vuln (1) + repo-glob (1) = 2 vulns; repo-warn = 1 warning.
     assert_eq!(data.vulnerabilities.len(), 2);
@@ -235,16 +152,7 @@ fn toolchain_advisory_joins_the_fleet_streams() {
         Some(&toolchain),
         None,
         &go(),
-        &npm(),
-        &pypi(),
-        &rubygems(),
-        &packagist(),
-        &nuget(),
-        &julia(),
-        &swift(),
-        &hex(),
-        &ghactions(),
-        &maven(),
+        &Mirrors::default(),
     );
 
     // The 2 in-repo vulns plus the 1 toolchain vuln.
@@ -287,18 +195,9 @@ fn pom_only_maven_repo_is_labelled_direct_only() {
             None,
             None,
             &go(),
-            &npm(),
-            &pypi(),
-            &rubygems(),
-            &packagist(),
-            &nuget(),
-            &julia(),
-            &swift(),
-            &hex(),
-            &ghactions(),
-            &MavenScan {
-                vuln_db: Some(&url),
-                remote: None,
+            &Mirrors {
+                maven: Some(&url),
+                ..Mirrors::default()
             },
         )
     };

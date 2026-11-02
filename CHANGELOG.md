@@ -116,6 +116,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   copy, and the site publishes `llms.txt`, `llms-full.txt`, a sitemap and JSON-LD. Old
   `/docs/*.html` addresses redirect. The README is shorter and points to the site.
 
+### Changed
+
+- **Faster on large lockfiles and large fleets**, with byte-identical output (checked on a
+  10,471-repo fleet and 13 large open-source monorepos):
+  - Dependency chains are built from one walk of each lockfile's graph instead of one walk per
+    package. npm, Hex and Julia asked for a chain for every package, so a big lockfile was
+    quadratic: the 13-monorepo scan went from 9.2s to 2.7s.
+  - `sbom` builds each repo's inventory and BOM in parallel, and reads each crate's or NuGet
+    package's license once per run instead of once per repo: 37s to 4.3s on the 10k fleet.
+    With `--fetch-licenses`, deps.dev is asked once per package for the whole fleet, not once
+    per repo. `licenses` reads repos in parallel too.
+  - `--signals` reads repos in parallel: 16s to 5.2s on the 10k fleet.
+  - The OSV databases a fleet needs load at the same time instead of one after another.
+
 ### Fixed
 
 Found by checking each feature against real repos (gitea, caddy, hugo, spring-petclinic,

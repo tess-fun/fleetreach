@@ -69,96 +69,148 @@ pub struct GoScan<'a> {
     pub offline: bool,
 }
 
-/// Everything the npm scan path needs. npm is **toolchain-free only** (the Tier-C
-/// matcher reads `package-lock.json` and an OSV mirror, building nothing), so unlike
-/// [`GoScan`] there is no binary, sandbox, or online mode — just the `file://<dir>`
-/// OSV mirror, absent which an npm repo is an honest gap.
-#[derive(Debug, Clone, Copy)]
-pub struct NpmScan<'a> {
-    pub vuln_db: Option<&'a str>,
-}
-
-/// Everything the PyPI scan path needs. Like npm it is **toolchain-free only** (the
-/// Tier-C matcher reads a Python lockfile and an OSV mirror, building nothing), so the
-/// only input is the `file://` OSV mirror, absent which a PyPI repo is an honest gap.
-#[derive(Debug, Clone, Copy)]
-pub struct PyPiScan<'a> {
-    pub vuln_db: Option<&'a str>,
-}
-
-/// Everything the RubyGems scan path needs. Like npm/PyPI it is **toolchain-free only**
-/// (the Tier-C matcher reads `Gemfile.lock` and an OSV mirror, building nothing), so the
-/// only input is the `file://` OSV mirror, absent which a Ruby repo is an honest gap.
-#[derive(Debug, Clone, Copy)]
-pub struct RubyGemsScan<'a> {
-    pub vuln_db: Option<&'a str>,
-}
-
-/// Everything the Packagist scan path needs. Like npm/PyPI/RubyGems it is **toolchain-free
-/// only** (the Tier-C matcher reads `composer.lock` and an OSV mirror, building nothing), so
-/// the only input is the `file://` OSV mirror, absent which a PHP repo is an honest gap.
-#[derive(Debug, Clone, Copy)]
-pub struct PackagistScan<'a> {
-    pub vuln_db: Option<&'a str>,
-}
-
-/// Everything the NuGet scan path needs. Like the other Tier-C feeders it is **toolchain-free
-/// only** (the matcher reads `packages.lock.json` and an OSV mirror, building nothing), so the
-/// only input is the `file://` OSV mirror, absent which a .NET repo is an honest gap.
-#[derive(Debug, Clone, Copy)]
-pub struct NuGetScan<'a> {
-    pub vuln_db: Option<&'a str>,
-}
-
-/// Everything the Julia scan path needs. Like the other Tier-C feeders it is **toolchain-free
-/// only** (the matcher reads `Manifest.toml` and an OSV mirror, building nothing), so the only
-/// input is the `file://` OSV mirror, absent which a Julia repo is an honest gap.
-#[derive(Debug, Clone, Copy)]
-pub struct JuliaScan<'a> {
-    pub vuln_db: Option<&'a str>,
-}
-
-/// Everything the Swift scan path needs. Like the other Tier-C feeders it is **toolchain-free
-/// only** (the matcher reads `Package.resolved` and an OSV mirror, building nothing), so the
-/// only input is the `file://` OSV mirror, absent which a Swift repo is an honest gap.
-#[derive(Debug, Clone, Copy)]
-pub struct SwiftScan<'a> {
-    pub vuln_db: Option<&'a str>,
-}
-
-/// Everything the Hex scan path needs. Like the other Tier-C feeders it is **toolchain-free
-/// only** (the matcher reads `mix.lock` and an OSV mirror, building nothing), so the only input
-/// is the `file://` OSV mirror, absent which an Elixir repo is an honest gap.
-#[derive(Debug, Clone, Copy)]
-pub struct HexScan<'a> {
-    pub vuln_db: Option<&'a str>,
-}
-
-/// Everything the GitHub Actions scan path needs. Like the other Tier-C feeders it is
-/// **toolchain-free only** (the matcher reads `.github/workflows/*.yml` and an OSV mirror,
-/// building nothing), so the only input is the `file://` OSV mirror, absent which a workflow
-/// repo is an honest gap.
-#[derive(Debug, Clone, Copy)]
-pub struct GhActionsScan<'a> {
-    pub vuln_db: Option<&'a str>,
-}
-
-/// Everything the Maven scan path needs. Like the other Tier-C feeders it is **toolchain-free
-/// only** (the matcher reads `gradle.lockfile`/`pom.xml` and an OSV mirror, building nothing),
-/// so the only input is the `file://` OSV mirror, absent which a Java repo is an honest gap.
-#[derive(Debug, Clone, Copy)]
-pub struct MavenScan<'a> {
-    pub vuln_db: Option<&'a str>,
+/// The `file://` OSV mirror of each toolchain-free ecosystem: its matcher reads a lockfile
+/// and the mirror, building nothing, so the mirror is all it needs, and without one a repo of
+/// that ecosystem is an honest gap. Go, which can also run govulncheck, has [`GoScan`].
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Mirrors<'a> {
+    pub npm: Option<&'a str>,
+    pub pypi: Option<&'a str>,
+    pub rubygems: Option<&'a str>,
+    pub packagist: Option<&'a str>,
+    pub nuget: Option<&'a str>,
+    pub julia: Option<&'a str>,
+    pub swift: Option<&'a str>,
+    pub hex: Option<&'a str>,
+    pub ghactions: Option<&'a str>,
+    pub maven: Option<&'a str>,
     /// Where to fetch POMs missing locally (`--maven-fetch`): the `settings.xml` mirror of
     /// Maven Central, or Central.
-    pub remote: Option<&'a crate::maven_repo::Remote>,
+    pub maven_remote: Option<&'a crate::maven_repo::Remote>,
 }
 
-// Each ecosystem threads its own scan config / once-loaded DB through the fleet walk as an
-// independent, clearly-named argument; bundling them into a catch-all struct would obscure
-// more than it simplifies (they are configured and loaded separately). The count grows by
-// one per ecosystem, so the lint is allowed here rather than chased.
-#[allow(clippy::too_many_arguments)]
+/// The OSV DBs a fleet needs, each loaded ONCE and shared read-only by every repo (re-reading
+/// a DB per repo is what dominated large fleets before). A DB is loaded only when the fleet
+/// has a repo of its ecosystem and a mirror was given; `None` is an honest gap, and a load
+/// failure is kept as the `Err` so each repo of that ecosystem reports the reason rather
+/// than coming out clean.
+#[derive(Default)]
+struct Dbs {
+    npm: Option<Result<NpmDb, NpmError>>,
+    go: Option<Result<GoDb, GoError>>,
+    pypi: Option<Result<PyPiDb, PyPiError>>,
+    rubygems: Option<Result<RubyGemsDb, RubyGemsError>>,
+    packagist: Option<Result<PackagistDb, PackagistError>>,
+    nuget: Option<Result<NuGetDb, NuGetError>>,
+    julia: Option<Result<JuliaDb, JuliaError>>,
+    swift: Option<Result<SwiftDb, SwiftError>>,
+    hex: Option<Result<HexDb, HexError>>,
+    ghactions: Option<Result<GhActionsDb, GhaError>>,
+    maven: Option<Result<MavenDb, MavenError>>,
+}
+
+impl Dbs {
+    /// Load every DB the fleet needs at the same time: each load is parallel inside but
+    /// leaves cores idle on its own, so one after another a polyglot fleet waited for the sum.
+    fn load(has: &(dyn Fn(Ecosystem) -> bool + Sync), go: &GoScan, m: &Mirrors) -> Dbs {
+        fn spawn<'s, D: Send>(
+            scope: &rayon::Scope<'s>,
+            slot: &'s mut Option<D>,
+            wanted: bool,
+            root: Option<PathBuf>,
+            load: fn(&Path) -> D,
+        ) {
+            if let (true, Some(root)) = (wanted, root) {
+                scope.spawn(move |_| *slot = Some(load(&root)));
+            }
+        }
+        let mut dbs = Dbs::default();
+        let Dbs {
+            npm,
+            go: go_db,
+            pypi,
+            rubygems,
+            packagist,
+            nuget,
+            julia,
+            swift,
+            hex,
+            ghactions,
+            maven,
+        } = &mut dbs;
+        let root = |mirror: Option<&str>, path: fn(&str) -> Option<PathBuf>| mirror.and_then(path);
+        rayon::scope(|s| {
+            use Ecosystem as E;
+            spawn(s, npm, has(E::Npm), root(m.npm, npm_db_path), NpmDb::load);
+            // The Go mirror is only the Tier-C fallback, unused when govulncheck runs.
+            let go_wanted = go.govulncheck.is_none() && has(E::Go);
+            let go_root = root(go.vuln_db, fleetreach_go::offline_db_path);
+            spawn(s, go_db, go_wanted, go_root, GoDb::load);
+            spawn(
+                s,
+                pypi,
+                has(E::Pypi),
+                root(m.pypi, pypi_db_path),
+                PyPiDb::load,
+            );
+            let rubygems_root = root(m.rubygems, rubygems_db_path);
+            spawn(
+                s,
+                rubygems,
+                has(E::RubyGems),
+                rubygems_root,
+                RubyGemsDb::load,
+            );
+            let packagist_root = root(m.packagist, packagist_db_path);
+            spawn(
+                s,
+                packagist,
+                has(E::Packagist),
+                packagist_root,
+                PackagistDb::load,
+            );
+            spawn(
+                s,
+                nuget,
+                has(E::NuGet),
+                root(m.nuget, nuget_db_path),
+                NuGetDb::load,
+            );
+            spawn(
+                s,
+                julia,
+                has(E::Julia),
+                root(m.julia, julia_db_path),
+                JuliaDb::load,
+            );
+            spawn(
+                s,
+                swift,
+                has(E::Swift),
+                root(m.swift, swift_db_path),
+                SwiftDb::load,
+            );
+            spawn(s, hex, has(E::Hex), root(m.hex, hex_db_path), HexDb::load);
+            let gha_root = root(m.ghactions, ghactions_db_path);
+            spawn(
+                s,
+                ghactions,
+                has(E::GitHubActions),
+                gha_root,
+                GhActionsDb::load,
+            );
+            spawn(
+                s,
+                maven,
+                has(E::Maven),
+                root(m.maven, maven_db_path),
+                MavenDb::load,
+            );
+        });
+        dbs
+    }
+}
+
 /// Scan every repo in `config`, plus the toolchain if provided. When
 /// `host_triple` is `Some`, each finding is additionally annotated (via
 /// `cargo tree`) with whether the package is actually built — see
@@ -169,16 +221,7 @@ pub fn scan_fleet(
     toolchain: Option<&Toolchain>,
     host_triple: Option<&str>,
     go: &GoScan,
-    npm: &NpmScan,
-    pypi: &PyPiScan,
-    rubygems: &RubyGemsScan,
-    packagist: &PackagistScan,
-    nuget: &NuGetScan,
-    julia: &JuliaScan,
-    swift: &SwiftScan,
-    hex: &HexScan,
-    ghactions: &GhActionsScan,
-    maven: &MavenScan,
+    mirrors: &Mirrors,
 ) -> ScanData {
     let mut data = ScanData::default();
 
@@ -198,144 +241,7 @@ pub fn scan_fleet(
             .any(|p| p.units.iter().any(|u| u.ecosystem == eco))
     };
 
-    // The npm OSV DB has no prebuilt index, so it is loaded ONCE here (not per repo)
-    // and shared read-only across the parallel walk. Only loaded when the fleet
-    // actually has an npm repo and a `file://` mirror was given; a load failure is
-    // carried as the `Err` so every npm repo degrades to an honest gap with the reason.
-    let npm_db: Option<Result<NpmDb, NpmError>> = if has(Ecosystem::Npm) {
-        npm.vuln_db
-            .and_then(npm_db_path)
-            .map(|root| NpmDb::load(&root))
-    } else {
-        None
-    };
-
-    // The Go Tier-C mirror is likewise loaded ONCE (the 434 KB module index + the
-    // advisories it references) and shared, instead of being re-read and re-parsed per
-    // repo — profiling showed that re-parse dominated a large Go fleet. Only when Tier-C
-    // will actually run: no govulncheck (toolchain path), a `file://` mirror, a Go repo.
-    let go_db: Option<Result<GoDb, GoError>> = if go.govulncheck.is_none() && has(Ecosystem::Go) {
-        go.vuln_db
-            .and_then(fleetreach_go::offline_db_path)
-            .map(|root| GoDb::load(&root))
-    } else {
-        None
-    };
-
-    // The PyPI OSV DB, like npm, has no prebuilt index, so it is loaded ONCE and shared
-    // read-only across the walk. Only when the fleet has a PyPI repo and a `file://`
-    // mirror was given; a load failure is carried as the `Err` so every PyPI repo
-    // degrades to an honest gap with the reason.
-    let pypi_db: Option<Result<PyPiDb, PyPiError>> = if has(Ecosystem::Pypi) {
-        pypi.vuln_db
-            .and_then(pypi_db_path)
-            .map(|root| PyPiDb::load(&root))
-    } else {
-        None
-    };
-
-    // The RubyGems OSV DB, like npm/PyPI, has no prebuilt index, so it is loaded ONCE and
-    // shared read-only across the walk. Only when the fleet has a RubyGems repo and a
-    // `file://` mirror was given; a load failure is carried as the `Err` so every RubyGems
-    // repo degrades to an honest gap with the reason.
-    let rubygems_db: Option<Result<RubyGemsDb, RubyGemsError>> = if has(Ecosystem::RubyGems) {
-        rubygems
-            .vuln_db
-            .and_then(rubygems_db_path)
-            .map(|root| RubyGemsDb::load(&root))
-    } else {
-        None
-    };
-
-    // The Packagist OSV DB, like npm/PyPI/RubyGems, has no prebuilt index, so it is loaded
-    // ONCE and shared read-only across the walk. Only when the fleet has a Packagist repo and
-    // a `file://` mirror was given; a load failure is carried as the `Err` so every Packagist
-    // repo degrades to an honest gap with the reason.
-    let packagist_db: Option<Result<PackagistDb, PackagistError>> = if has(Ecosystem::Packagist) {
-        packagist
-            .vuln_db
-            .and_then(packagist_db_path)
-            .map(|root| PackagistDb::load(&root))
-    } else {
-        None
-    };
-
-    // The NuGet OSV DB, like the other Tier-C feeders, has no prebuilt index, so it is loaded
-    // ONCE and shared read-only across the walk. Only when the fleet has a NuGet repo and a
-    // `file://` mirror was given; a load failure is carried as the `Err` so every NuGet repo
-    // degrades to an honest gap with the reason.
-    let nuget_db: Option<Result<NuGetDb, NuGetError>> = if has(Ecosystem::NuGet) {
-        nuget
-            .vuln_db
-            .and_then(nuget_db_path)
-            .map(|root| NuGetDb::load(&root))
-    } else {
-        None
-    };
-
-    // The Julia OSV DB, like the other Tier-C feeders, has no prebuilt index, so it is loaded
-    // ONCE and shared read-only across the walk. Only when the fleet has a Julia repo and a
-    // `file://` mirror was given; a load failure is carried as the `Err` so every Julia repo
-    // degrades to an honest gap with the reason.
-    let julia_db: Option<Result<JuliaDb, JuliaError>> = if has(Ecosystem::Julia) {
-        julia
-            .vuln_db
-            .and_then(julia_db_path)
-            .map(|root| JuliaDb::load(&root))
-    } else {
-        None
-    };
-
-    // The Swift OSV DB, like the other Tier-C feeders, has no prebuilt index, so it is loaded
-    // ONCE and shared read-only across the walk. Only when the fleet has a Swift repo and a
-    // `file://` mirror was given; a load failure is carried as the `Err` so every Swift repo
-    // degrades to an honest gap with the reason.
-    let swift_db: Option<Result<SwiftDb, SwiftError>> = if has(Ecosystem::Swift) {
-        swift
-            .vuln_db
-            .and_then(swift_db_path)
-            .map(|root| SwiftDb::load(&root))
-    } else {
-        None
-    };
-
-    // The Hex OSV DB, like the other Tier-C feeders, has no prebuilt index, so it is loaded
-    // ONCE and shared read-only across the walk. Only when the fleet has a Hex repo and a
-    // `file://` mirror was given; a load failure is carried as the `Err` so every Hex repo
-    // degrades to an honest gap with the reason.
-    let hex_db: Option<Result<HexDb, HexError>> = if has(Ecosystem::Hex) {
-        hex.vuln_db
-            .and_then(hex_db_path)
-            .map(|root| HexDb::load(&root))
-    } else {
-        None
-    };
-
-    // The GitHub Actions OSV DB, like the other Tier-C feeders, has no prebuilt index, so it is
-    // loaded ONCE and shared read-only across the walk. Only when the fleet has a workflow repo
-    // and a `file://` mirror was given; a load failure is carried as the `Err` so every such
-    // repo degrades to an honest gap with the reason.
-    let ghactions_db: Option<Result<GhActionsDb, GhaError>> = if has(Ecosystem::GitHubActions) {
-        ghactions
-            .vuln_db
-            .and_then(ghactions_db_path)
-            .map(|root| GhActionsDb::load(&root))
-    } else {
-        None
-    };
-
-    // The Maven OSV DB, like the other Tier-C feeders, has no prebuilt index, so it is loaded
-    // ONCE and shared read-only across the walk. Only when the fleet has a Java repo and a
-    // `file://` mirror was given; a load failure is carried as the `Err` so every Maven repo
-    // degrades to an honest gap with the reason.
-    let maven_db: Option<Result<MavenDb, MavenError>> = if has(Ecosystem::Maven) {
-        maven
-            .vuln_db
-            .and_then(maven_db_path)
-            .map(|root| MavenDb::load(&root))
-    } else {
-        None
-    };
+    let dbs = Dbs::load(&has, go, mirrors);
 
     // Each repo is independent and shares only the read-only advisory DBs, so the
     // per-repo scan (dominated by lockfile parsing) fans out across cores. Results
@@ -343,24 +249,9 @@ pub fn scan_fleet(
     // is byte-identical to a serial scan regardless of completion order.
     let scan_unit_with = |unit: &ScanUnit| {
         if let Some(sbom) = &unit.sbom {
-            return scan_sbom_unit(
-                &unit.repo,
-                unit.ecosystem,
-                sbom,
-                &SbomDbs {
-                    npm: npm_db.as_ref(),
-                    pypi: pypi_db.as_ref(),
-                    rubygems: rubygems_db.as_ref(),
-                    packagist: packagist_db.as_ref(),
-                    nuget: nuget_db.as_ref(),
-                    julia: julia_db.as_ref(),
-                    swift: swift_db.as_ref(),
-                    hex: hex_db.as_ref(),
-                    maven: maven_db.as_ref(),
-                },
-            );
+            return scan_sbom_unit(&unit.repo, unit.ecosystem, sbom, &dbs);
         }
-        if unit.alongside && ghactions_db.is_none() {
+        if unit.alongside && dbs.ghactions.is_none() {
             return RepoResult::scanned(&unit.repo.id, Vec::new(), Vec::new()).with_coverage(
                 CoverageGap {
                     repo: unit.repo.id.clone(),
@@ -380,18 +271,8 @@ pub fn scan_fleet(
             unit.ecosystem,
             host_triple,
             go,
-            npm_db.as_ref(),
-            go_db.as_ref(),
-            pypi_db.as_ref(),
-            rubygems_db.as_ref(),
-            packagist_db.as_ref(),
-            nuget_db.as_ref(),
-            julia_db.as_ref(),
-            swift_db.as_ref(),
-            hex_db.as_ref(),
-            ghactions_db.as_ref(),
-            maven_db.as_ref(),
-            maven,
+            &dbs,
+            mirrors.maven_remote,
         )
     };
     let per_repo: Vec<RepoResult> = plans
@@ -581,25 +462,12 @@ fn sbom_plan(repo: &Repo, path: &Path) -> RepoPlan {
     plan
 }
 
-/// The once-loaded OSV DBs an SBOM unit may need.
-struct SbomDbs<'a> {
-    npm: Option<&'a Result<NpmDb, NpmError>>,
-    pypi: Option<&'a Result<PyPiDb, PyPiError>>,
-    rubygems: Option<&'a Result<RubyGemsDb, RubyGemsError>>,
-    packagist: Option<&'a Result<PackagistDb, PackagistError>>,
-    nuget: Option<&'a Result<NuGetDb, NuGetError>>,
-    julia: Option<&'a Result<JuliaDb, JuliaError>>,
-    swift: Option<&'a Result<SwiftDb, SwiftError>>,
-    hex: Option<&'a Result<HexDb, HexError>>,
-    maven: Option<&'a Result<MavenDb, MavenError>>,
-}
-
 /// Scan one ecosystem's packages from an SBOM with that ecosystem's matcher.
 fn scan_sbom_unit(
     repo: &Repo,
     ecosystem: Ecosystem,
     sbom: &Result<crate::sbom_input::SbomInput, String>,
-    dbs: &SbomDbs,
+    dbs: &Dbs,
 ) -> RepoResult {
     let errored = |reason: String| RepoResult::errored(&repo.id, reason);
     let input = match sbom {
@@ -636,7 +504,7 @@ fn scan_sbom_unit(
                     })
                     .collect::<Vec<_>>(),
                 g,
-                db(dbs.npm, ecosystem)?,
+                db(dbs.npm.as_ref(), ecosystem)?,
                 &repo.id,
             ),
             Ecosystem::Pypi => fleetreach_pypi::scan_installed(
@@ -650,7 +518,7 @@ fn scan_sbom_unit(
                     })
                     .collect::<Vec<_>>(),
                 g,
-                db(dbs.pypi, ecosystem)?,
+                db(dbs.pypi.as_ref(), ecosystem)?,
                 &repo.id,
             ),
             Ecosystem::Packagist => fleetreach_packagist::scan_installed(
@@ -664,7 +532,7 @@ fn scan_sbom_unit(
                     })
                     .collect::<Vec<_>>(),
                 g,
-                db(dbs.packagist, ecosystem)?,
+                db(dbs.packagist.as_ref(), ecosystem)?,
                 &repo.id,
             ),
             Ecosystem::RubyGems => fleetreach_rubygems::scan_installed(
@@ -677,7 +545,7 @@ fn scan_sbom_unit(
                     })
                     .collect::<Vec<_>>(),
                 g,
-                db(dbs.rubygems, ecosystem)?,
+                db(dbs.rubygems.as_ref(), ecosystem)?,
                 &repo.id,
             ),
             Ecosystem::NuGet => fleetreach_nuget::scan_installed(
@@ -690,7 +558,7 @@ fn scan_sbom_unit(
                     })
                     .collect::<Vec<_>>(),
                 g,
-                db(dbs.nuget, ecosystem)?,
+                db(dbs.nuget.as_ref(), ecosystem)?,
                 &repo.id,
             ),
             Ecosystem::Julia => fleetreach_julia::scan_installed(
@@ -703,7 +571,7 @@ fn scan_sbom_unit(
                     })
                     .collect::<Vec<_>>(),
                 g,
-                db(dbs.julia, ecosystem)?,
+                db(dbs.julia.as_ref(), ecosystem)?,
                 &repo.id,
             ),
             Ecosystem::Swift => fleetreach_swift::scan_installed(
@@ -716,7 +584,7 @@ fn scan_sbom_unit(
                     })
                     .collect::<Vec<_>>(),
                 g,
-                db(dbs.swift, ecosystem)?,
+                db(dbs.swift.as_ref(), ecosystem)?,
                 &repo.id,
             ),
             Ecosystem::Hex => fleetreach_hex::scan_installed(
@@ -729,7 +597,7 @@ fn scan_sbom_unit(
                     })
                     .collect::<Vec<_>>(),
                 g,
-                db(dbs.hex, ecosystem)?,
+                db(dbs.hex.as_ref(), ecosystem)?,
                 &repo.id,
             ),
             Ecosystem::Maven => {
@@ -751,7 +619,11 @@ fn scan_sbom_unit(
                     graph: g.clone(),
                     missing: Vec::new(),
                 };
-                fleetreach_maven::scan_resolution(&resolution, db(dbs.maven, ecosystem)?, &repo.id)
+                fleetreach_maven::scan_resolution(
+                    &resolution,
+                    db(dbs.maven.as_ref(), ecosystem)?,
+                    &repo.id,
+                )
             }
             other => {
                 return Err(format!(
@@ -997,40 +869,27 @@ fn merge_units<'a>(
 
 /// Scan one unit, dispatching on its ecosystem. Pure (no shared mutable state) so it runs
 /// safely in parallel across repos; the only shared input is the read-only `db`.
-// One once-loaded OSV DB per Tier-C ecosystem is threaded in as its own argument; see the
-// note on `scan_fleet` for why the lint is allowed rather than bundled away.
-#[allow(clippy::too_many_arguments)]
 fn scan_unit(
     db: &AdvisoryDb,
     repo: &Repo,
     ecosystem: Ecosystem,
     host_triple: Option<&str>,
     go: &GoScan,
-    npm_db: Option<&Result<NpmDb, NpmError>>,
-    go_db: Option<&Result<GoDb, GoError>>,
-    pypi_db: Option<&Result<PyPiDb, PyPiError>>,
-    rubygems_db: Option<&Result<RubyGemsDb, RubyGemsError>>,
-    packagist_db: Option<&Result<PackagistDb, PackagistError>>,
-    nuget_db: Option<&Result<NuGetDb, NuGetError>>,
-    julia_db: Option<&Result<JuliaDb, JuliaError>>,
-    swift_db: Option<&Result<SwiftDb, SwiftError>>,
-    hex_db: Option<&Result<HexDb, HexError>>,
-    ghactions_db: Option<&Result<GhActionsDb, GhaError>>,
-    maven_db: Option<&Result<MavenDb, MavenError>>,
-    maven: &MavenScan,
+    dbs: &Dbs,
+    maven_remote: Option<&crate::maven_repo::Remote>,
 ) -> RepoResult {
     match ecosystem {
-        Ecosystem::Go => return scan_go_repo(repo, go, go_db),
-        Ecosystem::Npm => return scan_npm_repo(repo, npm_db),
-        Ecosystem::Pypi => return scan_pypi_repo(repo, pypi_db),
-        Ecosystem::RubyGems => return scan_rubygems_repo(repo, rubygems_db),
-        Ecosystem::Packagist => return scan_packagist_repo(repo, packagist_db),
-        Ecosystem::NuGet => return scan_nuget_repo(repo, nuget_db),
-        Ecosystem::Julia => return scan_julia_repo(repo, julia_db),
-        Ecosystem::Swift => return scan_swift_repo(repo, swift_db),
-        Ecosystem::Hex => return scan_hex_repo(repo, hex_db),
-        Ecosystem::Maven => return scan_maven_repo(repo, maven_db, maven.remote),
-        Ecosystem::GitHubActions => return scan_ghactions_repo(repo, ghactions_db),
+        Ecosystem::Go => return scan_go_repo(repo, go, dbs.go.as_ref()),
+        Ecosystem::Npm => return scan_npm_repo(repo, dbs.npm.as_ref()),
+        Ecosystem::Pypi => return scan_pypi_repo(repo, dbs.pypi.as_ref()),
+        Ecosystem::RubyGems => return scan_rubygems_repo(repo, dbs.rubygems.as_ref()),
+        Ecosystem::Packagist => return scan_packagist_repo(repo, dbs.packagist.as_ref()),
+        Ecosystem::NuGet => return scan_nuget_repo(repo, dbs.nuget.as_ref()),
+        Ecosystem::Julia => return scan_julia_repo(repo, dbs.julia.as_ref()),
+        Ecosystem::Swift => return scan_swift_repo(repo, dbs.swift.as_ref()),
+        Ecosystem::Hex => return scan_hex_repo(repo, dbs.hex.as_ref()),
+        Ecosystem::Maven => return scan_maven_repo(repo, dbs.maven.as_ref(), maven_remote),
+        Ecosystem::GitHubActions => return scan_ghactions_repo(repo, dbs.ghactions.as_ref()),
         Ecosystem::Cargo => {}
     }
     let (lockfiles, walk_errors) = discover_lockfiles(repo);

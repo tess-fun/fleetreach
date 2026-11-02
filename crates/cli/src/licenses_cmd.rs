@@ -17,6 +17,8 @@ use serde::Serialize;
 use crate::cli::fail;
 use crate::config::Config;
 use crate::inventory::repo_inventory_with;
+use rayon::prelude::*;
+
 use crate::licenses::{annotate, decide, Category, Decision, Verdict};
 use crate::sources;
 
@@ -91,16 +93,19 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
         Ok(remote) => remote,
         Err(e) => return fail(&e),
     };
+    let cache = crate::licenses::LicenseCache::new();
     let mut inventories: Vec<_> = config
         .repos
-        .iter()
+        .par_iter()
         .map(|repo| {
             let mut inv = repo_inventory_with(repo, maven.as_ref());
-            annotate(&mut inv, &repo.path);
-            unread.extend(inv.errors.iter().map(|e| format!("{}: {e}", repo.id)));
+            annotate(&mut inv, &repo.path, &cache);
             inv
         })
         .collect();
+    for (repo, inv) in config.repos.iter().zip(&inventories) {
+        unread.extend(inv.errors.iter().map(|e| format!("{}: {e}", repo.id)));
+    }
     if args.fetch {
         match crate::licenses::fetch_missing(&mut inventories) {
             Ok((found, wanted, failed)) => {

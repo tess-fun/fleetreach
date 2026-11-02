@@ -16,10 +16,7 @@ use crate::assemble::{assemble, Assembled, SuppressedOccurrence, Suppression};
 use crate::cli::{fail, usage_fail, BuildSandbox};
 use crate::config::{Config, Repo};
 use crate::db::{build_provenance, load_db_from};
-use crate::orchestrate::{
-    scan_fleet, GhActionsScan, GoScan, HexScan, JuliaScan, MavenScan, NpmScan, NuGetScan,
-    PackagistScan, PyPiScan, RubyGemsScan, SwiftScan,
-};
+use crate::orchestrate::{scan_fleet, GoScan, Mirrors};
 use crate::static_reach;
 
 /// Resolve a product `@id` (§4.3) for every repo, keyed by repo id.
@@ -146,19 +143,7 @@ pub fn assemble_fresh(config: &Config, db: &AdvisoryDb, provenance: Provenance) 
             vuln_db: None,
             offline: false,
         },
-        &NpmScan { vuln_db: None },
-        &PyPiScan { vuln_db: None },
-        &RubyGemsScan { vuln_db: None },
-        &PackagistScan { vuln_db: None },
-        &NuGetScan { vuln_db: None },
-        &JuliaScan { vuln_db: None },
-        &SwiftScan { vuln_db: None },
-        &HexScan { vuln_db: None },
-        &GhActionsScan { vuln_db: None },
-        &MavenScan {
-            vuln_db: None,
-            remote: None,
-        },
+        &Mirrors::default(),
     );
     let mut suppressions: Vec<Suppression> = config
         .ignores

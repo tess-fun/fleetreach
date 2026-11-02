@@ -24,10 +24,7 @@ use crate::db::{
     parse_duration_secs,
 };
 use crate::enrich::{self, Enrichment};
-use crate::orchestrate::{
-    discover_lockfiles, fleet_ecosystems, scan_fleet, GhActionsScan, GoScan, HexScan, JuliaScan,
-    MavenScan, NpmScan, NuGetScan, PackagistScan, PyPiScan, RubyGemsScan, SwiftScan,
-};
+use crate::orchestrate::{discover_lockfiles, fleet_ecosystems, scan_fleet, GoScan, Mirrors};
 use crate::{npm_reach, osvdb, py_reach, reach, resolve, sources, static_reach, vex};
 
 #[derive(Parser)]
@@ -670,36 +667,18 @@ pub(crate) fn run_scan(args: ScanArgs) -> u8 {
             vuln_db: go_db.as_deref(),
             offline: args.offline,
         },
-        &NpmScan {
-            vuln_db: npm_vuln_db.as_deref(),
-        },
-        &PyPiScan {
-            vuln_db: pypi_vuln_db.as_deref(),
-        },
-        &RubyGemsScan {
-            vuln_db: rubygems_vuln_db.as_deref(),
-        },
-        &PackagistScan {
-            vuln_db: packagist_vuln_db.as_deref(),
-        },
-        &NuGetScan {
-            vuln_db: nuget_vuln_db.as_deref(),
-        },
-        &JuliaScan {
-            vuln_db: julia_vuln_db.as_deref(),
-        },
-        &SwiftScan {
-            vuln_db: swift_vuln_db.as_deref(),
-        },
-        &HexScan {
-            vuln_db: hex_vuln_db.as_deref(),
-        },
-        &GhActionsScan {
-            vuln_db: ghactions_vuln_db.as_deref(),
-        },
-        &MavenScan {
-            vuln_db: maven_vuln_db.as_deref(),
-            remote: maven_remote.as_ref(),
+        &Mirrors {
+            npm: npm_vuln_db.as_deref(),
+            pypi: pypi_vuln_db.as_deref(),
+            rubygems: rubygems_vuln_db.as_deref(),
+            packagist: packagist_vuln_db.as_deref(),
+            nuget: nuget_vuln_db.as_deref(),
+            julia: julia_vuln_db.as_deref(),
+            swift: swift_vuln_db.as_deref(),
+            hex: hex_vuln_db.as_deref(),
+            ghactions: ghactions_vuln_db.as_deref(),
+            maven: maven_vuln_db.as_deref(),
+            maven_remote: maven_remote.as_ref(),
         },
     );
 

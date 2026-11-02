@@ -22,6 +22,7 @@ use std::path::Path;
 
 use fleetreach_core::semver::Version;
 use fleetreach_core::{DependencyKind, Ecosystem, Occurrence, RepoId, WarnFinding, WarnKind};
+use rayon::prelude::*;
 
 use crate::config::Repo;
 use crate::orchestrate::plan_repo;
@@ -78,35 +79,13 @@ pub fn fleet_signals(repos: &[Repo], extra_registries: &[String]) -> Vec<WarnFin
         .map(|s| (*s).to_string())
         .chain(extra_registries.iter().cloned())
         .collect();
+    // Repos are read in parallel and merged in fleet order, so the result matches a serial run.
+    let per_repo: Vec<Vec<Hit>> = repos
+        .par_iter()
+        .map(|repo| repo_hits(repo, &allowed))
+        .collect();
     let mut by_signal: BTreeMap<&'static str, Vec<Occurrence>> = BTreeMap::new();
-    for repo in repos {
-        let mut hits = Vec::new();
-        let mut seen_dirs = BTreeSet::new();
-        for unit in plan_repo(repo).units {
-            let dir = unit.repo.path.clone();
-            if !seen_dirs.insert((dir.clone(), unit.ecosystem)) {
-                continue;
-            }
-            match unit.ecosystem {
-                Ecosystem::Npm => npm(&dir, &allowed, &mut hits),
-                Ecosystem::Cargo => {
-                    for lock in crate::orchestrate::discover_lockfiles(&unit.repo).0 {
-                        cargo(&lock, &allowed, &mut hits);
-                    }
-                }
-                Ecosystem::Pypi => uv(&dir, &allowed, &mut hits),
-                Ecosystem::GitHubActions => actions(&dir, &mut hits),
-                _ => {}
-            }
-            // Workflows sit at the repo root, which is not always its own unit.
-        }
-        if repo.path.join(".github").join("workflows").is_dir()
-            && !seen_dirs
-                .iter()
-                .any(|(_, e)| *e == Ecosystem::GitHubActions)
-        {
-            actions(&repo.path, &mut hits);
-        }
+    for (repo, hits) in repos.iter().zip(per_repo) {
         for hit in hits {
             by_signal
                 .entry(hit.signal)
@@ -132,7 +111,7 @@ pub fn fleet_signals(repos: &[Repo], extra_registries: &[String]) -> Vec<WarnFin
         .iter()
         .filter_map(|(id, title)| {
             let mut occurrences = by_signal.remove(id)?;
-            occurrences.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+            occurrences.sort_by_cached_key(|o| format!("{o:?}"));
             occurrences.dedup();
             Some(WarnFinding {
                 kind: WarnKind::Notice,
@@ -146,41 +125,82 @@ pub fn fleet_signals(repos: &[Repo], extra_registries: &[String]) -> Vec<WarnFin
     findings
 }
 
+/// Every signal one repo trips.
+fn repo_hits(repo: &Repo, allowed: &[String]) -> Vec<Hit> {
+    let mut hits = Vec::new();
+    let mut seen_dirs = BTreeSet::new();
+    for unit in plan_repo(repo).units {
+        let dir = unit.repo.path.clone();
+        if !seen_dirs.insert((dir.clone(), unit.ecosystem)) {
+            continue;
+        }
+        match unit.ecosystem {
+            Ecosystem::Npm => npm(&dir, allowed, &mut hits),
+            Ecosystem::Cargo => {
+                for lock in crate::orchestrate::discover_lockfiles(&unit.repo).0 {
+                    cargo(&lock, allowed, &mut hits);
+                }
+            }
+            Ecosystem::Pypi => uv(&dir, allowed, &mut hits),
+            Ecosystem::GitHubActions => actions(&dir, &mut hits),
+            _ => {}
+        }
+        // Workflows sit at the repo root, which is not always its own unit.
+    }
+    if repo.path.join(".github").join("workflows").is_dir()
+        && !seen_dirs
+            .iter()
+            .any(|(_, e)| *e == Ecosystem::GitHubActions)
+    {
+        actions(&repo.path, &mut hits);
+    }
+    hits
+}
+
 /// One finding per popular package that a dependency's name imitates.
 fn typosquats(repos: &[Repo]) -> Vec<WarnFinding> {
-    let mut by_target: BTreeMap<(Ecosystem, String), Vec<Occurrence>> = BTreeMap::new();
-    for repo in repos {
-        let inv = crate::inventory::repo_inventory(repo);
-        for source in &inv.sources {
-            for p in &source.packages {
-                let Some(target) = crate::typosquat::lookalike(source.ecosystem, &p.name) else {
-                    continue;
-                };
-                by_target
-                    .entry((source.ecosystem, target))
-                    .or_default()
-                    .push(Occurrence::InRepo {
-                        repo: inv.repo.clone(),
-                        package: p.name.clone(),
-                        installed: lenient_version(&p.version),
-                        patched: Vec::new(),
-                        dependency_kind: if p.direct {
-                            DependencyKind::Direct
-                        } else {
-                            DependencyKind::Transitive
+    let per_repo: Vec<Vec<((Ecosystem, String), Occurrence)>> = repos
+        .par_iter()
+        .map(|repo| {
+            let inv = crate::inventory::repo_inventory(repo);
+            let mut found = Vec::new();
+            for source in &inv.sources {
+                for p in &source.packages {
+                    let Some(target) = crate::typosquat::lookalike(source.ecosystem, &p.name)
+                    else {
+                        continue;
+                    };
+                    found.push((
+                        (source.ecosystem, target),
+                        Occurrence::InRepo {
+                            repo: inv.repo.clone(),
+                            package: p.name.clone(),
+                            installed: lenient_version(&p.version),
+                            patched: Vec::new(),
+                            dependency_kind: if p.direct {
+                                DependencyKind::Direct
+                            } else {
+                                DependencyKind::Transitive
+                            },
+                            dependency_path: Vec::new(),
+                            active: None,
+                            source: Default::default(),
+                            scope: Default::default(),
                         },
-                        dependency_path: Vec::new(),
-                        active: None,
-                        source: Default::default(),
-                        scope: Default::default(),
-                    });
+                    ));
+                }
             }
-        }
+            found
+        })
+        .collect();
+    let mut by_target: BTreeMap<(Ecosystem, String), Vec<Occurrence>> = BTreeMap::new();
+    for (key, occurrence) in per_repo.into_iter().flatten() {
+        by_target.entry(key).or_default().push(occurrence);
     }
     by_target
         .into_iter()
         .map(|((_, target), mut occurrences)| {
-            occurrences.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+            occurrences.sort_by_cached_key(|o| format!("{o:?}"));
             occurrences.dedup();
             WarnFinding {
                 kind: WarnKind::Notice,
@@ -216,7 +236,6 @@ pub fn fleet_packages(
     repos: &[Repo],
     maven: Option<&crate::maven_repo::Remote>,
 ) -> Vec<FleetPackage> {
-    use rayon::prelude::*;
     repos
         .par_iter()
         .flat_map_iter(|repo| {
@@ -266,7 +285,7 @@ pub fn new_to_fleet(
     if occurrences.is_empty() {
         return None;
     }
-    occurrences.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+    occurrences.sort_by_cached_key(|o| format!("{o:?}"));
     occurrences.dedup();
     Some(WarnFinding {
         kind: WarnKind::Notice,
@@ -570,7 +589,7 @@ pub fn release_age(
         if occurrences.is_empty() {
             continue;
         }
-        occurrences.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        occurrences.sort_by_cached_key(|o| format!("{o:?}"));
         occurrences.dedup();
         out.push(WarnFinding {
             kind: WarnKind::Notice,

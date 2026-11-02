@@ -377,16 +377,57 @@ impl Policy {
 
 // ---- lookup ----
 
-/// The license of every package in `inv` that a local source knows, keyed by the package's
-/// position in `inv.sources[i].packages[j]`, with the source name.
-pub fn annotate(inv: &mut RepoInventory, repo_root: &Path) {
-    let cargo_home = std::env::var_os("CARGO_HOME")
-        .map(PathBuf::from)
-        .or_else(|| home().map(|h| h.join(".cargo")));
-    let nuget_root = std::env::var_os("NUGET_PACKAGES")
-        .map(PathBuf::from)
-        .or_else(|| home().map(|h| h.join(".nuget").join("packages")));
-    let mut cargo_index: Option<Vec<PathBuf>> = None;
+/// The machine-wide license sources (the Cargo registry and the NuGet packages folder),
+/// shared by every repo of a run: a fleet repeats the same crates thousands of times, so
+/// each package directory is read once and its answer remembered.
+pub struct LicenseCache {
+    cargo_roots: Vec<PathBuf>,
+    nuget_root: Option<PathBuf>,
+    found: std::sync::Mutex<std::collections::HashMap<PathBuf, Option<License>>>,
+}
+
+impl LicenseCache {
+    pub fn new() -> LicenseCache {
+        let cargo_home = std::env::var_os("CARGO_HOME")
+            .map(PathBuf::from)
+            .or_else(|| home().map(|h| h.join(".cargo")));
+        LicenseCache {
+            cargo_roots: cargo_registry_roots(cargo_home.as_deref()),
+            nuget_root: std::env::var_os("NUGET_PACKAGES")
+                .map(PathBuf::from)
+                .or_else(|| home().map(|h| h.join(".nuget").join("packages"))),
+            found: Default::default(),
+        }
+    }
+
+    /// `read(dir)`, remembered by `dir`. The lock is not held while reading, so two
+    /// threads may read the same directory once each; both get the same answer.
+    fn get(&self, dir: PathBuf, read: fn(&Path) -> Option<License>) -> Option<License> {
+        if let Some(hit) = self
+            .found
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&dir)
+        {
+            return hit.clone();
+        }
+        let license = read(&dir);
+        self.found
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(dir, license.clone());
+        license
+    }
+}
+
+impl Default for LicenseCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// The license of every package in `inv` that a local source knows, with the source name.
+pub fn annotate(inv: &mut RepoInventory, repo_root: &Path, cache: &LicenseCache) {
     for source in &mut inv.sources {
         let dir = source_dir(repo_root, &source.source);
         match source.ecosystem {
@@ -412,12 +453,10 @@ pub fn annotate(inv: &mut RepoInventory, repo_root: &Path) {
                 }
             }
             Ecosystem::Cargo => {
-                let roots =
-                    cargo_index.get_or_insert_with(|| cargo_registry_roots(cargo_home.as_deref()));
                 for p in &mut source.packages {
-                    let found = roots
-                        .iter()
-                        .find_map(|r| cargo_license(&r.join(format!("{}-{}", p.name, p.version))));
+                    let found = cache.cargo_roots.iter().find_map(|r| {
+                        cache.get(r.join(format!("{}-{}", p.name, p.version)), cargo_license)
+                    });
                     set(p, found.map(|l| (l, "cargo registry")));
                 }
             }
@@ -430,11 +469,11 @@ pub fn annotate(inv: &mut RepoInventory, repo_root: &Path) {
             }
             Ecosystem::NuGet => {
                 for p in &mut source.packages {
-                    let found = nuget_root.as_deref().and_then(|root| {
-                        nuspec_license(
-                            &root
-                                .join(p.name.to_lowercase())
+                    let found = cache.nuget_root.as_deref().and_then(|root| {
+                        cache.get(
+                            root.join(p.name.to_lowercase())
                                 .join(p.version.to_lowercase()),
+                            nuspec_license,
                         )
                     });
                     set(p, found.map(|l| (l, "nuget packages")));
