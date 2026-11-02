@@ -597,9 +597,12 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 
 #### 19. Malware / typosquat (B- to A, light touch by user choice)
 
-- **User decision (2026-11-02)**: keep this row light. No live malware samples on this
-  machine, no registry-watch service, no AI review, no install-time proxy. This is the one row
-  planned below A+, on purpose.
+- **User decision (2026-11-02)**: keep this row light. Nothing in it ever executes package
+  code, malicious or not: no sandbox, no dynamic analysis, no install scripts run. No known
+  malware samples are downloaded or kept for testing. No registry-watch service, no AI
+  review, no install-time proxy. Leveraging open data is fine (OSV `MAL-` records from
+  OpenSSF malicious-packages, already used). This is the one row planned below A+, on
+  purpose.
 - **Gap**: MAL- records, typosquats, release age, new-to-fleet and lockfile signals exist; no
   look inside package contents.
 - **Work (1.7.0)**: reuse the tarball cache from license detection (row 20); for npm and
@@ -607,6 +610,8 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   install-time code, obfuscation and high-entropy payloads, bundled binaries) and, the main
   signal, the **difference from the previous version** ("1.4.2 adds network access in
   postinstall"). Alert names follow Socket's where they overlap. Opt-in under `--signals`.
+  The scan reads tarball bytes as text only; the tarballs are the fleet's own dependencies,
+  already in its lockfiles, and are never unpacked into a place where anything could run them.
 - **Effort**: M. **Release**: 1.7.0. **Depends on**: tarball cache (row 20).
 - **Proof**: alerts per 1,000 benign packages per alert type, measured on the top 5,000 npm
   and PyPI packages and `~/fa-testbed` (as the typosquat signal's 1.6 per 1,000). Recall
@@ -728,5 +733,5 @@ feeds (advisories, corrections, sinks) are open data.
    continues?
 2. Should `serve` commit triage edits to git itself, or only write files and leave commits to
    the user?
-3. The malware corpus: the plan now uses benign packages and synthetic fixtures only, with no
-   live samples. Confirm that is the intent.
+3. Answered 2026-11-02: no malware is ever executed and no known samples are collected;
+   benign packages and synthetic fixtures only, plus open data such as OSV `MAL-` records.
