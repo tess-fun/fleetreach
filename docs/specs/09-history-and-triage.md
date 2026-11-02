@@ -1,6 +1,6 @@
 # Spec 09: History, SLAs and notifications without a server
 
-Status: implemented, all four phases (unreleased: history store, trend, age, sla, mttr, notify, static HTML report) · Gap: #6 (triage workflow) · CTEM stage: mobilization (and the loop back to scoping) · Effort: M
+Status: implemented, all four phases (released in 1.5.0: history store, trend, age, sla, mttr, notify, static HTML report) · Gap: #6 (triage workflow) · CTEM stage: mobilization (and the loop back to scoping) · Effort: M
 
 ## Problem
 

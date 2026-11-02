@@ -1,6 +1,6 @@
 # Spec 04: Maven transitive resolution
 
-Status: phases 1 and 2 implemented (released in 1.4.0: parents, BOMs, mediation, ranges, reactors, `--maven-fetch`; settings.xml mirrors unreleased); phase 3 (deps.dev) not started · Gap: #2 (coverage) · CTEM stage: discovery · Effort: L
+Status: phases 1 and 2 implemented (released in 1.4.0: parents, BOMs, mediation, ranges, reactors, `--maven-fetch`; settings.xml mirrors released in 1.5.0); phase 3 (deps.dev) not started · Gap: #2 (coverage) · CTEM stage: discovery · Effort: L
 
 ## Problem
 

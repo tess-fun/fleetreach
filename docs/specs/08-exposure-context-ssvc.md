@@ -1,6 +1,6 @@
 # Spec 08: Exposure context and SSVC decisions
 
-Status: implemented (unreleased; tag_rules not done; OSV EVIDENCE references dropped, see Exploitation below) · Gap: CTEM scoping (from the CTEM notes) · CTEM stage: scoping, prioritization · Effort: M
+Status: implemented (released in 1.5.0; tag_rules not done; OSV EVIDENCE references dropped, see Exploitation below) · Gap: CTEM scoping (from the CTEM notes) · CTEM stage: scoping, prioritization · Effort: M
 
 ## Problem
 
