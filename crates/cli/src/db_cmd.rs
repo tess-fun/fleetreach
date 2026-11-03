@@ -271,7 +271,12 @@ fn sync_osv(args: &DbSyncArgs, dir: &Path) -> Result<bool, u8> {
                         eprintln!("warning: image {}: {e}", image.source);
                     }
                 }
-                distros = crate::images::distro_ecosystems(&images);
+                // A vendor's VEX ecosystems are derived from its CSAF index on scan, not
+                // fetched (`--source csaf:<provider>` fetches the index).
+                distros = crate::images::distro_ecosystems(&images)
+                    .into_iter()
+                    .filter(|eco| !fleetreach_os::distro::is_vex(eco))
+                    .collect();
                 let mut ecos = fleet_ecosystems(&config);
                 ecos.extend(crate::images::language_ecosystems(&images));
                 ecos.sort();

@@ -53,7 +53,9 @@ release's BaseOS, AppStream and CRB repositories), AlmaLinux, Rocky Linux, openS
 Leap Micro and Tumbleweed, SUSE Linux Enterprise 15 (its Basesystem and Server Applications
 modules, the optional modules such as Containers, Python 3 and Public Cloud, and LTSS), SLE
 Micro and SUSE Linux Micro, Azure Linux 3 and CBL-Mariner 2, Mageia and
-openEuler. CentOS and Fedora have no advisories to match, so their images are a coverage gap:
+openEuler. AlmaLinux's export also holds bug fix and enhancement advisories (ALBA, ALEA);
+those that name no CVE fix no vulnerability and are not reported. CentOS and Fedora have no
+advisories to match, so their images are a coverage gap:
 they are not matched against Red Hat's records, whose versions and backports are not theirs.
 
 Amazon Linux, Oracle Linux, Photon OS and Bottlerocket publish no advisories to osv.dev, so

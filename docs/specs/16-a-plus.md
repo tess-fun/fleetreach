@@ -679,6 +679,25 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     extras being borrowed SLE fixes the frozen post-end-of-life Leap OVAL does not track;
     Leap 15.5 2 of 2 (frozen OVAL). Tumbleweed's 2014 bash CVEs come from an osv.dev record
     (openSUSE-SU-2024:10106-1, "fixed in 7.0-92.1" for bash) and are left as osv.dev says.
+    **Status: Grype diff done 2026-11-03.** Grype v0.121.1 (DB built 2026-11-03) vs
+    fleetreach on the 22 rpm images, compared on (CVE, binary rpm) pairs with fixed/open
+    status: 5,951 pairs in common, **0 status disagreements**; Amazon Linux 2 and 2023
+    (old images) equal (540 and 562). Grype-only pairs, by cause: (1) AlmaLinux and Rocky:
+    Grype applies Red Hat's data to the rebuilds, 582 to 611 unfixed statuses per image plus
+    5 to 120 RHEL fixes the rebuild's own records do not name (open decision). (2) Oracle
+    8.7 and 9: Grype applies Oracle's FIPS epoch-10 builds (`10:3.7.6-...fips`) to plain
+    gnutls and libgcrypt, 5 and 87 false positives. (3) Amazon Linux 2: Grype's
+    `ALAS2MOCK2-2026-002` applies a separate rpm 4.14 stream; Amazon's ALAS2-2026-3984 fixes
+    the installed build. (4) UBI 8.8 vim-minimal (20): Red Hat lists it not affected where
+    vim is fixed; fleetreach follows Red Hat. (5) CBL-Mariner 2 (2): osv.dev's Azure Linux
+    export lacks the Mariner 2 records Grype reads from Microsoft's OVAL, a data gap.
+    fleetreach-only pairs: openSUSE (Grype reports nothing for Leap or Tumbleweed), SUSE and
+    Red Hat VEX open statuses newer than or outside Grype's data, Photon BDSA ids, SUSE
+    security updates with no CVE, Oracle's bind-export-libs (in the ELSA's OVAL), and a
+    Rocky record republished with a later fix. **Found and fixed**: (a) AlmaLinux's ALBA
+    and ALEA records were reported as vulnerabilities (a coreutils bug fix); records with no
+    CVE are now skipped (970 ALBA, 218 ALEA). (b) A plain `db sync` asked osv.dev for the
+    derived `::vex` ecosystems (404s, a failed sync); they are now left to the scan.
   - **Phase 3 (1.8.0)**: pull by digest from an OCI registry (behind `network`, docker
     config credentials); per-layer attribution and base-image detection from image history;
     base-image rollup and rebuild advice across the fleet; VEX discovered from OCI

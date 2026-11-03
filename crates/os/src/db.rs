@@ -277,6 +277,15 @@ enum Entry {
     Rpm((String, String), Advisory<RpmVersion>),
 }
 
+/// AlmaLinux's export carries its bug fix (`ALBA`) and enhancement (`ALEA`) advisories next
+/// to the security ones (`ALSA`). One that names no CVE fixes no vulnerability: reporting it
+/// (a coreutils bug fix, "fixed in" a later build) would be a false positive. One that names
+/// a CVE is kept.
+fn not_security(id: &str, aliases: &[String]) -> bool {
+    (id.starts_with("ALBA-") || id.starts_with("ALEA-"))
+        && !aliases.iter().any(|a| a.starts_with("CVE-"))
+}
+
 fn entries_of(mut r: Record, wanted: &Wanted) -> (Vec<Entry>, BTreeMap<String, usize>) {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut out = Vec::new();
@@ -296,6 +305,9 @@ fn entries_of(mut r: Record, wanted: &Wanted) -> (Vec<Entry>, BTreeMap<String, u
     let cvss_vector = osv::cvss_vector_of(&shared);
     let title = title(&r);
     let aliases = aliases(&r);
+    if not_security(&r.id, &aliases) {
+        return (out, counts);
+    }
     for a in &r.affected {
         let Some(pkg) = &a.package else { continue };
         let (Some(name), Some(eco)) = (pkg.name.as_deref(), pkg.ecosystem.as_deref()) else {
@@ -471,6 +483,30 @@ mod tests {
         w.ecosystems.insert("Debian:12".into(), Family::Deb);
         w.ecosystems.insert("Alpine:v3.20".into(), Family::Apk);
         w
+    }
+
+    #[test]
+    fn alma_bug_fix_advisories_without_a_cve_are_not_vulnerabilities() {
+        let mut w = Wanted::default();
+        w.ecosystems.insert("AlmaLinux:8".into(), Family::Rpm);
+        let record = |id: &str, related: &str| {
+            format!(
+                r#"{{"id":"{id}","summary":"coreutils bug fix and enhancement update",
+                "related":[{related}],
+                "affected":[{{"package":{{"name":"coreutils","ecosystem":"AlmaLinux:8"}},
+                "ranges":[{{"type":"ECOSYSTEM","events":[{{"introduced":"0"}},{{"fixed":"8.30-20.el8_10"}}]}}]}}]}}"#
+            )
+        };
+        let entries = |id: &str, related: &str| {
+            parse_record(record(id, related).as_bytes(), &w, Path::new("x"))
+                .unwrap()
+                .0
+                .len()
+        };
+        assert_eq!(entries("ALBA-2026:47115", ""), 0);
+        assert_eq!(entries("ALEA-2026:1", ""), 0);
+        assert_eq!(entries("ALBA-2026:2", r#""CVE-2026-1""#), 1);
+        assert_eq!(entries("ALSA-2026:3", ""), 1);
     }
 
     #[test]

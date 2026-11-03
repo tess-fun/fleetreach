@@ -36,7 +36,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that disagree are a coverage gap. Versions compare with rpm's ordering (epoch, `~`, `^`).
   Red Hat and AlmaLinux advisories name binary packages, so there each binary is matched on
   its own; elsewhere binaries fold into their source rpm. CentOS and Fedora have no
-  advisories to match and are coverage gaps, never clean.
+  advisories to match and are coverage gaps, never clean. AlmaLinux's bug fix and
+  enhancement advisories (ALBA, ALEA) that name no CVE are not reported as vulnerabilities.
   Package names are `<distro>/<package>` (`rocky-linux/openssl`, `redhat/openssl-libs`),
   ecosystem `rpm`.
 - **Vendor feeds for rpm distributions osv.dev lacks** (spec 16, row 10, phase 2). Amazon
@@ -73,7 +74,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   package's open statuses, unless Red Hat says something about the binary itself (a binary
   it lists as not affected stays clean). Module streams (`php:7.3`) gate their entries as
   for Oracle. Findings link Red Hat's CVE page. A RHEL image scanned without the index is a
-  coverage gap naming the command. Validated against Trivy 0.73.0 on UBI 8.8 and UBI 9:
+  coverage gap naming the command; a plain `db sync` leaves the derived exports to the scan
+  instead of asking osv.dev for them. Validated against Trivy 0.73.0 on UBI 8.8 and UBI 9:
   every one of Trivy's 947 and 538 findings is reported with the same status; the 19 and 2
   more are Red Hat's open statuses for the binary's source package, which Trivy matches by
   binary name only.
