@@ -65,6 +65,7 @@ fn arb_vuln() -> impl Strategy<Value = VulnFinding> {
                 active: None,
                 source: Default::default(),
                 scope: Default::default(),
+                layer: None,
             }],
         })
 }
@@ -98,6 +99,7 @@ fn arb_warn() -> impl Strategy<Value = WarnFinding> {
                 active: None,
                 source: Default::default(),
                 scope: Default::default(),
+                layer: None,
             }],
         })
 }
@@ -197,6 +199,7 @@ fn version_divergent_occurrences_keep_independent_verdicts() {
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }],
     };
 
@@ -251,6 +254,7 @@ fn identical_occurrences_are_deduplicated() {
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }],
     };
 

@@ -140,6 +140,23 @@ impl DepSource {
     }
 }
 
+/// One layer of a container image.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImageLayer {
+    /// Position in the image, 0 for the bottom layer.
+    pub index: usize,
+    /// The layer's uncompressed digest (`diff_id`), when the image config gives it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub digest: Option<String>,
+    /// The build step that made it (`RUN apt-get install -y curl`), when the image's history
+    /// says.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
+    /// Whether the layer belongs to the base image, so a rebuild on a newer base replaces it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub base: bool,
+}
+
 /// A single location/version where an advisory applies.
 ///
 /// The advisory groups occurrences, but the **verdict is per-occurrence**: the
@@ -182,6 +199,10 @@ pub enum Occurrence {
         /// the runtime default, so `schema_version: 1` output is unaffected.
         #[serde(default, skip_serializing_if = "DepScope::is_runtime")]
         scope: DepScope,
+        /// The image layer that put this package there, for a finding in a container image.
+        /// Additive — omitted from JSON everywhere else.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        layer: Option<ImageLayer>,
     },
     Toolchain {
         /// e.g. `"stable 1.xx"` — there is no repo to pin a toolchain advisory to.
@@ -215,6 +236,7 @@ impl Occurrence {
     ///     active: None,
     ///     source: Default::default(),
     ///     scope: Default::default(),
+    ///     layer: None,
     /// };
     /// assert!(at(1, 1, 9).is_vulnerable());  // below the fix
     /// assert!(!at(1, 2, 0).is_vulnerable()); // at the fix

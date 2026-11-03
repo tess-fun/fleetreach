@@ -40,6 +40,7 @@ fn arb_occurrence() -> impl Strategy<Value = Occurrence> {
         active: None,
         source: Default::default(),
         scope: Default::default(),
+        layer: None,
     })
 }
 
@@ -123,7 +124,7 @@ proptest! {
         warns in prop::collection::vec(arb_warn(), 0..15),
         outcomes in prop::collection::vec(arb_outcome(), 0..8),
     ) {
-        let make = || ScanData { skipped_unparseable: 0, coverage: Vec::new(),
+        let make = || ScanData { images: Vec::new(), skipped_unparseable: 0, coverage: Vec::new(),
             vulnerabilities: vulns.clone(),
             warnings: warns.clone(),
             outcomes: outcomes.clone(),

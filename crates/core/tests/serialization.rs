@@ -65,6 +65,7 @@ fn in_repo_occurrence_is_internally_tagged() {
         active: None,
         source: Default::default(),
         scope: Default::default(),
+        layer: None,
     };
     let v = serde_json::to_value(&occ).unwrap();
     assert_eq!(v["kind"], "in_repo");
@@ -97,6 +98,7 @@ fn dep_source_is_additive_and_round_trips() {
             rev: Some("abc123".into()),
         },
         scope: Default::default(),
+        layer: None,
     };
     let v = serde_json::to_value(&git).unwrap();
     assert_eq!(v["source"]["git"]["url"], "https://github.com/o/r");

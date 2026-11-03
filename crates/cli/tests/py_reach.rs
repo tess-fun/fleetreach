@@ -56,6 +56,7 @@ fn pypi_finding(id: &str, repo: &str, package: &str) -> VulnFinding {
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }],
     }
 }
@@ -80,6 +81,7 @@ fn config() -> Config {
 
 fn assessed(findings: Vec<VulnFinding>) -> fleetreach_core::FleetReport {
     let scan = ScanData {
+        images: Vec::new(),
         vulnerabilities: findings,
         warnings: vec![],
         outcomes: vec![],

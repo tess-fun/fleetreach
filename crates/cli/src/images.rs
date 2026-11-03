@@ -12,6 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use fleetreach_core::{Ecosystem, RepoId};
+use fleetreach_os::jar::Found;
 use fleetreach_os::lang::Installed;
 use fleetreach_os::Inspection;
 use rayon::prelude::*;
@@ -43,9 +44,95 @@ pub(crate) struct Opened {
     pub(crate) unread: BTreeMap<&'static str, usize>,
     /// Wanted files the image reader could not keep (too large, unreadable).
     pub(crate) skipped: Vec<String>,
+    /// Where each package came from.
+    pub(crate) layers: Layers,
     /// The image's lockfiles, written out for the language feeders; `lang_repo` points here.
     pub(crate) _files: tempfile::TempDir,
     pub(crate) lang_repo: Repo,
+}
+
+/// Which layer of an image each thing a finding can name came from. A package installed at
+/// several versions, or a source package's binaries, take the highest layer: replacing the
+/// layers below it would leave that one.
+#[derive(Default)]
+pub(crate) struct Layers {
+    build: fleetreach_os::image::Build,
+    /// By OS binary package name.
+    packages: BTreeMap<String, Option<usize>>,
+    /// By image path, for lockfiles, metadata and archives.
+    files: BTreeMap<String, usize>,
+}
+
+impl Layers {
+    fn new(fs: &fleetreach_os::image::ImageFs, inspection: &Inspection, paths: Vec<&str>) -> Self {
+        let mut out = Layers {
+            build: fs.build().clone(),
+            ..Layers::default()
+        };
+        if out.build.layers.is_empty() {
+            return out;
+        }
+        for p in &inspection.inventory.packages {
+            let layer = fs.introduced(&p.name, &p.version);
+            let at = out.packages.entry(p.name.clone()).or_insert(layer);
+            *at = (*at).zip(layer).map(|(a, b)| a.max(b));
+        }
+        for path in paths {
+            if let Some(layer) = fs.file_layer(path) {
+                out.files.insert(path.to_string(), layer);
+            }
+        }
+        out
+    }
+
+    /// The layer the OS binaries `names` came from: all of them must be known.
+    pub(crate) fn of_packages<'a>(
+        &self,
+        mut names: impl Iterator<Item = &'a str>,
+    ) -> Option<usize> {
+        names.try_fold(0, |top, name| Some(top.max((*self.packages.get(name)?)?)))
+    }
+
+    /// The layer that wrote the file at `path`.
+    pub(crate) fn of_file(&self, path: &str) -> Option<usize> {
+        self.files.get(path).copied()
+    }
+
+    /// The layer that wrote the lockfiles directly in `dir`.
+    pub(crate) fn of_dir(&self, dir: &str) -> Option<usize> {
+        self.files
+            .iter()
+            .filter(|(p, _)| p.rsplit_once('/').map_or("", |(d, _)| d) == dir)
+            .map(|(_, l)| *l)
+            .max()
+    }
+
+    /// The image's base, when its history shows one and its config gives the layers' digests.
+    pub(crate) fn base(
+        &self,
+        repo: &RepoId,
+        inspection: &Inspection,
+    ) -> Option<fleetreach_core::ImageBase> {
+        let layers = self.build.base_layers?;
+        Some(fleetreach_core::ImageBase {
+            repo: repo.clone(),
+            fingerprint: self.build.base_fingerprint()?,
+            name: self.build.base_name.clone(),
+            os: inspection.distro.as_ref().ok().map(|d| d.name.clone()),
+            layers,
+        })
+    }
+
+    /// Layer `index` as reports show it.
+    pub(crate) fn describe(&self, index: usize) -> Option<fleetreach_core::ImageLayer> {
+        let layer = self.build.layers.get(index)?;
+        Some(fleetreach_core::ImageLayer {
+            index,
+            digest: layer.digest.clone(),
+            created_by: layer.created_by.clone(),
+            base: self.build.base_layers.is_some_and(|n| index < n),
+        })
+    }
 }
 
 impl Prepared {
@@ -92,6 +179,21 @@ fn open(image: &Image) -> Result<Opened, String> {
     for (path, data) in &lang.files {
         write_file(files.path(), path, data)?;
     }
+    let installed = lang.pypi.iter().chain(&lang.npm).chain(&lang.gems);
+    let archives = lang.java.iter().filter_map(|f| match f {
+        Found::Coordinates { path, .. }
+        | Found::FileName { path, .. }
+        | Found::Bundle { path, .. } => path.split('!').next(),
+        Found::Unknown { .. } | Found::Unreadable { .. } => None,
+    });
+    let paths = lang
+        .files
+        .keys()
+        .map(String::as_str)
+        .chain(installed.map(|i| i.path.as_str()))
+        .chain(archives)
+        .collect();
+    let layers = Layers::new(&fs, &inspection, paths);
     let lang_repo = Repo {
         id: image.id.clone(),
         path: files.path().to_path_buf(),
@@ -108,6 +210,7 @@ fn open(image: &Image) -> Result<Opened, String> {
         java: lang.java,
         unread: lang.unread,
         skipped: fs.skipped().to_vec(),
+        layers,
         _files: files,
         lang_repo,
     })

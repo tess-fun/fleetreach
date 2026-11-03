@@ -68,6 +68,7 @@ fn empty_report() -> fleetreach_core::FleetReport {
         context: Vec::new(),
         ssvc: None,
         package_versions: Vec::new(),
+        base_images: Vec::new(),
     }
 }
 

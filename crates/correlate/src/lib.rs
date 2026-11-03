@@ -26,6 +26,7 @@
 //! #         occurrences: vec![Occurrence::InRepo {
 //! #             repo: RepoId(repo.into()), package: "foo".into(), installed: Version::new(1, 0, 0),
 //! #             patched: vec![], dependency_kind: DependencyKind::Transitive,
+//! #             layer: None,
 //! #             dependency_path: vec![], active: None, source: Default::default(), scope: Default::default() }],
 //! #     }
 //! # }

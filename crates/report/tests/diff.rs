@@ -35,6 +35,7 @@ fn occ(repo: &str) -> Occurrence {
         active: None,
         source: Default::default(),
         scope: Default::default(),
+        layer: None,
     }
 }
 
@@ -75,6 +76,7 @@ fn report(vulns: Vec<VulnFinding>, warnings: Vec<WarnFinding>) -> FleetReport {
         context: Vec::new(),
         ssvc: None,
         package_versions: Vec::new(),
+        base_images: Vec::new(),
     }
 }
 

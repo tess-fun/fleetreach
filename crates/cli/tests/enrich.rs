@@ -36,6 +36,7 @@ fn vuln(id: &str, cve: &str, severity: Severity) -> VulnFinding {
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }],
         affected_functions: vec![],
         reachable: None,
@@ -218,6 +219,7 @@ fn summary_max_severity_is_refreshed_after_enrichment_backfill() {
         context: Vec::new(),
         ssvc: None,
         package_versions: Vec::new(),
+        base_images: Vec::new(),
     };
 
     let enrichment = Enrichment {

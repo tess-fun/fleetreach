@@ -143,6 +143,7 @@ pub fn warning(os: &OsRelease, repo: &RepoId, today: &str) -> Option<WarnFinding
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }],
     })
 }

@@ -104,6 +104,7 @@ pub fn fleet_signals(repos: &[Repo], extra_registries: &[String]) -> Vec<WarnFin
                     active: None,
                     source: Default::default(),
                     scope: Default::default(),
+                    layer: None,
                 });
         }
     }
@@ -186,6 +187,7 @@ fn typosquats(repos: &[Repo]) -> Vec<WarnFinding> {
                             active: None,
                             source: Default::default(),
                             scope: Default::default(),
+                            layer: None,
                         },
                     ));
                 }
@@ -280,6 +282,7 @@ pub fn new_to_fleet(
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         })
         .collect();
     if occurrences.is_empty() {
@@ -559,6 +562,7 @@ pub fn release_age(
                     active: None,
                     source: Default::default(),
                     scope: Default::default(),
+                    layer: None,
                 };
                 match published {
                     Some(at) => {

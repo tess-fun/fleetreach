@@ -15,6 +15,7 @@ fn in_repo(installed: Version, patched: Vec<VersionReq>) -> Occurrence {
         active: None,
         source: Default::default(),
         scope: Default::default(),
+        layer: None,
     }
 }
 

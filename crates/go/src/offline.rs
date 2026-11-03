@@ -300,6 +300,7 @@ fn match_module(
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }],
         affected_functions: {
             let mut symbols: Vec<String> = entries.iter().flat_map(|a| a.symbols(module)).collect();

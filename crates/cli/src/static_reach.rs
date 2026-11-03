@@ -276,6 +276,7 @@ mod tests {
                     active: None,
                     source: Default::default(),
                     scope: Default::default(),
+                    layer: None,
                 })
                 .collect(),
             affected_functions: funcs.iter().map(|s| (*s).into()).collect(),

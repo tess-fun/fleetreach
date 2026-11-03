@@ -32,6 +32,7 @@
 //! #         occurrences: vec![Occurrence::InRepo {
 //! #             repo: RepoId("app".into()), package: "foo".into(), installed: Version::new(1, 0, 0),
 //! #             patched: vec![], dependency_kind: DependencyKind::Direct,
+//! #             layer: None,
 //! #             dependency_path: vec![], active: None, source: Default::default(), scope: Default::default() }] };
 //! #     FleetReport {
 //! #         schema_version: 1,
@@ -41,7 +42,7 @@
 //! #         summary: Summary { repos_scanned: 1, repos_errored: 0, vuln_count: 1, warn_count: 0,
 //! #             max_severity: Severity::High, stale_ignores: vec![] },
 //! #         vulnerabilities: vec![vuln], warnings: vec![], outcomes: vec![], coverage: vec![],
-//! #         context: vec![], ssvc: None, package_versions: vec![] }
+//! #         context: vec![], ssvc: None, package_versions: vec![], base_images: vec![] }
 //! # }
 //! // Render the fleet report as a plain-text table (no color for piped output).
 //! let table = to_table(&report(), false);
@@ -816,7 +817,32 @@ pub fn to_table(report: &FleetReport, color: bool) -> String {
     if sections.is_empty() {
         return "No advisories found.".to_string();
     }
+    if let Some(bases) = base_image_lines(report) {
+        sections.push(bases);
+    }
     sections.join("\n\n")
+}
+
+/// The base images with findings in their layers, and what a rebuild would clear.
+fn base_image_lines(report: &FleetReport) -> Option<String> {
+    let mut lines = vec!["Base images".to_string()];
+    for base in report.base_images.iter().filter(|b| b.findings > 0) {
+        let short = base.fingerprint.strip_prefix("sha256:").unwrap_or_default();
+        let short = short.get(..12).unwrap_or(short);
+        let name = match (&base.name, &base.os) {
+            (Some(name), _) => sanitize_text(name),
+            (None, Some(os)) => format!("{} ({short})", sanitize_text(os)),
+            (None, None) => short.to_string(),
+        };
+        lines.push(format!(
+            "  {name}: {} image(s), {} finding(s) in its layers; rebuilding on a current base \
+             clears the {} with a fix",
+            base.images.len(),
+            base.findings,
+            base.fixable,
+        ));
+    }
+    (lines.len() > 1).then(|| lines.join("\n"))
 }
 
 /// Blast-radius view: findings ranked by how many repos they hit — the

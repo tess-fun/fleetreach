@@ -250,6 +250,29 @@ An archive none of these can place is a coverage gap, never a guess. Fleetreach 
 checksum index of Maven Central, so a jar that was renamed and has no metadata stays a gap
 where a tool with such an index could name it.
 
+## Layers and base images
+
+Each finding in an image carries a `layer` in the JSON report: its position, its digest, the
+build step that made it, and `base: true` when it belongs to the base image. For an OS package
+that is the layer where the package first appeared at its installed version; for a language
+package, the layer that wrote its lockfile, metadata or archive. A finding on several binaries
+of one source package takes the highest of their layers, since replacing the ones below would
+leave that one.
+
+The base image ends at its `CMD`: the last `CMD` in the image's history with a layer above it,
+the rule Trivy uses. An image with no such `CMD`, including a base image itself, has no base.
+`org.opencontainers.image.base.name` gives the base's name when the image declares it.
+
+Images built on the same layers are one entry in the report's `base_images`, with a fingerprint
+of those layers, the images, the findings in its layers counted once, and `fixable`, how many
+of them have a fix. Those are what rebuilding on a current base can clear; the rest wait for the
+distribution. The table view ends with the same summary:
+
+```text
+Base images
+  Debian 10 (d3d01b10c925): 2 image(s), 123 finding(s) in its layers; rebuilding on a current base clears the 123 with a fix
+```
+
 ## Advisory data
 
 Distro exports are fetched one distribution at a time, never all at once: Chainguard's is

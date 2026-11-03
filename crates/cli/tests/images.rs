@@ -290,6 +290,111 @@ fn java_archives_and_gems_in_an_image_are_matched() {
     );
 }
 
+/// A tar stream of regular files.
+fn tar_of(files: &[(&str, &[u8])]) -> Vec<u8> {
+    let mut out = Vec::new();
+    for (path, data) in files {
+        let mut h = [0u8; 512];
+        h[..path.len()].copy_from_slice(path.as_bytes());
+        h[100..107].copy_from_slice(b"0000644");
+        h[124..135].copy_from_slice(format!("{:011o}", data.len()).as_bytes());
+        h[156] = b'0';
+        h[257..263].copy_from_slice(b"ustar\0");
+        h[148..156].fill(b' ');
+        let sum: u32 = h.iter().map(|b| u32::from(*b)).sum();
+        h[148..155].copy_from_slice(format!("{sum:06o}\0").as_bytes());
+        out.extend_from_slice(&h);
+        out.extend_from_slice(data);
+        out.resize(out.len().div_ceil(512) * 512, 0);
+    }
+    out.resize(out.len() + 1024, 0);
+    out
+}
+
+/// A `docker save` archive of `layers`, with `history` as its config's.
+fn saved_image(path: &Path, layers: &[&[u8]], history: &str) {
+    let names: Vec<String> = (0..layers.len())
+        .map(|i| format!("l{i}/layer.tar"))
+        .collect();
+    let diff_ids: Vec<String> = (0..layers.len())
+        .map(|i| format!("\"sha256:{}\"", layers[i].len() + i))
+        .collect();
+    let config = format!(
+        r#"{{"rootfs":{{"diff_ids":[{}]}},"history":[{history}]}}"#,
+        diff_ids.join(",")
+    );
+    let manifest = format!(
+        r#"[{{"Config":"c.json","Layers":[{}]}}]"#,
+        names
+            .iter()
+            .map(|n| format!("\"{n}\""))
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    let mut files: Vec<(&str, &[u8])> = vec![
+        ("manifest.json", manifest.as_bytes()),
+        ("c.json", config.as_bytes()),
+    ];
+    for (name, layer) in names.iter().zip(layers) {
+        files.push((name, layer));
+    }
+    std::fs::write(path, tar_of(&files)).unwrap();
+}
+
+#[test]
+fn findings_name_their_layer_and_the_fleet_rolls_up_by_base() {
+    let fx = Fixture::new("layers");
+    let os = "ID=debian\nVERSION_ID=\"12\"\n";
+    let zlib = STATUS.split("\n\n").next().unwrap();
+    let base = tar_of(&[
+        ("etc/os-release", os.as_bytes()),
+        ("var/lib/dpkg/status", format!("{zlib}\n\n").as_bytes()),
+    ]);
+    let status = STATUS.replace("Version: 3.0.11-1~deb12u1", "Version: 3.0.9-1");
+    let own = tar_of(&[("var/lib/dpkg/status", status.as_bytes())]);
+    let other = tar_of(&[("opt/app", b"x")]);
+    let history = r#"{"created_by":"/bin/sh -c #(nop) ADD file:a in / "},
+        {"created_by":"/bin/sh -c #(nop)  CMD [\"bash\"]","empty_layer":true},
+        {"created_by":"/bin/sh -c apt-get install -y libssl3"},
+        {"created_by":"/bin/sh -c #(nop)  CMD [\"app\"]","empty_layer":true}"#;
+    let (one, two) = (fx.dir.join("one.tar"), fx.dir.join("two.tar"));
+    saved_image(&one, &[&base, &own], history);
+    saved_image(&two, &[&base, &other], history);
+    let (one, two) = (one.to_string_lossy(), two.to_string_lossy());
+    let (_, report, stderr) = fx.scan(&["--image", &one, "--image", &two]);
+    let mut layers = BTreeMap::new();
+    for v in report["vulnerabilities"].as_array().unwrap() {
+        for o in v["occurrences"].as_array().unwrap() {
+            let id = v["advisory_id"].as_str().unwrap().to_string();
+            layers.insert((id, o["repo"].to_string()), o["layer"].clone());
+        }
+    }
+    let zlib_layer = layers
+        .iter()
+        .find(|((id, _), _)| id == "CVE-2026-0001")
+        .map(|(_, l)| l)
+        .unwrap_or_else(|| panic!("{report} {stderr}"));
+    assert_eq!(zlib_layer["index"], 0);
+    assert_eq!(zlib_layer["base"], true);
+    let openssl = layers
+        .iter()
+        .find(|((id, _), _)| id == "CVE-2026-0002")
+        .map(|(_, l)| l)
+        .unwrap();
+    assert_eq!(openssl["index"], 1);
+    assert_eq!(openssl["created_by"], "RUN apt-get install -y libssl3");
+    assert!(openssl.get("base").is_none(), "{openssl}");
+    // Two images on one base: its findings count once, the app's layer not at all.
+    let bases = report["base_images"].as_array().unwrap();
+    assert_eq!(bases.len(), 1, "{report}");
+    assert_eq!(bases[0]["images"].as_array().unwrap().len(), 2);
+    assert_eq!(bases[0]["os"], "Debian 12");
+    assert_eq!(bases[0]["layers"], 1);
+    // CVE-2026-0001 has a fix, CVE-2026-0003 has none.
+    assert_eq!(bases[0]["findings"], 2, "{report}");
+    assert_eq!(bases[0]["fixable"], 1, "{report}");
+}
+
 #[test]
 fn image_os_packages_match_with_dpkg_order_and_keep_unfixed() {
     let fx = Fixture::new("match");

@@ -26,6 +26,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   language matchers, skipping files an OS package owns. Fail-closed: an unreadable image or a
   missing distro export is an errored target, and an unknown distribution or release or an
   unreadable package database is a coverage gap. New crate `fleetreach-os`.
+- **Image layers and base images** (spec 16, row 10, phase 3). Every finding in an image names
+  the layer that put the package there, with its digest and build step, and whether it belongs
+  to the base image. Where several images share a base, the report's `base_images` and the
+  table's closing section say how many findings its layers hold and how many a rebuild can
+  clear. Layers match Trivy 0.73.0 on Debian, Alpine and Rocky images.
 - **Java archives and gems inside images** (spec 16, row 10). `.jar`, `.war`, `.ear`, `.par`,
   `.kar`, `.jpi` and `.hpi` files are read through, nested archives included, and matched as
   Maven packages; installed gems (`specifications/*.gemspec`) are matched as RubyGems. An

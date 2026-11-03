@@ -56,6 +56,7 @@ fn npm_finding(id: &str, package: &str) -> VulnFinding {
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }],
     }
 }
@@ -91,6 +92,7 @@ fn import_graph_resolves_direct_transitive_and_prune() {
     // The fixture app imports lodash; lodash imports minimist (transitive); qs is in the lockfile
     // and node_modules but imported by nobody.
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![
@@ -146,6 +148,7 @@ fn script_run_tools_are_entry_points() {
     // bin of the scoped @acme/linter). Nothing imports either, but each runs when its script does,
     // so it and what it imports are reachable, and prune must not mark them NotReachable.
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![

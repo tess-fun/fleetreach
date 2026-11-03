@@ -49,12 +49,14 @@ fn vuln(id: &str) -> VulnFinding {
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }],
     }
 }
 
 fn report_with(ids: &[&str]) -> fleetreach_core::FleetReport {
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: ids.iter().map(|id| vuln(id)).collect(),
@@ -105,6 +107,7 @@ fn drop_phantom_removes_unbuilt_keeps_built_and_unknown() {
         active,
         source: Default::default(),
         scope: Default::default(),
+        layer: None,
     };
     let finding = |id: &str, active: Option<bool>| VulnFinding {
         advisory_id: id.into(),
@@ -123,6 +126,7 @@ fn drop_phantom_removes_unbuilt_keeps_built_and_unknown() {
     };
 
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![

@@ -1001,6 +1001,7 @@ impl TierCFinding<'_> {
                 } else {
                     DepScope::Runtime
                 },
+                layer: None,
             }],
             affected_functions: Vec::new(),
             reachable: None,

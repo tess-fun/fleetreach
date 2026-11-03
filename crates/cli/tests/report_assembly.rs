@@ -49,6 +49,7 @@ fn vuln(id: &str, severity: Severity, repo: &str) -> VulnFinding {
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }],
     }
 }
@@ -68,6 +69,7 @@ fn warn(id: &str, repo: &str) -> WarnFinding {
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }],
     }
 }
@@ -98,6 +100,7 @@ fn gate(fail_on: Severity, fail_on_warnings: bool) -> GateConfig {
 #[test]
 fn clean_fleet_exits_zero() {
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![],
@@ -112,6 +115,7 @@ fn clean_fleet_exits_zero() {
 #[test]
 fn vuln_at_or_above_fail_on_exits_one() {
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![vuln("RUSTSEC-1", Severity::High, "a")],
@@ -127,6 +131,7 @@ fn vuln_at_or_above_fail_on_exits_one() {
 #[test]
 fn errored_repo_forces_two_even_with_no_findings() {
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![],
@@ -142,6 +147,7 @@ fn errored_repo_forces_two_even_with_no_findings() {
 fn zero_repos_scanned_exits_two() {
     // An empty fleet is untrustworthy: we read nothing, so we cannot claim clean.
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![],
@@ -156,6 +162,7 @@ fn zero_repos_scanned_exits_two() {
 #[test]
 fn unknown_severity_vuln_is_fail_closed() {
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![vuln("RUSTSEC-1", Severity::Unknown, "a")],
@@ -170,6 +177,7 @@ fn unknown_severity_vuln_is_fail_closed() {
 #[test]
 fn warnings_only_gate_when_opted_in() {
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![],
@@ -184,6 +192,7 @@ fn warnings_only_gate_when_opted_in() {
 #[test]
 fn ignores_suppress_findings_and_report_stale() {
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![vuln("RUSTSEC-PRESENT", Severity::High, "a")],
@@ -218,6 +227,7 @@ fn ignore_naming_an_alias_suppresses_the_finding() {
     let mut v = vuln("GHSA-kept", Severity::High, "a");
     v.aliases = vec!["CVE-2026-1".into(), "PYSEC-2026-1".into()];
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![v],
@@ -251,9 +261,11 @@ fn repo_scoped_suppression_removes_only_that_repos_occurrence() {
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         });
     }
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![v],
@@ -288,6 +300,7 @@ fn repo_scoped_suppression_removes_only_that_repos_occurrence() {
 #[test]
 fn min_severity_filters_below_threshold_but_keeps_unknown() {
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![
@@ -313,6 +326,7 @@ fn min_severity_filters_below_threshold_but_keeps_unknown() {
 #[test]
 fn assembly_is_byte_identical_across_runs() {
     let make = || ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![
@@ -333,6 +347,7 @@ fn assembly_is_byte_identical_across_runs() {
 #[test]
 fn json_matches_the_schema_shape() {
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![vuln("RUSTSEC-1", Severity::High, "a")],

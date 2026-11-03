@@ -787,6 +787,23 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     config credentials); per-layer attribution and base-image detection from image history;
     base-image rollup and rebuild advice across the fleet; VEX discovered from OCI
     referrers (Trivy 0.73.0 parity); the published differential.
+    **Status: layers and base images implemented 2026-11-03, unreleased.** The image reader
+    re-reads the package database after each layer that changes it, so a package's layer is
+    the first with that name and version unbroken to the top, with nothing held back per
+    layer. Language packages take the layer that wrote their file. `Occurrence::InRepo.layer`
+    carries index, `diff_id`, build step and `base`; a source finding takes the highest layer
+    of its binaries, so `base` never claims a rebuild clears what a later layer also installed.
+    Base: the last `CMD` below the image's last layer (Trivy's rule), name from
+    `org.opencontainers.image.base.name`. `base_images` groups images by a digest of the base's
+    `diff_id`s and counts distinct advisory and package pairs, `fixable` being those with a
+    fix. Validated against each package's `Layer.DiffID` in Trivy 0.73.0: Ruby 3.1.2 1,427 of
+    1,427, Tomcat 123 of 123, nginx Alpine 23 of 23, Rocky 9 123 of 123, Jenkins 298 of 327
+    (the other 29 are jars inside `.hpi` plugins in layer 5 that Trivy does not read; it lists
+    the same names from `jenkins-plugin-manager.jar` in layer 7). Two BuildKit images on
+    `tomcat:9.0.50-jdk11` rolled up as one base of 10 layers, 123 findings counted once.
+    Still open in phase 3: registry pull, VEX from OCI referrers, the published differential.
+    A base with no declared name shows its distribution and fingerprint, as a config does not
+    say which tag it came from.
 - **Effort**: XL. **Release**: 1.6.0, 1.7.0, 1.8.0. **Depends on**: per-distro sync (row 11),
   vendor CSAF (row 12).
 - **Proof**: comparators vs `dpkg --compare-versions`, `apk version -t` and `rpmdev-vercmp`

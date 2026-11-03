@@ -49,6 +49,8 @@ pub struct ScanData {
     /// feeder reads (their packages went unscanned) and manifests that only declare direct
     /// dependencies. Carried into the report so the weakness is visible, never silent.
     pub coverage: Vec<CoverageGap>,
+    /// The base of each image that has a recognizable one.
+    pub images: Vec<fleetreach_core::ImageBase>,
 }
 
 /// An installed toolchain to additionally scan against `Collection::Rust`.
@@ -354,6 +356,11 @@ pub(crate) fn scan_fleet_with(
             )
         })
         .collect();
+    data.images
+        .extend(images.prepared.iter().filter_map(|image| {
+            let opened = image.opened.as_ref().ok()?;
+            opened.layers.base(&image.id, &opened.inspection)
+        }));
     for (result, unsupported) in per_image {
         data.vulnerabilities.extend(result.vulnerabilities);
         data.warnings.extend(result.warnings);
@@ -797,7 +804,12 @@ fn scan_image(
         sbom: None,
         alongside: false,
     };
-    let os = scan_image_os(&image.id, opened, images, distro_db);
+    let layers = &opened.layers;
+    let mut os = scan_image_os(&image.id, opened, images, distro_db);
+    // The real binary names ride in the path: distro, source, then the binaries.
+    attribute(&mut os.1, layers, |_, path| {
+        layers.of_packages(path.get(2)?.split(", "))
+    });
     let mut extra = vec![(own(os.0), os.1)];
     let graph = fleetreach_core::DepGraph::new(image.id.0.clone());
     if !opened.pypi.is_empty() {
@@ -822,6 +834,8 @@ fn scan_image(
                 format!("{} installed Python packages: {reason}", installed.len()),
             ),
         };
+        let mut result = result;
+        attribute_installed(&mut result, layers, &opened.pypi);
         extra.push((own(Ecosystem::Pypi), result));
     }
     if !opened.npm.is_empty() {
@@ -846,6 +860,8 @@ fn scan_image(
                 format!("{} installed npm packages: {reason}", installed.len()),
             ),
         };
+        let mut result = result;
+        attribute_installed(&mut result, layers, &opened.npm);
         extra.push((own(Ecosystem::Npm), result));
     }
     if !opened.gems.is_empty() {
@@ -869,6 +885,8 @@ fn scan_image(
                 format!("{} installed gems: {reason}", installed.len()),
             ),
         };
+        let mut result = result;
+        attribute_installed(&mut result, layers, &opened.gems);
         extra.push((own(Ecosystem::RubyGems), result));
     }
     if !opened.java.is_empty() {
@@ -879,15 +897,65 @@ fn scan_image(
                 format!("{} Java archive entries: {reason}", opened.java.len()),
             ),
         };
+        let mut result = result;
+        attribute(&mut result, layers, |_, path| layers.of_file(path.first()?));
         extra.push((own(Ecosystem::Maven), result));
     }
-    let lang: Vec<RepoResult> = plan.units.par_iter().map(scan_unit).collect();
+    let lang: Vec<RepoResult> = plan
+        .units
+        .par_iter()
+        .map(|unit| {
+            let mut result = scan_unit(unit);
+            attribute(&mut result, layers, |_, _| layers.of_dir(&unit.rel_dir));
+            result
+        })
+        .collect();
     let (units, results): (Vec<ScanUnit>, Vec<RepoResult>) = extra.into_iter().unzip();
     let merged = merge_units(
         plan,
         units.iter().zip(results).chain(plan.units.iter().zip(lang)),
     );
     (merged, plan.unsupported.clone())
+}
+
+/// Mark each finding in `result` with the image layer `at` finds for its package and path.
+fn attribute(
+    result: &mut RepoResult,
+    layers: &crate::images::Layers,
+    at: impl Fn(&str, &[String]) -> Option<usize>,
+) {
+    for occurrence in result
+        .vulnerabilities
+        .iter_mut()
+        .flat_map(|v| &mut v.occurrences)
+    {
+        if let Occurrence::InRepo {
+            package,
+            dependency_path,
+            layer,
+            ..
+        } = occurrence
+        {
+            *layer = at(package, dependency_path).and_then(|i| layers.describe(i));
+        }
+    }
+}
+
+/// [`attribute`] for packages read from installed metadata, by name. Names compare as the
+/// feeders' normalized forms do, and several installs of one name take the highest layer.
+fn attribute_installed(
+    result: &mut RepoResult,
+    layers: &crate::images::Layers,
+    installed: &[fleetreach_os::lang::Installed],
+) {
+    let name = |n: &str| n.to_lowercase().replace(['_', '.'], "-");
+    attribute(result, layers, |package, _| {
+        installed
+            .iter()
+            .filter(|i| name(&i.name) == name(package))
+            .map(|i| layers.of_file(&i.path))
+            .try_fold(None, |top: Option<usize>, l| Some(top.max(Some(l?))))?
+    });
 }
 
 /// Match what an image's Java archives hold. A jar known only by its file name is placed by

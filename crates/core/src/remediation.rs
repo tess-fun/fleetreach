@@ -640,6 +640,7 @@ mod tests {
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }
     }
 
@@ -701,6 +702,7 @@ mod tests {
             context: Vec::new(),
             ssvc: None,
             package_versions: Vec::new(),
+            base_images: Vec::new(),
         }
     }
 

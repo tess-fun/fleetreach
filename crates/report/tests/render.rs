@@ -42,6 +42,7 @@ fn report(vulns: Vec<VulnFinding>) -> FleetReport {
         context: Vec::new(),
         ssvc: None,
         package_versions: Vec::new(),
+        base_images: Vec::new(),
     }
 }
 
@@ -69,6 +70,7 @@ fn a_vuln() -> VulnFinding {
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }],
     }
 }
@@ -104,6 +106,7 @@ fn impact_and_fix_first_sanitize_untrusted_cells() {
         active: None,
         source: Default::default(),
         scope: Default::default(),
+        layer: None,
     }];
     let r = report(vec![v]);
     for out in [
@@ -364,6 +367,7 @@ fn impact_ranks_by_repos_affected() {
         active: None,
         source: Default::default(),
         scope: Default::default(),
+        layer: None,
     });
     let mut narrow = a_vuln();
     narrow.advisory_id = "RUSTSEC-NARROW".into();
@@ -389,6 +393,7 @@ fn blast_splits_direct_and_transitive_with_fix_hint() {
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }
     }
     fn vuln(id: &str, occs: Vec<Occurrence>) -> VulnFinding {
@@ -448,6 +453,7 @@ fn packages_roll_up_advisories_per_dependency() {
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }
     }
     fn vuln(id: &str, occs: Vec<Occurrence>) -> VulnFinding {
@@ -510,6 +516,7 @@ fn fix_first_ranks_severity_over_blast_radius() {
                 active: None,
                 source: Default::default(),
                 scope: Default::default(),
+                layer: None,
             })
             .collect()
     };
@@ -577,6 +584,7 @@ fn fixable(repo: &str, pkg: &str, installed: &str, fixed: &str) -> Occurrence {
         active: None,
         source: Default::default(),
         scope: Default::default(),
+        layer: None,
     }
 }
 

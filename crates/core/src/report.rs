@@ -36,6 +36,42 @@ pub struct FleetReport {
     /// Empty (and omitted) when nothing was vulnerable.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub package_versions: Vec<PackageVersions>,
+    /// The base images the fleet's container images are built on, and what a rebuild would
+    /// clear (spec 16, row 10). Most findings first; empty (and omitted) with no such images.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub base_images: Vec<BaseImage>,
+}
+
+/// One image's base, as read from its config.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImageBase {
+    pub repo: RepoId,
+    /// A digest of the base's layers: two images with the same one share the same base build.
+    pub fingerprint: String,
+    /// The name the image declares for its base.
+    pub name: Option<String>,
+    /// The distribution, for a base with no declared name.
+    pub os: Option<String>,
+    pub layers: usize,
+}
+
+/// One base image across the fleet.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BaseImage {
+    /// A digest of the base's layers, in order.
+    pub fingerprint: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os: Option<String>,
+    pub layers: usize,
+    /// The images built on it, sorted.
+    pub images: Vec<RepoId>,
+    /// Distinct advisory and package pairs in its layers.
+    pub findings: usize,
+    /// How many of those have a fix: what rebuilding on a current base can clear. The rest
+    /// stay until the distribution ships one.
+    pub fixable: usize,
 }
 
 /// The versions of one package across the fleet (spec 13).

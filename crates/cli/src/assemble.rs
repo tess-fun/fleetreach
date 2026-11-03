@@ -4,11 +4,11 @@
 //! filter by min severity, summarize. The clock is injected via `provenance`, so
 //! report assembly is fully deterministic and testable.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use fleetreach_core::{
-    max_severity_of, DepScope, FleetReport, Occurrence, Provenance, RepoId, RepoOutcome,
-    ScanStatus, Severity, Summary, VulnFinding,
+    max_severity_of, BaseImage, DepScope, FleetReport, ImageBase, Occurrence, Provenance, RepoId,
+    RepoOutcome, ScanStatus, Severity, Summary, VulnFinding,
 };
 
 /// Drop occurrences known to be phantom — a `Cargo.lock`-only optional dependency
@@ -229,6 +229,7 @@ pub fn assemble(
             .retain(|v| is_malware(v) || passes_threshold(v.severity, min));
     }
     let summary = summarize(&correlated, &scan.outcomes, stale_ignores);
+    let base_images = roll_up_bases(&scan.images, &correlated.vulnerabilities);
     Assembled {
         report: FleetReport {
             schema_version: fleetreach_core::SCHEMA_VERSION,
@@ -241,9 +242,69 @@ pub fn assemble(
             context: Vec::new(),
             ssvc: None,
             package_versions: Vec::new(),
+            base_images,
         },
         suppressed,
     }
+}
+
+/// The fleet's base images, each with the findings in its layers, counted once however many
+/// images carry them.
+fn roll_up_bases(images: &[ImageBase], vulnerabilities: &[VulnFinding]) -> Vec<BaseImage> {
+    let mut bases: BTreeMap<&str, BaseImage> = BTreeMap::new();
+    for image in images {
+        let base = bases
+            .entry(&image.fingerprint)
+            .or_insert_with(|| BaseImage {
+                fingerprint: image.fingerprint.clone(),
+                name: None,
+                os: image.os.clone(),
+                layers: image.layers,
+                images: Vec::new(),
+                findings: 0,
+                fixable: 0,
+            });
+        base.name = base.name.take().or_else(|| image.name.clone());
+        base.images.push(image.repo.clone());
+    }
+    let of_repo: BTreeMap<&RepoId, &str> = images
+        .iter()
+        .map(|i| (&i.repo, i.fingerprint.as_str()))
+        .collect();
+    // (base, advisory, package) -> has a fix.
+    let mut pairs: BTreeMap<(&str, &str, &str), bool> = BTreeMap::new();
+    for v in vulnerabilities {
+        for o in &v.occurrences {
+            let Occurrence::InRepo {
+                repo,
+                package,
+                patched,
+                layer: Some(layer),
+                ..
+            } = o
+            else {
+                continue;
+            };
+            if let (true, Some(base)) = (layer.base, of_repo.get(repo)) {
+                let fixed = pairs.entry((base, &v.advisory_id, package)).or_default();
+                *fixed |= !patched.is_empty();
+            }
+        }
+    }
+    for ((fingerprint, _, _), fixed) in pairs {
+        if let Some(base) = bases.get_mut(fingerprint) {
+            base.findings += 1;
+            base.fixable += usize::from(fixed);
+        }
+    }
+    let mut out: Vec<BaseImage> = bases.into_values().collect();
+    for base in &mut out {
+        base.images.sort();
+    }
+    out.sort_by(|a, b| {
+        (b.fixable, b.findings, &a.fingerprint).cmp(&(a.fixable, a.findings, &b.fingerprint))
+    });
+    out
 }
 
 /// [`assemble`] for non-VEX callers: each ignore is a fleet-wide suppression and

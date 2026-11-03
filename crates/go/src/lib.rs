@@ -202,6 +202,7 @@ fn build_finding(
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }],
         affected_functions: osv.map(affected_symbols).unwrap_or_default(),
         reachable: None,

@@ -55,6 +55,7 @@ fn finding(id: &str, repo: &str) -> VulnFinding {
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }],
     }
 }
@@ -78,6 +79,7 @@ fn config() -> Config {
 #[test]
 fn assess_flags_source_presence_per_repo() {
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![finding("R-USES", "uses"), finding("R-CLEAN", "clean")],
@@ -159,6 +161,7 @@ fn tier_c(
             active: None,
             source: Default::default(),
             scope: Default::default(),
+            layer: None,
         }],
     }
 }
@@ -209,6 +212,7 @@ fn tier_c_config() -> Config {
 fn hex_and_github_actions_reachability() {
     use DependencyKind::Direct;
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![
@@ -261,6 +265,7 @@ fn hex_and_github_actions_reachability() {
 fn name_mapping_ecosystems_detect_imports_securely() {
     use DependencyKind::{Direct, Transitive};
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![
@@ -335,6 +340,7 @@ fn name_mapping_ecosystems_detect_imports_securely() {
 fn tier_c_import_presence_is_secure() {
     use DependencyKind::{Direct, Transitive};
     let scan = ScanData {
+        images: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![

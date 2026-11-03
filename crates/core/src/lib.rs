@@ -33,6 +33,7 @@
 //!     active: None,
 //!     source: Default::default(),
 //!     scope: Default::default(),
+//!     layer: None,
 //! };
 //! assert!(occurrence.is_vulnerable()); // installed is below the patched range
 //! ```
@@ -53,8 +54,8 @@ pub mod ssvc;
 
 pub use depgraph::DepGraph;
 pub use finding::{
-    DepScope, DepSource, DependencyKind, Ecosystem, Exploitability, Occurrence, ReachVerdict,
-    Reachability, RepoId, VulnFinding, WarnFinding, WarnKind,
+    DepScope, DepSource, DependencyKind, Ecosystem, Exploitability, ImageLayer, Occurrence,
+    ReachVerdict, Reachability, RepoId, VulnFinding, WarnFinding, WarnKind,
 };
 pub use outcome::{RepoOutcome, ScanStatus};
 pub use remediation::{
@@ -62,9 +63,9 @@ pub use remediation::{
     RemediationItem, Risk,
 };
 pub use report::{
-    max_severity_of, Coverage, CoverageGap, FleetReport, OsvProvenance, PackageVersions,
-    Provenance, RepoContext, RepoSource, SsvcDecision, SsvcReport, Summary, VersionInFleet,
-    SCHEMA_VERSION,
+    max_severity_of, BaseImage, Coverage, CoverageGap, FleetReport, ImageBase, OsvProvenance,
+    PackageVersions, Provenance, RepoContext, RepoSource, SsvcDecision, SsvcReport, Summary,
+    VersionInFleet, SCHEMA_VERSION,
 };
 pub use severity::Severity;
 

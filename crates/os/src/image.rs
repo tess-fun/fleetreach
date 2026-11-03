@@ -72,6 +72,120 @@ pub struct ImageFs {
     layers: usize,
     /// Wanted files that could not be kept (too large, unreadable), as `path: reason`.
     skipped: Vec<String>,
+    /// How the image was built, for an image with layers.
+    build: Build,
+    /// The layer each installed package, by name and version, has been there since.
+    introduced: BTreeMap<(String, String), usize>,
+    /// Whether the layer being applied changed anything a package database is made of.
+    packages_changed: bool,
+}
+
+/// One layer as the image's config describes it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LayerInfo {
+    /// The digest of the uncompressed layer (`diff_id`).
+    pub digest: Option<String>,
+    /// The build step that made it, in Dockerfile terms where it can be told.
+    pub created_by: Option<String>,
+}
+
+/// How an image was built, from its config. Empty for a root filesystem.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Build {
+    /// One per layer, bottom first.
+    pub layers: Vec<LayerInfo>,
+    /// How many layers, from the bottom, are the base image's. `None` when the history does
+    /// not say, as for a base image itself.
+    pub base_layers: Option<usize>,
+    /// The base image's name, when the image declares it
+    /// (`org.opencontainers.image.base.name`).
+    pub base_name: Option<String>,
+}
+
+/// The longest build step kept, in bytes.
+const MAX_CREATED_BY: usize = 200;
+
+/// A history entry's `created_by` as a Dockerfile step: classic builders write
+/// `/bin/sh -c #(nop)  COPY ...` and `/bin/sh -c apt-get ...`, BuildKit `RUN /bin/sh -c ...
+/// # buildkit`.
+fn build_step(created_by: &str) -> Option<String> {
+    let step = created_by.split_whitespace().collect::<Vec<_>>().join(" ");
+    let step = step.strip_suffix(" # buildkit").unwrap_or(&step);
+    let step = match step.strip_prefix("RUN /bin/sh -c ") {
+        Some(rest) => format!("RUN {rest}"),
+        None => match step.strip_prefix("/bin/sh -c ") {
+            Some(rest) => match rest.strip_prefix("#(nop) ") {
+                Some(instruction) => instruction.to_string(),
+                None => format!("RUN {rest}"),
+            },
+            None => step.to_string(),
+        },
+    };
+    if step.is_empty() {
+        return None;
+    }
+    let end = (0..=MAX_CREATED_BY.min(step.len()))
+        .rev()
+        .find(|&i| step.is_char_boundary(i))
+        .unwrap_or(0);
+    Some(step[..end].to_string())
+}
+
+/// How many layers are the base image's. A build step that adds a layer after an inherited
+/// `CMD` is the image's own: the base image's `CMD` is the last one below the image's last
+/// layer, and an image's own `CMD` after its last layer says nothing (Trivy's rule too).
+fn base_layers(history: &[History]) -> Option<usize> {
+    let last = history.iter().rposition(|h| !h.empty_layer)?;
+    let cmd = history[..last].iter().rposition(|h| {
+        h.empty_layer
+            && (h.created_by.starts_with("/bin/sh -c #(nop)  CMD")
+                || h.created_by.starts_with("CMD"))
+    })?;
+    let layers = history[..cmd].iter().filter(|h| !h.empty_layer).count();
+    (layers > 0).then_some(layers)
+}
+
+impl Build {
+    /// A digest of the base image's layers, in order: two images with the same one were built
+    /// on the same build of the same base.
+    pub fn base_fingerprint(&self) -> Option<String> {
+        let mut hasher = Sha256::new();
+        for layer in self.layers.get(..self.base_layers?)? {
+            hasher.update(layer.digest.as_deref()?);
+            hasher.update(b"\n");
+        }
+        let hex: String = hasher
+            .finalize()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        Some(format!("sha256:{hex}"))
+    }
+
+    fn new(layers: usize, config: &ImageConfig, annotations: &BTreeMap<String, String>) -> Build {
+        const BASE_NAME: &str = "org.opencontainers.image.base.name";
+        let diff_ids = &config.rootfs.diff_ids;
+        let steps: Vec<&History> = config.history.iter().filter(|h| !h.empty_layer).collect();
+        Build {
+            layers: (0..layers)
+                .map(|i| LayerInfo {
+                    digest: (diff_ids.len() == layers).then(|| diff_ids[i].clone()),
+                    created_by: (steps.len() == layers)
+                        .then(|| build_step(&steps[i].created_by))
+                        .flatten(),
+                })
+                .collect(),
+            base_layers: (steps.len() == layers)
+                .then(|| base_layers(&config.history))
+                .flatten(),
+            // An annotation is this image's own; a label can be inherited from its base, and
+            // then names the base's base.
+            base_name: annotations
+                .get(BASE_NAME)
+                .or_else(|| config.config.labels.as_ref()?.get(BASE_NAME))
+                .cloned(),
+        }
+    }
 }
 
 /// Normalize an archive path to `a/b/c`; `None` for the root itself. A `..` component is an
@@ -280,6 +394,24 @@ impl ImageFs {
         &self.skipped
     }
 
+    /// How the image was built.
+    pub fn build(&self) -> &Build {
+        &self.build
+    }
+
+    /// The layer an installed package has been there since at this version. `None` when an
+    /// intermediate package database could not be read.
+    pub fn introduced(&self, name: &str, version: &str) -> Option<usize> {
+        self.introduced
+            .get(&(name.to_string(), version.to_string()))
+            .copied()
+    }
+
+    /// The layer that wrote the file at `path`.
+    pub fn file_layer(&self, path: &str) -> Option<usize> {
+        self.entries.get(path).map(|e| e.layer)
+    }
+
     /// Build a view from in-memory `(path, content)` files, for tests and callers that
     /// already hold the files.
     pub fn from_files<'a>(files: impl IntoIterator<Item = (&'a str, &'a [u8])>) -> ImageFs {
@@ -327,6 +459,7 @@ impl ImageFs {
                 Ok(None) => continue,
                 Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
             };
+            self.packages_changed |= crate::packages::wanted(&path) || path.contains(".wh.");
             let node = match entry.kind {
                 Kind::File if want(&path) => {
                     let limit = file_limit(&path);
@@ -362,7 +495,28 @@ impl ImageFs {
             };
             self.apply(layer, path, node);
         }
+        self.note_packages(layer);
         Ok(())
+    }
+
+    /// After a layer that changed a package database: a package at a version the layer below
+    /// did not have was installed by this layer. A database that cannot be read here leaves
+    /// what it changed to the next one that can.
+    fn note_packages(&mut self, layer: usize) {
+        if !std::mem::take(&mut self.packages_changed) {
+            return;
+        }
+        let inventory = crate::packages::inventory(self);
+        if !inventory.problems.is_empty() {
+            return;
+        }
+        let mut now = BTreeMap::new();
+        for p in inventory.packages {
+            let key = (p.name, p.version);
+            let since = self.introduced.get(&key).copied().unwrap_or(layer);
+            now.insert(key, since);
+        }
+        self.introduced = now;
     }
 }
 
@@ -566,8 +720,41 @@ impl Source for SeekFile {
     }
 }
 
+/// What is read from an image's config.
+#[derive(Deserialize, Default)]
+struct ImageConfig {
+    #[serde(default)]
+    rootfs: RootFs,
+    #[serde(default)]
+    history: Vec<History>,
+    #[serde(default)]
+    config: RunConfig,
+}
+
+#[derive(Deserialize, Default)]
+struct RootFs {
+    #[serde(default)]
+    diff_ids: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct History {
+    #[serde(default)]
+    created_by: String,
+    #[serde(default)]
+    empty_layer: bool,
+}
+
+#[derive(Deserialize, Default)]
+struct RunConfig {
+    #[serde(rename = "Labels", default)]
+    labels: Option<BTreeMap<String, String>>,
+}
+
 #[derive(Deserialize)]
 struct DockerManifest {
+    #[serde(rename = "Config", default)]
+    config: Option<String>,
     #[serde(rename = "Layers")]
     layers: Vec<String>,
     #[serde(rename = "RepoTags", default)]
@@ -611,6 +798,10 @@ impl Platform {
 #[derive(Deserialize)]
 struct OciManifest {
     #[serde(default)]
+    config: Option<Descriptor>,
+    #[serde(default)]
+    annotations: BTreeMap<String, String>,
+    #[serde(default)]
     layers: Vec<Descriptor>,
     /// Present when this "manifest" is in fact an index (nested image index).
     #[serde(default)]
@@ -621,6 +812,15 @@ struct OciManifest {
 struct Layer {
     name: String,
     digest: Option<String>,
+}
+
+/// The one image in an archive.
+struct Manifest {
+    /// Bottom first.
+    layers: Vec<Layer>,
+    /// The archive member holding its config.
+    config: Option<String>,
+    annotations: BTreeMap<String, String>,
 }
 
 fn blob_name(digest: &str) -> Option<String> {
@@ -638,12 +838,12 @@ fn digest_of_name(name: &str) -> Option<String> {
     (hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit())).then(|| format!("sha256:{hex}"))
 }
 
-/// The layers of the one image in an archive, bottom first.
-fn layers_of(
+/// The manifest of the one image in an archive.
+fn manifest_of(
     archive: &Archive,
     label: &Path,
     platform: Option<&str>,
-) -> Result<Vec<Layer>, OsError> {
+) -> Result<Manifest, OsError> {
     if archive.has("manifest.json") {
         let manifests: Vec<DockerManifest> = archive.read_json("manifest.json", label)?;
         let one = match manifests.as_slice() {
@@ -664,17 +864,21 @@ fn layers_of(
                 ));
             }
         };
-        return Ok(one
-            .layers
-            .iter()
-            .map(|l| {
-                let name = normalize_lexical(l);
-                Layer {
-                    digest: digest_of_name(&name),
-                    name,
-                }
-            })
-            .collect());
+        return Ok(Manifest {
+            layers: one
+                .layers
+                .iter()
+                .map(|l| {
+                    let name = normalize_lexical(l);
+                    Layer {
+                        digest: digest_of_name(&name),
+                        name,
+                    }
+                })
+                .collect(),
+            config: one.config.as_deref().map(normalize_lexical),
+            annotations: BTreeMap::new(),
+        });
     }
     if archive.has("index.json") {
         let index: OciIndex = archive.read_json("index.json", label)?;
@@ -732,7 +936,7 @@ fn layers_of(
                 "no image manifest with its layers present",
             ));
         };
-        return manifest
+        let layers = manifest
             .layers
             .iter()
             .map(|l| {
@@ -743,7 +947,12 @@ fn layers_of(
                     digest: Some(l.digest.clone()),
                 })
             })
-            .collect();
+            .collect::<Result<Vec<Layer>, OsError>>()?;
+        return Ok(Manifest {
+            layers,
+            config: manifest.config.and_then(|c| blob_name(&c.digest)),
+            annotations: manifest.annotations,
+        });
     }
     Err(OsError::image(
         label,
@@ -802,9 +1011,20 @@ fn open_layers(
     want: &dyn Fn(&str) -> bool,
     platform: Option<&str>,
 ) -> Result<ImageFs, OsError> {
-    let layers = layers_of(archive, label, platform)?;
-    let mut fs = ImageFs::default();
-    for (i, layer) in layers.iter().enumerate() {
+    let manifest = manifest_of(archive, label, platform)?;
+    // The config describes the image; nothing matched depends on it, so one that cannot be
+    // read costs the description only.
+    let config = manifest
+        .config
+        .as_deref()
+        .filter(|name| archive.has(name))
+        .and_then(|name| archive.read_json::<ImageConfig>(name, label).ok())
+        .unwrap_or_default();
+    let mut fs = ImageFs {
+        build: Build::new(manifest.layers.len(), &config, &manifest.annotations),
+        ..ImageFs::default()
+    };
+    for (i, layer) in manifest.layers.iter().enumerate() {
         let (raw, _) = archive.open(&layer.name)?;
         let mut hasher = Sha256::new();
         {
@@ -932,6 +1152,76 @@ mod tests {
     fn layered(layers: &[Vec<u8>]) -> ImageFs {
         let layers: Vec<&[u8]> = layers.iter().map(Vec::as_slice).collect();
         ImageFs::from_layers(&layers, &all).unwrap()
+    }
+
+    #[test]
+    fn packages_are_attributed_to_the_layer_that_installed_them() {
+        let stanza = |n: &str, v: &str| {
+            format!("Package: {n}\nStatus: install ok installed\nVersion: {v}\n\n")
+        };
+        let status = |text: String| tar(&[E::File("var/lib/dpkg/status", text.as_bytes())]);
+        let (a1, b1, a2) = (stanza("a", "1"), stanza("b", "1"), stanza("a", "2"));
+        let fs = layered(&[
+            status(a1.clone()),
+            tar(&[E::File("opt/unrelated", b"x")]),
+            status(format!("{a1}{b1}")),
+            status(format!("{a2}{b1}")),
+        ]);
+        assert_eq!(fs.introduced("a", "2"), Some(3));
+        assert_eq!(fs.introduced("a", "1"), None);
+        assert_eq!(fs.introduced("b", "1"), Some(2));
+        assert_eq!(fs.file_layer("opt/unrelated"), Some(1));
+        // Removed and installed again: from the layer that put it back.
+        let fs = layered(&[
+            status(format!("{a1}{b1}")),
+            status(a1.clone()),
+            status(format!("{a1}{b1}")),
+        ]);
+        assert_eq!(fs.introduced("a", "1"), Some(0));
+        assert_eq!(fs.introduced("b", "1"), Some(2));
+    }
+
+    #[test]
+    fn the_base_image_ends_at_its_cmd() {
+        let h = |step: &str, empty: bool| History {
+            created_by: step.to_string(),
+            empty_layer: empty,
+        };
+        // `FROM debian` (ADD, CMD), then RUN, COPY, then the image's own CMD.
+        let classic = [
+            h("/bin/sh -c #(nop) ADD file:abc in / ", false),
+            h("/bin/sh -c #(nop)  CMD [\"bash\"]", true),
+            h("/bin/sh -c apt-get update", false),
+            h("/bin/sh -c #(nop) COPY file:def in /app", false),
+            h("/bin/sh -c #(nop)  CMD [\"app\"]", true),
+        ];
+        assert_eq!(base_layers(&classic), Some(1));
+        let buildkit = [
+            h("ADD rootfs.tar / # buildkit", false),
+            h("RUN /bin/sh -c yum install -y x # buildkit", false),
+            h("CMD [\"/bin/bash\"]", true),
+            h("COPY app /app # buildkit", false),
+        ];
+        assert_eq!(base_layers(&buildkit), Some(2));
+        // A base image itself: its own CMD has no layer above it.
+        assert_eq!(base_layers(&classic[..2]), None);
+        assert_eq!(base_layers(&[]), None);
+        // No CMD below the last layer: the history does not say.
+        assert_eq!(base_layers(&classic[2..]), None);
+    }
+
+    #[test]
+    fn build_steps_read_as_a_dockerfile() {
+        let step = |s: &str| build_step(s).unwrap();
+        assert_eq!(step("/bin/sh -c #(nop)  CMD [\"bash\"]"), "CMD [\"bash\"]");
+        assert_eq!(step("/bin/sh -c apt-get   update"), "RUN apt-get update");
+        assert_eq!(
+            step("RUN /bin/sh -c apk add curl # buildkit"),
+            "RUN apk add curl"
+        );
+        assert_eq!(step("COPY app /app # buildkit"), "COPY app /app");
+        assert_eq!(build_step("  "), None);
+        assert!(step(&"é".repeat(300)).len() <= MAX_CREATED_BY);
     }
 
     #[test]
