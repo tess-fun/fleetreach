@@ -27,7 +27,15 @@
 //!   Bugzilla reports an update closes (`CVE-2026-1234 xmlstarlet: ... [fedora-all]`), so
 //!   those are its aliases; an update that names none is reported by its own id.
 //!
-//! All five name binary packages. Conversion is strict: a feed whose shape is not the one
+//! - **CBL-Mariner 2.0**: Microsoft's OVAL (`cbl-mariner-2.0-oval.xml`), one record per CVE.
+//!   Microsoft stopped publishing Mariner 2 to OSV in April 2026 and its OVAL ran on to May,
+//!   so the OVAL is read as an overlay over osv.dev's records (`Azure Linux:2::oval`): where it
+//!   names a CVE for a package, it is the word that counts. A definition is one version line
+//!   of a package: fixed below its "less than" version (from its "greater than" bound, if
+//!   any), open up to its "or earlier" version when no patch is available, and not affected
+//!   when Microsoft marks it "Not Applicable".
+//!
+//! All six name binary packages. Conversion is strict: a feed whose shape is not the one
 //! described here is an error, never a partial set of records.
 
 use std::collections::BTreeMap;
@@ -49,6 +57,8 @@ pub enum Kind {
     BottlerocketUpdateinfo,
     /// A Fedora updates repository's `updateinfo.xml.zst`.
     FedoraUpdateinfo,
+    /// Microsoft's CBL-Mariner OVAL definitions, plain XML.
+    MarinerOval,
 }
 
 /// A vendor feed serving one ecosystem.
@@ -73,6 +83,9 @@ pub const FEDORA_FIRST: u32 = 41;
 const FEDORA_LIVE: &str = "https://dl.fedoraproject.org/pub/fedora/linux/updates/";
 const FEDORA_ARCHIVE: &str = "https://archives.fedoraproject.org/pub/archive/fedora/linux/updates/";
 
+/// The overlay ecosystem holding Microsoft's CBL-Mariner 2.0 OVAL (see the module docs).
+pub const MARINER_2_OVAL: &str = "Azure Linux:2::oval";
+
 /// Where an ended Fedora release's updates repository moves: the archive, given the live
 /// repository's [`Feed::url`].
 pub fn fedora_archive(live: &str) -> Option<String> {
@@ -82,6 +95,15 @@ pub fn fedora_archive(live: &str) -> Option<String> {
 
 /// The vendor feed for `ecosystem`, if it is one fleetreach reads from its vendor.
 pub fn feed_for(ecosystem: &str) -> Option<Feed> {
+    if ecosystem == MARINER_2_OVAL {
+        return Some(Feed {
+            ecosystem: ecosystem.to_string(),
+            kind: Kind::MarinerOval,
+            url: "https://raw.githubusercontent.com/microsoft/AzureLinuxVulnerabilityData/main/\
+                  cbl-mariner-2.0-oval.xml"
+                .to_string(),
+        });
+    }
     if ecosystem == BOTTLEROCKET {
         return Some(Feed {
             ecosystem: ecosystem.to_string(),
@@ -181,7 +203,7 @@ fn decompress(raw: &[u8], kind: Kind) -> Result<Vec<u8>, String> {
         Kind::OracleOval => bzip2_rs::DecoderReader::new(raw)
             .take(MAX_FEED_BYTES)
             .read_to_end(&mut out),
-        Kind::PhotonCves => return Ok(raw.to_vec()),
+        Kind::PhotonCves | Kind::MarinerOval => return Ok(raw.to_vec()),
         Kind::FedoraUpdateinfo => {
             crate::image::decompress(raw).and_then(|r| r.take(MAX_FEED_BYTES).read_to_end(&mut out))
         }
@@ -209,6 +231,7 @@ pub fn convert(feed: &Feed, raw: &[u8]) -> Result<Vec<Record>, String> {
         Kind::FedoraUpdateinfo => updateinfo(&feed.ecosystem, text(&body)?, Vendor::Fedora)?,
         Kind::OracleOval => oracle(&feed.ecosystem, text(&body)?)?,
         Kind::PhotonCves => photon(&feed.ecosystem, &body)?,
+        Kind::MarinerOval => mariner(&feed.ecosystem, text(&body)?)?,
     };
     if records.is_empty() {
         return Err(format!("the {} feed holds no advisories", feed.ecosystem));
@@ -603,6 +626,184 @@ fn walk(
     Ok(())
 }
 
+/// One package's version lines in a Mariner OVAL CVE: `(introduced, fixed)` for a patched
+/// line, `(introduced, last affected)` for one with no patch yet.
+#[derive(Default)]
+struct MarinerPackage {
+    fixed: Vec<(String, String)>,
+    open: Vec<String>,
+    not_applicable: bool,
+}
+
+fn mariner(ecosystem: &str, xml: &str) -> Result<Vec<(String, Value)>, String> {
+    let opts = roxmltree::ParsingOptions {
+        allow_dtd: false,
+        ..roxmltree::ParsingOptions::default()
+    };
+    let doc =
+        roxmltree::Document::parse_with_options(xml, opts).map_err(|e| format!("OVAL: {e}"))?;
+    let root = doc.root_element();
+    let section = |tag: &str| root.children().find(|n| n.has_tag_name(tag));
+    let by_id = |tag: &str| -> BTreeMap<&str, roxmltree::Node> {
+        section(tag)
+            .into_iter()
+            .flat_map(|s| s.children().filter(roxmltree::Node::is_element))
+            .filter_map(|n| n.attribute("id").map(|id| (id, n)))
+            .collect()
+    };
+    let (tests, objects, states) = (by_id("tests"), by_id("objects"), by_id("states"));
+    // A test's package name, comparison and version.
+    let test = |test_ref: &str| -> Option<(&str, &str, &str)> {
+        let test = tests.get(test_ref)?;
+        let child = |tag: &str, attr: &str| {
+            test.children()
+                .find(|c| c.has_tag_name(tag))
+                .and_then(|c| c.attribute(attr))
+        };
+        let evr = states
+            .get(child("state", "state_ref")?)?
+            .children()
+            .find(|c| c.has_tag_name("evr"))?;
+        let object = objects.get(child("object", "object_ref")?)?;
+        let name = object.children().find(|c| c.has_tag_name("name"))?.text()?;
+        Some((name.trim(), evr.attribute("operation")?, evr.text()?.trim()))
+    };
+    let parse = |v: &str| {
+        crate::RpmVersion::parse(v)
+            .map(|_| v.to_string())
+            .ok_or_else(|| format!("unparseable version {v}"))
+    };
+
+    let mut by_cve: BTreeMap<String, (Option<&str>, BTreeMap<String, MarinerPackage>)> =
+        BTreeMap::new();
+    let definitions = section("definitions").ok_or("OVAL: no <definitions>")?;
+    for def in definitions
+        .children()
+        .filter(|n| n.has_tag_name("definition"))
+    {
+        let id = def.attribute("id").unwrap_or("?");
+        let meta = def
+            .children()
+            .find(|n| n.has_tag_name("metadata"))
+            .ok_or_else(|| format!("OVAL: {id} has no metadata"))?;
+        let meta_text = |tag: &str| {
+            meta.children()
+                .find(|n| n.has_tag_name(tag))
+                .and_then(|n| n.text())
+                .map(str::trim)
+        };
+        let cves: Vec<&str> = meta
+            .children()
+            .filter(|n| n.has_tag_name("reference") && n.attribute("source") == Some("CVE"))
+            .filter_map(|n| n.attribute("ref_id"))
+            .collect();
+        let [cve] = cves[..] else {
+            return Err(format!("OVAL: {id} names {} CVEs, not one", cves.len()));
+        };
+        let criteria = def
+            .children()
+            .find(|n| n.has_tag_name("criteria"))
+            .filter(|c| c.attribute("operator") == Some("AND"))
+            .filter(|c| !c.children().any(|n| n.has_tag_name("criteria")))
+            .ok_or_else(|| format!("OVAL: {id}: criteria are not one AND of tests"))?;
+        let mut name = None;
+        let (mut below, mut above, mut up_to) = (None, None, None);
+        for c in criteria.children().filter(|n| n.has_tag_name("criterion")) {
+            let (n, op, v) = c
+                .attribute("test_ref")
+                .and_then(test)
+                .filter(|_| c.attribute("negate").is_none_or(|n| n == "false"))
+                .ok_or_else(|| format!("OVAL: {id}: a criterion is not a package test"))?;
+            if name.is_some_and(|m| m != n) {
+                return Err(format!("OVAL: {id}: tests on two packages"));
+            }
+            name = Some(n);
+            let slot = match op {
+                "less than" => &mut below,
+                "greater than" => &mut above,
+                "less than or equal" => &mut up_to,
+                other => return Err(format!("OVAL: {id}: comparison {other:?}")),
+            };
+            if slot.replace(v).is_some() {
+                return Err(format!("OVAL: {id}: two {op:?} tests"));
+            }
+        }
+        let name = name.ok_or_else(|| format!("OVAL: {id}: no package test"))?;
+        let (severity, packages) = by_cve.entry(cve.to_string()).or_default();
+        *severity = severity.or(meta_text("severity").and_then(band));
+        let package = packages.entry(name.to_string()).or_default();
+        // A lower bound is written as a bare version with the release tag (`0:1.19.0.cm2`),
+        // which rpm orders above that version's own builds (`1.19.0-1.cm2`): without the tag
+        // those builds stay in the line.
+        let introduced = match above {
+            None => "0".to_string(),
+            Some(v) => {
+                let v = v.strip_suffix(".cm2").unwrap_or(v);
+                if v == "0:0.0.0" {
+                    "0".to_string()
+                } else {
+                    parse(v)?
+                }
+            }
+        };
+        match (meta_text("patchable"), below, up_to) {
+            (Some("Not Applicable"), ..) => package.not_applicable = true,
+            (Some("true"), Some(fix), None) => package.fixed.push((introduced, parse(fix)?)),
+            (Some("false"), None, Some(last)) if above.is_none() => {
+                package.open.push(parse(last)?);
+            }
+            (p, ..) => {
+                return Err(format!(
+                    "OVAL: {id}: patchable {p:?} with these tests is not understood"
+                ))
+            }
+        }
+    }
+    let source = "https://github.com/microsoft/AzureLinuxVulnerabilityData";
+    Ok(by_cve
+        .into_iter()
+        .map(|(cve, (severity, packages))| {
+            let affected: Vec<Value> = packages
+                .into_iter()
+                .map(|(name, p)| {
+                    let mut ranges: Vec<Value> = p
+                        .fixed
+                        .iter()
+                        .map(|(intro, fix)| {
+                            json!({"type": "ECOSYSTEM",
+                                "events": [{"introduced": intro}, {"fixed": fix}]})
+                        })
+                        .collect();
+                    ranges.extend(p.open.iter().map(|last| {
+                        json!({"type": "ECOSYSTEM",
+                            "events": [{"introduced": "0"}, {"last_affected": last}]})
+                    }));
+                    let mut a = json!({
+                        "package": {"ecosystem": ecosystem, "name": name},
+                        "ranges": ranges,
+                    });
+                    // Only "Not Applicable": Microsoft's word that it is not affected.
+                    if p.not_applicable && p.fixed.is_empty() && p.open.is_empty() {
+                        a["ecosystem_specific"] = json!({"status": "not affected"});
+                    }
+                    a
+                })
+                .collect();
+            let mut r = json!({
+                "id": cve,
+                "summary": cve,
+                "aliases": [],
+                "affected": affected,
+                "database_specific": {"source": source},
+            });
+            if let Some(s) = severity {
+                r["database_specific"]["severity"] = json!(s);
+            }
+            (cve, r)
+        })
+        .collect())
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PhotonRow {
@@ -664,6 +865,124 @@ mod tests {
             .iter()
             .map(|r| serde_json::from_slice(&r.json).unwrap())
             .collect()
+    }
+
+    #[test]
+    fn mariner_oval_version_lines() {
+        // One definition per package version line, as Microsoft writes them.
+        let def = |n: u32, cve: &str, patchable: &str, tests: &[(&str, &str, &str)]| {
+            let crit: String = (0..tests.len())
+                .map(|i| format!(r#"<criterion comment="c" test_ref="tst:{n}{i}"/>"#))
+                .collect();
+            let defn = format!(
+                r#"<definition class="vulnerability" id="def:{n}" version="1"><metadata>
+                <title>{cve}</title><reference ref_id="{cve}" source="CVE"/>
+                <patchable>{patchable}</patchable><severity>High</severity></metadata>
+                <criteria operator="AND">{crit}</criteria></definition>"#
+            );
+            let mut t = String::new();
+            let mut o = String::new();
+            let mut st = String::new();
+            for (i, (name, op, evr)) in tests.iter().enumerate() {
+                t += &format!(
+                    r#"<rpminfo_test id="tst:{n}{i}"><object object_ref="obj:{n}{i}"/>
+                    <state state_ref="ste:{n}{i}"/></rpminfo_test>"#
+                );
+                o += &format!(
+                    r#"<rpminfo_object id="obj:{n}{i}"><name>{name}</name></rpminfo_object>"#
+                );
+                st += &format!(
+                    r#"<rpminfo_state id="ste:{n}{i}"><evr operation="{op}">{evr}</evr></rpminfo_state>"#
+                );
+            }
+            (defn, t, o, st)
+        };
+        let defs = [
+            def(
+                1,
+                "CVE-2026-1",
+                "true",
+                &[
+                    ("golang", "less than", "0:1.18.8-10.cm2"),
+                    ("golang", "greater than", "0:1.18.0.cm2"),
+                ],
+            ),
+            def(
+                2,
+                "CVE-2026-1",
+                "true",
+                &[
+                    ("golang", "less than", "0:1.22.7-5.cm2"),
+                    ("golang", "greater than", "0:1.19.0.cm2"),
+                ],
+            ),
+            def(
+                3,
+                "CVE-2026-2",
+                "true",
+                &[
+                    ("curl", "less than", "0:8.8.0-2.cm2"),
+                    ("curl", "greater than", "0:0.0.0.cm2"),
+                ],
+            ),
+            def(
+                4,
+                "CVE-2026-3",
+                "false",
+                &[("syslinux", "less than or equal", "0:6.04-10.cm2")],
+            ),
+            def(
+                5,
+                "CVE-2026-4",
+                "Not Applicable",
+                &[("syslinux", "less than or equal", "0:6.04-10.cm2")],
+            ),
+        ];
+        let xml = format!(
+            "<oval_definitions><definitions>{}</definitions><tests>{}</tests>\
+             <objects>{}</objects><states>{}</states></oval_definitions>",
+            defs.iter().map(|d| d.0.as_str()).collect::<String>(),
+            defs.iter().map(|d| d.1.as_str()).collect::<String>(),
+            defs.iter().map(|d| d.2.as_str()).collect::<String>(),
+            defs.iter().map(|d| d.3.as_str()).collect::<String>(),
+        );
+        let feed = feed_for(MARINER_2_OVAL).unwrap();
+        assert_eq!(feed.kind, Kind::MarinerOval);
+        let r = parsed(&convert(&feed, xml.as_bytes()).unwrap());
+        let ids: Vec<&str> = r.iter().map(|v| v["id"].as_str().unwrap()).collect();
+        assert_eq!(
+            ids,
+            ["CVE-2026-1", "CVE-2026-2", "CVE-2026-3", "CVE-2026-4"]
+        );
+        // Two version lines of one package; a lower bound without the release tag.
+        assert_eq!(
+            r[0]["affected"][0]["ranges"],
+            json!([
+                {"type": "ECOSYSTEM", "events": [{"introduced": "0:1.18.0"}, {"fixed": "0:1.18.8-10.cm2"}]},
+                {"type": "ECOSYSTEM", "events": [{"introduced": "0:1.19.0"}, {"fixed": "0:1.22.7-5.cm2"}]},
+            ])
+        );
+        assert_eq!(r[0]["database_specific"]["severity"], "HIGH");
+        assert_eq!(
+            r[1]["affected"][0]["ranges"][0]["events"][0]["introduced"],
+            "0"
+        );
+        // No patch: open up to the version named.
+        assert_eq!(
+            r[2]["affected"][0]["ranges"][0]["events"],
+            json!([{"introduced": "0"}, {"last_affected": "0:6.04-10.cm2"}])
+        );
+        // Not Applicable: no range, Microsoft's "not affected".
+        assert_eq!(r[3]["affected"][0]["ranges"], json!([]));
+        assert_eq!(
+            r[3]["affected"][0]["ecosystem_specific"]["status"],
+            "not affected"
+        );
+        // Strict: a shape not described fails the conversion.
+        let odd = xml.replace("less than or equal", "equals");
+        assert!(convert(&feed, odd.as_bytes())
+            .unwrap_err()
+            .contains("equals"));
     }
 
     #[test]

@@ -642,6 +642,20 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     the 24 rpm images: flagged Amazon Linux 2 (both), CentOS 7, Fedora 41, Leap 15.5 and
     15.6, SLES 15.6 (LTSS until 2028-12-31); Grype v0.121.1 flags only Amazon Linux 2 and
     Fedora 41. Not covered by endoflife.date: Azure Linux, openEuler, Bottlerocket.
+    **Status: CBL-Mariner 2.0 OVAL implemented 2026-11-03, unreleased.** Microsoft's OSV for
+    Mariner 2 stopped in April 2026 (every record `modified` 2026-04), its OVAL on 2026-05-06;
+    both look final. Against the OVAL, osv.dev lacks 269 pairs and lists 153 fixes as open, and
+    has 1,485 pairs the OVAL does not, so the OVAL is an overlay (`Azure Linux:2::oval`, one
+    record per CVE) that supersedes per CVE and package, not a replacement. Definitions: `true`
+    with "less than" (and optional "greater than") is a fixed range, `false` with "less than or
+    equal" is open to `last_affected`, `Not Applicable` is `ranges: []`, "not affected". A
+    package can have several version lines (golang 1.18 and 1.22). **Found**: lower bounds
+    carry the release tag (`0:1.19.0.cm2`), which rpm orders above `1.19.0-1.cm2`, so those
+    builds would fall in neither line; the tag is dropped. Validated on 2.0.20230126: Grype
+    v0.121.1 134 of 134 with no status difference, raw OVAL evaluated with rpm's ordering 111 of
+    111; 70 extras are 55 OVAL pairs (Grype lacks `openssl` CVE-2022-4304, which the OVAL lists
+    below `-21`, and subpackages of hits) and 15 from Microsoft's OSV records. Current image:
+    the 2 pairs osv.dev missed now match. Azure Linux 3 needs no overlay: its OSV is daily.
     **Status: Fedora implemented 2026-11-03, unreleased.** Fedora publishes nothing to osv.dev;
     the vendor feed is the updates repository's `updateinfo.xml.zst` (Bodhi's FEDORA ids),
     `type="security"` only, CVEs from the Bugzilla reference titles, falling back to

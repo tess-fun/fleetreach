@@ -512,11 +512,16 @@ pub fn detect(
             if os.id == "mariner" && r != "2" {
                 return Err(format!("{pretty}: only CBL-Mariner 2.0 is in osv.dev"));
             }
-            rpm(
+            let mut d = rpm(
                 format!("Azure Linux {r}"),
                 "azure-linux",
                 format!("Azure Linux:{r}"),
-            )
+            );
+            // Microsoft's last CBL-Mariner 2.0 advisories are only in its OVAL.
+            if r == "2" {
+                d.overlays.push(crate::feeds::MARINER_2_OVAL.to_string());
+            }
+            d
         }
         "mageia" => {
             let r = release("Mageia")?;
@@ -958,7 +963,7 @@ mod tests {
         );
         assert_eq!(
             eco("ID=mariner\nVERSION_ID=\"2.0\"\n").0,
-            vec!["Azure Linux:2"]
+            vec!["Azure Linux:2", "Azure Linux:2::oval"]
         );
         assert_eq!(
             eco("ID=\"openEuler\"\nVERSION=\"22.03 (LTS-SP3)\"\nVERSION_ID=\"22.03\"\n").0,

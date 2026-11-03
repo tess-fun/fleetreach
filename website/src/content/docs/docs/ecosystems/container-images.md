@@ -79,6 +79,7 @@ osv.dev exports:
 | Oracle Linux | 7, 8, 9, 10 | Oracle's OVAL definitions | ELSA |
 | Photon OS | 3.0, 4.0, 5.0 | VMware's CVE metadata | CVE |
 | Fedora | 41 and later | the updates repository's `updateinfo.xml.zst` (what `dnf updateinfo` reads), security updates only, from the archive once a release leaves the mirrors | FEDORA (Bodhi) |
+| CBL-Mariner | 2.0, over its osv.dev records | Microsoft's OVAL (`cbl-mariner-2.0-oval.xml`) | CVE |
 | Bottlerocket | every variant and version | `advisories.bottlerocket.aws/updateinfo.xml.gz` | BRSA, GHSA |
 
 These advisories name binary packages, and findings link the vendor's advisory page. Oracle
@@ -89,7 +90,10 @@ shape fleetreach does not recognize fails the sync rather than load partly. Resu
 `yum updateinfo` on Amazon Linux 2 and `dnf updateinfo` on Amazon Linux 2023, Oracle
 Linux 8 and Fedora 43. Fedora's updates name their CVEs only in the titles of the Red Hat
 Bugzilla bugs they close, and those are what fleetreach reports; Fedora 40 and older are a
-coverage gap. One known difference: Oracle's OVAL leaves out a few reissued ELSAs, so dnf can name
+coverage gap. Microsoft stopped sending CBL-Mariner 2.0 to OSV in April 2026 while its OVAL ran
+on to May, so the OVAL (`db sync --distros "Azure Linux:2::oval"`) is read over osv.dev's
+records: where it names a CVE for a package, including "Not Applicable", it is the word that
+counts. One known difference: Oracle's OVAL leaves out a few reissued ELSAs, so dnf can name
 an advisory fleetreach does not, while the same CVEs are reported under the reissue's id.
 
 Bottlerocket is a host OS rather than a container image, and it ships no rpm database: scan its

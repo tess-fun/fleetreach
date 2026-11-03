@@ -1002,6 +1002,56 @@ mod tests {
     }
 
     #[test]
+    fn mariner_oval_overrules_osv_per_cve() {
+        let os = crate::distro::parse_os_release("ID=mariner\nVERSION_ID=\"2.0\"\n");
+        let mariner = crate::distro::detect(&os, None, Default::default()).unwrap();
+        let (osv, oval) = ("Azure Linux:2", crate::feeds::MARINER_2_OVAL);
+        let mut db = DistroDb::default();
+        let open = |id: &str, cve: &str| {
+            let mut a = adv(id, &[("introduced", "0")], RpmVersion::parse);
+            a.aliases = vec![cve.into()];
+            a
+        };
+        // osv.dev still has it open; the OVAL has the fix.
+        db.insert_rpm(osv, "curl", open("AZL-1", "CVE-2026-1"));
+        let mut fixed = adv(
+            "CVE-2026-1",
+            &[("introduced", "0"), ("fixed", "0:8.8.0-2.cm2")],
+            RpmVersion::parse,
+        );
+        fixed.aliases.clear();
+        db.insert_rpm(oval, "curl", fixed);
+        // Not Applicable in the OVAL: not affected, whatever osv.dev says.
+        db.insert_rpm(osv, "curl", open("AZL-2", "CVE-2026-2"));
+        let mut not_applicable = adv("CVE-2026-2", &[], RpmVersion::parse);
+        not_applicable.ranges.clear();
+        db.insert_rpm(oval, "curl", not_applicable);
+        // The OVAL says nothing: osv.dev's record stands.
+        db.insert_rpm(osv, "curl", open("AZL-3", "CVE-2026-3"));
+        let pkgs = vec![OsPackage {
+            name: "curl".into(),
+            version: "0:8.8.0-1.cm2".into(),
+            source: "curl".into(),
+            source_version: "0:8.8.0-1.cm2".into(),
+            arch: None,
+            module: None,
+        }];
+        let s = scan(
+            &mariner,
+            &pkgs,
+            &db,
+            &RepoId("img".into()),
+            ScanOptions::default(),
+        );
+        let got: Vec<(&str, bool)> = s
+            .findings
+            .iter()
+            .map(|f| (f.advisory_id.as_str(), f.title.contains("fixed in")))
+            .collect();
+        assert_eq!(got, [("AZL-3", false), ("CVE-2026-1", true)]);
+    }
+
+    #[test]
     fn centos_takes_red_hat_fixes_only_where_it_shipped_them() {
         let pkg = |name: &str, version: &str| OsPackage {
             name: name.into(),

@@ -92,6 +92,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   AlmaLinux 8 equal to dnf; on a UBI 8 image with php, nodejs, ruby and perl streams, 171
   other-stream pairs gone, 27 open statuses for the installed streams back, and every one of
   Grype v0.121.1's 751 pairs reported.
+- **CBL-Mariner 2.0 from Microsoft's OVAL** (spec 16, row 10, phase 2). osv.dev's Mariner 2
+  records stopped in April 2026, while Microsoft's OVAL ran on to May: 269 CVE and package pairs
+  missing and 153 fixes still listed as open. The OVAL is now read over osv.dev's records
+  (`db sync --distros "Azure Linux:2::oval"`); where it names a CVE for a package, including
+  "Not Applicable", it wins. On a 2023 image every pair Grype v0.121.1 reports is reported with
+  the same status, and every pair the raw OVAL finds affected.
 - **CentOS Linux 6, 7 and 8** (spec 16, row 10, phase 2). Matched against Red Hat's records
   for the release each rebuilt, with Red Hat's open statuses. A Red Hat fix counts as fixed
   only when CentOS shipped it, from a bundled list of each release's final builds
