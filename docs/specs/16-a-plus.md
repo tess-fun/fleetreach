@@ -642,6 +642,13 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     the 24 rpm images: flagged Amazon Linux 2 (both), CentOS 7, Fedora 41, Leap 15.5 and
     15.6, SLES 15.6 (LTSS until 2028-12-31); Grype v0.121.1 flags only Amazon Linux 2 and
     Fedora 41. Not covered by endoflife.date: Azure Linux, openEuler, Bottlerocket.
+    **Status: Fedora implemented 2026-11-03, unreleased.** Fedora publishes nothing to osv.dev;
+    the vendor feed is the updates repository's `updateinfo.xml.zst` (Bodhi's FEDORA ids),
+    `type="security"` only, CVEs from the Bugzilla reference titles, falling back to
+    `archives.fedoraproject.org` on a 404. Releases 41 and later (older ones ship xz, and are
+    past their end of life), so Fedora 40 and older stay a gap. Validated on a Fedora 43 GA
+    image: 26 of 26 advisories and 51 of 51 advisory and package pairs equal to `dnf
+    updateinfo list --security`; a current Fedora 41 image 0 and 0. CentOS stays a gap.
     **Status: Bottlerocket implemented 2026-11-03, unreleased.** Feed
     `advisories.bottlerocket.aws/updateinfo.xml.gz` (1,841 advisories, 190 KB) converted by the
     updateinfo converter into one `Bottlerocket` ecosystem; packages from

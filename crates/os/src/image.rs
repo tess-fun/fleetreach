@@ -393,7 +393,7 @@ impl<R: BufRead> Read for Zstd<R> {
 }
 
 /// Wrap `raw` in the decompressor its first bytes call for (gzip, zstd, or none).
-fn decompress<'a, R: Read + 'a>(raw: R) -> io::Result<Box<dyn Read + 'a>> {
+pub(crate) fn decompress<'a, R: Read + 'a>(raw: R) -> io::Result<Box<dyn Read + 'a>> {
     let mut buf = BufReader::with_capacity(1 << 16, raw);
     let head = buf.fill_buf()?;
     Ok(if head.starts_with(&[0x1f, 0x8b]) {

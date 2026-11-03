@@ -20,7 +20,14 @@
 //!   `kernel-6.1`) while the image's inventory has the short one, so a prefixed name is
 //!   recorded under both.
 //!
-//! All four name binary packages. Conversion is strict: a feed whose shape is not the one
+//! - **Fedora 41 and later**: the `updateinfo.xml.zst` of the release's updates repository
+//!   (the archive's once the release has ended), one record per security update
+//!   (`FEDORA-2026-3c78c99467`, what `dnf updateinfo --security` lists), each binary package
+//!   fixed at the version the update ships. Fedora names CVEs only in the titles of the
+//!   Bugzilla reports an update closes (`CVE-2026-1234 xmlstarlet: ... [fedora-all]`), so
+//!   those are its aliases; an update that names none is reported by its own id.
+//!
+//! All five name binary packages. Conversion is strict: a feed whose shape is not the one
 //! described here is an error, never a partial set of records.
 
 use std::collections::BTreeMap;
@@ -40,6 +47,8 @@ pub enum Kind {
     PhotonCves,
     /// Bottlerocket's `updateinfo.xml.gz`.
     BottlerocketUpdateinfo,
+    /// A Fedora updates repository's `updateinfo.xml.zst`.
+    FedoraUpdateinfo,
 }
 
 /// A vendor feed serving one ecosystem.
@@ -49,13 +58,27 @@ pub struct Feed {
     /// (`Amazon Linux:2023`, `Oracle Linux:9`, `Photon OS:5.0`).
     pub ecosystem: String,
     pub kind: Kind,
-    /// Where to start: the repository mirror list for Amazon Linux (resolved with
-    /// [`updateinfo_url`]), the file itself otherwise.
+    /// Where to start: the repository mirror list for Amazon Linux and the repository's base
+    /// URL for Fedora (each resolved with [`updateinfo_url`]; see [`fedora_archive`] for an
+    /// ended Fedora release), the file itself otherwise.
     pub url: String,
 }
 
 /// Bottlerocket's ecosystem: one for all its variants and versions, as its advisories are.
 pub const BOTTLEROCKET: &str = "Bottlerocket";
+
+/// The first Fedora release with a feed fleetreach reads.
+pub const FEDORA_FIRST: u32 = 41;
+
+const FEDORA_LIVE: &str = "https://dl.fedoraproject.org/pub/fedora/linux/updates/";
+const FEDORA_ARCHIVE: &str = "https://archives.fedoraproject.org/pub/archive/fedora/linux/updates/";
+
+/// Where an ended Fedora release's updates repository moves: the archive, given the live
+/// repository's [`Feed::url`].
+pub fn fedora_archive(live: &str) -> Option<String> {
+    live.strip_prefix(FEDORA_LIVE)
+        .map(|rest| format!("{FEDORA_ARCHIVE}{rest}"))
+}
 
 /// The vendor feed for `ecosystem`, if it is one fleetreach reads from its vendor.
 pub fn feed_for(ecosystem: &str) -> Option<Feed> {
@@ -80,6 +103,11 @@ pub fn feed_for(ecosystem: &str) -> Option<Feed> {
         ("Oracle Linux", r) if digits(r) => (
             Kind::OracleOval,
             format!("https://linux.oracle.com/security/oval/com.oracle.elsa-ol{r}.xml.bz2"),
+        ),
+        // 40 and older publish `updateinfo.xml.xz`, which nothing here decodes.
+        ("Fedora", r) if digits(r) && r.parse::<u32>().is_ok_and(|n| n >= FEDORA_FIRST) => (
+            Kind::FedoraUpdateinfo,
+            format!("{FEDORA_LIVE}{r}/Everything/x86_64/\n"),
         ),
         ("Photon OS", r @ ("3.0" | "4.0" | "5.0")) => (
             Kind::PhotonCves,
@@ -154,6 +182,9 @@ fn decompress(raw: &[u8], kind: Kind) -> Result<Vec<u8>, String> {
             .take(MAX_FEED_BYTES)
             .read_to_end(&mut out),
         Kind::PhotonCves => return Ok(raw.to_vec()),
+        Kind::FedoraUpdateinfo => {
+            crate::image::decompress(raw).and_then(|r| r.take(MAX_FEED_BYTES).read_to_end(&mut out))
+        }
     };
     read.map_err(|e| format!("decompressing the feed: {e}"))?;
     if out.len() as u64 >= MAX_FEED_BYTES {
@@ -175,6 +206,7 @@ pub fn convert(feed: &Feed, raw: &[u8]) -> Result<Vec<Record>, String> {
         Kind::BottlerocketUpdateinfo => {
             updateinfo(&feed.ecosystem, text(&body)?, Vendor::Bottlerocket)?
         }
+        Kind::FedoraUpdateinfo => updateinfo(&feed.ecosystem, text(&body)?, Vendor::Fedora)?,
         Kind::OracleOval => oracle(&feed.ecosystem, text(&body)?)?,
         Kind::PhotonCves => photon(&feed.ecosystem, &body)?,
     };
@@ -267,6 +299,25 @@ fn keep_max(fixed: &mut Fixed, key: (String, Option<String>), evr: String) -> Re
 enum Vendor {
     Amazon,
     Bottlerocket,
+    Fedora,
+}
+
+/// The CVE ids in `text`, in order, without repeats (`CVE-2026-1234`).
+fn cve_ids(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for (i, _) in text.match_indices("CVE-") {
+        let rest = &text[i + 4..];
+        let year: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        let Some(tail) = rest[year.len()..].strip_prefix('-') else {
+            continue;
+        };
+        let num: String = tail.chars().take_while(char::is_ascii_digit).collect();
+        let id = format!("CVE-{year}-{num}");
+        if year.len() == 4 && num.len() >= 4 && !out.contains(&id) {
+            out.push(id);
+        }
+    }
+    out
 }
 
 fn updateinfo(ecosystem: &str, xml: &str, vendor: Vendor) -> Result<Vec<(String, Value)>, String> {
@@ -285,11 +336,28 @@ fn updateinfo(ecosystem: &str, xml: &str, vendor: Vendor) -> Result<Vec<(String,
     let mut out = Vec::new();
     for u in root.children().filter(|n| n.has_tag_name("update")) {
         let id = child_text(u, "id").ok_or("an update has no id")?;
-        let aliases: Vec<String> = u
+        // Fedora's repository also lists bug fixes and enhancements; dnf's `--security`
+        // keeps only these.
+        if matches!(vendor, Vendor::Fedora) && u.attribute("type") != Some("security") {
+            continue;
+        }
+        let mut aliases: Vec<String> = u
             .descendants()
             .filter(|n| n.has_tag_name("reference") && n.attribute("type") == Some("cve"))
             .filter_map(|n| n.attribute("id").map(str::to_string))
             .collect();
+        if matches!(vendor, Vendor::Fedora) {
+            for r in u
+                .descendants()
+                .filter(|n| n.has_tag_name("reference") && n.attribute("type") == Some("bugzilla"))
+            {
+                for cve in cve_ids(r.attribute("title").unwrap_or_default()) {
+                    if !aliases.contains(&cve) {
+                        aliases.push(cve);
+                    }
+                }
+            }
+        }
         let mut fixed = BTreeMap::new();
         for p in u.descendants().filter(|n| n.has_tag_name("package")) {
             let attr = |k: &str| {
@@ -322,6 +390,7 @@ fn updateinfo(ecosystem: &str, xml: &str, vendor: Vendor) -> Result<Vec<(String,
                     ""
                 }
             ),
+            Vendor::Fedora => format!("https://bodhi.fedoraproject.org/updates/{id}"),
             // The advisory's own page (a BRSA file in the kit's repository, or a GitHub
             // security advisory), else the feed.
             Vendor::Bottlerocket => u
@@ -704,6 +773,53 @@ mod tests {
             .as_str()
             .unwrap()
             .ends_with("/advisories/9.6.1/BRSA-x6xvhd26anlv.toml"));
+    }
+
+    #[test]
+    fn fedora_updateinfo_keeps_security_updates_and_bugzilla_cves() {
+        let xml = r#"<?xml version="1.0"?><updates>
+          <update from="updates@fedoraproject.org" status="stable" type="security" version="2.0">
+          <id>FEDORA-2026-3c78c99467</id><title>xmlstarlet-1.6.1-30.fc43</title>
+          <severity>Important</severity>
+          <references>
+            <reference href="https://bugzilla.redhat.com/show_bug.cgi?id=1" id="1" type="bugzilla" title="CVE-2026-1234 CVE-2026-5678 xmlstarlet: XXE [fedora-all]"/>
+            <reference href="https://bugzilla.redhat.com/show_bug.cgi?id=2" id="2" type="bugzilla" title="xmlstarlet crashes (not CVE-12)"/>
+          </references>
+          <pkglist><collection short="F43"><name>Fedora 43</name>
+            <package name="xmlstarlet" version="1.6.1" release="30.fc43" epoch="0" arch="src"/>
+            <package name="xmlstarlet" version="1.6.1" release="30.fc43" epoch="0" arch="x86_64"/>
+          </collection></pkglist></update>
+          <update status="stable" type="bugfix" version="2.0"><id>FEDORA-2026-b</id>
+          <title>coreutils-9.6-2.fc43</title><references/>
+          <pkglist><collection short="F43"><name>Fedora 43</name>
+            <package name="coreutils" version="9.6" release="2.fc43" epoch="0" arch="x86_64"/>
+          </collection></pkglist></update></updates>"#;
+        let zst = ruzstd::encoding::compress_to_vec(
+            xml.as_bytes(),
+            ruzstd::encoding::CompressionLevel::Fastest,
+        );
+        let feed = feed_for("Fedora:43").unwrap();
+        assert_eq!(feed.kind, Kind::FedoraUpdateinfo);
+        assert_eq!(
+            fedora_archive(&feed.url).unwrap().trim(),
+            "https://archives.fedoraproject.org/pub/archive/fedora/linux/updates/43/Everything/x86_64/"
+        );
+        let recs = parsed(&convert(&feed, &zst).unwrap());
+        assert_eq!(recs.len(), 1, "the bug fix update is not a vulnerability");
+        let r = &recs[0];
+        assert_eq!(r["id"], "FEDORA-2026-3c78c99467");
+        assert_eq!(r["aliases"], json!(["CVE-2026-1234", "CVE-2026-5678"]));
+        assert_eq!(r["affected"][0]["package"]["name"], "xmlstarlet");
+        assert_eq!(
+            r["affected"][0]["ranges"][0]["events"][1]["fixed"],
+            "0:1.6.1-30.fc43"
+        );
+        assert_eq!(
+            r["references"][0]["url"],
+            "https://bodhi.fedoraproject.org/updates/FEDORA-2026-3c78c99467"
+        );
+        // Releases before 41 publish xz, which is not read.
+        assert!(feed_for("Fedora:40").is_none());
     }
 
     const OVAL: &str = r#"<oval_definitions xmlns="http://oval.mitre.org/XMLSchema/oval-definitions-5">

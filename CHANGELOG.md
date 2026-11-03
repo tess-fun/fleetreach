@@ -35,8 +35,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   an empty stray database beside the real one (Oracle Linux 9 ships one) is skipped, and two
   that disagree are a coverage gap. Versions compare with rpm's ordering (epoch, `~`, `^`).
   Red Hat and AlmaLinux advisories name binary packages, so there each binary is matched on
-  its own; elsewhere binaries fold into their source rpm. CentOS and Fedora have no
-  advisories to match and are coverage gaps, never clean. AlmaLinux's bug fix and
+  its own; elsewhere binaries fold into their source rpm. CentOS has no advisories to match
+  and is a coverage gap, never clean. AlmaLinux's bug fix and
   enhancement advisories (ALBA, ALEA) that name no CVE are not reported as vulnerabilities.
   Package names are `<distro>/<package>` (`rocky-linux/openssl`, `redhat/openssl-libs`),
   ecosystem `rpm`.
@@ -93,6 +93,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   AlmaLinux 8 equal to dnf; on a UBI 8 image with php, nodejs, ruby and perl streams, 171
   other-stream pairs gone, 27 open statuses for the installed streams back, and every one of
   Grype v0.121.1's 751 pairs reported.
+- **Fedora** (spec 16, row 10, phase 2). Fedora 41 and later are matched against the updates
+  repository's `updateinfo.xml.zst` (`db sync --distros Fedora`; from the Fedora archive once
+  a release leaves the mirrors), its security updates only, with CVEs from the Bugzilla bugs
+  each update closes. Findings link the Bodhi update. Equal to `dnf updateinfo list
+  --security` on a Fedora 43 image (26 advisories, 51 advisory and package pairs). Fedora 40
+  and older are a coverage gap.
 - **End-of-life warnings for images** (spec 16, row 10, phase 2). An image whose release is
   past the end of its standard support (CentOS 7, Debian 10, Amazon Linux 2, Fedora 41, ...)
   gets an `unmaintained` warning, `EOL-<product>-<release>`, grouped across the fleet, with

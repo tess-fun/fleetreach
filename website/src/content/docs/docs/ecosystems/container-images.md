@@ -54,11 +54,11 @@ Leap Micro and Tumbleweed, SUSE Linux Enterprise 15 (its Basesystem and Server A
 modules, the optional modules such as Containers, Python 3 and Public Cloud, and LTSS), SLE
 Micro and SUSE Linux Micro, Azure Linux 3 and CBL-Mariner 2, Mageia and
 openEuler. AlmaLinux's export also holds bug fix and enhancement advisories (ALBA, ALEA);
-those that name no CVE fix no vulnerability and are not reported. CentOS and Fedora have no
-advisories to match, so their images are a coverage gap:
-they are not matched against Red Hat's records, whose versions and backports are not theirs.
+those that name no CVE fix no vulnerability and are not reported. CentOS has no advisories
+to match, so its images are a coverage gap: they are not matched against Red Hat's records,
+whose versions and backports are not CentOS's.
 
-Amazon Linux, Oracle Linux, Photon OS and Bottlerocket publish no advisories to osv.dev, so
+Amazon Linux, Oracle Linux, Photon OS, Fedora and Bottlerocket publish no advisories to osv.dev, so
 fleetreach reads their vendors' own feeds and converts them to OSV records, cached beside the
 osv.dev exports:
 
@@ -67,6 +67,7 @@ osv.dev exports:
 | Amazon Linux | 2, 2023 | the core repository's `updateinfo.xml` (what `yum updateinfo` reads) | ALAS |
 | Oracle Linux | 7, 8, 9, 10 | Oracle's OVAL definitions | ELSA |
 | Photon OS | 3.0, 4.0, 5.0 | VMware's CVE metadata | CVE |
+| Fedora | 41 and later | the updates repository's `updateinfo.xml.zst` (what `dnf updateinfo` reads), security updates only, from the archive once a release leaves the mirrors | FEDORA (Bodhi) |
 | Bottlerocket | every variant and version | `advisories.bottlerocket.aws/updateinfo.xml.gz` | BRSA, GHSA |
 
 These advisories name binary packages, and findings link the vendor's advisory page. Oracle
@@ -74,8 +75,10 @@ publishes separate fixes for each module stream (`nodejs:18`, `php:7.4`); such a
 matches only packages built for that stream, read from the package's modularity label or,
 for an older build without one, from the stream `/etc/dnf/modules.d` enables. A feed whose
 shape fleetreach does not recognize fails the sync rather than load partly. Results equal
-`yum updateinfo` on Amazon Linux 2 and `dnf updateinfo` on Amazon Linux 2023 and Oracle
-Linux 8. One known difference: Oracle's OVAL leaves out a few reissued ELSAs, so dnf can name
+`yum updateinfo` on Amazon Linux 2 and `dnf updateinfo` on Amazon Linux 2023, Oracle
+Linux 8 and Fedora 43. Fedora's updates name their CVEs only in the titles of the Red Hat
+Bugzilla bugs they close, and those are what fleetreach reports; Fedora 40 and older are a
+coverage gap. One known difference: Oracle's OVAL leaves out a few reissued ELSAs, so dnf can name
 an advisory fleetreach does not, while the same CVEs are reported under the reissue's id.
 
 Bottlerocket is a host OS rather than a container image, and it ships no rpm database: scan its

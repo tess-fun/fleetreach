@@ -317,7 +317,7 @@ fn rpm_distro_without_osv_data_is_a_gap_not_clean() {
     write(
         &root,
         "etc/os-release",
-        "ID=\"fedora\"\nVERSION_ID=\"41\"\nPRETTY_NAME=\"Fedora Linux 41\"\n",
+        "ID=\"centos\"\nVERSION_ID=\"7\"\nPRETTY_NAME=\"CentOS Linux 7 (Core)\"\n",
     );
     std::fs::create_dir_all(root.join("var/lib/rpm")).unwrap();
     std::fs::copy(
@@ -329,18 +329,21 @@ fn rpm_distro_without_osv_data_is_a_gap_not_clean() {
     let (code, report, stderr) = fx.scan(&["--image", &rootfs, "--require-full-coverage"]);
     assert_eq!(code, 2, "{stderr}");
     assert!(
-        report["coverage"].to_string().contains("Fedora Linux 41"),
+        report["coverage"]
+            .to_string()
+            .contains("CentOS Linux 7 (Core)"),
         "{report}"
     );
-    // Fedora 41 reached its end of life on 2025-12-15: a warning, from the bundled snapshot.
+    // CentOS Linux 7 reached its end of life on 2024-06-30: a warning, from the bundled
+    // snapshot.
     let eol = &report["warnings"][0];
     assert_eq!(eol["kind"], "unmaintained", "{report}");
-    assert_eq!(eol["advisory_id"], "EOL-fedora-41");
+    assert_eq!(eol["advisory_id"], "EOL-centos-7");
     assert!(
         eol["title"]
             .as_str()
             .unwrap()
-            .starts_with("Fedora 41 reached the end of its standard support on 2025-12-15"),
+            .starts_with("CentOS Linux 7 reached the end of its standard support on 2024-06-30"),
         "{eol}"
     );
     assert_eq!(report["outcomes"][0]["warnings"], 1, "{report}");

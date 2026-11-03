@@ -584,7 +584,20 @@ pub fn detect(
             d.binary_names = true;
             d
         }
-        "centos" | "fedora" => {
+        "fedora" => {
+            let r = release("Fedora")?;
+            if crate::feeds::feed_for(&format!("Fedora:{r}")).is_none() {
+                return Err(format!(
+                    "{pretty}: Fedora releases before {} have no advisory feed fleetreach \
+                     reads, so its OS packages were not matched",
+                    crate::feeds::FEDORA_FIRST
+                ));
+            }
+            let mut d = rpm(format!("Fedora {r}"), "fedora", format!("Fedora:{r}"));
+            d.binary_names = true;
+            d
+        }
+        "centos" => {
             return Err(format!(
                 "{pretty}: osv.dev has no advisories for this distribution, so its OS packages \
                  were not matched"
@@ -627,7 +640,7 @@ pub fn family_of(ecosystem: &str) -> Option<Family> {
         "Debian" | "Ubuntu" | "Echo" => Some(Family::Deb),
         "Red Hat" | "AlmaLinux" | "Rocky Linux" | "SUSE" | "openSUSE" | "Azure Linux"
         | "Mageia" | "openEuler" | "Amazon Linux" | "Oracle Linux" | "Photon OS"
-        | "Bottlerocket" => Some(Family::Rpm),
+        | "Bottlerocket" | "Fedora" => Some(Family::Rpm),
         "Alpine"
         | "Wolfi"
         | "Chainguard"
@@ -669,6 +682,7 @@ pub fn explicit(ecosystem: &str, family: Family) -> Distro {
                 | "Oracle Linux"
                 | "Photon OS"
                 | "Bottlerocket"
+                | "Fedora"
         ),
         overlays: Vec::new(),
         modules: BTreeMap::new(),
@@ -944,19 +958,20 @@ mod tests {
         for text in [
             "ID=amzn\nVERSION_ID=2018.03\n",
             "ID=photon\nVERSION_ID=2.0\n",
+            "ID=fedora\nVERSION_ID=40\n",
         ] {
             let e = detect(&os(text), None, Hints::default()).unwrap_err();
             assert!(e.contains("feed"), "{e}");
         }
-        // No data, and not matched against Red Hat's: gaps that say why.
-        for id in ["centos", "fedora"] {
-            let e = detect(
-                &os(&format!("ID={id}\nVERSION_ID=9\n")),
-                None,
-                Hints::default(),
-            );
-            assert!(e.unwrap_err().contains("no advisories"), "{id}");
-        }
+        let fedora = detect(&os("ID=fedora\nVERSION_ID=43\n"), None, Hints::default()).unwrap();
+        assert_eq!(
+            (fedora.ecosystem.as_str(), fedora.binary_names),
+            ("Fedora:43", true)
+        );
+        assert_eq!(family_of("Fedora:43"), Some(Family::Rpm));
+        // No data, and not matched against Red Hat's: a gap that says why.
+        let e = detect(&os("ID=centos\nVERSION_ID=9\n"), None, Hints::default());
+        assert!(e.unwrap_err().contains("no advisories"));
         assert_eq!(
             family_of("Red Hat:enterprise_linux:9::baseos"),
             Some(Family::Rpm)

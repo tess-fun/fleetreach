@@ -713,6 +713,22 @@ mod net {
                 let list = String::from_utf8_lossy(&list).into_owned();
                 fleetreach_os::feeds::updateinfo_url(&list, &mut fetch)?
             }
+            // The repository's base URL; once a release has ended it is in the archive.
+            fleetreach_os::feeds::Kind::FedoraUpdateinfo => {
+                let mut fetch = |u: &str| {
+                    get_bytes(u, None)?
+                        .map(|(b, _, _)| b)
+                        .ok_or_else(|| format!("GET {u}: not modified on an unconditional request"))
+                };
+                match fleetreach_os::feeds::updateinfo_url(&feed.url, &mut fetch) {
+                    Err(e) if e.contains("HTTP 404") => {
+                        let archive = fleetreach_os::feeds::fedora_archive(&feed.url)
+                            .ok_or_else(|| format!("{}: {e}", feed.url.trim()))?;
+                        fleetreach_os::feeds::updateinfo_url(&archive, &mut fetch)?
+                    }
+                    other => other?,
+                }
+            }
             _ => feed.url.clone(),
         };
         let Some((raw, etag, last_modified)) = get_bytes(&url, previous.as_ref())? else {
