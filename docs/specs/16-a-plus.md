@@ -613,8 +613,30 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     fixed by the `modules.d` fallback. (3) Photon's `cve_id` is sometimes a Black Duck id
     (BDSA), which has no public page; those link the feed file. **Still open in phase 2**:
     CentOS and Fedora are gaps; RHEL module streams in the OSV data are not told apart (the
-    OSV Red Hat records carry no stream); Bottlerocket; Red Hat and SUSE CSAF unfixed
-    statuses; the rpm comparison against Trivy and Grype.
+    OSV Red Hat records carry no stream); Bottlerocket; SUSE CSAF unfixed statuses; the rpm
+    comparison against Grype.
+    **Status: Red Hat CSAF statuses implemented 2026-11-03, unreleased.** The CSAF index
+    (`csaf:redhat`, 415 MB archive, about 7 minutes and 6.8 GB RSS to index, so never
+    started by a scan) is derived on first use into `Red Hat:enterprise_linux:N::vex`
+    exports (about 20 s, cached under the index's size and mtime). It is a distro
+    *fallback*: consulted for a package only for CVEs the release's own records do not name
+    for it. One OSV record per CVE and release: a component fixed on a main-stream CPE
+    (`cpe:/o:redhat:enterprise_linux:8::baseos`; EUS, AUS, E4S and TUS CPEs are ignored)
+    gets the highest fix; one not affected there gets no range (an explicit clean); one
+    listed against `red_hat_enterprise_linux_N` as affected, will not fix, fix deferred, out
+    of support or under investigation gets an open range and the status. Order: fix, then
+    not affected, then status. Matching takes the binary's entries first, then the source
+    package's open entries for CVEs the binary has none for. Module streams come from the
+    purl's `rpmmod`. Validated against Trivy 0.73.0 (Docker): UBI 8.8 947 of 947 and UBI 9
+    538 of 538 with the same status, 0 missed; 19 and 2 extra, all source-package open
+    statuses (CVE-2021-28861 on python3-requests and friends, whose sources Red Hat lists as
+    affected), kept on purpose. **Found**: (1) osv.dev's Red Hat export lags the VEX (21
+    fixed findings Trivy had, missing even after a fresh sync), hence the main-stream fixes.
+    (2) A source package's fix applied to its binaries was a false positive on 20 pairs:
+    Red Hat lists vim fixed and vim-minimal not affected for one CVE. Hence not-affected
+    entries and no source fixes for binaries. (3) Purl versions are percent-encoded
+    (`module%2Bel8`), and rpm's order treats `%` as a separator: decoded on index and on
+    derive.
   - **Phase 3 (1.8.0)**: pull by digest from an OCI registry (behind `network`, docker
     config credentials); per-layer attribution and base-image detection from image history;
     base-image rollup and rebuild advice across the fleet; VEX discovered from OCI

@@ -18,7 +18,7 @@ scrapes web pages.
 | CISA's SSVC inputs | [Vulnrichment](https://github.com/cisagov/vulnrichment) | SSVC Exploitation and Automatable |
 | Missing severities | [NVD](https://nvd.nist.gov) | CVSS when the advisory has none |
 | CNA data and ADP enrichment | [CVE 5.x records](https://github.com/CVEProject/cvelistV5) | `db quality`, `db crosscheck` |
-| Vendor statuses | [Red Hat CSAF VEX](https://security.access.redhat.com/data/csaf/v2/vex/) | `db crosscheck`; OS packages later |
+| Vendor statuses | [Red Hat CSAF VEX](https://security.access.redhat.com/data/csaf/v2/vex/) | `db crosscheck`; RHEL image statuses |
 | Your corrections | OSV files in `[settings.advisories] dir` | layered over every OSV export |
 | Licenses | lockfiles and local package caches, else deps.dev with `licenses --fetch` | `fleetreach licenses`, SBOMs |
 

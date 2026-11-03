@@ -53,6 +53,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (260) and Oracle Linux 8 with module streams enabled (371 of 374; the other 3 are one ELSA
   Oracle's OVAL omits, a reissue whose CVEs a later ELSA in the feed covers), and to the raw
   Photon feed evaluated with rpm's comparator (252).
+- **Red Hat's unfixed CVEs in RHEL and UBI images** (spec 16, row 10, phase 2). The CSAF VEX
+  index (`db sync --source csaf:redhat` or `db import --csaf`) is turned into a per-release
+  export on the first scan that needs it (about 20 seconds, then cached until the index
+  changes) and consulted where the release's osv.dev records do not name a CVE for a package:
+  CVEs Red Hat lists as affected, will not fix, fix deferred, out of support scope or under
+  investigation become findings marked `no fix yet` with that status, and fixes on the
+  release's main stream that osv.dev has not imported yet are reported with their version.
+  Red Hat lists open CVEs by source package, so a binary package also matches its source
+  package's open statuses, unless Red Hat says something about the binary itself (a binary
+  it lists as not affected stays clean). Module streams (`php:7.3`) gate their entries as
+  for Oracle. Findings link Red Hat's CVE page. A RHEL image scanned without the index is a
+  coverage gap naming the command. Validated against Trivy 0.73.0 on UBI 8.8 and UBI 9:
+  every one of Trivy's 947 and 538 findings is reported with the same status; the 19 and 2
+  more are Red Hat's open statuses for the binary's source package, which Trivy matches by
+  binary name only.
 - `db sync --distros Debian:12,Wolfi` fetches distro exports one distribution at a time (the
   per-release export where osv.dev has one, else the whole distribution's), and a plain
   `db sync` fetches what the fleet's images need. `db status` lists the distro exports present.
@@ -68,8 +83,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   build) and `db import --cve <dir|zip>` / `db import --csaf <dir|tar.zst> --provider redhat`
   reduce cvelistV5 (CNA affected data, ADP enrichment) and Red Hat's CSAF VEX archive (every
   product status plus will-not-fix, fix-deferred, out-of-support and similar remediations) to
-  compact indexes next to the OSV exports, with sha256 and dates in `db status`. Scans do not
-  match against them yet.
+  compact indexes next to the OSV exports, with sha256 and dates in `db status`. Scans of
+  RHEL images match against the Red Hat index (above).
 - **`db quality`**: data-quality checks on the advisory data as the matchers see it
   (unmatchable entries, versions outside ranges, events out of order, unparseable bounds,
   alias conflicts, live records aliasing rejected CVEs, missing severity, withdrawn records,

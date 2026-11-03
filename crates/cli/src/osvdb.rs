@@ -732,28 +732,6 @@ mod net {
         }
         let records =
             fleetreach_os::feeds::convert(feed, &raw).map_err(|e| format!("{url}: {e}"))?;
-        let tmp = dir.join("all.zip.partial");
-        let result = (|| {
-            let file = std::fs::File::create(&tmp)
-                .map_err(|e| format!("creating {}: {e}", tmp.display()))?;
-            let mut out = zip::ZipWriter::new(file);
-            let options = zip::write::SimpleFileOptions::default()
-                .compression_method(zip::CompressionMethod::Deflated);
-            for r in &records {
-                out.start_file(format!("{}.json", r.id), options)
-                    .and_then(|()| out.write_all(&r.json).map_err(Into::into))
-                    .map_err(|e| format!("writing {}: {e}", tmp.display()))?;
-            }
-            let file = out
-                .finish()
-                .map_err(|e| format!("writing {}: {e}", tmp.display()))?;
-            file.sync_all()
-                .map_err(|e| format!("writing {}: {e}", tmp.display()))
-        })();
-        if let Err(e) = result {
-            let _ = std::fs::remove_file(&tmp);
-            return Err(e);
-        }
         let sha256 = Sha256::digest(&raw)
             .iter()
             .map(|b| format!("{b:02x}"))
@@ -767,8 +745,11 @@ mod net {
             sha256,
             size: raw.len() as u64,
         };
-        std::fs::rename(&tmp, &zip).map_err(|e| format!("installing {}: {e}", zip.display()))?;
-        write_meta(&zip, &meta)
+        super::install_export(
+            &dir,
+            records.iter().map(|r| (r.id.as_str(), &r.json[..])),
+            &meta,
+        )
     }
 
     fn write_meta(zip: &Path, meta: &Meta) -> Result<(), String> {
@@ -776,6 +757,105 @@ mod net {
         let json = serde_json::to_string_pretty(meta).map_err(|e| e.to_string())?;
         std::fs::write(&path, json).map_err(|e| format!("writing {}: {e}", path.display()))
     }
+}
+
+/// Install converted OSV records as `<dir>/all.zip` with `meta` beside it: written to a
+/// temporary file and renamed, so a failure never replaces a good export.
+pub(crate) fn install_export<'a>(
+    dir: &Path,
+    records: impl Iterator<Item = (&'a str, &'a [u8])>,
+    meta: &Meta,
+) -> Result<(), String> {
+    use std::io::Write as _;
+    create_private_dir(dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+    let zip_path = dir.join("all.zip");
+    let tmp = dir.join("all.zip.partial");
+    let result = (|| {
+        let file =
+            std::fs::File::create(&tmp).map_err(|e| format!("creating {}: {e}", tmp.display()))?;
+        let mut out = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        for (id, json) in records {
+            out.start_file(format!("{id}.json"), options)
+                .and_then(|()| out.write_all(json).map_err(Into::into))
+                .map_err(|e| format!("writing {}: {e}", tmp.display()))?;
+        }
+        let file = out
+            .finish()
+            .map_err(|e| format!("writing {}: {e}", tmp.display()))?;
+        file.sync_all()
+            .map_err(|e| format!("writing {}: {e}", tmp.display()))
+    })();
+    if let Err(e) = result {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    std::fs::rename(&tmp, &zip_path)
+        .map_err(|e| format!("installing {}: {e}", zip_path.display()))?;
+    let path = meta_path(&zip_path);
+    let json = serde_json::to_string_pretty(meta).map_err(|e| e.to_string())?;
+    std::fs::write(&path, json).map_err(|e| format!("writing {}: {e}", path.display()))
+}
+
+/// Derive Red Hat's VEX exports ([`fleetreach_os::distro::red_hat_vex`], one
+/// per RHEL release) from the Red Hat CSAF index under `root`, unless they are already
+/// derived from this index. Nothing happens without an index. Returns whether it derived.
+///
+/// # Errors
+///
+/// A corrupt index, or a failed write (the previous exports stay).
+pub fn derive_red_hat_vex(root: &Path) -> Result<bool, String> {
+    let index = crate::csaf::index_path(root, "redhat");
+    let Ok(md) = std::fs::metadata(&index) else {
+        return Ok(false);
+    };
+    // The index's identity: size and modification time are enough to notice a re-index.
+    let mtime = md
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_nanos());
+    let stamp = format!("csaf-index:{}:{mtime}", md.len());
+    let marker = root.join(dir_name(&fleetreach_os::distro::red_hat_vex("9")));
+    if read_meta(&marker.join("all.zip")).is_some_and(|m| m.etag.as_deref() == Some(&stamp)) {
+        return Ok(false);
+    }
+    let mut by_eco: BTreeMap<String, Vec<(String, Vec<u8>)>> = BTreeMap::new();
+    crate::csaf::for_each_record(&index, |record| {
+        for (eco, osv) in crate::csaf::red_hat_vex(&record) {
+            let id = osv["id"].as_str().unwrap_or_default().to_string();
+            let json = serde_json::to_vec(&osv).map_err(|e| e.to_string())?;
+            by_eco.entry(eco).or_default().push((id, json));
+        }
+        Ok(())
+    })?;
+    let upstream = read_meta(&index);
+    for (eco, mut records) in by_eco {
+        records.sort_by(|a, b| a.0.cmp(&b.0));
+        // One Red Hat document per CVE: two records with one id would be one CVE twice.
+        records.dedup_by(|a, b| a.0 == b.0);
+        let meta = Meta {
+            url: upstream
+                .as_ref()
+                .map_or_else(|| index.display().to_string(), |m| m.url.clone()),
+            etag: Some(stamp.clone()),
+            last_modified: upstream.as_ref().and_then(|m| m.last_modified.clone()),
+            fetched_at: now_rfc3339(),
+            fetched_unix: upstream.as_ref().map_or_else(now_unix, |m| m.fetched_unix),
+            sha256: upstream
+                .as_ref()
+                .map(|m| m.sha256.clone())
+                .unwrap_or_default(),
+            size: md.len(),
+        };
+        install_export(
+            &root.join(dir_name(&eco)),
+            records.iter().map(|(id, json)| (id.as_str(), &json[..])),
+            &meta,
+        )?;
+    }
+    Ok(true)
 }
 
 pub(crate) fn now_unix() -> u64 {
@@ -930,8 +1010,27 @@ pub fn resolve_distros(
     let mut found: BTreeMap<String, DistroSource> = BTreeMap::new();
     let mut warnings = Vec::new();
     let mut missing = Vec::new();
+    // Red Hat's VEX exports come from the CSAF index, not from osv.dev: derive them
+    // where an index is (indexing it is `db sync --source csaf:redhat`, minutes of work).
+    if ecosystems
+        .iter()
+        .any(|e| fleetreach_os::distro::is_red_hat_vex(e))
+    {
+        for root in [opts.dir.as_deref(), opts.cache.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            if let Err(e) = derive_red_hat_vex(root) {
+                warnings.push(format!(
+                    "could not derive Red Hat's VEX statuses from {}: {e}",
+                    root.display()
+                ));
+            }
+        }
+    }
     for eco in ecosystems {
         let candidates = fleetreach_os::distro::export_candidates(eco);
+        let derived = fleetreach_os::distro::is_red_hat_vex(eco);
         let from_dir = opts.dir.as_deref().and_then(|d| {
             candidates
                 .iter()
@@ -939,7 +1038,7 @@ pub fn resolve_distros(
         });
         let resolved = from_dir.or_else(|| {
             let cache = opts.cache.as_deref()?;
-            if opts.sync {
+            if opts.sync && !derived {
                 if let Err(e) = sync_distro(cache, eco, opts, false) {
                     warnings.push(format!("could not refresh the OSV {eco} export: {e}"));
                 }

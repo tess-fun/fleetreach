@@ -35,7 +35,8 @@ pub struct Advisory<V> {
     pub severity: Severity,
     pub cvss_score: Option<f32>,
     pub cvss_vector: Option<String>,
-    /// Debian's `urgency` or Ubuntu's `ubuntu_priority`, verbatim.
+    /// Debian's `urgency` or Ubuntu's `ubuntu_priority`, verbatim, or a vendor's status for
+    /// an unfixed issue (`will not fix`).
     pub urgency: Option<String>,
     /// The module stream (`nodejs:18`) whose builds this is about; only packages from that
     /// stream match.
@@ -183,6 +184,7 @@ struct Package {
 struct EcosystemSpecific {
     urgency: Option<String>,
     ubuntu_priority: Option<String>,
+    status: Option<String>,
     module: Option<String>,
 }
 
@@ -306,10 +308,12 @@ fn entries_of(mut r: Record, wanted: &Wanted) -> (Vec<Entry>, BTreeMap<String, u
         if wanted.packages.as_ref().is_some_and(|p| !p.contains(name)) {
             continue;
         }
-        let urgency = a
-            .ecosystem_specific
-            .as_ref()
-            .and_then(|e| e.urgency.clone().or_else(|| e.ubuntu_priority.clone()));
+        let urgency = a.ecosystem_specific.as_ref().and_then(|e| {
+            e.urgency
+                .clone()
+                .or_else(|| e.ubuntu_priority.clone())
+                .or_else(|| e.status.clone())
+        });
         let severity = if severity == Severity::Unknown {
             urgency
                 .as_deref()
@@ -332,14 +336,12 @@ fn entries_of(mut r: Record, wanted: &Wanted) -> (Vec<Entry>, BTreeMap<String, u
                     cvss_vector: cvss_vector.clone(),
                     urgency: urgency.clone(),
                     module: a.ecosystem_specific.as_ref().and_then(|e| e.module.clone()),
-                    url: crate::feeds::feed_for(eco)
-                        .and_then(|_| {
-                            r.references
-                                .iter()
-                                .find(|x| x.kind.as_deref() == Some("ADVISORY"))
-                        })
-                        .and_then(|x| x.url.clone())
-                        .filter(|u| u.starts_with("https://")),
+                    url: (crate::feeds::feed_for(eco).is_some()
+                        || crate::distro::is_red_hat_vex(eco))
+                    .then_some(&r.references)
+                    .and_then(|refs| refs.iter().find(|x| x.kind.as_deref() == Some("ADVISORY")))
+                    .and_then(|x| x.url.clone())
+                    .filter(|u| u.starts_with("https://")),
                     ranges: ranges_of(a, $parse),
                     versions,
                 }

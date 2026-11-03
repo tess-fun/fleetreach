@@ -55,7 +55,9 @@ fleetreach db import --csaf ./csaf_vex_2026-11-01.tar.zst --provider redhat
 - **Red Hat CSAF VEX** gives a status for every Red Hat product and component per CVE,
   including the ones OSV's Red Hat export does not carry: affected with no fix yet, will not
   fix, fix deferred, out of support scope, under investigation, and not affected with a
-  justification. `db import --csaf` reads any CSAF 2.0 directory or `.tar.zst`.
+  justification. `db import --csaf` reads any CSAF 2.0 directory or `.tar.zst`. Scans of
+  RHEL and UBI images use it for the CVEs Red Hat has not fixed (see
+  [container images](/fleetreach/docs/ecosystems/container-images/)).
 
 Both are reduced to a compact index next to the OSV exports (`cvelistV5/index.jsonl.gz`,
 `csaf/<provider>/index.jsonl.gz`, each with a `.meta.json` recording the upstream file,

@@ -934,7 +934,16 @@ fn scan_image_os(
             Some(Err(e)) => RepoResult::errored(id, format!("{} OSV DB: {e}", distro.name)),
             Some(Ok(db)) => {
                 for eco in distro.ecosystems() {
-                    let reason = if images.missing.contains(&eco) {
+                    let derived = fleetreach_os::distro::is_red_hat_vex(&eco);
+                    let reason = if derived && images.missing.contains(&eco) {
+                        format!(
+                            "Red Hat's CSAF VEX is not loaded, so CVEs Red Hat has not fixed \
+                             in {} packages (affected, will not fix, fix deferred) and fixes \
+                             osv.dev has not imported yet were not reported; index it with \
+                             `fleetreach db sync --source csaf:redhat` (or `db import --csaf`)",
+                            distro.name
+                        )
+                    } else if images.missing.contains(&eco) {
                         format!("no OSV export for {eco}; its fixes were not applied")
                     } else if db.records(&eco) == 0 {
                         format!(

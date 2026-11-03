@@ -93,6 +93,28 @@ Debian and Ubuntu track many CVEs with no fix yet. They are reported, never drop
 An advisory fixed only in another release line says so. Pass `--distro-ignore-unimportant`
 to drop the ones Debian marks `unimportant` and Ubuntu rates `negligible`.
 
+Red Hat's open CVEs are not in osv.dev, which carries only its fixes (RHSAs). They come from
+Red Hat's CSAF VEX instead, indexed with `db sync --source csaf:redhat` (a 415 MB download
+that takes several minutes, so a scan never starts it) or `db import --csaf` from a local
+copy of the archive. The first scan of a RHEL image after that turns the index into a
+per-release export, which later scans reuse until the index changes. Where the release's own
+advisories do not name a CVE for a package, the VEX entry applies:
+
+- CVEs Red Hat lists as affected, will not fix, fix deferred, out of support scope or under
+  investigation are findings marked `no fix yet` with that status
+  (`[Red Hat enterprise_linux 9 baseos: no fix yet; status will not fix]`);
+- fixes on the release's main stream that osv.dev has not imported yet are reported with
+  their fixed version (extended update support streams are not the release's).
+
+Red Hat lists open CVEs under the source package (`python-requests`), so a binary package
+(`python3-requests`) also takes its source package's open statuses, unless Red Hat says
+something about the binary itself: a binary listed as not affected stays clean, and a fix
+for the source package never stands in for its binaries. Trivy matches by binary name only,
+so fleetreach reports somewhat more on RHEL images (19 more on UBI 8.8, 2 more on UBI 9,
+with every one of Trivy's findings also reported). Entries for a module stream (`php:7.3`)
+match only packages from that stream. Without the index, a RHEL image is a coverage gap that
+names the command.
+
 ## Language packages in the image
 
 Lockfiles in the image (`package-lock.json`, `poetry.lock`, `Gemfile.lock`, `go.mod`, ...) are

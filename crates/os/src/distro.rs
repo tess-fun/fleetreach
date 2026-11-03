@@ -96,16 +96,35 @@ pub struct Distro {
     /// The module streams enabled in the image (`php` -> `7.4`), for gating advisories
     /// about module builds whose packages carry no modularity label.
     pub modules: BTreeMap<String, String>,
+    /// Ecosystems consulted for a package and CVE only when the release's own ecosystems
+    /// say nothing about that CVE for it, matched by binary or source name: Red Hat's CSAF
+    /// VEX ([`red_hat_vex`]).
+    pub fallbacks: Vec<String>,
 }
 
 impl Distro {
-    /// Every ecosystem to load: the release, its other repositories, then its overlays.
+    /// Every ecosystem to load: the release, its other repositories, its overlays, then its
+    /// fallbacks.
     pub fn ecosystems(&self) -> Vec<String> {
         let mut out = vec![self.ecosystem.clone()];
         out.extend(self.also.iter().cloned());
         out.extend(self.overlays.iter().cloned());
+        out.extend(self.fallbacks.iter().cloned());
         out
     }
+}
+
+/// The ecosystem holding what Red Hat's CSAF VEX says about RHEL `release` beyond osv.dev's
+/// Red Hat export: unfixed statuses (affected with no fix yet, will not fix, fix deferred,
+/// out of support, under investigation), which that export does not carry, and fixes it has
+/// not imported yet. It is derived from the VEX, not published by osv.dev.
+pub fn red_hat_vex(release: &str) -> String {
+    format!("Red Hat:enterprise_linux:{release}::vex")
+}
+
+/// Whether `ecosystem` is one of the [`red_hat_vex`] ecosystems.
+pub fn is_red_hat_vex(ecosystem: &str) -> bool {
+    ecosystem.starts_with("Red Hat:enterprise_linux:") && ecosystem.ends_with("::vex")
 }
 
 /// The osv.dev export directories that can serve `ecosystem`, smallest first: the
@@ -114,8 +133,9 @@ impl Distro {
 /// LTS release).
 pub fn export_candidates(ecosystem: &str) -> Vec<String> {
     let base = ecosystem.split(':').next().unwrap_or(ecosystem).to_string();
-    // A vendor feed is converted into an export of its own release only.
-    if base == ecosystem || crate::feeds::feed_for(ecosystem).is_some() {
+    // A vendor feed, or Red Hat's VEX, is an export of its own release only.
+    if base == ecosystem || crate::feeds::feed_for(ecosystem).is_some() || is_red_hat_vex(ecosystem)
+    {
         vec![ecosystem.to_string()]
     } else {
         vec![ecosystem.to_string(), base]
@@ -170,6 +190,7 @@ pub fn detect(
         binary_names: false,
         overlays: Vec::new(),
         modules: BTreeMap::new(),
+        fallbacks: Vec::new(),
     };
     let release = |what: &str| {
         version
@@ -275,6 +296,7 @@ pub fn detect(
                 .iter()
                 .map(|repo| format!("Red Hat:enterprise_linux:{r}::{repo}"))
                 .collect();
+            d.fallbacks = vec![red_hat_vex(r)];
             d.binary_names = true;
             d
         }
@@ -505,6 +527,15 @@ pub fn explicit(ecosystem: &str, family: Family) -> Distro {
         ),
         overlays: Vec::new(),
         modules: BTreeMap::new(),
+        // `Red Hat:enterprise_linux:9::baseos` takes RHEL 9's VEX too.
+        fallbacks: match ecosystem.split(':').collect::<Vec<_>>().as_slice() {
+            ["Red Hat", "enterprise_linux", release, ..]
+                if !release.is_empty() && release.bytes().all(|b| b.is_ascii_digit()) =>
+            {
+                vec![red_hat_vex(release)]
+            }
+            _ => Vec::new(),
+        },
     }
 }
 
@@ -585,13 +616,26 @@ mod tests {
                     "Red Hat:enterprise_linux:9::baseos".to_string(),
                     "Red Hat:enterprise_linux:9::appstream".to_string(),
                     "Red Hat:enterprise_linux:9::crb".to_string(),
+                    "Red Hat:enterprise_linux:9::vex".to_string(),
                 ],
                 true
             )
         );
         assert_eq!(
             eco("ID=\"rhel\"\nVERSION_ID=\"7.9\"\n").0,
-            vec!["Red Hat:enterprise_linux:7::server"]
+            vec![
+                "Red Hat:enterprise_linux:7::server",
+                "Red Hat:enterprise_linux:7::vex"
+            ]
+        );
+        assert!(is_red_hat_vex("Red Hat:enterprise_linux:7::vex"));
+        assert_eq!(
+            export_candidates("Red Hat:enterprise_linux:7::vex"),
+            vec!["Red Hat:enterprise_linux:7::vex"]
+        );
+        assert_eq!(
+            explicit("Red Hat:enterprise_linux:8::appstream", Family::Rpm).fallbacks,
+            vec!["Red Hat:enterprise_linux:8::vex"]
         );
         assert_eq!(
             eco("ID=\"almalinux\"\nVERSION_ID=\"8.8\"\n"),

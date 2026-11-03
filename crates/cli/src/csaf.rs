@@ -187,6 +187,9 @@ pub struct VexEntry {
     /// The version (an rpm `epoch:version-release`) when the product names one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    /// The module stream of a modular rpm (`php:7.3`, from the purl's `rpmmod`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub module: Option<String>,
     pub status: ProductStatus,
     pub state: VendorState,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -372,8 +375,9 @@ pub fn summarize(body: &str) -> Option<Vec<VexRecord>> {
                     platforms.insert(platform.to_string(), cpe);
                 }
                 let product = products.get(component_ref);
-                let (component, purl, version) =
-                    component_identity(component_ref, product.and_then(|p| p.purl.as_deref()));
+                let product_purl = product.and_then(|p| p.purl.as_deref());
+                let (component, purl, version) = component_identity(component_ref, product_purl);
+                let module = product_purl.and_then(rpm_module);
                 let component = if component.is_empty() {
                     product
                         .and_then(|p| p.name.clone())
@@ -386,6 +390,7 @@ pub fn summarize(body: &str) -> Option<Vec<VexRecord>> {
                     component,
                     purl,
                     version,
+                    module,
                     status,
                     state,
                     // A fixed or unaffected product's remediation adds nothing (and would
@@ -431,14 +436,17 @@ fn component_identity(
             Some((p, v)) if p.contains('/') => (p, Some(v.to_string())),
             _ => (base, None),
         };
-        let name = path.rsplit('/').next().unwrap_or(path).to_string();
+        let name = percent_decode(path.rsplit('/').next().unwrap_or(path));
         let epoch = qualifiers
             .split('&')
             .find_map(|q| q.strip_prefix("epoch="))
             .filter(|e| !e.is_empty());
+        // rpm versions read as rpm writes them (`module+el8`), others as the purl has them.
+        let rpm = path.starts_with("pkg:rpm/");
+        let version = version.map(|v| if rpm { percent_decode(&v) } else { v });
         let version = match (version, epoch) {
             (Some(v), Some(e)) => Some(format!("{e}:{v}")),
-            (Some(v), None) if path.starts_with("pkg:rpm/") => Some(format!("0:{v}")),
+            (Some(v), None) if rpm => Some(format!("0:{v}")),
             (v, _) => v,
         };
         return (name, Some(path.to_string()), version);
@@ -448,6 +456,44 @@ fn component_identity(
         return (name, None, Some(evr));
     }
     (String::new(), None, None)
+}
+
+/// A purl component with its `%XX` escapes decoded (`gcc-c%2B%2B` is `gcc-c++`). An escape
+/// that is not valid hex, or bytes that are not UTF-8, leave the text as written.
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let hex = |c: u8| (c as char).to_digit(16);
+        match (
+            b[i],
+            b.get(i + 1).copied().and_then(hex),
+            b.get(i + 2).copied().and_then(hex),
+        ) {
+            (b'%', Some(h), Some(l)) => {
+                out.push(u8::try_from(h * 16 + l).unwrap_or(b'?'));
+                i += 3;
+            }
+            (c, _, _) => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8(out).unwrap_or_else(|_| s.to_string())
+}
+
+/// The `name:stream` of a modular rpm's purl (`rpmmod=php:7.3`, or with version and context
+/// after the stream on a built package).
+fn rpm_module(purl: &str) -> Option<String> {
+    let query = purl.split_once('?')?.1;
+    let value = query.split('&').find_map(|q| q.strip_prefix("rpmmod="))?;
+    let mut parts = value.split(':');
+    match (parts.next(), parts.next()) {
+        (Some(n), Some(s)) if !n.is_empty() && !s.is_empty() => Some(format!("{n}:{s}")),
+        _ => None,
+    }
 }
 
 /// `name-epoch:version-release.arch` into `(name, epoch:version-release)`.
@@ -566,6 +612,211 @@ fn absorb(result: &mut ReadResult, parsed: Vec<Option<Vec<VexRecord>>>) {
             None => result.not_csaf += 1,
         }
     }
+}
+
+/// Call `f` on each record of a compact index, read as a stream (Red Hat's holds millions
+/// of entries).
+///
+/// # Errors
+///
+/// A missing or corrupt index, or `f`'s error.
+pub fn for_each_record(
+    path: &Path,
+    mut f: impl FnMut(VexRecord) -> Result<(), String>,
+) -> Result<(), String> {
+    use std::io::BufRead as _;
+    let file = std::fs::File::open(path).map_err(|e| format!("reading {}: {e}", path.display()))?;
+    let reader = std::io::BufReader::new(flate2::read::GzDecoder::new(file));
+    for (n, line) in reader.lines().enumerate() {
+        let line = line.map_err(|e| format!("{}: {e}", path.display()))?;
+        let record = serde_json::from_str(&line)
+            .map_err(|e| format!("{}:{}: {e}", path.display(), n + 1))?;
+        f(record)?;
+    }
+    Ok(())
+}
+
+/// The RHEL release a platform product names (`red_hat_enterprise_linux_9` is 9).
+fn rhel_release(platform: &str) -> Option<&str> {
+    platform
+        .strip_prefix("red_hat_enterprise_linux_")
+        .filter(|r| !r.is_empty() && r.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// How a Red Hat state reads in a finding (`will not fix`), for the states that leave a
+/// package exposed; `None` for fixed and not affected.
+fn unfixed_status(state: VendorState) -> Option<&'static str> {
+    match state {
+        VendorState::Affected => Some("affected"),
+        VendorState::WillNotFix => Some("will not fix"),
+        VendorState::FixDeferred => Some("fix deferred"),
+        VendorState::OutOfSupport => Some("out of support scope"),
+        VendorState::UnderInvestigation => Some("under investigation"),
+        VendorState::Fixed | VendorState::NotAffected => None,
+    }
+}
+
+/// Red Hat's aggregate severity as an OSV `database_specific.severity` band.
+fn severity_band(text: &str) -> Option<&'static str> {
+    match text.to_ascii_lowercase().as_str() {
+        "critical" => Some("CRITICAL"),
+        "important" => Some("HIGH"),
+        "moderate" => Some("MEDIUM"),
+        "low" => Some("LOW"),
+        _ => None,
+    }
+}
+
+/// The RHEL release of a main-stream platform CPE (`cpe:/o:redhat:enterprise_linux:8::baseos`
+/// is 8; EUS, AUS and the like have products of their own and are not read).
+fn rhel_cpe_release(cpe: &str) -> Option<&str> {
+    let mut parts = cpe.split(':');
+    let (Some("cpe"), Some("/o" | "/a"), Some("redhat"), Some("enterprise_linux"), Some(r)) = (
+        parts.next(),
+        parts.next(),
+        parts.next(),
+        parts.next(),
+        parts.next(),
+    ) else {
+        return None;
+    };
+    (!r.is_empty() && r.bytes().all(|b| b.is_ascii_digit())).then_some(r)
+}
+
+/// What the VEX says about one RHEL package, strongest first: a fix outranks a statement
+/// that the package is not affected, which outranks an open status.
+enum Verdict {
+    /// Fixed in this version (the highest a main-stream platform names).
+    Fixed(String),
+    /// Not affected (`vulnerable_code_not_present`): said so that the package is never
+    /// matched through its source package's entry.
+    NotAffected,
+    /// Not fixed, with the status as it reads in a finding.
+    Open(&'static str),
+}
+
+impl Verdict {
+    fn rank(&self) -> u8 {
+        match self {
+            Verdict::Fixed(_) => 2,
+            Verdict::NotAffected => 1,
+            Verdict::Open(_) => 0,
+        }
+    }
+}
+
+/// The OSV records of one Red Hat record's RHEL rpm entries, by ecosystem
+/// ([`fleetreach_os::distro::red_hat_vex`]): one record per release, its id the CVE, one
+/// affected package per (component, module stream). A package fixed on a main-stream
+/// platform (`cpe:/o:redhat:enterprise_linux:8::baseos`) gets its fix version; one Red Hat
+/// lists as not fixed on the release gets no fix event and its status in
+/// `ecosystem_specific.status`; one it lists as not affected gets an empty range.
+#[must_use]
+pub fn red_hat_vex(record: &VexRecord) -> Vec<(String, Value)> {
+    type Key<'a> = (&'a str, Option<&'a str>);
+    let mut by_release: BTreeMap<&str, BTreeMap<Key<'_>, Verdict>> = BTreeMap::new();
+    for e in &record.entries {
+        if !e
+            .purl
+            .as_deref()
+            .is_some_and(|p| p.starts_with("pkg:rpm/redhat/"))
+            || e.component.is_empty()
+        {
+            continue;
+        }
+        let key = (e.component.as_str(), e.module.as_deref());
+        if e.state == VendorState::Fixed {
+            let (Some(release), Some(version)) = (
+                record
+                    .platforms
+                    .get(&e.platform)
+                    .and_then(|c| rhel_cpe_release(c)),
+                e.version.as_deref(),
+            ) else {
+                continue;
+            };
+            // Indexes written before versions were decoded hold `module%2Bel8...`.
+            let version = percent_decode(version);
+            let Some(parsed) = fleetreach_os::RpmVersion::parse(&version) else {
+                continue;
+            };
+            let slot = by_release.entry(release).or_default();
+            match slot.get(&key) {
+                Some(Verdict::Fixed(old))
+                    if fleetreach_os::RpmVersion::parse(old).is_some_and(|o| o >= parsed) => {}
+                _ => {
+                    slot.insert(key, Verdict::Fixed(version));
+                }
+            }
+        } else {
+            let release = rhel_release(&e.platform).or_else(|| {
+                record
+                    .platforms
+                    .get(&e.platform)
+                    .and_then(|c| rhel_cpe_release(c))
+            });
+            let verdict = match (e.state, unfixed_status(e.state)) {
+                (VendorState::NotAffected, _) => Verdict::NotAffected,
+                (_, Some(status)) if rhel_release(&e.platform).is_some() => Verdict::Open(status),
+                _ => continue,
+            };
+            let Some(release) = release else { continue };
+            let slot = by_release.entry(release).or_default();
+            if slot.get(&key).is_none_or(|old| old.rank() < verdict.rank()) {
+                slot.insert(key, verdict);
+            }
+        }
+    }
+    by_release
+        .into_iter()
+        .map(|(release, components)| {
+            let ecosystem = fleetreach_os::distro::red_hat_vex(release);
+            let affected: Vec<Value> = components
+                .into_iter()
+                .map(|((name, module), verdict)| {
+                    let range = |events: Value| serde_json::json!([{"type": "ECOSYSTEM", "events": events}]);
+                    let (ranges, mut specific) = match verdict {
+                        Verdict::Fixed(v) => (
+                            range(serde_json::json!([{"introduced": "0"}, {"fixed": v}])),
+                            serde_json::json!({}),
+                        ),
+                        Verdict::Open(status) => (
+                            range(serde_json::json!([{"introduced": "0"}])),
+                            serde_json::json!({ "status": status }),
+                        ),
+                        // No range and no versions: no version is affected.
+                        Verdict::NotAffected => (
+                            serde_json::json!([]),
+                            serde_json::json!({ "status": "not affected" }),
+                        ),
+                    };
+                    if let Some(m) = module {
+                        specific["module"] = Value::from(m);
+                    }
+                    serde_json::json!({
+                        "package": {"ecosystem": ecosystem, "name": name},
+                        "ranges": ranges,
+                        "ecosystem_specific": specific,
+                    })
+                })
+                .collect();
+            let mut osv = serde_json::json!({
+                "id": record.cve,
+                "summary": record.cve,
+                "modified": record.modified,
+                "affected": affected,
+                "references": [{
+                    "type": "ADVISORY",
+                    "url": format!("https://access.redhat.com/security/cve/{}", record.cve),
+                }],
+                "database_specific": {"source": "Red Hat CSAF VEX", "document": record.document},
+            });
+            if let Some(band) = record.severity.as_deref().and_then(severity_band) {
+                osv["database_specific"]["severity"] = Value::from(band);
+            }
+            (ecosystem, osv)
+        })
+        .collect()
 }
 
 /// The directory under an OSV directory holding a provider's CSAF index.
@@ -752,6 +1003,91 @@ mod tests {
         );
         assert_eq!(name, "ose-cli");
         assert_eq!(version.as_deref(), Some("sha256%3Aabc"));
+        let (name, _, _) = component_identity("x", Some("pkg:rpm/redhat/gcc-c%2B%2B?arch=src"));
+        assert_eq!(name, "gcc-c++");
+        let (_, _, version) = component_identity(
+            "x",
+            Some("pkg:rpm/redhat/libzip@1.6.1-1.module%2Bel8.3.0?arch=x86_64&epoch=1"),
+        );
+        assert_eq!(version.as_deref(), Some("1:1.6.1-1.module+el8.3.0"));
+        assert_eq!(percent_decode("bad%zz%4"), "bad%zz%4");
+    }
+
+    /// The index line for CVE-2026-28417 on RHEL 8, trimmed: vim fixed on the main stream
+    /// (and on an EUS stream, which is ignored), vim-minimal not affected, a modular php
+    /// package left open, and an EUS-only fix that says nothing about the main stream.
+    #[test]
+    fn red_hat_records_per_release() {
+        let line = r#"{"cve":"CVE-2026-28417","document":"CVE-2026-28417","modified":"2026-10-01",
+          "severity":"Moderate",
+          "platforms":{"BaseOS-8.10.0.Z.MAIN.EUS":"cpe:/o:redhat:enterprise_linux:8::baseos",
+            "BaseOS-8.6.0.Z.AUS":"cpe:/o:redhat:rhel_aus:8.6::baseos",
+            "red_hat_enterprise_linux_8":"cpe:/o:redhat:enterprise_linux:8"},
+          "entries":[
+            {"platform":"BaseOS-8.10.0.Z.MAIN.EUS","component":"vim","purl":"pkg:rpm/redhat/vim",
+             "version":"2:8.0.1763-22.el8_10.1","status":"fixed","state":"fixed"},
+            {"platform":"BaseOS-8.10.0.Z.MAIN.EUS","component":"vim","purl":"pkg:rpm/redhat/vim",
+             "version":"2:8.0.1763-21.el8","status":"fixed","state":"fixed"},
+            {"platform":"BaseOS-8.6.0.Z.AUS","component":"vim","purl":"pkg:rpm/redhat/vim",
+             "version":"2:8.0.1763-99.el8_6","status":"fixed","state":"fixed"},
+            {"platform":"BaseOS-8.6.0.Z.AUS","component":"gvim","purl":"pkg:rpm/redhat/gvim",
+             "version":"2:8.0.1763-99.el8_6","status":"fixed","state":"fixed"},
+            {"platform":"BaseOS-8.10.0.Z.MAIN.EUS","component":"vim-minimal","purl":"pkg:rpm/redhat/vim-minimal",
+             "status":"known_not_affected","state":"not_affected"},
+            {"platform":"red_hat_enterprise_linux_8","component":"vim","purl":"pkg:rpm/redhat/vim",
+             "status":"known_affected","state":"affected"},
+            {"platform":"red_hat_enterprise_linux_8","component":"php-cli","purl":"pkg:rpm/redhat/php-cli?rpmmod=php:7.3",
+             "module":"php:7.3","status":"known_affected","state":"will_not_fix"}]}"#;
+        let record: VexRecord = serde_json::from_str(line).unwrap();
+        let out = red_hat_vex(&record);
+        assert_eq!(out.len(), 1);
+        let (eco, osv) = &out[0];
+        assert_eq!(eco, "Red Hat:enterprise_linux:8::vex");
+        assert_eq!(osv["id"], "CVE-2026-28417");
+        assert_eq!(
+            osv["references"][0]["url"],
+            "https://access.redhat.com/security/cve/CVE-2026-28417"
+        );
+        let by_name: BTreeMap<&str, &Value> = osv["affected"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| (a["package"]["name"].as_str().unwrap(), a))
+            .collect();
+        // The highest main-stream fix, and it outranks the release's open status.
+        assert_eq!(
+            by_name["vim"]["ranges"][0]["events"],
+            serde_json::json!([{"introduced": "0"}, {"fixed": "2:8.0.1763-22.el8_10.1"}])
+        );
+        assert_eq!(by_name["vim-minimal"]["ranges"], serde_json::json!([]));
+        assert_eq!(
+            by_name["vim-minimal"]["ecosystem_specific"]["status"],
+            "not affected"
+        );
+        assert_eq!(
+            by_name["php-cli"]["ecosystem_specific"],
+            serde_json::json!({"status": "will not fix", "module": "php:7.3"})
+        );
+        assert!(
+            !by_name.contains_key("gvim"),
+            "an AUS-only fix is not the release's"
+        );
+    }
+
+    #[test]
+    fn module_streams_from_rpmmod() {
+        assert_eq!(
+            rpm_module("pkg:rpm/redhat/php-cli?rpmmod=php:7.3").as_deref(),
+            Some("php:7.3")
+        );
+        assert_eq!(
+            rpm_module(
+                "pkg:rpm/redhat/libzip@1.6.1-1.module%2Bel8.3.0?arch=x86_64&rpmmod=php:7.4:8080020230118140634:cc342424"
+            )
+            .as_deref(),
+            Some("php:7.4")
+        );
+        assert_eq!(rpm_module("pkg:rpm/redhat/tar?arch=src"), None);
     }
 
     #[test]

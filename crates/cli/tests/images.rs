@@ -380,3 +380,173 @@ fn vendor_feed_distro_matches_binaries_and_links_the_vendor_page() {
         "https://linux.oracle.com/errata/ELSA-2026-1.html"
     );
 }
+
+/// A Red Hat CSAF VEX document for one CVE: `fixed` components on the RHEL 8 BaseOS main
+/// stream (purl with epoch), `open` components Red Hat lists against the release with a
+/// remediation (`no_fix_planned` "Will not fix").
+fn red_hat_vex_doc(cve: &str, fixed: &[(&str, &str, &str)], open: &[(&str, &str)]) -> String {
+    let mut products = vec![
+        r#"{"category":"product_name","name":"Red Hat Enterprise Linux 8","product":{
+          "name":"Red Hat Enterprise Linux 8","product_id":"red_hat_enterprise_linux_8",
+          "product_identification_helper":{"cpe":"cpe:/o:redhat:enterprise_linux:8"}}}"#
+            .to_string(),
+        r#"{"category":"product_name","name":"BaseOS 8.10","product":{
+          "name":"BaseOS 8.10","product_id":"BaseOS-8.10.0.Z.MAIN.EUS",
+          "product_identification_helper":{"cpe":"cpe:/o:redhat:enterprise_linux:8::baseos"}}}"#
+            .to_string(),
+    ];
+    let (mut rels, mut fixed_ids, mut open_ids, mut remediations) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for (name, epoch, vr) in fixed {
+        let id = format!("{name}-{epoch}:{vr}.x86_64");
+        products.push(format!(
+            r#"{{"category":"product_version","name":"{id}","product":{{"name":"{id}","product_id":"{id}",
+              "product_identification_helper":{{"purl":"pkg:rpm/redhat/{name}@{vr}?arch=x86_64&epoch={epoch}"}}}}}}"#
+        ));
+        let full = format!("BaseOS-8.10.0.Z.MAIN.EUS:{id}");
+        rels.push(format!(
+            r#"{{"category":"default_component_of","product_reference":"{id}",
+              "relates_to_product_reference":"BaseOS-8.10.0.Z.MAIN.EUS",
+              "full_product_name":{{"name":"x","product_id":"{full}"}}}}"#
+        ));
+        fixed_ids.push(format!("\"{full}\""));
+    }
+    for (name, details) in open {
+        products.push(format!(
+            r#"{{"category":"product_version","name":"{name}","product":{{"name":"{name}","product_id":"{name}",
+              "product_identification_helper":{{"purl":"pkg:rpm/redhat/{name}"}}}}}}"#
+        ));
+        let full = format!("red_hat_enterprise_linux_8:{name}");
+        rels.push(format!(
+            r#"{{"category":"default_component_of","product_reference":"{name}",
+              "relates_to_product_reference":"red_hat_enterprise_linux_8",
+              "full_product_name":{{"name":"x","product_id":"{full}"}}}}"#
+        ));
+        remediations.push(format!(
+            r#"{{"category":"no_fix_planned","details":"{details}","product_ids":["{full}"]}}"#
+        ));
+        open_ids.push(format!("\"{full}\""));
+    }
+    format!(
+        r#"{{"document":{{"category":"csaf_vex","csaf_version":"2.0",
+          "aggregate_severity":{{"text":"Important"}},
+          "publisher":{{"namespace":"https://www.redhat.com","name":"Red Hat Product Security"}},
+          "tracking":{{"id":"{cve}","current_release_date":"2026-10-01T00:00:00+00:00"}}}},
+        "product_tree":{{"branches":[{{"category":"vendor","name":"Red Hat","branches":[{}]}}],
+          "relationships":[{}]}},
+        "vulnerabilities":[{{"cve":"{cve}",
+          "product_status":{{"fixed":[{}],"known_affected":[{}]}},
+          "remediations":[{}]}}]}}"#,
+        products.join(","),
+        rels.join(","),
+        fixed_ids.join(","),
+        open_ids.join(","),
+        remediations.join(",")
+    )
+}
+
+/// A RHEL 8 root filesystem (the Berkeley DB fixture: basesystem, libpng
+/// 2:1.6.34-11.el8_10, which) and a `Red Hat` export that says nothing about its packages.
+fn rhel_fixture(name: &str) -> Fixture {
+    let fx = Fixture::new(name);
+    let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../os/tests/fixtures/rpmdb");
+    let root = fx.dir.join("rpmfs");
+    write(
+        &root,
+        "etc/os-release",
+        "ID=\"rhel\"\nVERSION_ID=\"8.10\"\nPRETTY_NAME=\"Red Hat Enterprise Linux 8.10 (Ootpa)\"\n",
+    );
+    std::fs::create_dir_all(root.join("var/lib/rpm")).unwrap();
+    std::fs::copy(
+        fixtures.join("db-bdb/Packages"),
+        root.join("var/lib/rpm/Packages"),
+    )
+    .unwrap();
+    for (i, stream) in ["baseos", "appstream", "crb"].iter().enumerate() {
+        write(
+            &fx.dir.join("osv/Red Hat"),
+            &format!("RHSA-2026:{i}.json"),
+            &format!(
+                r#"{{"id":"RHSA-2026:{i}","modified":"2026-01-01T00:00:00Z","summary":"zsh update",
+                "affected":[{{"package":{{"ecosystem":"Red Hat:enterprise_linux:8::{stream}","name":"zsh"}},
+                "ranges":[{{"type":"ECOSYSTEM","events":[{{"introduced":"0"}},{{"fixed":"0:5.5.1-11.el8"}}]}}]}}]}}"#
+            ),
+        );
+    }
+    fx
+}
+
+#[test]
+fn red_hat_vex_reports_unfixed_statuses_and_fixes_osv_lacks() {
+    let fx = rhel_fixture("rhel-vex");
+    let docs = fx.dir.join("csaf-docs");
+    write(
+        &docs,
+        "2026/cve-2026-0101.json",
+        &red_hat_vex_doc("CVE-2026-0101", &[("libpng", "2", "1.6.34-12.el8_10")], &[]),
+    );
+    write(
+        &docs,
+        "2026/cve-2026-0102.json",
+        &red_hat_vex_doc("CVE-2026-0102", &[], &[("which", "Will not fix")]),
+    );
+    // Fixed already: the installed libpng is past it.
+    write(
+        &docs,
+        "2026/cve-2026-0103.json",
+        &red_hat_vex_doc("CVE-2026-0103", &[("libpng", "2", "1.6.34-10.el8_10")], &[]),
+    );
+    let osv = fx.path("osv");
+    let out = run(
+        &[
+            "db",
+            "import",
+            "-q",
+            "--csaf",
+            &docs.to_string_lossy(),
+            "--osv-dir",
+            &osv,
+        ],
+        &fx.dir.join("cache"),
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let rootfs = fx.path("rpmfs");
+    let (code, report, stderr) = fx.scan(&["--image", &rootfs, "--require-full-coverage"]);
+    assert_eq!(code, 1, "{stderr}");
+    assert_eq!(
+        findings(&report),
+        vec![
+            ("CVE-2026-0101".into(), "redhat/libpng".into()),
+            ("CVE-2026-0102".into(), "redhat/which".into()),
+        ],
+        "{report}"
+    );
+    let text = report.to_string();
+    assert!(text.contains("1.6.34-12.el8_10"), "the VEX fix: {text}");
+    assert!(text.contains("status will not fix"), "{text}");
+    assert!(
+        text.contains("https://access.redhat.com/security/cve/CVE-2026-0102"),
+        "{text}"
+    );
+    // Derived once: a second scan reads the cached export and agrees.
+    let (code2, report2, _) = fx.scan(&["--image", &rootfs]);
+    assert_eq!(code2, 1);
+    assert_eq!(findings(&report2), findings(&report));
+}
+
+#[test]
+fn red_hat_without_the_vex_index_is_a_gap() {
+    let fx = rhel_fixture("rhel-novex");
+    let rootfs = fx.path("rpmfs");
+    let (code, report, stderr) = fx.scan(&["--image", &rootfs, "--require-full-coverage"]);
+    assert_eq!(code, 2, "{stderr}");
+    let coverage = report["coverage"].to_string();
+    assert!(
+        coverage.contains("fleetreach db sync --source csaf:redhat"),
+        "{report}"
+    );
+}

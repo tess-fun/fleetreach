@@ -106,6 +106,8 @@ pub fn to_semver(raw: &str) -> SemverVersion {
 /// A source package as installed: its name, version and the binaries built from it.
 struct Source<'a> {
     name: &'a str,
+    /// The source package name (the same as `name` where packages are grouped by source).
+    source: &'a str,
     version: &'a str,
     binaries: Vec<&'a str>,
     /// The module stream the packages came from, if any.
@@ -115,7 +117,9 @@ struct Source<'a> {
 /// What to match: source packages with their binaries folded in, or each binary on its own
 /// where the advisories name binaries (`binary_names`).
 fn sources(packages: &[OsPackage], binary_names: bool) -> Vec<Source<'_>> {
-    let mut by: BTreeMap<(&str, &str, Option<&str>), Vec<&str>> = BTreeMap::new();
+    /// Name, version and module stream.
+    type Key<'a> = (&'a str, &'a str, Option<&'a str>);
+    let mut by: BTreeMap<Key<'_>, (&str, Vec<&str>)> = BTreeMap::new();
     for p in packages {
         let module = p.module.as_deref();
         let key = if binary_names {
@@ -123,14 +127,18 @@ fn sources(packages: &[OsPackage], binary_names: bool) -> Vec<Source<'_>> {
         } else {
             (p.source.as_str(), p.source_version.as_str(), module)
         };
-        by.entry(key).or_default().push(p.name.as_str());
+        by.entry(key)
+            .or_insert((p.source.as_str(), Vec::new()))
+            .1
+            .push(p.name.as_str());
     }
     by.into_iter()
-        .map(|((name, version, module), mut binaries)| {
+        .map(|((name, version, module), (source, mut binaries))| {
             binaries.sort_unstable();
             binaries.dedup();
             Source {
                 name,
+                source,
                 version,
                 binaries,
                 module,
@@ -234,6 +242,7 @@ impl Distro {
     fn name_of_urgency(&self) -> &'static str {
         match self.namespace.as_str() {
             "ubuntu" => "priority",
+            "redhat" => "status",
             _ => "urgency",
         }
     }
@@ -256,14 +265,16 @@ fn in_stream(distro: &Distro, src: &Source, module: &str) -> bool {
     distro.modules.get(name).is_none_or(|s| s == stream)
 }
 
-/// Match one source package across the release and its overlays.
+/// Match one source package across the release, its overlays and its fallbacks. `lookup`
+/// gives an ecosystem's advisories for a package name.
 fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
     ctx: &Ctx,
     src: &Source,
     v: &V,
-    lookup: impl Fn(&str) -> &'d [Advisory<V>],
+    by_name: impl Fn(&str, &str) -> &'d [Advisory<V>],
     out: &mut Vec<VulnFinding>,
 ) {
+    let lookup = |eco: &str| by_name(eco, src.name);
     let applies = |eco: &str| !eco.starts_with("Root:") || src.version.contains("root.io");
     let overlays: Vec<&str> = ctx
         .distro
@@ -281,9 +292,46 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
     let base = std::iter::once(&ctx.distro.ecosystem)
         .chain(&ctx.distro.also)
         .flat_map(|e| lookup(e).iter());
+    // A fallback speaks only about CVEs the release's own records do not mention for this
+    // package (fixed there or not), and names the binary or its source package.
+    let known: BTreeSet<&str> = base
+        .clone()
+        .chain(overlays.iter().flat_map(|e| lookup(e).iter()))
+        .flat_map(Advisory::keys)
+        .filter(|k| k.starts_with("CVE-"))
+        .collect();
+    // By binary name first. A source package's entry stands for its binaries only where it
+    // has no fix (vendors list fixes and "not affected" per binary, open issues per source),
+    // and never for a binary the fallback speaks about itself.
+    let mut fallback_ids: BTreeSet<&str> = BTreeSet::new();
+    let mut fallbacks: Vec<&Advisory<V>> = Vec::new();
+    let mut by_binary: BTreeSet<&str> = BTreeSet::new();
+    for eco in &ctx.distro.fallbacks {
+        for adv in by_name(eco, src.name) {
+            by_binary.extend(adv.keys().filter(|k| k.starts_with("CVE-")));
+            if !adv.keys().any(|k| known.contains(k)) && fallback_ids.insert(adv.id.as_str()) {
+                fallbacks.push(adv);
+            }
+        }
+    }
+    if src.source != src.name {
+        for eco in &ctx.distro.fallbacks {
+            for adv in by_name(eco, src.source) {
+                if !has_fix(&adv.ranges)
+                    && !adv
+                        .keys()
+                        .any(|k| known.contains(k) || by_binary.contains(k))
+                    && fallback_ids.insert(adv.id.as_str())
+                {
+                    fallbacks.push(adv);
+                }
+            }
+        }
+    }
     let candidates = base
         .filter(|a| !a.keys().any(|k| superseded.contains(k)))
-        .chain(overlays.iter().flat_map(|e| lookup(e).iter()));
+        .chain(overlays.iter().flat_map(|e| lookup(e).iter()))
+        .chain(fallbacks);
     for adv in candidates {
         if ctx.opts.ignore_unimportant && adv.unimportant() {
             continue;
@@ -313,15 +361,15 @@ pub fn scan(
     for src in sources(packages, distro.binary_names) {
         match distro.family {
             Family::Deb => match DebVersion::parse(src.version) {
-                Some(v) => match_source(&ctx, &src, &v, |e| db.deb(e, src.name), &mut out),
+                Some(v) => match_source(&ctx, &src, &v, |e, n| db.deb(e, n), &mut out),
                 None => skipped_unparseable += 1,
             },
             Family::Apk => match ApkVersion::parse(src.version) {
-                Some(v) => match_source(&ctx, &src, &v, |e| db.apk(e, src.name), &mut out),
+                Some(v) => match_source(&ctx, &src, &v, |e, n| db.apk(e, n), &mut out),
                 None => skipped_unparseable += 1,
             },
             Family::Rpm => match RpmVersion::parse(src.version) {
-                Some(v) => match_source(&ctx, &src, &v, |e| db.rpm(e, src.name), &mut out),
+                Some(v) => match_source(&ctx, &src, &v, |e, n| db.rpm(e, n), &mut out),
                 None => skipped_unparseable += 1,
             },
         }
@@ -404,7 +452,7 @@ mod tests {
         let src = &sources(&pkgs, false)[0];
         let mut out = Vec::new();
         let v = DebVersion::parse("1.0-1").unwrap();
-        match_source(&ctx, src, &v, |_| std::slice::from_ref(&a), &mut out);
+        match_source(&ctx, src, &v, |_, _| std::slice::from_ref(&a), &mut out);
         assert_eq!(out.len(), 1);
         assert!(out[0].title.contains("no fix yet"), "{}", out[0].title);
         assert!(out[0].title.contains("urgency unimportant"));
@@ -425,7 +473,7 @@ mod tests {
             ..ctx
         };
         let mut out = Vec::new();
-        match_source(&ctx, src, &v, |_| std::slice::from_ref(&a), &mut out);
+        match_source(&ctx, src, &v, |_, _| std::slice::from_ref(&a), &mut out);
         assert!(out.is_empty());
     }
 
@@ -459,7 +507,7 @@ mod tests {
             let src = &sources(&pkgs, false)[0];
             let mut out = Vec::new();
             let v = DebVersion::parse(installed).unwrap();
-            match_source(&ctx, src, &v, |_| std::slice::from_ref(&a), &mut out);
+            match_source(&ctx, src, &v, |_, _| std::slice::from_ref(&a), &mut out);
             assert_eq!(!out.is_empty(), hit, "{installed}");
             if hit {
                 assert!(out[0].occurrences[0].is_vulnerable());
@@ -489,7 +537,7 @@ mod tests {
             repo: &repo,
             opts: ScanOptions::default(),
         };
-        let lookup = |e: &str| -> &[Advisory<DebVersion>] {
+        let lookup = |e: &str, _: &str| -> &[Advisory<DebVersion>] {
             if e == "Root:Debian:12" {
                 std::slice::from_ref(&root)
             } else {
@@ -629,6 +677,88 @@ mod tests {
         assert_eq!(ids(&ol, pkg(modular, None)), ["ELSA-74", "ELSA-80"]);
         ol.modules.insert("php".into(), "7.4".into());
         assert_eq!(ids(&ol, pkg(modular, None)), ["ELSA-74"]);
+    }
+
+    #[test]
+    fn red_hat_vex_statuses_fill_in_only_what_the_release_does_not_say() {
+        let pkgs = vec![OsPackage {
+            name: "openssl-libs".into(),
+            version: "1:3.0.7-27.el9".into(),
+            source: "openssl".into(),
+            source_version: "1:3.0.7-27.el9".into(),
+            arch: None,
+            module: None,
+        }];
+        let rhel = crate::distro::explicit("Red Hat:enterprise_linux:9::baseos", Family::Rpm);
+        let vex = "Red Hat:enterprise_linux:9::vex";
+        let mut db = DistroDb::default();
+        // The release fixed CVE-2026-1 (installed is past the fix): Red Hat's unfixed entry
+        // for another stream of the same CVE must not bring it back.
+        db.insert_rpm(
+            "Red Hat:enterprise_linux:9::baseos",
+            "openssl-libs",
+            adv(
+                "RHSA-2026-1",
+                &[("introduced", "0"), ("fixed", "1:3.0.7-20.el9")],
+                RpmVersion::parse,
+            ),
+        );
+        let open = |cve: &str, status: &str, module: Option<&str>| {
+            let mut a = adv(cve, &[("introduced", "0")], RpmVersion::parse);
+            a.aliases = vec![cve.into()];
+            a.urgency = Some(status.into());
+            a.module = module.map(str::to_string);
+            a
+        };
+        db.insert_rpm(vex, "openssl", open("CVE-2026-1", "affected", None));
+        // Named by source package, and by the binary: one finding.
+        db.insert_rpm(vex, "openssl", open("CVE-2026-2", "will not fix", None));
+        db.insert_rpm(
+            vex,
+            "openssl-libs",
+            open("CVE-2026-2", "will not fix", None),
+        );
+        // Another module stream's build.
+        db.insert_rpm(
+            vex,
+            "openssl-libs",
+            open("CVE-2026-3", "affected", Some("openssl:1.1")),
+        );
+        // A fix names binaries: the source package's fix says nothing about openssl-libs
+        // (Red Hat lists vim fixed and vim-minimal not affected for one CVE).
+        db.insert_rpm(
+            vex,
+            "openssl",
+            adv(
+                "CVE-2026-4",
+                &[("introduced", "0"), ("fixed", "1:3.0.7-30.el9")],
+                RpmVersion::parse,
+            ),
+        );
+        // The binary is not affected (no range): the source's open entry does not apply.
+        db.insert_rpm(vex, "openssl", open("CVE-2026-5", "affected", None));
+        let mut not_affected = adv("CVE-2026-5", &[], RpmVersion::parse);
+        not_affected.ranges.clear();
+        db.insert_rpm(vex, "openssl-libs", not_affected);
+        let s = scan(
+            &rhel,
+            &pkgs,
+            &db,
+            &RepoId("img".into()),
+            ScanOptions::default(),
+        );
+        let got: Vec<(&str, &str)> = s
+            .findings
+            .iter()
+            .map(|f| (f.advisory_id.as_str(), f.title.as_str()))
+            .collect();
+        assert_eq!(got.len(), 1, "{got:?}");
+        assert_eq!(got[0].0, "CVE-2026-2");
+        assert!(
+            got[0].1.ends_with("no fix yet; status will not fix]"),
+            "{}",
+            got[0].1
+        );
     }
 
     #[test]
