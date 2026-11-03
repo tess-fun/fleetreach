@@ -1,6 +1,6 @@
 # Spec 16: A+ on every matrix row by 1.8.0
 
-Status: in progress (1.6.0: E2 jar-diff and commit-first runs done, both gates missed; 1.7.0: rpm reader spike done) · Written 2026-11-02 after the 1.5.0 release, revised the same day
+Status: in progress (1.6.0: E2 jar-diff and commit-first runs done, both gates missed; 1.7.0: rpm images implemented) · Written 2026-11-02 after the 1.5.0 release, revised the same day
 (three releases instead of two; a path to A+ researched for every row) · Supersedes the
 "out of scope" parts of [spec 14](14-out-of-scope.md) for containers, curated research,
 hosted triage and malware analysis (user decisions of 2026-11-02, not re-argued here)
@@ -572,22 +572,28 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     since the OSV Red Hat export holds only fixes. Direct feeds for distros osv.dev lacks:
     Amazon Linux (ALAS), Oracle Linux (OVAL), Photon (CVE metadata), Bottlerocket. OS
     end-of-life warnings from endoflife.date data, bundled for offline use.
-    **Reader spike done 2026-11-02, unreleased** (`fleetreach_os::rpmdb`, not wired into
-    scans): pure-Rust readers for all three databases, about 1,000 lines with their unit tests and no new
-    dependency. SQLite is a read-only b-tree walker (overflow chains, interior pages, the
+    **Status: rpm images implemented 2026-11-02, unreleased** (`fleetreach_os::rpmdb`,
+    `RpmVersion`, wired into `scan --image`). Pure-Rust readers for all three databases, no
+    new dependency: SQLite is a read-only b-tree walker (overflow chains, interior pages, the
     write-ahead log applied up to its last valid commit frame); Berkeley DB reads only pages
     a hash bucket reaches, so headers of erased packages left on free pages are never
     reported; NDB verifies each blob's adler32. Installed sets equal `rpm -qa` (name, epoch,
-    version, release, arch, source rpm, modularity label) on 12 real images, 1,574 packages,
-    0 differences: SQLite on Alma 9, Amazon Linux 2023, Fedora 41, Azure Linux 3, Oracle 9,
-    Photon 5, UBI 9, Rocky 9; Berkeley DB on Amazon Linux 2, CentOS 7, Rocky 8; NDB on
-    openSUSE Leap 15.6. Fixtures written by rpm itself, and every single-byte corruption of
-    them, are in the test suite (fail-closed, no panic). **Found**: Oracle Linux 9 ships an
-    empty stray `/usr/lib/sysimage/rpm/rpmdb.sqlite` while its real database is
-    `/var/lib/rpm`, so 1.7.0 must pick the location by the image's `%_dbpath` macro (from
-    `/usr/lib/rpm/macros` and `/etc/rpm/macros*`), not by which file exists first; until
-    then a scan would report 0 packages for that image, which is the false-clean the
-    fail-closed rule forbids.
+    version, release, arch, source rpm, modularity label) on 18 real images, 0 differences,
+    from CentOS 7 to Fedora 41 in all three formats. The comparator agrees with rpm 4.20's
+    `rpm.vercmp` on 538,780 pairs from the eight rpm exports and the installed versions.
+    Findings equal an independent evaluation of the exports with rpm deciding every
+    comparison on 12 images: 1,130 findings, 0 missing, 0 extra (AlmaLinux 8.8, 9.2, 9;
+    Rocky 8, 9.2, 9; UBI 8.8, 9; Azure Linux 3; CBL-Mariner 2; Leap 15.5, 15.6). Distros
+    matched: Red Hat (BaseOS, AppStream, CRB; binary names), AlmaLinux (binary names),
+    Rocky, openSUSE, SLES 15 (Basesystem, Server Applications), SLE Micro, Azure Linux,
+    Mageia, openEuler. **Found**: Oracle Linux 9 ships an empty stray
+    `/usr/lib/sysimage/rpm/rpmdb.sqlite` while its real database is `/var/lib/rpm`; both
+    locations are read, the empty one gives way, and two that disagree are a gap (simpler and
+    as safe as evaluating the `%_dbpath` macro). **Still open in phase 2**: CentOS, Oracle,
+    Fedora, Amazon Linux and Photon are gaps until their direct feeds land; RHEL module
+    streams are not told apart (a modular package is compared on its EVR alone, as the OSV
+    records carry no stream); Red Hat and SUSE CSAF unfixed statuses; the rpm comparison
+    against Trivy and Grype.
   - **Phase 3 (1.8.0)**: pull by digest from an OCI registry (behind `network`, docker
     config credentials); per-layer attribution and base-image detection from image history;
     base-image rollup and rebuild advice across the fleet; VEX discovered from OCI

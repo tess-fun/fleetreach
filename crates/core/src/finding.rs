@@ -23,6 +23,7 @@ use crate::Severity;
 /// [`GitHubActions`]: Ecosystem::GitHubActions
 /// [`Deb`]: Ecosystem::Deb
 /// [`Apk`]: Ecosystem::Apk
+/// [`Rpm`]: Ecosystem::Rpm
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
 )]
@@ -47,6 +48,9 @@ pub enum Ecosystem {
     Deb,
     /// apk-family OS packages (Alpine, Wolfi, Chainguard, MinimOS, ...) inside an image.
     Apk,
+    /// rpm-family OS packages (Red Hat, AlmaLinux, Rocky, SUSE, Azure Linux, ...) inside an
+    /// image.
+    Rpm,
 }
 
 impl Ecosystem {

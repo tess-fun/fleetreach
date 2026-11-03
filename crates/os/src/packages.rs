@@ -1,15 +1,17 @@
 //! The installed-package databases: dpkg's `/var/lib/dpkg/status` (and distroless's
-//! `/var/lib/dpkg/status.d/*`, one file per package) and apk's `/lib/apk/db/installed`.
+//! `/var/lib/dpkg/status.d/*`, one file per package), apk's `/lib/apk/db/installed`, and
+//! rpm's database ([`crate::rpmdb`]).
 //!
-//! Advisories name **source** packages (Debian's `Source:`, apk's origin `o:`), so every
-//! binary package is mapped to its source name and version: `libssl3` is matched as
-//! `openssl`. The files each package owns are collected too, so a language lockfile that
+//! Advisories name **source** packages (Debian's `Source:`, apk's origin `o:`, rpm's
+//! `SOURCERPM`), so every binary package is mapped to its source name and version: `libssl3`
+//! is matched as `openssl`. The files each package owns are collected too, so a language lockfile that
 //! an OS package installed is not reported a second time through its language feeder.
 
 use std::collections::BTreeSet;
 
 use crate::distro::Family;
 use crate::image::ImageFs;
+use crate::rpmdb::{self, Backend, RpmPackage};
 
 /// One installed OS package.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -160,6 +162,76 @@ pub fn parse_apk_installed(text: &str) -> (Vec<OsPackage>, BTreeSet<String>) {
     (out, owned)
 }
 
+/// Where rpm keeps its database: `/usr/lib/sysimage/rpm` since rpm 4.16, `/var/lib/rpm`
+/// before (and still on RHEL 9, which links one to the other).
+const RPM_DIRS: &[&str] = &["usr/lib/sysimage/rpm", "var/lib/rpm"];
+const RPM_FILES: &[&str] = &[
+    "rpmdb.sqlite",
+    "rpmdb.sqlite-wal",
+    "Packages.db",
+    "Packages",
+];
+
+/// The installed version as rpm prints it, `[epoch:]version-release`.
+fn evr(epoch: Option<u32>, version: &str, release: &str) -> String {
+    match epoch {
+        Some(e) => format!("{e}:{version}-{release}"),
+        None => format!("{version}-{release}"),
+    }
+}
+
+/// An rpm package as an [`OsPackage`]: the source name and version come from its source rpm
+/// file name (`openssl-3.0.7-27.el9.src.rpm`), with the binary's epoch. `None` for rpm's
+/// `gpg-pubkey` pseudo-packages, which hold signing keys, not software.
+pub fn from_rpm(p: &RpmPackage) -> Option<OsPackage> {
+    if p.name == "gpg-pubkey" && p.arch.is_none() {
+        return None;
+    }
+    let version = evr(p.epoch, &p.version, &p.release);
+    let source = p.source_rpm.as_deref().and_then(|s| {
+        let stem = s
+            .strip_suffix(".src.rpm")
+            .or_else(|| s.strip_suffix(".nosrc.rpm"))?;
+        let (rest, release) = stem.rsplit_once('-')?;
+        let (name, ver) = rest.rsplit_once('-')?;
+        (!name.is_empty()).then(|| (name.to_string(), evr(p.epoch, ver, release)))
+    });
+    let (source, source_version) = source.unwrap_or_else(|| (p.name.clone(), version.clone()));
+    Some(OsPackage {
+        name: p.name.clone(),
+        version,
+        source,
+        source_version,
+        arch: p.arch.clone(),
+    })
+}
+
+/// The packages of each rpm database in the image, by directory. A directory that is a
+/// link to another is read once.
+fn rpm_databases(fs: &ImageFs) -> Vec<(String, Result<Vec<RpmPackage>, String>)> {
+    let mut seen = BTreeSet::new();
+    let mut out = Vec::new();
+    for dir in RPM_DIRS {
+        let Some(backend) = [Backend::Sqlite, Backend::Ndb, Backend::BerkeleyDb]
+            .into_iter()
+            .find(|b| fs.is_file(&format!("{dir}/{}", b.file_name())))
+        else {
+            continue;
+        };
+        let path = format!("{dir}/{}", backend.file_name());
+        if !seen.insert(fs.canonical(&path).unwrap_or_else(|| path.clone())) {
+            continue;
+        }
+        let wal = fs.read(&format!("{dir}/rpmdb.sqlite-wal"));
+        let read = match fs.read(&path) {
+            Some(file) => rpmdb::read(backend, file, wal).map_err(|e| format!("{path}: {e}")),
+            None => Err(format!("{path} could not be read")),
+        };
+        out.push((path, read));
+    }
+    out
+}
+
 /// Where each format keeps its database, for opening only what is needed.
 pub(crate) fn wanted(path: &str) -> bool {
     matches!(
@@ -170,7 +242,11 @@ pub(crate) fn wanted(path: &str) -> bool {
             | "var/lib/dpkg/status"
             | "lib/apk/db/installed"
             | "usr/lib/apk/db/installed"
-    ) || path
+    ) || RPM_DIRS.iter().any(|d| {
+        path.strip_prefix(d)
+            .and_then(|f| f.strip_prefix('/'))
+            .is_some_and(|f| RPM_FILES.contains(&f))
+    }) || path
         .strip_prefix("var/lib/dpkg/status.d/")
         .is_some_and(|f| !f.contains('/'))
         || path
@@ -204,9 +280,21 @@ pub fn inventory(fs: &ImageFs) -> Inventory {
         .into_iter()
         .find(|p| fs.is_file(p));
     let has_dpkg = dpkg_status || !status_d.is_empty();
-    if has_dpkg && apk_db.is_some() {
-        inv.problems
-            .push("the image has both a dpkg and an apk package database".to_string());
+    let rpm_dbs = rpm_databases(fs);
+    let found: Vec<&str> = [
+        (has_dpkg, "dpkg"),
+        (apk_db.is_some(), "apk"),
+        (!rpm_dbs.is_empty(), "rpm"),
+    ]
+    .into_iter()
+    .filter_map(|(has, name)| has.then_some(name))
+    .collect();
+    if found.len() > 1 {
+        inv.problems.push(format!(
+            "the image has more than one package database ({}); only the {} one was read",
+            found.join(", "),
+            found[0]
+        ));
     }
     if has_dpkg {
         inv.family = Some(Family::Deb);
@@ -256,6 +344,41 @@ pub fn inventory(fs: &ImageFs) -> Inventory {
                 inv.owned = owned;
             }
             None => inv.problems.push(format!("{db} could not be read")),
+        }
+    } else if !rpm_dbs.is_empty() {
+        inv.family = Some(Family::Rpm);
+        let mut read: Vec<(String, Vec<RpmPackage>)> = Vec::new();
+        for (path, result) in rpm_dbs {
+            match result {
+                Ok(pkgs) => read.push((path, pkgs)),
+                Err(e) => inv.problems.push(e),
+            }
+        }
+        // An image can ship a stray empty database beside the real one (Oracle Linux 9 has
+        // an empty `/usr/lib/sysimage/rpm/rpmdb.sqlite`; rpm uses `/var/lib/rpm`): the one
+        // with packages is the one rpm reads. Two that disagree is a gap, never a guess.
+        read.retain(|(_, pkgs)| !pkgs.is_empty());
+        read.sort_by_key(|(_, pkgs)| std::cmp::Reverse(pkgs.len()));
+        if let [(_, a), (_, b), ..] = read.as_slice() {
+            if a == b {
+                read.truncate(1);
+            }
+        }
+        if let [(first, _), (second, _), ..] = read.as_slice() {
+            inv.problems.push(format!(
+                "the image has two rpm databases with packages ({first} and {second}); only \
+                 {first} was read"
+            ));
+        }
+        if let Some((_, pkgs)) = read.into_iter().next() {
+            for p in &pkgs {
+                inv.owned.extend(
+                    p.files
+                        .iter()
+                        .map(|f| f.trim_start_matches('/').to_string()),
+                );
+            }
+            inv.packages = pkgs.iter().filter_map(from_rpm).collect();
         }
     }
     for s in fs.skipped() {
@@ -341,6 +464,96 @@ R:package-lock.json
         );
         assert!(owned.contains("usr/lib/libcrypto.so.3"));
         assert!(owned.contains("app/package-lock.json"));
+    }
+
+    fn rpm(name: &str, epoch: Option<u32>, src: Option<&str>) -> RpmPackage {
+        RpmPackage {
+            name: name.into(),
+            epoch,
+            version: "3.0.7".into(),
+            release: "27.el9".into(),
+            arch: Some("aarch64".into()),
+            source_rpm: src.map(str::to_string),
+            ..RpmPackage::default()
+        }
+    }
+
+    #[test]
+    fn rpm_binaries_map_to_their_source_rpm() {
+        let p = from_rpm(&rpm(
+            "openssl-libs",
+            Some(1),
+            Some("openssl-3.0.7-27.el9.src.rpm"),
+        ))
+        .unwrap();
+        assert_eq!(
+            (
+                p.version.as_str(),
+                p.source.as_str(),
+                p.source_version.as_str()
+            ),
+            ("1:3.0.7-27.el9", "openssl", "1:3.0.7-27.el9")
+        );
+        // SUSE source names carry dashes of their own.
+        let p = from_rpm(&rpm(
+            "libopenssl3",
+            None,
+            Some("openssl-3-3.1.4-150600.5.15.1.src.rpm"),
+        ))
+        .unwrap();
+        assert_eq!(
+            (p.source.as_str(), p.source_version.as_str()),
+            ("openssl-3", "3.1.4-150600.5.15.1")
+        );
+        let p = from_rpm(&rpm("orphan", None, None)).unwrap();
+        assert_eq!(p.source, "orphan");
+        let mut key = rpm("gpg-pubkey", None, None);
+        key.arch = None;
+        assert!(from_rpm(&key).is_none(), "signing keys are not packages");
+    }
+
+    #[test]
+    fn rpm_inventory_skips_a_stray_empty_database_and_owns_files() {
+        let fixture = |p: &str| {
+            std::fs::read(
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/rpmdb")
+                    .join(p),
+            )
+            .unwrap()
+        };
+        let (real, empty) = (fixture("db-bdb/Packages"), fixture("db-empty/rpmdb.sqlite"));
+        // Oracle Linux 9's layout: the newer location holds an empty database.
+        let fs = ImageFs::from_files([
+            ("var/lib/rpm/Packages", real.as_slice()),
+            ("usr/lib/sysimage/rpm/rpmdb.sqlite", empty.as_slice()),
+        ]);
+        let inv = inventory(&fs);
+        assert_eq!(inv.family, Some(Family::Rpm));
+        assert!(inv.problems.is_empty(), "{:?}", inv.problems);
+        let names: Vec<_> = inv.packages.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["basesystem", "libpng", "which"]);
+        assert_eq!(inv.packages[1].version, "2:1.6.34-11.el8_10");
+        assert!(inv.owned.contains("usr/bin/which"), "{:?}", inv.owned);
+
+        // Two databases that disagree: the larger is read and the scan says so.
+        let ndb = fixture("db-ndb/Packages.db");
+        let fs = ImageFs::from_files([
+            ("var/lib/rpm/Packages", real.as_slice()),
+            ("usr/lib/sysimage/rpm/Packages.db", ndb.as_slice()),
+        ]);
+        let inv = inventory(&fs);
+        assert_eq!(inv.packages.len(), 3);
+        assert!(
+            inv.problems[0].contains("two rpm databases"),
+            "{:?}",
+            inv.problems
+        );
+
+        // A database that cannot be read is a problem, never an empty image.
+        let fs = ImageFs::from_files([("var/lib/rpm/Packages", &real[..4096])]);
+        let inv = inventory(&fs);
+        assert!(inv.packages.is_empty() && !inv.problems.is_empty());
     }
 
     #[test]

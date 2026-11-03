@@ -478,6 +478,7 @@ fn purl_type(ecosystem: Ecosystem) -> &'static str {
         // OS packages: the name is already `<distro>/<source>`, the purl namespace and name.
         Ecosystem::Deb => "deb",
         Ecosystem::Apk => "apk",
+        Ecosystem::Rpm => "rpm",
     }
 }
 

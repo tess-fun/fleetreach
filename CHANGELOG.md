@@ -27,6 +27,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   missing distro export is an errored target, and an unknown distribution or release, an
   unreadable package database, or Java archives and gems no matcher reads yet are coverage
   gaps. New crate `fleetreach-os`.
+- **rpm-based container images** (spec 16, row 10, phase 2). Red Hat Enterprise Linux (UBI),
+  AlmaLinux, Rocky Linux, openSUSE Leap and Tumbleweed, SUSE Linux Enterprise 15 and SLE
+  Micro, Azure Linux and CBL-Mariner 2, Mageia and openEuler images are matched against their
+  osv.dev exports. The rpm database is read in pure Rust in all three formats rpm has used
+  (SQLite with its write-ahead log, Berkeley DB, NDB), with no `rpm` and no database library;
+  an empty stray database beside the real one (Oracle Linux 9 ships one) is skipped, and two
+  that disagree are a coverage gap. Versions compare with rpm's ordering (epoch, `~`, `^`).
+  Red Hat and AlmaLinux advisories name binary packages, so there each binary is matched on
+  its own; elsewhere binaries fold into their source rpm. CentOS, Oracle Linux, Fedora,
+  Amazon Linux and Photon have no osv.dev advisories and are coverage gaps, never clean.
+  Package names are `<distro>/<package>` (`rocky-linux/openssl`, `redhat/openssl-libs`),
+  ecosystem `rpm`.
 - `db sync --distros Debian:12,Wolfi` fetches distro exports one distribution at a time (the
   per-release export where osv.dev has one, else the whole distribution's), and a plain
   `db sync` fetches what the fleet's images need. `db status` lists the distro exports present.

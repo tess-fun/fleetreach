@@ -20,7 +20,7 @@ sidebar:
 | [Swift](/fleetreach/docs/ecosystems/swift/) | `Package.resolved` | osv.dev | SemVer by URL |
 | [Hex](/fleetreach/docs/ecosystems/hex/) | `mix.lock` | osv.dev | SemVer |
 | [Julia](/fleetreach/docs/ecosystems/julia/) | `Manifest.toml` | osv.dev | `VersionNumber` |
-| [Container images](/fleetreach/docs/ecosystems/container-images/) | dpkg and apk databases in an image | osv.dev distro exports | dpkg, apk-tools |
+| [Container images](/fleetreach/docs/ecosystems/container-images/) | dpkg, apk and rpm databases in an image | osv.dev distro exports | dpkg, apk-tools, rpm |
 
 Every ecosystem except Go with `govulncheck` is read **without a toolchain**: no package
 manager, no install script, no build. That makes fleetreach safe to point at any repository.

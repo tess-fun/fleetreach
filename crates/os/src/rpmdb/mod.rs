@@ -8,8 +8,9 @@
 //! - **Berkeley DB** (`Packages`, hash format): RHEL 7 and 8, CentOS 7, Amazon Linux 2.
 //! - **NDB** (`Packages.db`): SUSE and openSUSE.
 //!
-//! Each package is its stored RPM header ([`header`]), reduced to the fields that identify it.
-//! Not wired into scans yet: matching RPM packages against advisories is 1.7.0 work.
+//! Each package is its stored RPM header ([`header`]), reduced to the fields that identify it
+//! and the files it owns. Images are read through [`read`], on the bytes the image reader
+//! kept; [`read_dir`] reads a database directory on disk.
 //!
 //! Fail-closed like every reader in this crate: a database that cannot be read in full is an
 //! error, never a short package list.
@@ -39,6 +40,8 @@ pub struct RpmPackage {
     pub source_rpm: Option<String>,
     /// The module stream a package came from (RHEL 8+ AppStream), if any.
     pub modularity_label: Option<String>,
+    /// The paths the package installs, absolute (`/usr/bin/openssl`).
+    pub files: Vec<String>,
 }
 
 /// Why an rpm database could not be read.
@@ -71,50 +74,63 @@ pub fn detect(dir: &Path) -> Option<Backend> {
     }
 }
 
-/// Every installed package in the database in `dir`, sorted.
-pub fn read_dir(dir: &Path) -> Result<Vec<RpmPackage>, RpmDbError> {
-    let err = |path: &Path, reason: String| RpmDbError {
-        path: path.to_path_buf(),
-        reason,
-    };
-    let backend = detect(dir).ok_or_else(|| err(dir, "no rpm database here".into()))?;
-    let (path, blobs) = match backend {
-        Backend::Sqlite => {
-            let path = dir.join("rpmdb.sqlite");
-            let file = read(&path)?;
-            let wal_path = dir.join("rpmdb.sqlite-wal");
-            let wal = if wal_path.is_file() {
-                Some(read(&wal_path)?)
-            } else {
-                None
-            };
-            let blobs = sqlite_blobs(&file, wal.as_deref()).map_err(|e| err(&path, e))?;
-            (path, blobs)
+impl Backend {
+    /// The database file's name (`rpmdb.sqlite`, `Packages`, `Packages.db`).
+    pub fn file_name(self) -> &'static str {
+        match self {
+            Backend::Sqlite => "rpmdb.sqlite",
+            Backend::BerkeleyDb => "Packages",
+            Backend::Ndb => "Packages.db",
         }
-        Backend::BerkeleyDb => {
-            let path = dir.join("Packages");
-            let blobs = bdb::blobs(&read(&path)?).map_err(|e| err(&path, e))?;
-            (path, blobs)
-        }
-        Backend::Ndb => {
-            let path = dir.join("Packages.db");
-            let blobs = ndb::blobs(&read(&path)?).map_err(|e| err(&path, e))?;
-            (path, blobs)
-        }
+    }
+}
+
+/// Every installed package in a database file's bytes, sorted. `wal` is SQLite's
+/// write-ahead log (`rpmdb.sqlite-wal`), if present.
+///
+/// # Errors
+///
+/// When the database cannot be read in full.
+pub fn read(backend: Backend, file: &[u8], wal: Option<&[u8]>) -> Result<Vec<RpmPackage>, String> {
+    let blobs = match backend {
+        Backend::Sqlite => sqlite_blobs(file, wal)?,
+        Backend::BerkeleyDb => bdb::blobs(file)?,
+        Backend::Ndb => ndb::blobs(file)?,
     };
     let mut out = Vec::with_capacity(blobs.len());
     for (i, blob) in blobs.iter().enumerate() {
         match header::parse(blob) {
             Ok(Some(pkg)) => out.push(pkg),
             Ok(None) => {}
-            Err(e) => return Err(err(&path, format!("package {i}: {e}"))),
+            Err(e) => return Err(format!("package {i}: {e}")),
         }
     }
     out.sort();
     Ok(out)
 }
 
-fn read(path: &Path) -> Result<Vec<u8>, RpmDbError> {
+/// Every installed package in the database in `dir`, sorted.
+///
+/// # Errors
+///
+/// When there is no database in `dir` or it cannot be read in full.
+pub fn read_dir(dir: &Path) -> Result<Vec<RpmPackage>, RpmDbError> {
+    let backend = detect(dir).ok_or_else(|| RpmDbError {
+        path: dir.to_path_buf(),
+        reason: "no rpm database here".into(),
+    })?;
+    let path = dir.join(backend.file_name());
+    let file = read_file(&path)?;
+    let wal_path = dir.join("rpmdb.sqlite-wal");
+    let wal = if backend == Backend::Sqlite && wal_path.is_file() {
+        Some(read_file(&wal_path)?)
+    } else {
+        None
+    };
+    read(backend, &file, wal.as_deref()).map_err(|reason| RpmDbError { path, reason })
+}
+
+fn read_file(path: &Path) -> Result<Vec<u8>, RpmDbError> {
     let err = |reason: String| RpmDbError {
         path: path.to_path_buf(),
         reason,

@@ -64,7 +64,7 @@ owner    = "team-api"
 | `id` | Stable name used in reports, like a repo id (the two share one namespace). |
 | `path` | The image: a `docker save` or OCI-layout tarball (gzip or zstd layers), an OCI-layout directory, or a root filesystem directory or tarball. |
 | `platform` | `os/arch`, to pick one image from a multi-platform index. Required when an index holds several. |
-| `distro` | An osv.dev distro ecosystem (`Debian:12`, `Ubuntu:24.04:LTS`, `Alpine:v3.20`, `Wolfi`, ...), to match against instead of the detected one. |
+| `distro` | An osv.dev distro ecosystem (`Debian:12`, `Ubuntu:24.04:LTS`, `Alpine:v3.20`, `Wolfi`, `Rocky Linux:9`, `Red Hat:enterprise_linux:9::baseos`, ...), to match against instead of the detected one. |
 | `exposure`, `mission_impact`, `safety_impact`, `owner`, `tags` | As for `[[repo]]`. |
 
 `scan --image <path>` adds an image without a `fleet.toml` entry; its id is the file name.

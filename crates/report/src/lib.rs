@@ -116,6 +116,7 @@ pub fn default_source(ecosystem: Ecosystem) -> &'static str {
         Ecosystem::GitHubActions => ".github/workflows",
         Ecosystem::Deb => "var/lib/dpkg/status",
         Ecosystem::Apk => "lib/apk/db/installed",
+        Ecosystem::Rpm => "var/lib/rpm",
     }
 }
 

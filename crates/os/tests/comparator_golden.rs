@@ -1,16 +1,18 @@
 //! Golden comparator cases, each checked against the real tool: `dpkg --compare-versions`
-//! (dpkg 1.21.23, debian:12) and `apk version -t` (apk-tools 2.14.4, alpine:3.20).
+//! (dpkg 1.21.23, debian:12), `apk version -t` (apk-tools 2.14.4, alpine:3.20) and
+//! `rpm.vercmp` (rpm 4.20.1, fedora:41).
 //!
 //! The hand-picked edge cases pin the rules that differ from SemVer. The pair files under
-//! `tests/data` are 800 pairs per family sampled from the full differential run (619,997 dpkg
-//! and 619,999 apk pairs drawn from the osv.dev distro exports, 0 mismatches), and
-//! `apk-invalid.txt` is every version in those exports that `apk version -c` rejects.
+//! `tests/data` are 800 pairs per family sampled from the full differential run (619,997 dpkg,
+//! 619,999 apk and 538,780 rpm pairs drawn from the osv.dev distro exports and, for rpm, the
+//! installed packages of 12 images; 0 mismatches), and `apk-invalid.txt` is every version in
+//! those exports that `apk version -c` rejects.
 
 #![allow(clippy::unwrap_used, clippy::panic)]
 
 use std::cmp::Ordering;
 
-use fleetreach_os::{ApkVersion, DebVersion};
+use fleetreach_os::{ApkVersion, DebVersion, RpmVersion};
 
 fn op(s: &str) -> Ordering {
     match s {
@@ -66,6 +68,28 @@ const APK_EDGES: &[(&str, &str, &str)] = &[
     ("2.36.1a_git20240101-r1", "2.36.1_git20240101-r1", ">"),
     ("0.1", "0.01", ">"),
 ];
+
+/// Checked with `rpm.vercmp` in rpm 4.20.1.
+const RPM_EDGES: &[(&str, &str, &str)] = &[
+    ("1.0~rc1", "1.0", "<"),
+    ("1.0^git1", "1.0", ">"),
+    ("1.0^git1", "1.0.1", "<"),
+    ("1.0-1", "0:1.0-1", "="),
+    ("1.0", "1.0-1", "<"),
+    ("1:1.0", "2.0", ">"),
+    ("10.0001", "10.1", "="),
+    ("1.0a", "1.0", ">"),
+    ("1.0.a", "1.0.1", "<"),
+    ("3.0.7-27.el9", "3.0.7-27.el9_4", "<"),
+    ("2.28-251.el9_2.1", "2.28-251.el9", ">"),
+    ("1.2.3-1.el8", "1.2.3-1.el8_10", "<"),
+];
+
+fn rpm_cmp(a: &str, b: &str) -> Ordering {
+    let pa = RpmVersion::parse(a).unwrap_or_else(|| panic!("rpm accepts {a}"));
+    let pb = RpmVersion::parse(b).unwrap_or_else(|| panic!("rpm accepts {b}"));
+    pa.cmp(&pb)
+}
 
 fn deb_cmp(a: &str, b: &str) -> Ordering {
     let pa = DebVersion::parse(a).unwrap_or_else(|| panic!("dpkg accepts {a}"));
@@ -125,6 +149,16 @@ fn dpkg_sampled_from_the_exports() {
 #[test]
 fn apk_sampled_from_the_exports() {
     check("apk", rows(include_str!("data/apk-pairs.tsv")), apk_cmp);
+}
+
+#[test]
+fn rpm_edge_cases() {
+    check("rpm", edges(RPM_EDGES), rpm_cmp);
+}
+
+#[test]
+fn rpm_sampled_from_the_exports() {
+    check("rpm", rows(include_str!("data/rpm-pairs.tsv")), rpm_cmp);
 }
 
 #[test]

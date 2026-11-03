@@ -62,7 +62,7 @@ pub fn osv_name(eco: Ecosystem) -> Option<&'static str> {
         Ecosystem::GitHubActions => "GitHub Actions",
         Ecosystem::Maven => "Maven",
         Ecosystem::Go => "Go",
-        Ecosystem::Cargo | Ecosystem::Deb | Ecosystem::Apk => return None,
+        Ecosystem::Cargo | Ecosystem::Deb | Ecosystem::Apk | Ecosystem::Rpm => return None,
     })
 }
 

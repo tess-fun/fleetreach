@@ -1,6 +1,6 @@
 //! An installed package's RPM header, as the rpm database stores it: a header blob without
 //! the on-disk magic (`il`, `dl`, `il` index entries of 16 bytes, then `dl` bytes of data).
-//! Only the tags that identify a package are read.
+//! Only the tags that identify a package and list its files are read.
 
 use super::RpmPackage;
 
@@ -11,6 +11,10 @@ const EPOCH: i32 = 1003;
 const ARCH: i32 = 1022;
 const SOURCERPM: i32 = 1044;
 const MODULARITYLABEL: i32 = 5096;
+const OLDFILENAMES: i32 = 1027;
+const DIRINDEXES: i32 = 1116;
+const BASENAMES: i32 = 1117;
+const DIRNAMES: i32 = 1118;
 
 const TYPE_INT32: u32 = 4;
 const TYPE_STRING: u32 = 6;
@@ -39,6 +43,7 @@ pub fn parse(blob: &[u8]) -> Result<Option<RpmPackage>, String> {
 
     let mut pkg = RpmPackage::default();
     let mut named = false;
+    let (mut dir_indexes, mut basenames, mut dirnames) = (Vec::new(), Vec::new(), Vec::new());
     for i in 0..il {
         let e = 8 + i * 16;
         let tag = be(e)? as i32;
@@ -60,6 +65,22 @@ pub fn parse(blob: &[u8]) -> Result<Option<RpmPackage>, String> {
                 .ok_or_else(|| format!("tag {tag}: string is not terminated"))?;
             Ok(String::from_utf8_lossy(&rest[..end]).into_owned())
         };
+        let strings = || -> Result<Vec<String>, String> {
+            if kind != TYPE_STRING_ARRAY {
+                return Err(format!("tag {tag}: not a string array"));
+            }
+            let mut out = Vec::with_capacity(count.min(data.len()));
+            let mut rest = &data[offset..];
+            for _ in 0..count {
+                let end = rest
+                    .iter()
+                    .position(|&b| b == 0)
+                    .ok_or_else(|| format!("tag {tag}: string array runs past the data"))?;
+                out.push(String::from_utf8_lossy(&rest[..end]).into_owned());
+                rest = &rest[end + 1..];
+            }
+            Ok(out)
+        };
         match tag {
             NAME => {
                 pkg.name = string()?;
@@ -79,8 +100,42 @@ pub fn parse(blob: &[u8]) -> Result<Option<RpmPackage>, String> {
                     .ok_or("epoch outside the header data")?;
                 pkg.epoch = Some(u32::from_be_bytes([b[0], b[1], b[2], b[3]]));
             }
+            OLDFILENAMES => pkg.files = strings()?,
+            BASENAMES => basenames = strings()?,
+            DIRNAMES => dirnames = strings()?,
+            DIRINDEXES => {
+                if kind != TYPE_INT32 {
+                    return Err("dirindexes are not int32".into());
+                }
+                let b = count
+                    .checked_mul(4)
+                    .and_then(|n| n.checked_add(offset))
+                    .and_then(|end| data.get(offset..end))
+                    .ok_or("dirindexes outside the header data")?;
+                dir_indexes = b
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|&c| u32::from_be_bytes(c) as usize)
+                    .collect();
+            }
             _ => {}
         }
+    }
+    if !basenames.is_empty() {
+        if dir_indexes.len() != basenames.len() {
+            return Err("file names and directory indexes differ in number".into());
+        }
+        pkg.files = basenames
+            .iter()
+            .zip(&dir_indexes)
+            .map(|(base, &i)| {
+                dirnames
+                    .get(i)
+                    .map(|dir| format!("{dir}{base}"))
+                    .ok_or_else(|| "a file's directory index is out of range".to_string())
+            })
+            .collect::<Result<_, _>>()?;
     }
     Ok(named.then_some(pkg))
 }

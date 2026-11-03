@@ -1,6 +1,6 @@
 ---
 title: Container images
-description: Scan container images for vulnerable OS packages (Debian, Ubuntu, Alpine, Wolfi, Chainguard and more) and the language packages inside them, offline and without running the image.
+description: Scan container images for vulnerable OS packages (Debian, Ubuntu, Alpine, Wolfi, Chainguard, Red Hat, AlmaLinux, Rocky, SUSE, Azure Linux and more) and the language packages inside them, offline and without running the image.
 sidebar:
   order: 13
 ---
@@ -8,9 +8,9 @@ sidebar:
 | | |
 |---|---|
 | Reads | a `docker save` or OCI-layout tarball, an OCI-layout directory, or a root filesystem (a directory or a tarball of one) |
-| OS packages | dpkg `status` and distroless `status.d`; apk `installed` |
-| Advisory data | the osv.dev distro exports: Debian, Ubuntu (and Ubuntu Pro), Alpine, Wolfi, Chainguard, MinimOS, Alpaquita and BellSoft, Echo, CleanStart, Root |
-| Version rules | dpkg's (`dpkg --compare-versions`) and apk-tools' (`apk version -t`) |
+| OS packages | dpkg `status` and distroless `status.d`; apk `installed`; the rpm database (SQLite, Berkeley DB or NDB) |
+| Advisory data | the osv.dev distro exports: Debian, Ubuntu (and Ubuntu Pro), Alpine, Wolfi, Chainguard, MinimOS, Alpaquita and BellSoft, Echo, CleanStart, Root, Red Hat, AlmaLinux, Rocky Linux, openSUSE, SUSE, Azure Linux, Mageia, openEuler |
+| Version rules | dpkg's (`dpkg --compare-versions`), apk-tools' (`apk version -t`) and rpm's (`rpm.vercmp`) |
 
 Name images in `fleet.toml`, next to repos:
 
@@ -48,9 +48,26 @@ Ubuntu Pro export when its packages carry `+esm` versions), Alpine (`3.20.10` ma
 patched packages (`root.io` versions) take Root's own advisories first. Distroless images are
 Debian, read from `/var/lib/dpkg/status.d`.
 
+rpm-based images are recognized too: Red Hat Enterprise Linux and UBI (matched against the
+release's BaseOS, AppStream and CRB repositories), AlmaLinux, Rocky Linux, openSUSE Leap,
+Leap Micro and Tumbleweed, SUSE Linux Enterprise 15 (its Basesystem and Server Applications
+modules), SLE Micro and SUSE Linux Micro, Azure Linux 3 and CBL-Mariner 2, Mageia and
+openEuler. CentOS, Oracle Linux, Fedora, Amazon Linux and Photon publish no advisories to
+osv.dev, so their images are a coverage gap: they are not matched against Red Hat's records,
+whose versions and backports are not theirs.
+
+The rpm database is read without `rpm` and without a database library, in whichever of rpm's
+three formats the image uses: SQLite (`rpmdb.sqlite`, with its write-ahead log applied; RHEL 9
+and later, Fedora, Azure Linux), Berkeley DB (`Packages`; RHEL 7 and 8, Amazon Linux 2) or NDB
+(`Packages.db`; SUSE). Both `/usr/lib/sysimage/rpm` and `/var/lib/rpm` are read: an empty
+database in one (Oracle Linux 9 ships a stray one) gives way to the one with packages, and two
+that disagree are a coverage gap.
+
 Advisories name **source** packages, so each installed binary package is matched under its
 source: `libssl3` as `openssl`. The finding's dependency path shows both, with the real
-installed version: `Debian 12 > openssl 3.0.17-1~deb12u2 > libssl3`.
+installed version: `Debian 12 > openssl 3.0.17-1~deb12u2 > libssl3`. Red Hat and AlmaLinux
+are the exception: their advisories name binary packages (`openssl-libs`), so there each
+binary is matched on its own (`redhat/openssl-libs`).
 
 ## Unfixed and unimportant advisories
 
@@ -94,12 +111,16 @@ Offline, lay them out in `--osv-dir` as `<dir>/Debian_12/all.zip` (or `<dir>/Deb
 
 ## Validation
 
-Both comparators were checked against the real tools in Docker, over pairs drawn from the
-osv.dev distro exports: 619,997 pairs against dpkg 1.21.23 and 619,999 against apk-tools 2.14
-(Alpine and Wolfi agree), with no disagreement. The 15 versions in the exports that apk itself
+The comparators were checked against the real tools in Docker, over pairs drawn from the
+osv.dev distro exports: 619,997 pairs against dpkg 1.21.23, 619,999 against apk-tools 2.14
+(Alpine and Wolfi agree) and 538,780 against rpm 4.20 (`rpm.vercmp`, the exports of eight rpm
+distributions plus the installed versions of 18 images), with no disagreement. The 15 versions in the exports that apk itself
 rejects are rejected here too. The installed packages read from debian:12-slim, ubuntu:24.04,
 python:3.12-slim, alpine:3.20, node:20-alpine, Chainguard's wolfi-base and the two distroless
-Debian images equal what `dpkg-query -W` and `apk info -v` list. The findings on 11 real
-images, older releases included, equal an independent evaluation of the same exports that
-uses the real tools for every version comparison. See
+Debian images equal what `dpkg-query -W` and `apk info -v` list, and the rpm databases of 18
+images (all three formats, from CentOS 7 to Fedora 41) equal `rpm -qa`, field by field. The
+findings on 11 real dpkg and apk images, older releases included, equal an independent
+evaluation of the same exports that uses the real tools for every version comparison; so do
+the 1,130 findings on 12 rpm images (AlmaLinux 8 and 9, Rocky 8 and 9, UBI 8 and 9, Azure
+Linux 3, CBL-Mariner 2, openSUSE Leap 15.5 and 15.6), with rpm deciding every comparison. See
 [Accuracy and validation](/fleetreach/docs/concepts/accuracy/).

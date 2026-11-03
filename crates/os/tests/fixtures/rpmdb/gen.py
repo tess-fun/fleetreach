@@ -1,6 +1,7 @@
 # Regenerate the rpmdb.sqlite fixtures (needs the sqlite3 CLI): fake but well-formed RPM
 # headers in rpm's Packages table, on 1 KiB pages so rows overflow and the b-tree has
-# interior pages; plus a copy whose last changes sit uncheckpointed in a WAL.
+# interior pages; plus a copy whose last changes sit uncheckpointed in a WAL, and an empty
+# database (the stray one Oracle Linux 9 ships beside its real one).
 #   python3 -I gen.py
 import os, shutil, struct, subprocess
 
@@ -24,9 +25,10 @@ def sql(rows):
     out += [f"INSERT INTO Packages(blob) VALUES (x'{header(*r).hex()}');" for r in rows]
     return '\n'.join(out)
 
-for d in ('db-plain', 'db-wal'):
+for d in ('db-plain', 'db-wal', 'db-empty'):
     shutil.rmtree(d, ignore_errors=True)
-os.makedirs('db-plain'); os.makedirs('db-wal')
+os.makedirs('db-plain'); os.makedirs('db-wal'); os.makedirs('db-empty')
+subprocess.run(['sqlite3', 'db-empty/rpmdb.sqlite'], input=sql([]), text=True, check=True)
 subprocess.run(['sqlite3', 'db-plain/rpmdb.sqlite'], input=sql(pkgs(60)), text=True, check=True)
 # WAL: the same 60 rows checkpointed, then a delete and an insert left in the log.
 subprocess.run(['sqlite3', 'db-wal/rpmdb.sqlite'], input=sql(pkgs(60)) + "\nPRAGMA journal_mode=WAL;", text=True, check=True)
@@ -34,5 +36,7 @@ tail = (".dbconfig no_ckpt_on_close on\nPRAGMA wal_autocheckpoint=0;\n"
         "DELETE FROM Packages WHERE hnum = 5;\n"
         f"INSERT INTO Packages(blob) VALUES (x'{header('walpkg', 7, '9.9', '1.fc41', 'noarch', 3000).hex()}');\n")
 subprocess.run(['sqlite3', 'db-wal/rpmdb.sqlite'], input=tail, text=True, check=True)
-for d in ('db-plain', 'db-wal'):
+# The shared-memory index is rebuilt by any reader; rpm images do not ship it either.
+os.remove('db-wal/rpmdb.sqlite-shm')
+for d in ('db-plain', 'db-wal', 'db-empty'):
     print(d, {f: os.path.getsize(os.path.join(d, f)) for f in sorted(os.listdir(d))})

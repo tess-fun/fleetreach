@@ -427,7 +427,11 @@ fn parsed_checks(dir: &Path, overlay: Option<&Path>) -> Result<Vec<Issue>, Strin
                 Ecosystem::Maven => check!(fleetreach_maven::MavenDb),
                 // Go and Rust use their own databases; distro exports are per distribution
                 // and not range-checked here yet.
-                Ecosystem::Go | Ecosystem::Cargo | Ecosystem::Deb | Ecosystem::Apk => {}
+                Ecosystem::Go
+                | Ecosystem::Cargo
+                | Ecosystem::Deb
+                | Ecosystem::Apk
+                | Ecosystem::Rpm => {}
             }
             Ok(out)
         })

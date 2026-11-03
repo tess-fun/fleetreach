@@ -22,6 +22,7 @@ use crate::apkver::ApkVersion;
 use crate::distro::Family;
 use crate::dpkgver::DebVersion;
 use crate::error::OsError;
+use crate::rpmver::RpmVersion;
 
 /// One advisory's facts for one source package in one ecosystem.
 #[derive(Debug, Clone)]
@@ -61,6 +62,7 @@ type Index<V> = BTreeMap<(String, String), Vec<Advisory<V>>>;
 pub struct DistroDb {
     deb: Index<DebVersion>,
     apk: Index<ApkVersion>,
+    rpm: Index<RpmVersion>,
     /// Affected entries seen per wanted ecosystem, before the package filter: zero means
     /// osv.dev knows no such release, which the scan reports as a coverage gap.
     records: BTreeMap<String, usize>,
@@ -81,6 +83,14 @@ impl DistroDb {
             .map_or(&[], Vec::as_slice)
     }
 
+    /// The advisories for `package` (a source or, for Red Hat and AlmaLinux, a binary name)
+    /// in rpm-family `ecosystem`.
+    pub fn rpm(&self, ecosystem: &str, package: &str) -> &[Advisory<RpmVersion>] {
+        self.rpm
+            .get(&(ecosystem.to_string(), package.to_string()))
+            .map_or(&[], Vec::as_slice)
+    }
+
     /// How many affected entries the exports hold for `ecosystem`.
     pub fn records(&self, ecosystem: &str) -> usize {
         self.records.get(ecosystem).copied().unwrap_or(0)
@@ -95,10 +105,20 @@ impl DistroDb {
             .push(adv);
     }
 
+    #[cfg(test)]
+    pub(crate) fn insert_rpm(&mut self, ecosystem: &str, package: &str, adv: Advisory<RpmVersion>) {
+        *self.records.entry(ecosystem.to_string()).or_default() += 1;
+        self.rpm
+            .entry((ecosystem.to_string(), package.to_string()))
+            .or_default()
+            .push(adv);
+    }
+
     /// Total indexed advisory entries, for diagnostics.
     pub fn len(&self) -> usize {
         self.deb.values().map(Vec::len).sum::<usize>()
             + self.apk.values().map(Vec::len).sum::<usize>()
+            + self.rpm.values().map(Vec::len).sum::<usize>()
     }
 
     /// Whether nothing was indexed.
@@ -236,6 +256,7 @@ fn ranges_of<V>(a: &Affected, parse: fn(&str) -> Option<V>) -> Vec<ParsedRange<V
 enum Entry {
     Deb((String, String), Advisory<DebVersion>),
     Apk((String, String), Advisory<ApkVersion>),
+    Rpm((String, String), Advisory<RpmVersion>),
 }
 
 fn entries_of(mut r: Record, wanted: &Wanted) -> (Vec<Entry>, BTreeMap<String, usize>) {
@@ -302,6 +323,7 @@ fn entries_of(mut r: Record, wanted: &Wanted) -> (Vec<Entry>, BTreeMap<String, u
         out.push(match family {
             Family::Deb => Entry::Deb(key, advisory!(DebVersion::parse)),
             Family::Apk => Entry::Apk(key, advisory!(ApkVersion::parse)),
+            Family::Rpm => Entry::Rpm(key, advisory!(RpmVersion::parse)),
         });
     }
     (out, counts)
@@ -333,6 +355,7 @@ pub fn load(paths: &[PathBuf], wanted: &Wanted) -> Result<DistroDb, OsError> {
                 match e {
                     Entry::Deb(k, a) => db.deb.entry(k).or_default().push(a),
                     Entry::Apk(k, a) => db.apk.entry(k).or_default().push(a),
+                    Entry::Rpm(k, a) => db.rpm.entry(k).or_default().push(a),
                 }
             }
         }

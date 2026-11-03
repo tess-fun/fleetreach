@@ -233,3 +233,94 @@ fn unknown_distribution_is_a_coverage_gap() {
     let (code, _, _) = fx.scan(&["--image", &rootfs, "--require-full-coverage"]);
     assert_eq!(code, 2);
 }
+
+/// A Rocky Linux 8 root filesystem whose rpm database was written by rpm itself (the
+/// `fleetreach-os` Berkeley DB fixture: basesystem, libpng 2:1.6.34-11.el8_10, which), beside
+/// a stray empty `/usr/lib/sysimage/rpm` database like Oracle Linux 9 ships.
+#[test]
+fn rpm_image_matches_source_packages_with_rpm_order() {
+    let fx = Fixture::new("rpm");
+    let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../os/tests/fixtures/rpmdb");
+    let root = fx.dir.join("rpmfs");
+    write(
+        &root,
+        "etc/os-release",
+        "ID=\"rocky\"\nVERSION_ID=\"8.10\"\n",
+    );
+    for (from, to) in [
+        ("db-bdb/Packages", "var/lib/rpm/Packages"),
+        ("db-empty/rpmdb.sqlite", "usr/lib/sysimage/rpm/rpmdb.sqlite"),
+    ] {
+        std::fs::create_dir_all(root.join(to).parent().unwrap()).unwrap();
+        std::fs::copy(fixtures.join(from), root.join(to)).unwrap();
+    }
+    let rocky = |id: &str, package: &str, fixed: &str| {
+        format!(
+            r#"{{"id":"{id}","modified":"2026-01-01T00:00:00Z","summary":"{package} update",
+            "aliases":["CVE-{}"],
+            "affected":[{{"package":{{"ecosystem":"Rocky Linux:8","name":"{package}"}},
+            "ranges":[{{"type":"ECOSYSTEM","events":[{{"introduced":"0"}},{{"fixed":"{fixed}"}}]}}]}}]}}"#,
+            id.trim_start_matches("RLSA-").replace(':', "-")
+        )
+    };
+    let osv = fx.dir.join("osv/Rocky Linux");
+    // el8_10 < el8_11 in rpm's order, so libpng is affected; which is already at its fix.
+    write(
+        &osv,
+        "RLSA-2026:1.json",
+        &rocky("RLSA-2026:1", "libpng", "2:1.6.34-11.el8_11"),
+    );
+    write(
+        &osv,
+        "RLSA-2026:2.json",
+        &rocky("RLSA-2026:2", "which", "2.21-21.el8_10"),
+    );
+    // Without its epoch, 1.6.40 would look newer than the installed 2:1.6.34.
+    write(
+        &osv,
+        "RLSA-2026:3.json",
+        &rocky("RLSA-2026:3", "libpng", "1:1.6.40-1.el8"),
+    );
+    let rootfs = fx.path("rpmfs");
+    let (code, report, stderr) = fx.scan(&["--image", &rootfs]);
+    assert_eq!(code, 1, "{stderr}");
+    assert_eq!(
+        findings(&report),
+        vec![("RLSA-2026:1".into(), "rocky-linux/libpng".into())],
+        "{report}"
+    );
+    let text = report.to_string();
+    assert!(text.contains("libpng 2:1.6.34-11.el8_10"), "{text}");
+    assert_eq!(report["vulnerabilities"][0]["ecosystem"], "rpm");
+    assert!(
+        report["coverage"].as_array().is_none_or(|c| c.is_empty()),
+        "the stray empty database is not a gap: {report}"
+    );
+}
+
+#[test]
+fn rpm_distro_without_osv_data_is_a_gap_not_clean() {
+    let fx = Fixture::new("rpm-gap");
+    let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../os/tests/fixtures/rpmdb");
+    let root = fx.dir.join("rpmfs");
+    write(
+        &root,
+        "etc/os-release",
+        "ID=\"ol\"\nVERSION_ID=\"9.4\"\nPRETTY_NAME=\"Oracle Linux Server 9.4\"\n",
+    );
+    std::fs::create_dir_all(root.join("var/lib/rpm")).unwrap();
+    std::fs::copy(
+        fixtures.join("db-ndb/Packages.db"),
+        root.join("var/lib/rpm/Packages.db"),
+    )
+    .unwrap();
+    let rootfs = fx.path("rpmfs");
+    let (code, report, stderr) = fx.scan(&["--image", &rootfs, "--require-full-coverage"]);
+    assert_eq!(code, 2, "{stderr}");
+    assert!(
+        report["coverage"]
+            .to_string()
+            .contains("Oracle Linux Server 9.4"),
+        "{report}"
+    );
+}

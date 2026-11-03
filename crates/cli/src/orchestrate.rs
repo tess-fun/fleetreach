@@ -748,7 +748,11 @@ fn load_distro_db(images: &Images) -> Option<Result<fleetreach_os::db::DistroDb,
             wanted.ecosystems.insert(eco, distro.family);
         }
         let installed = &opened.inspection.inventory.packages;
+        // Source names, and binary names for distros whose advisories name binaries.
         packages.extend(installed.iter().map(|p| p.source.clone()));
+        if distro.binary_names {
+            packages.extend(installed.iter().map(|p| p.name.clone()));
+        }
     }
     if wanted.ecosystems.is_empty() || images.exports.is_empty() {
         return None;
@@ -843,8 +847,8 @@ fn scan_image(
     (merged, plan.unsupported.clone())
 }
 
-/// Match an image's OS packages. Returns the ecosystem the result is filed under (dpkg or
-/// apk) and the result: errored when the distro's export is missing, and with coverage gaps
+/// Match an image's OS packages. Returns the ecosystem the result is filed under (dpkg, apk
+/// or rpm) and the result: errored when the distro's export is missing, and with coverage gaps
 /// for an unknown distro or release, an incomplete package database, image files that could
 /// not be read, and language artifacts no feeder reads.
 fn scan_image_os(
@@ -861,11 +865,13 @@ fn scan_image_os(
         .or_else(|| inspection.distro.as_ref().ok().map(|d| d.family));
     let ecosystem = match family {
         Some(Family::Apk) => Ecosystem::Apk,
+        Some(Family::Rpm) => Ecosystem::Rpm,
         _ => Ecosystem::Deb,
     };
     let source = match family {
         Some(Family::Deb) => "var/lib/dpkg/status",
         Some(Family::Apk) => "lib/apk/db/installed",
+        Some(Family::Rpm) => "var/lib/rpm",
         None => "etc/os-release",
     };
     let gap = |source: &str, ecosystem: Ecosystem, reason: String| CoverageGap {
@@ -1258,7 +1264,7 @@ fn scan_unit(
                 whole(fleetreach_ghactions::scan_offline(&repo.path, db, &repo.id))
             })
         }
-        Ecosystem::Deb | Ecosystem::Apk => {
+        Ecosystem::Deb | Ecosystem::Apk | Ecosystem::Rpm => {
             return RepoResult::errored(
                 &repo.id,
                 "OS packages are scanned from container images ([[image]]), not repos".to_string(),

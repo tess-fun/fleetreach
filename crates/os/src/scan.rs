@@ -1,8 +1,9 @@
 //! Matching installed OS packages against the distro advisories.
 //!
 //! Each installed source package (binary packages folded into their source) is matched
-//! against its release's ecosystem with the family's own comparator. Two rules beyond the
-//! plain range match:
+//! against its release's ecosystem with the family's own comparator. Red Hat and AlmaLinux
+//! name binary packages in their advisories, so there each binary is matched on its own.
+//! Two rules beyond the plain range match:
 //!
 //! - **Unfixed is a finding.** A Debian or Ubuntu entry with no `fixed` event means the
 //!   distro knows the package is affected and has not shipped a fix; it becomes a finding
@@ -26,6 +27,7 @@ use crate::db::{Advisory, DistroDb};
 use crate::distro::{Distro, Family};
 use crate::dpkgver::DebVersion;
 use crate::packages::OsPackage;
+use crate::rpmver::RpmVersion;
 
 /// Matching options.
 #[derive(Debug, Clone, Copy, Default)]
@@ -108,12 +110,17 @@ struct Source<'a> {
     binaries: Vec<&'a str>,
 }
 
-fn sources(packages: &[OsPackage]) -> Vec<Source<'_>> {
+/// What to match: source packages with their binaries folded in, or each binary on its own
+/// where the advisories name binaries (`binary_names`).
+fn sources(packages: &[OsPackage], binary_names: bool) -> Vec<Source<'_>> {
     let mut by: BTreeMap<(&str, &str), Vec<&str>> = BTreeMap::new();
     for p in packages {
-        by.entry((p.source.as_str(), p.source_version.as_str()))
-            .or_default()
-            .push(p.name.as_str());
+        let key = if binary_names {
+            (p.name.as_str(), p.version.as_str())
+        } else {
+            (p.source.as_str(), p.source_version.as_str())
+        };
+        by.entry(key).or_default().push(p.name.as_str());
     }
     by.into_iter()
         .map(|((name, version), mut binaries)| {
@@ -189,6 +196,7 @@ fn finding<V: Ord + Clone + std::fmt::Display>(
         ecosystem: match ctx.distro.family {
             Family::Deb => Ecosystem::Deb,
             Family::Apk => Ecosystem::Apk,
+            Family::Rpm => Ecosystem::Rpm,
         },
         advisory_id: adv.id.clone(),
         aliases: adv.aliases.clone(),
@@ -245,9 +253,10 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
             superseded.extend(adv.keys().filter(|k| k.starts_with("CVE-")));
         }
     }
-    let base = lookup(&ctx.distro.ecosystem);
+    let base = std::iter::once(&ctx.distro.ecosystem)
+        .chain(&ctx.distro.also)
+        .flat_map(|e| lookup(e).iter());
     let candidates = base
-        .iter()
         .filter(|a| !a.keys().any(|k| superseded.contains(k)))
         .chain(overlays.iter().flat_map(|e| lookup(e).iter()));
     for adv in candidates {
@@ -271,7 +280,7 @@ pub fn scan(
     let ctx = Ctx { distro, repo, opts };
     let mut out = Vec::new();
     let mut skipped_unparseable = 0u32;
-    for src in sources(packages) {
+    for src in sources(packages, distro.binary_names) {
         match distro.family {
             Family::Deb => match DebVersion::parse(src.version) {
                 Some(v) => match_source(&ctx, &src, &v, |e| db.deb(e, src.name), &mut out),
@@ -279,6 +288,10 @@ pub fn scan(
             },
             Family::Apk => match ApkVersion::parse(src.version) {
                 Some(v) => match_source(&ctx, &src, &v, |e| db.apk(e, src.name), &mut out),
+                None => skipped_unparseable += 1,
+            },
+            Family::Rpm => match RpmVersion::parse(src.version) {
+                Some(v) => match_source(&ctx, &src, &v, |e| db.rpm(e, src.name), &mut out),
                 None => skipped_unparseable += 1,
             },
         }
@@ -355,7 +368,7 @@ mod tests {
             repo: &RepoId("img".into()),
             opts: ScanOptions::default(),
         };
-        let src = &sources(&pkgs)[0];
+        let src = &sources(&pkgs, false)[0];
         let mut out = Vec::new();
         let v = DebVersion::parse("1.0-1").unwrap();
         match_source(&ctx, src, &v, |_| std::slice::from_ref(&a), &mut out);
@@ -409,7 +422,7 @@ mod tests {
                 source_version: installed.into(),
                 arch: None,
             }];
-            let src = &sources(&pkgs)[0];
+            let src = &sources(&pkgs, false)[0];
             let mut out = Vec::new();
             let v = DebVersion::parse(installed).unwrap();
             match_source(&ctx, src, &v, |_| std::slice::from_ref(&a), &mut out);
@@ -457,7 +470,7 @@ mod tests {
                 source_version: ver.into(),
                 arch: None,
             }];
-            let src = &sources(&pkgs)[0];
+            let src = &sources(&pkgs, false)[0];
             let mut out = Vec::new();
             match_source(
                 &ctx,
@@ -472,6 +485,72 @@ mod tests {
         assert_eq!(run("1.0-2.root.io.1"), 0);
         // Not a Root package: the base record decides.
         assert_eq!(run("1.0-2"), 1);
+    }
+
+    #[test]
+    fn rpm_matches_binaries_or_sources_as_the_distro_names_them() {
+        let pkgs = vec![
+            OsPackage {
+                name: "openssl-libs".into(),
+                version: "1:3.0.7-27.el9".into(),
+                source: "openssl".into(),
+                source_version: "1:3.0.7-27.el9".into(),
+                arch: None,
+            },
+            OsPackage {
+                name: "openssl".into(),
+                version: "1:3.0.7-27.el9".into(),
+                source: "openssl".into(),
+                source_version: "1:3.0.7-27.el9".into(),
+                arch: None,
+            },
+        ];
+        let fix = |id: &str| {
+            adv(
+                id,
+                &[("introduced", "0"), ("fixed", "1:3.0.7-28.el9_4")],
+                RpmVersion::parse,
+            )
+        };
+        let repo = RepoId("img".into());
+        // Red Hat names binaries, across its repositories: each binary is its own finding.
+        let mut rhel = crate::distro::explicit("Red Hat:enterprise_linux:9::baseos", Family::Rpm);
+        rhel.also = vec!["Red Hat:enterprise_linux:9::appstream".into()];
+        let mut db = DistroDb::default();
+        db.insert_rpm(
+            "Red Hat:enterprise_linux:9::baseos",
+            "openssl-libs",
+            fix("RHSA-1"),
+        );
+        db.insert_rpm(
+            "Red Hat:enterprise_linux:9::appstream",
+            "openssl",
+            fix("RHSA-1"),
+        );
+        let s = scan(&rhel, &pkgs, &db, &repo, ScanOptions::default());
+        let names: Vec<_> = s.findings.iter().map(|f| f.ecosystem).collect();
+        assert_eq!(names, [Ecosystem::Rpm, Ecosystem::Rpm], "{:?}", s.findings);
+        // Rocky names sources: one finding for the source, both binaries in its path.
+        let rocky = crate::distro::explicit("Rocky Linux:9", Family::Rpm);
+        let mut db = DistroDb::default();
+        db.insert_rpm("Rocky Linux:9", "openssl", fix("RLSA-1"));
+        let s = scan(&rocky, &pkgs, &db, &repo, ScanOptions::default());
+        assert_eq!(s.findings.len(), 1);
+        assert!(s.findings[0].occurrences[0].is_vulnerable());
+        // The epoch counts: 0:3.1 is older than the installed 1:3.0.7.
+        let mut db = DistroDb::default();
+        db.insert_rpm(
+            "Rocky Linux:9",
+            "openssl",
+            adv(
+                "RLSA-2",
+                &[("introduced", "0"), ("fixed", "0:3.1.0-1.el9")],
+                RpmVersion::parse,
+            ),
+        );
+        assert!(scan(&rocky, &pkgs, &db, &repo, ScanOptions::default())
+            .findings
+            .is_empty());
     }
 
     #[test]

@@ -12,14 +12,20 @@
 //!   followed inside the image, only wanted files kept in memory;
 //! - [`distro`]: `/etc/os-release` to the osv.dev ecosystem (`Debian:12`, `Ubuntu:24.04:LTS`,
 //!   `Alpine:v3.20`, `Wolfi`, `Chainguard`, `MinimOS`, `Alpaquita:stream`, `Echo`,
-//!   `CleanStart`), plus the Ubuntu Pro and Root overlays; an unknown distribution or release
-//!   is a coverage gap, never clean;
-//! - [`packages`]: dpkg `status` and distroless `status.d`, apk `installed`, each binary
-//!   package mapped to the source package advisories name, and the files each package owns;
-//! - [`DebVersion`] and [`ApkVersion`]: dpkg's and apk-tools' orderings, validated against
-//!   `dpkg --compare-versions` and `apk version -t` (see `tests/comparator_golden.rs`);
+//!   `CleanStart`, `Red Hat:enterprise_linux:9::baseos`, `AlmaLinux:9`, `Rocky Linux:9`,
+//!   `openSUSE:Leap 15.6`, `SUSE:...`, `Azure Linux:3`, `Mageia:9`, `openEuler:...`), plus the
+//!   Ubuntu Pro and Root overlays; an unknown distribution or release, or one osv.dev has no
+//!   advisories for (CentOS, Oracle Linux, Fedora, Amazon Linux, Photon), is a coverage gap,
+//!   never clean;
+//! - [`packages`]: dpkg `status` and distroless `status.d`, apk `installed`, and the rpm
+//!   database ([`rpmdb`]: SQLite, Berkeley DB and NDB, read in pure Rust), each binary package
+//!   mapped to the source package advisories name, and the files each package owns;
+//! - [`DebVersion`], [`ApkVersion`] and [`RpmVersion`]: dpkg's, apk-tools' and rpm's
+//!   orderings, validated against `dpkg --compare-versions`, `apk version -t` and
+//!   `rpm.vercmp` (see `tests/comparator_golden.rs`);
 //! - [`db`] and [`scan`]: the per-distro advisory index and the matcher. Unfixed Debian and
-//!   Ubuntu records are findings with no patched version and their urgency;
+//!   Ubuntu records are findings with no patched version and their urgency. Red Hat and
+//!   AlmaLinux advisories name binary packages, so there each binary is matched on its own;
 //! - [`lang`]: the language lockfiles and installed package metadata in the image, for the
 //!   existing language feeders, skipping files an OS package owns.
 //!
@@ -60,6 +66,7 @@ pub mod image;
 pub mod lang;
 pub mod packages;
 pub mod rpmdb;
+mod rpmver;
 pub mod scan;
 mod tar;
 
@@ -71,6 +78,7 @@ pub use dpkgver::DebVersion;
 pub use error::{DbError, OsError};
 pub use image::ImageFs;
 pub use packages::{Inventory, OsPackage};
+pub use rpmver::RpmVersion;
 pub use scan::ScanOptions;
 
 /// Open an image keeping the OS package databases, os-release, and whatever `extra`
@@ -129,7 +137,10 @@ pub fn inspect(fs: &ImageFs, explicit: Option<&str>) -> Inspection {
             d.family.purl_type(),
             f.purl_type()
         )),
-        None => Err(format!("{}: no dpkg or apk package database found", d.name)),
+        None => Err(format!(
+            "{}: no dpkg, apk or rpm package database found",
+            d.name
+        )),
     });
     Inspection {
         os_release,
