@@ -133,6 +133,13 @@ with every one of Trivy's findings also reported). Entries for a module stream (
 match only packages from that stream. Without the index, a RHEL image is a coverage gap that
 names the command.
 
+AlmaLinux and Rocky Linux rebuild RHEL from the same sources, so their scans take Red Hat's
+open statuses and "not affected" for the matching RHEL release the same way, titled with
+`Red Hat status` (`[Rocky Linux 9: no fix yet; Red Hat status affected]`). Red Hat's fix
+versions are not borrowed: they are Red Hat's builds, and the rebuild's own advisories carry
+its fixes. Without the index, an AlmaLinux or Rocky image is a coverage gap that names the
+command.
+
 SUSE's open CVEs come the same way, from SUSE's CSAF VEX: `db sync --source csaf:suse` (a
 526 MB download that expands to 19 GB of JSON; indexing takes about 15 minutes and 10 GB of
 memory) or `db import --csaf csaf-vex.tar.bz2 --provider suse`. It covers openSUSE Leap,

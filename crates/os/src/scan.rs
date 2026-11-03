@@ -263,6 +263,8 @@ impl Distro {
             "ubuntu" => "priority",
             // The vendors' VEX statuses (Red Hat, SUSE): no other urgency reaches these distros.
             "redhat" | "suse" | "opensuse" => "status",
+            // Red Hat's statuses, borrowed by its rebuilds.
+            "almalinux" | "rocky-linux" => "Red Hat status",
             _ => "urgency",
         }
     }
@@ -350,6 +352,7 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
     let mut fallbacks: Vec<(&Advisory<V>, bool, OwnVersion<'_>)> = Vec::new();
     for eco in &ctx.distro.fallbacks {
         let borrowed = ctx.distro.borrowed.contains(eco);
+        let opens_only = ctx.distro.borrowed_opens.contains(eco);
         let mut by_binary: BTreeSet<&str> = BTreeSet::new();
         let mut here: Vec<(&Advisory<V>, OwnVersion<'_>)> = Vec::new();
         for bin in &src.binaries {
@@ -380,6 +383,9 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
                 !a.keys().any(|k| before.contains(k))
             })
             .filter(|(a, _)| !borrowed || has_fix(&a.ranges))
+            // From the distribution a release rebuilds, the reverse: its open statuses and
+            // "not affected" hold for the same sources, its fix versions are its own builds.
+            .filter(|(a, _)| !opens_only || !has_fix(&a.ranges))
             .collect();
         for (adv, _) in &fresh {
             spoken.extend(adv.keys().filter(|k| k.starts_with("CVE-")));
@@ -892,6 +898,73 @@ mod tests {
         assert_eq!(got[0].0, "CVE-2026-2");
         assert!(
             got[0].1.ends_with("no fix yet; status will not fix]"),
+            "{}",
+            got[0].1
+        );
+    }
+
+    #[test]
+    fn rebuilds_borrow_red_hat_open_statuses_but_not_its_fixes() {
+        let pkgs = vec![OsPackage {
+            name: "openssl-libs".into(),
+            version: "1:3.0.7-27.el9".into(),
+            source: "openssl".into(),
+            source_version: "1:3.0.7-27.el9".into(),
+            arch: None,
+            module: None,
+        }];
+        let rocky = crate::distro::explicit("Rocky Linux:9", Family::Rpm);
+        let vex = "Red Hat:enterprise_linux:9::vex";
+        assert_eq!(rocky.borrowed_opens, [vex]);
+        let mut db = DistroDb::default();
+        let open = |cve: &str, status: &str| {
+            let mut a = adv(cve, &[("introduced", "0")], RpmVersion::parse);
+            a.aliases = vec![cve.into()];
+            a.urgency = Some(status.into());
+            a
+        };
+        db.insert_rpm(vex, "openssl-libs", open("CVE-2026-1", "affected"));
+        // Red Hat's fix version is Red Hat's build, not Rocky's: not borrowed.
+        db.insert_rpm(
+            vex,
+            "openssl-libs",
+            adv(
+                "CVE-2026-2",
+                &[("introduced", "0"), ("fixed", "1:3.0.7-30.el9")],
+                RpmVersion::parse,
+            ),
+        );
+        // Rocky's own record fixed it (installed is past the fix): Red Hat's open entry
+        // does not bring it back.
+        let mut own = adv(
+            "RLSA-2026:3",
+            &[("introduced", "0"), ("fixed", "1:3.0.7-20.el9")],
+            RpmVersion::parse,
+        );
+        own.aliases = vec!["CVE-2026-3".into()];
+        db.insert_rpm("Rocky Linux:9", "openssl", own);
+        db.insert_rpm(vex, "openssl-libs", open("CVE-2026-3", "affected"));
+        // Not affected for the binary holds for the rebuild too.
+        db.insert_rpm(vex, "openssl", open("CVE-2026-4", "affected"));
+        let mut not_affected = adv("CVE-2026-4", &[], RpmVersion::parse);
+        not_affected.ranges.clear();
+        db.insert_rpm(vex, "openssl-libs", not_affected);
+        let s = scan(
+            &rocky,
+            &pkgs,
+            &db,
+            &RepoId("img".into()),
+            ScanOptions::default(),
+        );
+        let got: Vec<(&str, &str)> = s
+            .findings
+            .iter()
+            .map(|f| (f.advisory_id.as_str(), f.title.as_str()))
+            .collect();
+        assert_eq!(got.len(), 1, "{got:?}");
+        assert_eq!(got[0].0, "CVE-2026-1");
+        assert!(
+            got[0].1.ends_with("no fix yet; Red Hat status affected]"),
             "{}",
             got[0].1
         );

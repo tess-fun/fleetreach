@@ -293,9 +293,16 @@ fn rpm_image_matches_source_packages_with_rpm_order() {
     let text = report.to_string();
     assert!(text.contains("libpng 2:1.6.34-11.el8_10"), "{text}");
     assert_eq!(report["vulnerabilities"][0]["ecosystem"], "rpm");
+    // The stray empty database is not a gap; the one gap is Red Hat's VEX, whose open
+    // statuses a Rocky image borrows and which this fixture does not load.
+    let coverage = report["coverage"].as_array().unwrap();
+    assert_eq!(coverage.len(), 1, "{report}");
+    let reason = coverage[0]["reason"].as_str().unwrap();
     assert!(
-        report["coverage"].as_array().is_none_or(|c| c.is_empty()),
-        "the stray empty database is not a gap: {report}"
+        reason.contains("Red Hat's CSAF VEX is not loaded")
+            && reason.contains("Rocky Linux 8")
+            && !reason.contains("fixes osv.dev"),
+        "{reason}"
     );
 }
 

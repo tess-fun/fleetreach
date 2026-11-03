@@ -79,6 +79,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   every one of Trivy's 947 and 538 findings is reported with the same status; the 19 and 2
   more are Red Hat's open statuses for the binary's source package, which Trivy matches by
   binary name only.
+- **Red Hat's unfixed CVEs in AlmaLinux and Rocky Linux images** (spec 16, row 10, phase 2).
+  AlmaLinux and Rocky rebuild Red Hat Enterprise Linux from the same sources, so a CVE Red
+  Hat has not fixed in RHEL 8 or 9 is not fixed in the rebuild either. Their scans take Red
+  Hat's CSAF VEX open statuses and "not affected" for the matching RHEL release, where the
+  rebuild's own records do not name the CVE for the package, titled `no fix yet; Red Hat
+  status ...`. Red Hat's fix versions are Red Hat's builds and are not borrowed. An AlmaLinux
+  or Rocky image scanned without the Red Hat index is now a coverage gap naming the command.
+  Against Grype v0.121.1 on six AlmaLinux and Rocky images, the 582 to 611 open statuses per
+  image Grype reported and fleetreach did not are now all reported, with no status
+  disagreements; the 4 to 18 more per image are Red Hat statuses newer than Grype's data.
 - **SUSE's unfixed CVEs in openSUSE, SLES and SLE Micro images** (spec 16, row 10, phase 2).
   `db sync --source csaf:suse` or `db import --csaf csaf-vex.tar.bz2 --provider suse`
   indexes SUSE's CSAF VEX (a 526 MB `.tar.bz2`, read in pure Rust), which scans of openSUSE

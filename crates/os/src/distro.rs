@@ -108,6 +108,11 @@ pub struct Distro {
     /// build is vulnerable, but the fix is not in the release's repositories, so the match is
     /// reported as fixed only in another line.
     pub borrowed: Vec<String>,
+    /// Fallbacks from the distribution a release rebuilds (Red Hat Enterprise Linux 9 for
+    /// AlmaLinux 9 and Rocky Linux 9). Only their open statuses and "not affected" count:
+    /// the rebuild ships the same sources, so a CVE Red Hat has not fixed is not fixed there
+    /// either, but Red Hat's fix versions are not the rebuild's builds.
+    pub borrowed_opens: Vec<String>,
 }
 
 impl Distro {
@@ -245,6 +250,15 @@ fn major(v: &str) -> Option<&str> {
     (!m.is_empty() && m.bytes().all(|b| b.is_ascii_digit())).then_some(m)
 }
 
+/// A rebuild of Red Hat Enterprise Linux `release` takes Red Hat's open statuses for it
+/// (see [`Distro::borrowed_opens`]).
+fn rebuild_of_rhel(mut d: Distro, release: &str) -> Distro {
+    let vex = red_hat_vex(release);
+    d.fallbacks.push(vex.clone());
+    d.borrowed_opens.push(vex);
+    d
+}
+
 /// Map os-release (and `/etc/debian_version` for Debian images without `VERSION_ID`) onto a
 /// [`Distro`]. `Err` carries the coverage-gap reason.
 ///
@@ -270,6 +284,7 @@ pub fn detect(
         fallbacks: Vec::new(),
         optional: Vec::new(),
         borrowed: Vec::new(),
+        borrowed_opens: Vec::new(),
     };
     // A SUSE product takes SUSE's VEX for each of its products.
     let suse = |mut d: Distro| {
@@ -402,14 +417,17 @@ pub fn detect(
                 format!("AlmaLinux:{r}"),
             );
             d.binary_names = true;
-            d
+            rebuild_of_rhel(d, r)
         }
         "rocky" => {
             let r = release("Rocky Linux")?;
-            rpm(
-                format!("Rocky Linux {r}"),
-                "rocky-linux",
-                format!("Rocky Linux:{r}"),
+            rebuild_of_rhel(
+                rpm(
+                    format!("Rocky Linux {r}"),
+                    "rocky-linux",
+                    format!("Rocky Linux:{r}"),
+                ),
+                r,
             )
         }
         "opensuse-leap" => {
@@ -631,7 +649,7 @@ pub fn known_ecosystem(ecosystem: &str) -> bool {
 /// database found in the image.
 pub fn explicit(ecosystem: &str, family: Family) -> Distro {
     let base = ecosystem.split(':').next().unwrap_or(ecosystem);
-    Distro {
+    let d = Distro {
         family,
         name: ecosystem.replace(':', " "),
         namespace: match base {
@@ -670,6 +688,16 @@ pub fn explicit(ecosystem: &str, family: Family) -> Distro {
         },
         optional: Vec::new(),
         borrowed: Vec::new(),
+        borrowed_opens: Vec::new(),
+    };
+    // `AlmaLinux:9` and `Rocky Linux:9` take RHEL 9's open statuses, as when detected.
+    match ecosystem.split_once(':') {
+        Some(("AlmaLinux" | "Rocky Linux", release))
+            if !release.is_empty() && release.bytes().all(|b| b.is_ascii_digit()) =>
+        {
+            rebuild_of_rhel(d, release)
+        }
+        _ => d,
     }
 }
 
@@ -808,14 +836,33 @@ mod tests {
             explicit("Red Hat:enterprise_linux:8::appstream", Family::Rpm).fallbacks,
             vec!["Red Hat:enterprise_linux:8::vex"]
         );
+        // Rebuilds take Red Hat's open statuses for the release they rebuild.
         assert_eq!(
             eco("ID=\"almalinux\"\nVERSION_ID=\"8.8\"\n"),
-            (vec!["AlmaLinux:8".to_string()], true)
+            (
+                vec![
+                    "AlmaLinux:8".to_string(),
+                    "Red Hat:enterprise_linux:8::vex".to_string()
+                ],
+                true
+            )
         );
         assert_eq!(
             eco("ID=\"rocky\"\nVERSION_ID=\"9.2\"\n"),
-            (vec!["Rocky Linux:9".to_string()], false)
+            (
+                vec![
+                    "Rocky Linux:9".to_string(),
+                    "Red Hat:enterprise_linux:9::vex".to_string()
+                ],
+                false
+            )
         );
+        let rocky = explicit("Rocky Linux:9", Family::Rpm);
+        assert_eq!(
+            rocky.borrowed_opens,
+            vec!["Red Hat:enterprise_linux:9::vex"]
+        );
+        assert!(rocky.borrowed.is_empty());
         assert_eq!(
             eco("ID=\"opensuse-leap\"\nVERSION_ID=\"15.6\"\n").0,
             vec![

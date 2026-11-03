@@ -684,7 +684,11 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     status: 5,951 pairs in common, **0 status disagreements**; Amazon Linux 2 and 2023
     (old images) equal (540 and 562). Grype-only pairs, by cause: (1) AlmaLinux and Rocky:
     Grype applies Red Hat's data to the rebuilds, 582 to 611 unfixed statuses per image plus
-    5 to 120 RHEL fixes the rebuild's own records do not name (open decision). (2) Oracle
+    5 to 120 RHEL fixes the rebuild's own records do not name. **Decided and done**: the
+    rebuilds now borrow Red Hat's open statuses and "not affected" for their RHEL release
+    (`Distro::borrowed_opens`), not its fix versions (Red Hat's builds); rescanned, all of
+    Grype's open statuses on the six images are reported, 0 status disagreements, and the
+    remaining Grype-only pairs are the unborrowed RHEL fixes (5, 11, 0, 15, 120, 68). (2) Oracle
     8.7 and 9: Grype applies Oracle's FIPS epoch-10 builds (`10:3.7.6-...fips`) to plain
     gnutls and libgcrypt, 5 and 87 false positives. (3) Amazon Linux 2: Grype's
     `ALAS2MOCK2-2026-002` applies a separate rpm 4.14 stream; Amazon's ALAS2-2026-3984 fixes

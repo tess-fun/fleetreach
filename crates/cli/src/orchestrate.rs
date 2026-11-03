@@ -949,12 +949,17 @@ fn scan_image_os(
                     let reason = if let (Some((vendor, provider)), true) =
                         (vendor, images.missing.contains(&eco))
                     {
+                        // A rebuild borrows only the open statuses (see `borrowed_opens`).
+                        let fixes = if distro.borrowed_opens.contains(&eco) {
+                            ""
+                        } else {
+                            " and fixes osv.dev has not imported yet"
+                        };
                         format!(
                             "{vendor}'s CSAF VEX is not loaded, so CVEs {vendor} has not fixed \
-                             in {} packages (affected, will not fix, fix deferred) and fixes \
-                             osv.dev has not imported yet were not reported; index it with \
-                             `fleetreach db sync --source csaf:{provider}` (or `db import --csaf \
-                             --provider {provider}`)",
+                             in {} packages (affected, will not fix, fix deferred){fixes} were \
+                             not reported; index it with `fleetreach db sync --source \
+                             csaf:{provider}` (or `db import --csaf --provider {provider}`)",
                             distro.name
                         )
                     } else if images.missing.contains(&eco) {
