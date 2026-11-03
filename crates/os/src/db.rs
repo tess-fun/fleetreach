@@ -335,7 +335,10 @@ fn entries_of(mut r: Record, wanted: &Wanted) -> (Vec<Entry>, BTreeMap<String, u
         };
         let key = (eco.to_string(), name.to_string());
         macro_rules! advisory {
-            ($parse:expr) => {{
+            ($parse:expr) => {
+                advisory!($parse, $parse)
+            };
+            ($parse:expr, $parse_bound:expr) => {{
                 let mut versions: Vec<_> = a.versions.iter().filter_map(|v| $parse(v)).collect();
                 versions.sort();
                 versions.dedup();
@@ -347,7 +350,11 @@ fn entries_of(mut r: Record, wanted: &Wanted) -> (Vec<Entry>, BTreeMap<String, u
                     cvss_score,
                     cvss_vector: cvss_vector.clone(),
                     urgency: urgency.clone(),
-                    module: a.ecosystem_specific.as_ref().and_then(|e| e.module.clone()),
+                    module: a
+                        .ecosystem_specific
+                        .as_ref()
+                        .and_then(|e| e.module.clone())
+                        .or_else(|| module_fix_streams(family, a, r.summary.as_deref())),
                     url: (crate::feeds::feed_for(eco).is_some() || crate::distro::is_vex(eco))
                         .then_some(&r.references)
                         .and_then(|refs| {
@@ -355,7 +362,7 @@ fn entries_of(mut r: Record, wanted: &Wanted) -> (Vec<Entry>, BTreeMap<String, u
                         })
                         .and_then(|x| x.url.clone())
                         .filter(|u| u.starts_with("https://")),
-                    ranges: ranges_of(a, $parse),
+                    ranges: ranges_of(a, $parse_bound),
                     versions,
                 }
             }};
@@ -363,10 +370,53 @@ fn entries_of(mut r: Record, wanted: &Wanted) -> (Vec<Entry>, BTreeMap<String, u
         out.push(match family {
             Family::Deb => Entry::Deb(key, advisory!(DebVersion::parse)),
             Family::Apk => Entry::Apk(key, advisory!(ApkVersion::parse)),
-            Family::Rpm => Entry::Rpm(key, advisory!(RpmVersion::parse)),
+            Family::Rpm => Entry::Rpm(key, advisory!(RpmVersion::parse, RpmVersion::parse_fix)),
         });
     }
     (out, counts)
+}
+
+/// The module streams an rpm entry is about, when its record does not say: osv.dev's Red
+/// Hat, AlmaLinux and Rocky records carry no stream, but an entry whose fix is a module build
+/// (`.module+el8`, `.module_el8`) comes from an advisory whose summary names the streams
+/// (`php:7.4 security update`, `virt:rhel and virt-devel:rhel security update`). Returned
+/// comma-separated; `None` when the fix is no module build or the summary names no stream,
+/// which leaves the entry ungated as before.
+fn module_fix_streams(family: Family, a: &Affected, summary: Option<&str>) -> Option<String> {
+    let module_fix = a
+        .ranges
+        .iter()
+        .flat_map(|r| &r.events)
+        .filter_map(|e| e.fixed.as_deref())
+        .any(|f| f.contains(".module"));
+    if family != Family::Rpm || !module_fix {
+        return None;
+    }
+    let streams = summary_streams(summary?);
+    (!streams.is_empty()).then(|| streams.join(","))
+}
+
+/// The `name:stream` words of an advisory summary (`389-ds:1.4`, `perl-DBD-Pg:3.7`,
+/// `container-tools:rhel8`), in order, without repeats. A severity prefix (`Moderate:`) has
+/// nothing after its colon and is not one.
+fn summary_streams(summary: &str) -> Vec<String> {
+    let part = |s: &str| {
+        !s.is_empty()
+            && s.bytes().next().is_some_and(|b| b.is_ascii_alphanumeric())
+            && s.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"_.+-".contains(&b))
+    };
+    let mut out: Vec<String> = Vec::new();
+    for word in summary.split_whitespace() {
+        let word = word.trim_end_matches([',', ';', ')']);
+        let Some((name, stream)) = word.split_once(':') else {
+            continue;
+        };
+        if part(name) && part(stream) && !out.iter().any(|w| w == word) {
+            out.push(word.to_string());
+        }
+    }
+    out
 }
 
 /// Load the exports at `paths` (each an `all.zip` or a directory of records), keeping what
@@ -507,6 +557,63 @@ mod tests {
         assert_eq!(entries("ALEA-2026:1", ""), 0);
         assert_eq!(entries("ALBA-2026:2", r#""CVE-2026-1""#), 1);
         assert_eq!(entries("ALSA-2026:3", ""), 1);
+    }
+
+    #[test]
+    fn module_fixes_take_their_streams_from_the_summary() {
+        let mut w = Wanted::default();
+        w.ecosystems.insert("Rocky Linux:8".into(), Family::Rpm);
+        let entry = |summary: &str, fixed: &str| {
+            let record = format!(
+                r#"{{"id":"RLSA-2026:1","summary":"{summary}","aliases":["CVE-2026-1"],
+                "affected":[{{"package":{{"name":"php","ecosystem":"Rocky Linux:8"}},
+                "ranges":[{{"type":"ECOSYSTEM","events":[{{"introduced":"0"}},{{"fixed":"{fixed}"}}]}}]}}]}}"#
+            );
+            match parse_record(record.as_bytes(), &w, Path::new("x"))
+                .unwrap()
+                .0
+                .pop()
+            {
+                Some(Entry::Rpm(_, a)) => a,
+                _ => panic!("no rpm entry"),
+            }
+        };
+        let module_of = |summary: &str, fixed: &str| entry(summary, fixed).module;
+        let module = "0:8.0.30-1.module+el8.8.0+1550+1a2b3c4d";
+        assert_eq!(
+            module_of("Important: php:8.0 security update", module).as_deref(),
+            Some("php:8.0")
+        );
+        assert_eq!(
+            module_of(
+                "Moderate: virt:rhel and virt-devel:rhel security update",
+                module
+            )
+            .as_deref(),
+            Some("virt:rhel,virt-devel:rhel")
+        );
+        assert_eq!(
+            module_of("Moderate: 389-ds:1.4 security update", module).as_deref(),
+            Some("389-ds:1.4")
+        );
+        // No stream named, or no module build: ungated.
+        assert_eq!(
+            module_of("Important: varnish security update", module),
+            None
+        );
+        assert_eq!(
+            module_of("Important: php:8.0 security update", "0:7.2.24-1.el8"),
+            None
+        );
+        // The fix compares as its version and release (a build of it for another module
+        // context is not older), and still shows in full.
+        let fixed = entry("Important: php:8.0 security update", module).ranges[0]
+            .events
+            .iter()
+            .find_map(|e| e.fixed.clone())
+            .unwrap();
+        assert_eq!(fixed, RpmVersion::parse("0:8.0.30-1").unwrap());
+        assert_eq!(fixed.to_string(), module);
     }
 
     #[test]

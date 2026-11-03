@@ -79,6 +79,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   every one of Trivy's 947 and 538 findings is reported with the same status; the 19 and 2
   more are Red Hat's open statuses for the binary's source package, which Trivy matches by
   binary name only.
+- **Module streams on RHEL, AlmaLinux and Rocky Linux images** (spec 16, row 10, phase 2).
+  osv.dev's records for these distributions carry no module stream, so an advisory for
+  `php:8.0` matched an installed `php:7.4` build as "fixed in 8.0.x". An advisory whose fix
+  is a module build now takes its streams from its title (`php:8.0 security update`,
+  `virt:rhel and virt-devel:rhel ...`) and matches only packages from those streams; a
+  non-module fix no longer applies to a module build, and a fix built once per module
+  context compares by its version and release. Another stream's advisory no longer hides
+  Red Hat's open status for the installed stream. Also fixed: an rpm subpackage with an
+  epoch of its own (`perl-base` `0:2.27`) gave its source rpm that epoch, so perl's source
+  looked older than `4:5.32.1` fixes. Checked against `dnf updateinfo` in Rocky Linux 8 and
+  9 and AlmaLinux 8 images with module streams: 46 and 100 cross-stream false positives gone,
+  AlmaLinux 8 equal to dnf; on a UBI 8 image with php, nodejs, ruby and perl streams, 171
+  other-stream pairs gone, 27 open statuses for the installed streams back, and every one of
+  Grype v0.121.1's 751 pairs reported.
 - **End-of-life warnings for images** (spec 16, row 10, phase 2). An image whose release is
   past the end of its standard support (CentOS 7, Debian 10, Amazon Linux 2, Fedora 41, ...)
   gets an `unmaintained` warning, `EOL-<product>-<release>`, grouped across the fleet, with

@@ -21,6 +21,8 @@ pub struct RpmVersion {
     epoch_written: bool,
     version: String,
     release: Option<String>,
+    /// The text to show when it is not what is compared (see [`RpmVersion::parse_fix`]).
+    shown: Option<String>,
 }
 
 impl RpmVersion {
@@ -51,7 +53,25 @@ impl RpmVersion {
             epoch_written,
             version: version.to_string(),
             release,
+            shown: None,
         })
+    }
+
+    /// Parse an advisory's bound. A module build (`2.174-440.module_el8.6.0+3181+91434291`)
+    /// compares as its own version and release (`2.174-440`), still shown in full: an
+    /// advisory lists the same fix built once per module context, and osv.dev does not say
+    /// which context each build is for. A module build with that version and release is built
+    /// from the same source rpm, so it has the fix whichever context it came from; ordering
+    /// by the module build numbers of two contexts would call it older.
+    pub fn parse_fix(s: &str) -> Option<RpmVersion> {
+        let s = s.trim();
+        match s.split_once(".module") {
+            Some((base, _)) if base.contains('-') => Some(RpmVersion {
+                shown: Some(s.to_string()),
+                ..RpmVersion::parse(base)?
+            }),
+            _ => RpmVersion::parse(s),
+        }
     }
 
     /// The epoch (0 when none was written).
@@ -62,6 +82,9 @@ impl RpmVersion {
 
 impl fmt::Display for RpmVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(shown) = &self.shown {
+            return f.write_str(shown);
+        }
         if self.epoch_written {
             write!(f, "{}:", self.epoch)?;
         }
@@ -277,6 +300,21 @@ mod tests {
         assert_eq!(RpmVersion::parse("0:1.0-1").unwrap().to_string(), "0:1.0-1");
         assert_eq!(RpmVersion::parse("2.0").unwrap().to_string(), "2.0");
         assert!(RpmVersion::parse("x:1.0").is_none());
+    }
+
+    #[test]
+    fn a_module_build_fix_compares_as_its_version_and_release() {
+        let fix = RpmVersion::parse_fix("2.174-440.module_el8.6.0+3181+91434291").unwrap();
+        assert_eq!(fix.to_string(), "2.174-440.module_el8.6.0+3181+91434291");
+        let installed = |v: &str| RpmVersion::parse(v).unwrap();
+        // The same fix built for another module context: not older.
+        assert!(installed("2.174-440.module_el8.6.0+2766+8bf0b7ce") >= fix);
+        assert!(installed("2.174-439.module_el8.6.0+9999+8bf0b7ce") < fix);
+        assert!(installed("2.174-441.module_el8.6.0+1+8bf0b7ce") > fix);
+        // Not a module build: as `parse`.
+        let plain = RpmVersion::parse_fix("4:5.26.3-419.el8").unwrap();
+        assert_eq!(plain, installed("4:5.26.3-419.el8"));
+        assert_eq!(plain.to_string(), "4:5.26.3-419.el8");
         assert!(RpmVersion::parse("1.0-").is_none());
         assert!(RpmVersion::parse("").is_none());
     }

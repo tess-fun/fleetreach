@@ -164,6 +164,29 @@ way. Validated against OpenSCAP evaluating SUSE's own OVAL: on the SLES BCI 15.6
 fleetreach reports all 238 CVEs the OVAL finds, plus 1 open status from the newer VEX.
 Without the index, a SUSE image is a coverage gap that names the command.
 
+## Module streams
+
+Red Hat Enterprise Linux 8 and 9, AlmaLinux and Rocky Linux ship some software as module
+streams (`php:7.4`, `nodejs:18`, `postgresql:12`), each with its own advisories. osv.dev's
+records for these distributions do not say which stream an advisory is for, so fleetreach
+reads it from the advisory's title (`php:8.0 security update`,
+`virt:rhel and virt-devel:rhel security update`) when its fix is a module build, and matches
+it only against packages from that stream, known from each package's modularity label. Three
+consequences follow dnf's own behavior:
+
+- an advisory for another stream is not reported (php:7.4 is not "fixed in 8.0.30"), and it
+  does not hide Red Hat's open status for the installed stream;
+- a non-module fix (perl 5.26's `5.26.3-419.el8`) never applies to a module build, since dnf
+  hides non-module packages of a name a stream provides;
+- a fix built once per module context (two builds of `perl-Data-Dumper-2.174-440`) is
+  compared by its version and release, so the installed context's build counts as fixed.
+
+An advisory whose title names no stream is matched as before. Checked against `dnf
+updateinfo list --security` inside Rocky Linux 8 and 9 and AlmaLinux 8 images with php,
+nodejs, ruby, perl and postgresql streams installed: the cross-stream findings (46 on Rocky
+8, 100 on AlmaLinux 8) are gone and every dnf row is reported, apart from dnf listing a newer
+stream's advisory that `dnf upgrade` would not install.
+
 ## End-of-life releases
 
 A release past the end of its standard support gets fewer and fewer advisories, so matching

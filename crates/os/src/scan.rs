@@ -270,21 +270,43 @@ impl Distro {
     }
 }
 
-/// Whether a package can be a build of module stream `module` (`php:7.4`), the condition
-/// an advisory about that stream's builds carries. A labelled package belongs to its own
-/// stream only, and a package that is no module build (no `.module` in its release) to
-/// none. An older module build can lack the label; it belongs to the stream the image has
-/// enabled for that module, or, with none recorded, possibly to any (so it still matches:
-/// an unknown stream never hides a fix).
-fn in_stream(distro: &Distro, src: &Source, module: &str) -> bool {
-    if let Some(own) = src.module {
-        return own == module;
-    }
-    if !src.version.contains(".module") {
-        return false;
-    }
-    let (name, stream) = module.split_once(':').unwrap_or((module, ""));
-    distro.modules.get(name).is_none_or(|s| s == stream)
+/// Whether a package can be a build of one of the module streams `modules` names
+/// (`php:7.4`, or comma-separated `virt:rhel,virt-devel:rhel`), the condition an advisory
+/// about those streams' builds carries. A labelled package belongs to its own stream only,
+/// and a package that is no module build (no `.module` in its release) to none. An older
+/// module build can lack the label; it belongs to the stream the image has enabled for that
+/// module, or, with none recorded, possibly to any (so it still matches: an unknown stream
+/// never hides a fix).
+fn in_stream(distro: &Distro, src: &Source, modules: &str) -> bool {
+    modules.split(',').any(|module| {
+        if let Some(own) = src.module {
+            return own == module;
+        }
+        if !src.version.contains(".module") {
+            return false;
+        }
+        let (name, stream) = module.split_once(':').unwrap_or((module, ""));
+        distro.modules.get(name).is_none_or(|s| s == stream)
+    })
+}
+
+/// Whether a module build is outside an advisory's reach: the advisory's fixes are all
+/// non-module builds. With a module stream enabled, dnf hides the non-module packages of the
+/// same name, so such a fix never replaces a module build (Rocky's RLSA-2021:1678 fixes perl
+/// 5.26's `5.26.3-419.el8`, which no `perl:5.32` install takes).
+fn non_module_fix_for_module_build<V: std::fmt::Display>(src: &Source, adv: &Advisory<V>) -> bool {
+    let module_build = src.module.is_some() || src.version.contains(".module");
+    let mut fixes = adv
+        .ranges
+        .iter()
+        .filter(|r| r.matchable)
+        .flat_map(|r| &r.events)
+        .filter_map(|e| e.fixed.as_ref())
+        .peekable();
+    module_build
+        && adv.module.is_none()
+        && fixes.peek().is_some()
+        && fixes.all(|f| !f.to_string().contains(".module"))
 }
 
 /// Match one source package across the release, its overlays and its fallbacks. `lookup`
@@ -299,6 +321,16 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
 ) {
     let lookup = |eco: &str| by_name(eco, src.name);
     let applies = |eco: &str| !eco.starts_with("Root:") || src.version.contains("root.io");
+    // Whether an advisory can be about this build at all: another module stream's advisory,
+    // or a non-module fix for a module build, says nothing about it, so it neither matches
+    // nor counts as the release having spoken about the CVE (php:8.0's RHSA must not hide
+    // Red Hat's "fix deferred" for php:7.4).
+    let reach = |adv: &Advisory<V>| {
+        adv.module
+            .as_ref()
+            .is_none_or(|m| in_stream(ctx.distro, src, m))
+            && !non_module_fix_for_module_build(src, adv)
+    };
     let overlays: Vec<&str> = ctx
         .distro
         .overlays
@@ -320,6 +352,7 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
     let known: BTreeSet<&str> = base
         .clone()
         .chain(overlays.iter().flat_map(|e| lookup(e).iter()))
+        .filter(|a| reach(a))
         .flat_map(Advisory::keys)
         .filter(|k| k.starts_with("CVE-"))
         .collect();
@@ -340,7 +373,7 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
     let hit: BTreeSet<&str> = base
         .clone()
         .chain(overlays.iter().flat_map(|e| lookup(e).iter()))
-        .filter(|a| affected(v, a).is_some())
+        .filter(|a| reach(a) && affected(v, a).is_some())
         .flat_map(Advisory::keys)
         .filter(|k| k.starts_with("CVE-"))
         .collect();
@@ -357,7 +390,7 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
         let mut here: Vec<(&Advisory<V>, OwnVersion<'_>)> = Vec::new();
         for bin in &src.binaries {
             let own = src.other_versions.get(bin).map(|ver| (*bin, *ver));
-            for adv in by_name(eco, bin) {
+            for adv in by_name(eco, bin).iter().filter(|a| reach(a)) {
                 by_binary.extend(adv.keys().filter(|k| k.starts_with("CVE-")));
                 here.push((adv, own));
             }
@@ -366,6 +399,7 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
             here.extend(
                 by_name(eco, name)
                     .iter()
+                    .filter(|a| reach(a))
                     .filter(|a| !has_fix(&a.ranges) && !a.keys().any(|k| by_binary.contains(k)))
                     .map(|a| (a, None)),
             );
@@ -393,13 +427,8 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
         }
         fallbacks.extend(fresh.into_iter().map(|(a, own)| (a, borrowed, own)));
     }
-    let wanted = |adv: &Advisory<V>| {
-        !(ctx.opts.ignore_unimportant && adv.unimportant())
-            && adv
-                .module
-                .as_ref()
-                .is_none_or(|m| in_stream(ctx.distro, src, m))
-    };
+    let wanted =
+        |adv: &Advisory<V>| !(ctx.opts.ignore_unimportant && adv.unimportant()) && reach(adv);
     let candidates = base
         .filter(|a| !a.keys().any(|k| superseded.contains(k)))
         .chain(overlays.iter().flat_map(|e| lookup(e).iter()));
@@ -819,6 +848,100 @@ mod tests {
         assert_eq!(ids(&ol, pkg(modular, None)), ["ELSA-74", "ELSA-80"]);
         ol.modules.insert("php".into(), "7.4".into());
         assert_eq!(ids(&ol, pkg(modular, None)), ["ELSA-74"]);
+    }
+
+    #[test]
+    fn module_builds_match_only_their_streams_and_module_fixes() {
+        let pkg = |name: &str, version: &str, module: &str| OsPackage {
+            name: name.into(),
+            version: version.into(),
+            source: name.into(),
+            source_version: version.into(),
+            arch: None,
+            module: Some(module.into()),
+        };
+        let pkgs = vec![
+            pkg("php", "0:7.4.30-1.module+el8.9.0+1500+aaaaaaaa", "php:7.4"),
+            // RHEL 8's perl:5.24 stream is older than its non-modular perl 5.26.
+            pkg(
+                "perl",
+                "4:5.24.4-404.module+el8.1.0+2926+ce7246ad",
+                "perl:5.24",
+            ),
+        ];
+        let rocky = crate::distro::explicit("Rocky Linux:8", Family::Rpm);
+        let mut db = DistroDb::default();
+        let fix = |id: &str, fixed: &str, module: Option<&str>| {
+            let mut a = adv(
+                id,
+                &[("introduced", "0"), ("fixed", fixed)],
+                RpmVersion::parse_fix,
+            );
+            a.module = module.map(str::to_string);
+            a
+        };
+        // Another stream's fix (php:8.0), and a list naming this stream among others.
+        db.insert_rpm(
+            "Rocky Linux:8",
+            "php",
+            fix(
+                "RLSA-1",
+                "0:8.0.30-1.module+el8.8.0+1550+bbbbbbbb",
+                Some("php:8.0"),
+            ),
+        );
+        db.insert_rpm(
+            "Rocky Linux:8",
+            "php",
+            fix(
+                "RLSA-2",
+                "0:7.4.33-1.module+el8.9.0+1600+aaaaaaaa",
+                Some("php-devel:7.4,php:7.4"),
+            ),
+        );
+        // A fix built for another module context, same version and release as installed.
+        db.insert_rpm(
+            "Rocky Linux:8",
+            "php",
+            fix(
+                "RLSA-3",
+                "0:7.4.30-1.module+el8.9.0+1700+cccccccc",
+                Some("php:7.4"),
+            ),
+        );
+        // Another stream's fix names a CVE that Red Hat leaves open for this stream: the open
+        // status still applies (the other stream's advisory says nothing about this build).
+        let mut other = fix(
+            "RLSA-5",
+            "0:8.0.27-1.module+el8.7.0+1+dddddddd",
+            Some("php:8.0"),
+        );
+        other.aliases = vec!["CVE-2022-4900".into()];
+        db.insert_rpm("Rocky Linux:8", "php", other);
+        let mut deferred = adv(
+            "CVE-2022-4900",
+            &[("introduced", "0")],
+            RpmVersion::parse_fix,
+        );
+        deferred.aliases = vec!["CVE-2022-4900".into()];
+        deferred.urgency = Some("fix deferred".into());
+        deferred.module = Some("php:7.4".into());
+        db.insert_rpm("Red Hat:enterprise_linux:8::vex", "php", deferred);
+        // perl 5.26's non-module fix: dnf never puts it over a perl:5.24 build.
+        db.insert_rpm(
+            "Rocky Linux:8",
+            "perl",
+            fix("RLSA-4", "4:5.26.3-419.el8", None),
+        );
+        let s = scan(
+            &rocky,
+            &pkgs,
+            &db,
+            &RepoId("img".into()),
+            ScanOptions::default(),
+        );
+        let ids: Vec<&str> = s.findings.iter().map(|f| f.advisory_id.as_str()).collect();
+        assert_eq!(ids, ["CVE-2022-4900", "RLSA-2"]);
     }
 
     #[test]

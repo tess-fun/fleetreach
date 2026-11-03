@@ -219,6 +219,44 @@ pub fn from_rpm(p: &RpmPackage) -> Option<OsPackage> {
     })
 }
 
+/// Give each source rpm one epoch. A source rpm's file name has none, so [`from_rpm`] takes
+/// the binary's, but a subpackage can carry an epoch of its own: perl's `perl-libs` is
+/// `4:5.32.1-475` while `perl-base` is `0:2.27-475`, so `perl-base` would make its source
+/// `0:5.32.1-475`, older than an advisory's `4:5.32.1-473`. The epoch of a binary built at the
+/// source's own version and release is the source's; where no binary is, or they disagree,
+/// nothing changes.
+fn share_source_epoch(pkgs: &mut [OsPackage]) {
+    fn split(v: &str) -> (Option<&str>, &str) {
+        match v.split_once(':') {
+            Some((e, rest)) if !e.is_empty() && e.bytes().all(|b| b.is_ascii_digit()) => {
+                (Some(e), rest)
+            }
+            _ => (None, v),
+        }
+    }
+    let mut epochs: BTreeMap<(String, String), BTreeSet<Option<String>>> = BTreeMap::new();
+    for p in pkgs.iter() {
+        let (epoch, vr) = split(&p.version);
+        let (_, source_vr) = split(&p.source_version);
+        if vr == source_vr {
+            epochs
+                .entry((p.source.clone(), source_vr.to_string()))
+                .or_default()
+                .insert(epoch.map(str::to_string));
+        }
+    }
+    for p in pkgs.iter_mut() {
+        let (_, source_vr) = split(&p.source_version);
+        let key = (p.source.clone(), source_vr.to_string());
+        if let Some(found) = epochs.get(&key).filter(|e| e.len() == 1) {
+            p.source_version = match found.iter().next().cloned().flatten() {
+                Some(e) => format!("{e}:{source_vr}"),
+                None => source_vr.to_string(),
+            };
+        }
+    }
+}
+
 /// The packages of each rpm database in the image, by directory. A directory that is a
 /// link to another is read once.
 fn rpm_databases(fs: &ImageFs) -> Vec<(String, Result<Vec<RpmPackage>, String>)> {
@@ -509,6 +547,7 @@ pub fn inventory(fs: &ImageFs) -> Inventory {
                 );
             }
             inv.packages = pkgs.iter().filter_map(from_rpm).collect();
+            share_source_epoch(&mut inv.packages);
         }
         for name in fs.list_dir(MODULES_D.trim_end_matches('/')) {
             if let Some(t) = name
@@ -703,6 +742,45 @@ R:package-lock.json
             source_rpm: src.map(str::to_string),
             ..RpmPackage::default()
         }
+    }
+
+    #[test]
+    fn a_source_rpm_takes_the_epoch_of_its_own_version() {
+        let pkg = |name: &str, epoch, version: &str| {
+            from_rpm(&RpmPackage {
+                name: name.into(),
+                epoch,
+                version: version.into(),
+                release: "475.module+el8.10.0+40316+ee3cfc74".into(),
+                arch: Some("aarch64".into()),
+                source_rpm: Some("perl-5.32.1-475.module+el8.10.0+40316+ee3cfc74.src.rpm".into()),
+                ..RpmPackage::default()
+            })
+            .unwrap()
+        };
+        let mut pkgs = vec![
+            pkg("perl-base", Some(0), "2.27"),
+            pkg("perl-libs", Some(4), "5.32.1"),
+            pkg("perl-if", None, "0.60.800"),
+        ];
+        assert_eq!(
+            pkgs[0].source_version,
+            "0:5.32.1-475.module+el8.10.0+40316+ee3cfc74"
+        );
+        share_source_epoch(&mut pkgs);
+        for p in &pkgs {
+            assert_eq!(
+                p.source_version,
+                "4:5.32.1-475.module+el8.10.0+40316+ee3cfc74"
+            );
+        }
+        // No binary at the source's own version: left as it was.
+        let mut alone = vec![pkg("perl-base", Some(0), "2.27")];
+        share_source_epoch(&mut alone);
+        assert_eq!(
+            alone[0].source_version,
+            "0:5.32.1-475.module+el8.10.0+40316+ee3cfc74"
+        );
     }
 
     #[test]

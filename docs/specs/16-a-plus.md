@@ -613,7 +613,26 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     fixed by the `modules.d` fallback. (3) Photon's `cve_id` is sometimes a Black Duck id
     (BDSA), which has no public page; those link the feed file. **Still open in phase 2**:
     CentOS and Fedora are gaps; RHEL module streams in the OSV data are not told apart (the
-    OSV Red Hat records carry no stream); the rpm comparison against Grype.
+    OSV Red Hat records carry no stream); the rpm comparison against Grype. (Module streams
+    and the Grype comparison since done, below.)
+    **Status: RHEL module streams implemented 2026-11-03, unreleased.** osv.dev's Red Hat,
+    AlmaLinux and Rocky records carry no stream (82,869 of Red Hat's 638,319 affected
+    entries have module-build fixes); the stream comes from the summary's `name:stream` words
+    when the entry's fix is a module build (1 word on 71%, several on 26%, none on 3%, which
+    stay ungated). Rules, all from dnf's modular filtering: another stream's advisory neither
+    matches nor counts as the release having spoken (else it hid Red Hat's open status for
+    the installed stream, a false negative found on UBI 8); a non-module fix never applies to
+    a module build (RHEL 8 `perl:5.24` vs perl 5.26's fix); a module-build fix compares by
+    version-release (`RpmVersion::parse_fix`), as an advisory lists one build per module
+    context. **Found**: a subpackage's own epoch became its source rpm's (`perl-base`
+    `0:2.27` made perl's source `0:5.32.1`); the source now takes the epoch of the binary
+    at its own version. Validated with `dnf updateinfo list --security` in images with php,
+    nodejs, ruby, perl and postgresql streams: Rocky 8 46 cross-stream extras to 1 (a
+    lagging updateinfo), AlmaLinux 8 100 to 0 and equal to dnf, Rocky 9 every in-stream row;
+    the remaining dnf-only rows are dnf listing a newer stream's advisory (php:8.3 for php:8.2)
+    that `dnf upgrade` would not install (checked with `check-update`), Rocky's republished
+    records and alias-merged ids. UBI 8 (no updateinfo): 171 other-stream pairs gone, 27 Red
+    Hat open statuses back, Grype v0.121.1 751 of 751. The 22-image Grype set is unchanged.
     **Status: OS end-of-life warnings implemented 2026-11-03, unreleased**
     (`fleetreach_os::eol`). A bundled endoflife.date snapshot (`crates/os/data/eol.tsv`, 250
     releases of 16 products, MIT data, refreshed by `scripts/update-eol.py`); os-release maps
