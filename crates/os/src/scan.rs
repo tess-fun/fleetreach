@@ -258,13 +258,22 @@ fn finding<V: Ord + Clone + std::fmt::Display>(
 }
 
 impl Distro {
+    /// Whether the release's repositories have `fix`, the fix an advisory of its own
+    /// ecosystems names for `package`: always, unless the release is matched against the
+    /// records of the distribution it rebuilds (see [`Distro::final_builds`]).
+    fn shipped<V: std::fmt::Display>(&self, package: &str, adv: &Advisory<V>, fix: &V) -> bool {
+        self.final_builds.as_deref().is_none_or(|release| {
+            crate::centos::shipped(release, package, adv.module.as_deref(), &fix.to_string())
+        })
+    }
+
     fn name_of_urgency(&self) -> &'static str {
         match self.namespace.as_str() {
             "ubuntu" => "priority",
             // The vendors' VEX statuses (Red Hat, SUSE): no other urgency reaches these distros.
             "redhat" | "suse" | "opensuse" => "status",
             // Red Hat's statuses, borrowed by its rebuilds.
-            "almalinux" | "rocky-linux" => "Red Hat status",
+            "almalinux" | "rocky-linux" | "centos" => "Red Hat status",
             _ => "urgency",
         }
     }
@@ -434,6 +443,7 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
         .chain(overlays.iter().flat_map(|e| lookup(e).iter()));
     for adv in candidates.filter(|a| wanted(a)) {
         if let Some(fixed) = affected(v, adv) {
+            let fixed = fixed.filter(|f| ctx.distro.shipped(src.name, adv, f));
             out.push(finding(ctx, src, v, adv, fixed, None));
         }
     }
@@ -475,6 +485,45 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
     }
 }
 
+/// Advisories by ecosystem and package name.
+type ByName = BTreeMap<(String, String), Vec<Advisory<RpmVersion>>>;
+
+/// For a rebranded CentOS build (`4.2.5-83.el7.centos.2`), the advisories it is matched
+/// against with Red Hat's fixes in CentOS's form (`4.2.5-83.el7_9.2` is the same build), so
+/// the build CentOS shipped as a fix reads as fixed; see [`crate::centos::rebrand`]. `None`
+/// for any other package, which is matched against the records as they are.
+fn rebranded(distro: &Distro, db: &DistroDb, src: &Source) -> Option<ByName> {
+    if distro.final_builds.is_none() || !src.version.contains(".centos") {
+        return None;
+    }
+    let rebrand = |f: &RpmVersion| {
+        crate::centos::rebrand(&f.to_string())
+            .and_then(|r| RpmVersion::parse_fix(&r))
+            .unwrap_or_else(|| f.clone())
+    };
+    let mut names = vec![src.name, src.source];
+    names.extend(&src.binaries);
+    let mut out = BTreeMap::new();
+    for eco in distro.ecosystems() {
+        for name in &names {
+            let advs = db
+                .rpm(&eco, name)
+                .iter()
+                .cloned()
+                .map(|mut a| {
+                    for e in a.ranges.iter_mut().flat_map(|r| r.events.iter_mut()) {
+                        e.fixed = e.fixed.as_ref().map(rebrand);
+                        e.last_affected = e.last_affected.as_ref().map(rebrand);
+                    }
+                    a
+                })
+                .collect();
+            out.insert((eco.clone(), name.to_string()), advs);
+        }
+    }
+    Some(out)
+}
+
 /// Match an image's installed packages. `packages` are from [`crate::inventory`].
 pub fn scan(
     distro: &Distro,
@@ -511,14 +560,22 @@ pub fn scan(
                 None => skipped_unparseable += 1,
             },
             Family::Rpm => match RpmVersion::parse(src.version) {
-                Some(v) => match_source(
-                    &ctx,
-                    &src,
-                    &v,
-                    RpmVersion::parse,
-                    |e, n| db.rpm(e, n),
-                    &mut out,
-                ),
+                Some(v) => {
+                    let rebranded = rebranded(distro, db, &src);
+                    match_source(
+                        &ctx,
+                        &src,
+                        &v,
+                        RpmVersion::parse,
+                        |e, n| match &rebranded {
+                            Some(own) => own
+                                .get(&(e.to_string(), n.to_string()))
+                                .map_or(&[][..], Vec::as_slice),
+                            None => db.rpm(e, n),
+                        },
+                        &mut out,
+                    );
+                }
                 None => skipped_unparseable += 1,
             },
         }
@@ -942,6 +999,74 @@ mod tests {
         );
         let ids: Vec<&str> = s.findings.iter().map(|f| f.advisory_id.as_str()).collect();
         assert_eq!(ids, ["CVE-2022-4900", "RLSA-2"]);
+    }
+
+    #[test]
+    fn centos_takes_red_hat_fixes_only_where_it_shipped_them() {
+        let pkg = |name: &str, version: &str| OsPackage {
+            name: name.into(),
+            version: version.into(),
+            source: name.into(),
+            source_version: version.into(),
+            arch: None,
+            module: None,
+        };
+        let os = crate::distro::parse_os_release("ID=centos\nVERSION_ID=7\n");
+        let centos = crate::distro::detect(&os, None, Default::default()).unwrap();
+        let eco = "Red Hat:enterprise_linux:7::server";
+        let mut db = DistroDb::default();
+        let fix = |id: &str, fixed: &str| {
+            adv(
+                id,
+                &[("introduced", "0"), ("fixed", fixed)],
+                RpmVersion::parse_fix,
+            )
+        };
+        // CentOS's final openssl is -26: the -26 fix is its own, the -27 one only Red Hat's.
+        db.insert_rpm(eco, "openssl", fix("RHSA-1", "1:1.0.2k-26.el7_9"));
+        db.insert_rpm(eco, "openssl", fix("RHSA-2", "1:1.0.2k-27.el7_9"));
+        // CentOS shipped Red Hat's dhcp -83.el7_9.2 as -83.el7.centos.2: the same build.
+        db.insert_rpm(eco, "dhclient", fix("RHSA-3", "12:4.2.5-83.el7_9.2"));
+        db.insert_rpm(eco, "dhclient", fix("RHSA-4", "12:4.2.5-83.el7_9.3"));
+        let pkgs = vec![
+            pkg("openssl", "1:1.0.2k-25.el7_9"),
+            pkg("dhclient", "12:4.2.5-83.el7.centos.2"),
+        ];
+        let s = scan(
+            &centos,
+            &pkgs,
+            &db,
+            &RepoId("img".into()),
+            ScanOptions::default(),
+        );
+        let got: Vec<(&str, &str, bool)> = s
+            .findings
+            .iter()
+            .map(|f| {
+                (
+                    f.advisory_id.as_str(),
+                    match &f.occurrences[0] {
+                        Occurrence::InRepo { package, .. } => package.as_str(),
+                        Occurrence::Toolchain { .. } => panic!("expected InRepo"),
+                    },
+                    f.title.contains("fixed only in another line"),
+                )
+            })
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("RHSA-1", "centos/openssl", false),
+                ("RHSA-2", "centos/openssl", true),
+                ("RHSA-4", "centos/dhclient", true),
+            ]
+        );
+        // Rebranded fixes read in CentOS's form.
+        assert!(
+            s.findings[2].title.contains("CentOS Linux 7"),
+            "{}",
+            s.findings[2].title
+        );
     }
 
     #[test]

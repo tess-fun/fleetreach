@@ -35,8 +35,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   an empty stray database beside the real one (Oracle Linux 9 ships one) is skipped, and two
   that disagree are a coverage gap. Versions compare with rpm's ordering (epoch, `~`, `^`).
   Red Hat and AlmaLinux advisories name binary packages, so there each binary is matched on
-  its own; elsewhere binaries fold into their source rpm. CentOS has no advisories to match
-  and is a coverage gap, never clean. AlmaLinux's bug fix and
+  its own; elsewhere binaries fold into their source rpm. AlmaLinux's bug fix and
   enhancement advisories (ALBA, ALEA) that name no CVE are not reported as vulnerabilities.
   Package names are `<distro>/<package>` (`rocky-linux/openssl`, `redhat/openssl-libs`),
   ecosystem `rpm`.
@@ -93,6 +92,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   AlmaLinux 8 equal to dnf; on a UBI 8 image with php, nodejs, ruby and perl streams, 171
   other-stream pairs gone, 27 open statuses for the installed streams back, and every one of
   Grype v0.121.1's 751 pairs reported.
+- **CentOS Linux 6, 7 and 8** (spec 16, row 10, phase 2). Matched against Red Hat's records
+  for the release each rebuilt, with Red Hat's open statuses. A Red Hat fix counts as fixed
+  only when CentOS shipped it, from a bundled list of each release's final builds
+  (`crates/os/data/centos.tsv`, vault.centos.org); otherwise it is fixed only in another line
+  (all of RHEL 8's fixes since CentOS 8 ended). Rebranded builds (`.el7.centos`) compare as
+  the Red Hat build they rebuilt. CentOS Stream remains a coverage gap. Equal to Grype v0.121.1
+  on CentOS 7 (12,619 pairs, no status differs) and CentOS 8 (1,286 pairs; 557 Red Hat fixes
+  CentOS 8 never shipped are fixed only in another line where Grype calls them fixed).
 - **Fedora** (spec 16, row 10, phase 2). Fedora 41 and later are matched against the updates
   repository's `updateinfo.xml.zst` (`db sync --distros Fedora`; from the Fedora archive once
   a release leaves the mirrors), its security updates only, with CVEs from the Bugzilla bugs

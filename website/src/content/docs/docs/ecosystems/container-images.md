@@ -54,9 +54,20 @@ Leap Micro and Tumbleweed, SUSE Linux Enterprise 15 (its Basesystem and Server A
 modules, the optional modules such as Containers, Python 3 and Public Cloud, and LTSS), SLE
 Micro and SUSE Linux Micro, Azure Linux 3 and CBL-Mariner 2, Mageia and
 openEuler. AlmaLinux's export also holds bug fix and enhancement advisories (ALBA, ALEA);
-those that name no CVE fix no vulnerability and are not reported. CentOS has no advisories
-to match, so its images are a coverage gap: they are not matched against Red Hat's records,
-whose versions and backports are not CentOS's.
+those that name no CVE fix no vulnerability and are not reported.
+
+CentOS Linux 6, 7 and 8 rebuilt Red Hat Enterprise Linux and published no advisories, so their
+images are matched against Red Hat's records for the release they rebuilt, with Red Hat's open
+statuses (`csaf:redhat`), as Grype and Trivy do. Unlike those tools, fleetreach reports a Red
+Hat fix as fixed only when CentOS shipped it: a bundled list of the highest build of each
+package in each release's final repositories (vault.centos.org, which no longer changes)
+decides, and a fix CentOS never built, such as every RHEL 8 fix after CentOS 8 ended in 2021,
+is reported as fixed only in another line. CentOS's rebranded builds
+(`4.2.5-83.el7.centos.2` for Red Hat's `4.2.5-83.el7_9.2`) are read as the build they
+rebuilt. Equal to Grype v0.121.1 on CentOS 7 and 8 images in every vulnerability and package
+pair both report, apart from those Red Hat fixes CentOS 8 never shipped (557 pairs Grype
+calls fixed). CentOS Stream is built ahead of RHEL, so Red Hat's records are not about its
+builds; its images are a coverage gap.
 
 Amazon Linux, Oracle Linux, Photon OS, Fedora and Bottlerocket publish no advisories to osv.dev, so
 fleetreach reads their vendors' own feeds and converts them to OSV records, cached beside the

@@ -62,6 +62,7 @@
 //! 1.89. An MSRV increase is treated as a minor-version bump.
 
 mod apkver;
+mod centos;
 pub mod db;
 pub mod distro;
 mod dpkgver;

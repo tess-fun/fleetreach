@@ -113,6 +113,10 @@ pub struct Distro {
     /// the rebuild ships the same sources, so a CVE Red Hat has not fixed is not fixed there
     /// either, but Red Hat's fix versions are not the rebuild's builds.
     pub borrowed_opens: Vec<String>,
+    /// For a rebuild matched against the records of the distribution it rebuilds (CentOS
+    /// Linux against Red Hat's), the release whose bundled final builds decide which of
+    /// those fixes it shipped; a fix it never shipped is fixed only in another line.
+    pub final_builds: Option<String>,
 }
 
 impl Distro {
@@ -285,6 +289,7 @@ pub fn detect(
         optional: Vec::new(),
         borrowed: Vec::new(),
         borrowed_opens: Vec::new(),
+        final_builds: None,
     };
     // A SUSE product takes SUSE's VEX for each of its products.
     let suse = |mut d: Distro| {
@@ -597,11 +602,40 @@ pub fn detect(
             d.binary_names = true;
             d
         }
+        // CentOS Linux rebuilt RHEL and published no advisories: Red Hat's records for the
+        // release it rebuilds, with only the fixes CentOS shipped (see `final_builds`).
+        // CentOS Stream is built ahead of RHEL, so neither its versions nor its fixes are
+        // Red Hat's.
         "centos" => {
-            return Err(format!(
-                "{pretty}: osv.dev has no advisories for this distribution, so its OS packages \
-                 were not matched"
-            ))
+            let r = release("CentOS")?;
+            let stream = os
+                .pretty_name
+                .as_deref()
+                .is_some_and(|n| n.contains("Stream"));
+            if stream || !matches!(r, "6" | "7" | "8") {
+                return Err(format!(
+                    "{pretty}: CentOS Stream has no advisories fleetreach reads, and Red Hat's \
+                     are not about its builds, so its OS packages were not matched"
+                ));
+            }
+            // CentOS 6 and 7 rebuilt the Server variant; 8 BaseOS, AppStream and PowerTools.
+            let repos: &[&str] = if r == "8" {
+                &["baseos", "appstream", "crb"]
+            } else {
+                &["server"]
+            };
+            let mut d = rpm(
+                format!("CentOS Linux {r}"),
+                "centos",
+                format!("Red Hat:enterprise_linux:{r}::{}", repos[0]),
+            );
+            d.also = repos[1..]
+                .iter()
+                .map(|repo| format!("Red Hat:enterprise_linux:{r}::{repo}"))
+                .collect();
+            d.binary_names = true;
+            d.final_builds = Some(r.to_string());
+            rebuild_of_rhel(d, r)
         }
         "" => return Err("no os-release ID".to_string()),
         other => {
@@ -703,6 +737,7 @@ pub fn explicit(ecosystem: &str, family: Family) -> Distro {
         optional: Vec::new(),
         borrowed: Vec::new(),
         borrowed_opens: Vec::new(),
+        final_builds: None,
     };
     // `AlmaLinux:9` and `Rocky Linux:9` take RHEL 9's open statuses, as when detected.
     match ecosystem.split_once(':') {
@@ -969,9 +1004,39 @@ mod tests {
             ("Fedora:43", true)
         );
         assert_eq!(family_of("Fedora:43"), Some(Family::Rpm));
-        // No data, and not matched against Red Hat's: a gap that says why.
-        let e = detect(&os("ID=centos\nVERSION_ID=9\n"), None, Hints::default());
-        assert!(e.unwrap_err().contains("no advisories"));
+        // CentOS Linux: Red Hat's records for the release it rebuilt, its statuses, and
+        // only the fixes CentOS shipped.
+        let centos = |text: &str| detect(&os(text), None, Hints::default());
+        let c7 = centos("ID=centos\nVERSION_ID=7\n").unwrap();
+        assert_eq!(
+            (
+                c7.ecosystem.as_str(),
+                c7.namespace.as_str(),
+                c7.binary_names
+            ),
+            ("Red Hat:enterprise_linux:7::server", "centos", true)
+        );
+        assert!(c7.also.is_empty());
+        assert_eq!(c7.final_builds.as_deref(), Some("7"));
+        assert_eq!(c7.borrowed_opens, [red_hat_vex("7")]);
+        let c8 = centos("ID=centos\nVERSION_ID=8\nPRETTY_NAME=\"CentOS Linux 8\"\n").unwrap();
+        assert_eq!(
+            c8.also,
+            [
+                "Red Hat:enterprise_linux:8::appstream",
+                "Red Hat:enterprise_linux:8::crb"
+            ]
+        );
+        // CentOS Stream is not a RHEL rebuild: a gap that says why.
+        for text in [
+            "ID=centos\nVERSION_ID=8\nPRETTY_NAME=\"CentOS Stream 8\"\n",
+            "ID=centos\nVERSION_ID=9\n",
+        ] {
+            assert!(
+                centos(text).unwrap_err().contains("CentOS Stream"),
+                "{text}"
+            );
+        }
         assert_eq!(
             family_of("Red Hat:enterprise_linux:9::baseos"),
             Some(Family::Rpm)

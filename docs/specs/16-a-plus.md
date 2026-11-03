@@ -648,7 +648,26 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     `archives.fedoraproject.org` on a 404. Releases 41 and later (older ones ship xz, and are
     past their end of life), so Fedora 40 and older stay a gap. Validated on a Fedora 43 GA
     image: 26 of 26 advisories and 51 of 51 advisory and package pairs equal to `dnf
-    updateinfo list --security`; a current Fedora 41 image 0 and 0. CentOS stays a gap.
+    updateinfo list --security`; a current Fedora 41 image 0 and 0.
+    **Status: CentOS Linux implemented 2026-11-03, unreleased.** CentOS 6, 7 and 8 match Red
+    Hat's records for the release they rebuilt (6 and 7 `server`, 8 BaseOS, AppStream, CRB)
+    plus Red Hat's VEX opens (as the rebuilds borrow them), binaries by name, namespace
+    `centos`. osv.dev's Red Hat records have no issue date (`published` is the import date),
+    so a cut-off date cannot tell which fixes CentOS got; instead `crates/os/data/centos.tsv`
+    (21,359 rows, 840 KB, from the final vault.centos.org repositories by
+    `scripts/update-centos.py`, which checks its rpm comparator against the 800 golden pairs
+    first) gives the highest build per package and module stream, and a fix above it is
+    "fixed only in another line" (`fleetreach_os::centos`). **Found**: CentOS rebranded some
+    builds (`dhcp 4.2.5-83.el7.centos.2` for `83.el7_9.2`, firefox, grub2, about 500 binaries),
+    which rpm orders below Red Hat's fix: a false positive on each, fixed by comparing such a
+    build against Red Hat's fix rewritten as `.el<N>.centos`. Validated against Grype
+    v0.121.1: CentOS 7 (2020 image) 12,619 common pairs, 0 status differences; Grype-only are
+    a 4.18 `kernel-core` Grype matches to other kernels' opens and Red Hat's vim-minimal "not
+    affected" (as on UBI 8); extras are newer VEX opens. CentOS 8 (8.4) 1,286 common, 557
+    status differences, all Red Hat fixes after CentOS 8's end that CentOS never built (Grype
+    calls them fixed). Every fixed status on both images checked independently against the
+    Red Hat fix versions and the snapshot (296 of 296). CentOS Stream stays a gap (built
+    ahead of RHEL).
     **Status: Bottlerocket implemented 2026-11-03, unreleased.** Feed
     `advisories.bottlerocket.aws/updateinfo.xml.gz` (1,841 advisories, 190 KB) converted by the
     updateinfo converter into one `Bottlerocket` ecosystem; packages from
