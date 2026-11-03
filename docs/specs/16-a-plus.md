@@ -562,8 +562,14 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     over 619,997 dpkg and 619,999 apk pairs from the exports (apk validity agrees on all
     42,587 distinct versions). Installed sets equal `dpkg-query -W` / `apk info -v` on 8 real
     images, and findings equal an independent real-tool evaluation of the exports on 11.
-    Still open: fuzzing the layer merge and the language records some hardened-image
-    exports carry (`Echo:PyPI`, `Root:npm`).
+    Still open: the language records some hardened-image exports carry (`Echo:PyPI`,
+    `Root:npm`).
+    **Fuzzing done 2026-11-03**: cargo-fuzz targets `rpmdb` (SQLite with its log, Berkeley
+    DB, NDB, seeded with the test databases), `image_layers` (a program of colliding paths,
+    link cycles and whiteouts over several layers, plus raw tar bytes), `jar` and
+    `os_packages`, ten minutes each in a Linux container: 26.4 million runs, no panic, hang
+    or memory blow-up. All four run in CI's short fuzz job. They do not build on this Mac
+    (no C++ headers in the Command Line Tools for libFuzzer), so run them in `rust:1.90`.
     **Java archives and gems in images: implemented 2026-11-03, unreleased**
     (`fleetreach_os::jar`). Evidence in order: `pom.properties`, file name with the group
     settled against the advisory data, OSGi manifest; anything else is a coverage gap. On

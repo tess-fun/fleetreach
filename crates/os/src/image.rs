@@ -296,6 +296,23 @@ impl ImageFs {
         fs
     }
 
+    /// The view of `layers`, bottom first, each a tar stream as a layer blob holds it (plain,
+    /// gzip or zstd), with no manifest or digest around them.
+    ///
+    /// # Errors
+    ///
+    /// A layer that is corrupt or does not decompress.
+    pub fn from_layers(layers: &[&[u8]], want: &dyn Fn(&str) -> bool) -> io::Result<ImageFs> {
+        let mut fs = ImageFs {
+            layers: layers.len(),
+            ..ImageFs::default()
+        };
+        for (i, layer) in layers.iter().enumerate() {
+            fs.apply_layer(i, decompress(*layer)?, want)?;
+        }
+        Ok(fs)
+    }
+
     /// Read one layer's tar stream into the view as layer `layer`.
     fn apply_layer<S: Source>(
         &mut self,
@@ -913,11 +930,8 @@ mod tests {
     }
 
     fn layered(layers: &[Vec<u8>]) -> ImageFs {
-        let mut fs = ImageFs::default();
-        for (i, l) in layers.iter().enumerate() {
-            fs.apply_layer(i, l.as_slice(), &all).unwrap();
-        }
-        fs
+        let layers: Vec<&[u8]> = layers.iter().map(Vec::as_slice).collect();
+        ImageFs::from_layers(&layers, &all).unwrap()
     }
 
     #[test]

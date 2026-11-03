@@ -86,6 +86,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arraydeque"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d902e3d592a523def97af8f317b08ce16b7ab854c1985a0c671e6f15cebc236"
+
+[[package]]
 name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -172,6 +178,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "block-buffer"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2f6c7dbe95a6ed67ad9f18e57daf93a2f034c524b99fd2b76d18fdfeb6660aa"
+dependencies = [
+ "hybrid-array",
+]
+
+[[package]]
 name = "borsh"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -211,6 +226,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
+name = "bzip2-rs"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "beeb59e7e4c811ab37cc73680c798c7a5da77fc9989c62b09138e31ee740f735"
+dependencies = [
+ "crc32fast",
+ "tinyvec",
+]
+
+[[package]]
 name = "camino"
 version = "1.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -225,7 +250,7 @@ dependencies = [
  "petgraph",
  "semver",
  "serde",
- "toml 1.1.8+spec-1.1.0",
+ "toml",
  "url",
 ]
 
@@ -340,9 +365,9 @@ dependencies = [
 
 [[package]]
 name = "comfy-table"
-version = "7.2.2"
+version = "8.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "958c5d6ecf1f214b4c2bbbbf6ab9523a864bd136dcf71a7e8904799acfe1ad47"
+checksum = "b96a46ad395a5e00676eddaca4a45ed78b29c08be5a878d35e4b071c625637dd"
 dependencies = [
  "crossterm",
  "unicode-segmentation",
@@ -365,6 +390,12 @@ name = "compression-core"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e8ccc4ea9f6acc32d102c0f6d471d11d913ad15f20c04de743374861fa1d414"
+
+[[package]]
+name = "const-oid"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 
 [[package]]
 name = "core-foundation"
@@ -483,6 +514,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crypto-common"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce6e4c961d6cd6c9a86db418387425e8bdeaf05b3c8bc1411e6dca4c252f1453"
+dependencies = [
+ "hybrid-array",
+]
+
+[[package]]
 name = "cvss"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -490,6 +530,12 @@ checksum = "f7fb220d3ce1b565af39cee5b89e47fd8dd1dab162900ee4363c8ee4169ee8a2"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "cvss"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11147ff68f855ef1b74c07e9b64489d0967baf41047e82505e13f0a96cf41360"
 
 [[package]]
 name = "defmt"
@@ -546,8 +592,19 @@ version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
- "block-buffer",
- "crypto-common",
+ "block-buffer 0.10.4",
+ "crypto-common 0.1.7",
+]
+
+[[package]]
+name = "digest"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1dd6dbb5841937940781866fa1281a1ff7bd3bf827091440879f9994983d5c2"
+dependencies = [
+ "block-buffer 0.12.1",
+ "const-oid",
+ "crypto-common 0.2.2",
 ]
 
 [[package]]
@@ -665,10 +722,13 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-cli"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "anyhow",
+ "bzip2-rs",
  "clap",
+ "comfy-table",
+ "flate2",
  "fleetreach-core",
  "fleetreach-correlate",
  "fleetreach-ghactions",
@@ -678,6 +738,7 @@ dependencies = [
  "fleetreach-maven",
  "fleetreach-npm",
  "fleetreach-nuget",
+ "fleetreach-os",
  "fleetreach-packagist",
  "fleetreach-pypi",
  "fleetreach-reach",
@@ -686,20 +747,26 @@ dependencies = [
  "fleetreach-scan",
  "fleetreach-swift",
  "rayon",
+ "roxmltree",
+ "ruzstd",
  "serde",
  "serde_json",
  "sha2",
+ "spdx",
+ "tar",
+ "tempfile",
  "thiserror",
  "time",
- "toml 0.9.12+spec-1.1.0",
+ "toml",
  "walkdir",
+ "zip",
 ]
 
 [[package]]
 name = "fleetreach-core"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
- "cvss",
+ "cvss 3.0.0",
  "rayon",
  "semver",
  "serde",
@@ -710,7 +777,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-correlate"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
 ]
@@ -721,13 +788,14 @@ version = "0.0.0"
 dependencies = [
  "fleetreach-cli",
  "fleetreach-go",
+ "fleetreach-os",
  "libfuzzer-sys",
  "rustsec",
 ]
 
 [[package]]
 name = "fleetreach-ghactions"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "serde",
@@ -738,7 +806,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-go"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "fleetreach-reach",
@@ -746,11 +814,12 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
+ "zip",
 ]
 
 [[package]]
 name = "fleetreach-hex"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "serde",
@@ -760,20 +829,21 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-julia"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "serde",
  "serde_json",
  "thiserror",
- "toml 0.9.12+spec-1.1.0",
+ "toml",
 ]
 
 [[package]]
 name = "fleetreach-maven"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
+ "roxmltree",
  "serde",
  "serde_json",
  "thiserror",
@@ -781,9 +851,11 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-npm"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
+ "saphyr",
+ "saphyr-parser",
  "serde",
  "serde_json",
  "thiserror",
@@ -791,17 +863,36 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-nuget"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
+ "roxmltree",
  "serde",
  "serde_json",
  "thiserror",
 ]
 
 [[package]]
+name = "fleetreach-os"
+version = "1.5.0"
+dependencies = [
+ "bzip2-rs",
+ "flate2",
+ "fleetreach-core",
+ "rayon",
+ "roxmltree",
+ "ruzstd",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "walkdir",
+ "zip",
+]
+
+[[package]]
 name = "fleetreach-packagist"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "serde",
@@ -811,19 +902,19 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-pypi"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "pep440_rs",
  "serde",
  "serde_json",
  "thiserror",
- "toml 0.9.12+spec-1.1.0",
+ "toml",
 ]
 
 [[package]]
 name = "fleetreach-reach"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -834,18 +925,19 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-report"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "comfy-table",
  "fleetreach-core",
  "serde",
  "serde_json",
  "sha2",
+ "spdx",
 ]
 
 [[package]]
 name = "fleetreach-rubygems"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "serde",
@@ -855,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-scan"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "rustsec",
@@ -865,7 +957,7 @@ dependencies = [
 
 [[package]]
 name = "fleetreach-swift"
-version = "1.0.1"
+version = "1.5.0"
 dependencies = [
  "fleetreach-core",
  "serde",
@@ -1845,6 +1937,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashlink"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a596f1b20ed2cc5ecac41a164aaebc7258057060f06c0cf7a2ba3991ee7990fb"
+dependencies = [
+ "hashbrown 0.17.1",
+]
+
+[[package]]
 name = "heapless"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1907,6 +2008,15 @@ name = "httparse"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
+
+[[package]]
+name = "hybrid-array"
+version = "0.4.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27f864f10dfb56725ce5ce5472bc52252c8f93a4ab86327122cebf62c5f59a17"
+dependencies = [
+ "typenum",
+]
 
 [[package]]
 name = "hyper"
@@ -2382,6 +2492,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "521739c6d2bac4aa25192232afe6841231376b2b26d4d9fae5ecf8ca5772e441"
 
 [[package]]
+name = "num-traits"
+version = "0.2.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2398,6 +2517,15 @@ name = "openssl-probe"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
+
+[[package]]
+name = "ordered-float"
+version = "5.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f59006ce1e204c30956638535b74d317bca99477b9356dfaec54c37f6f600ab"
+dependencies = [
+ "num-traits",
+]
 
 [[package]]
 name = "parking_lot"
@@ -2709,6 +2837,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "roxmltree"
+version = "0.21.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9da7f59328b09405b181fee1018925fad50f157afb43c0c0f5c522c256dd5907"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "rustc-hash"
 version = "2.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2824,7 +2961,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c60fd662f245fd3d6ae7ee2371f59042c4e9dc00a02183c0b1735f4da2aa5ed"
 dependencies = [
  "cargo-lock",
- "cvss",
+ "cvss 2.2.0",
  "fs-err",
  "gix",
  "home",
@@ -2835,7 +2972,7 @@ dependencies = [
  "tame-index",
  "thiserror",
  "time",
- "toml 1.1.8+spec-1.1.0",
+ "toml",
  "url",
 ]
 
@@ -2846,12 +2983,43 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
+name = "ruzstd"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69e4ce4a039f42bf25920b95667e4d789e98749ab11bbb8d2c2936f788421bb5"
+dependencies = [
+ "twox-hash",
+]
+
+[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "saphyr"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3aa37a62b2a28868277e83b6f651dc9581751db73d1cb51132c73c0b4ec7f70a"
+dependencies = [
+ "hashlink",
+ "ordered-float",
+ "saphyr-parser",
+ "thiserror",
+]
+
+[[package]]
+name = "saphyr-parser"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48cf5a82d41247a625f040af08e91008fec945bce3b0bffba992c44af092caa2"
+dependencies = [
+ "arraydeque",
+ "thiserror",
 ]
 
 [[package]]
@@ -2962,7 +3130,7 @@ checksum = "a978451301f4db1d02937a4ab3ccce137717b81826e79b7d49ffe3244a13c3b8"
 dependencies = [
  "cfg-if",
  "cpufeatures 0.2.17",
- "digest",
+ "digest 0.10.7",
 ]
 
 [[package]]
@@ -2971,19 +3139,19 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "89f599ac0c323ebb1c6082821a54962b839832b03984598375bff3975b804423"
 dependencies = [
- "digest",
+ "digest 0.10.7",
  "sha1",
 ]
 
 [[package]]
 name = "sha2"
-version = "0.10.9"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
+checksum = "47d7069beb7d6ac7b9acd1039986e73443f24234f41074da099d6f994ac9ad19"
 dependencies = [
  "cfg-if",
- "cpufeatures 0.2.17",
- "digest",
+ "cpufeatures 0.3.1",
+ "digest 0.11.3",
 ]
 
 [[package]]
@@ -3050,6 +3218,15 @@ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "spdx"
+version = "0.13.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "646c5a367da914e3babcb9cd8e91c37ccaac42325b8f86f036513ad103f2a716"
+dependencies = [
+ "smallvec",
 ]
 
 [[package]]
@@ -3140,6 +3317,16 @@ dependencies = [
  "tokio",
  "toml-span",
  "twox-hash",
+]
+
+[[package]]
+name = "tar"
+version = "0.4.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6221d9a6003c78398e3b239969f352578258df48c8eb051caadae0015bc840"
+dependencies = [
+ "filetime",
+ "libc",
 ]
 
 [[package]]
@@ -3261,21 +3448,6 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.9.12+spec-1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf92845e79fc2e2def6a5d828f0801e29a2f8acc037becc5ab08595c7d5e9863"
-dependencies = [
- "indexmap",
- "serde_core",
- "serde_spanned",
- "toml_datetime 0.7.5+spec-1.1.0",
- "toml_parser",
- "toml_writer",
- "winnow 0.7.15",
-]
-
-[[package]]
-name = "toml"
 version = "1.1.8+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20489e00e4d8741d6be680764cc12e270655e375a20d1011e844a9c3379e678d"
@@ -3283,10 +3455,10 @@ dependencies = [
  "indexmap",
  "serde_core",
  "serde_spanned",
- "toml_datetime 1.1.2+spec-1.1.0",
+ "toml_datetime",
  "toml_parser",
  "toml_writer",
- "winnow 1.0.4",
+ "winnow",
 ]
 
 [[package]]
@@ -3296,15 +3468,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac7807845e399906fbe4e7f57369d284d5bf102836423073290b7c01948dbda3"
 dependencies = [
  "smallvec",
-]
-
-[[package]]
-name = "toml_datetime"
-version = "0.7.5+spec-1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92e1cfed4a3038bc5a127e35a2d360f145e1f4b971b551a2ba5fd7aedf7e1347"
-dependencies = [
- "serde_core",
 ]
 
 [[package]]
@@ -3322,7 +3485,7 @@ version = "1.1.5+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c"
 dependencies = [
- "winnow 1.0.4",
+ "winnow",
 ]
 
 [[package]]
@@ -3737,12 +3900,6 @@ name = "windows_x86_64_msvc"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
-
-[[package]]
-name = "winnow"
-version = "0.7.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
 
 [[package]]
 name = "winnow"

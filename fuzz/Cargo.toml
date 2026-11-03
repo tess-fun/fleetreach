@@ -14,6 +14,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 fleetreach-cli = { path = "../crates/cli" }
 fleetreach-go = { path = "../crates/go" }
+fleetreach-os = { path = "../crates/os" }
 rustsec = "=0.33.0"
 
 [[bin]]
@@ -33,6 +34,34 @@ bench = false
 [[bin]]
 name = "go_mod"
 path = "fuzz_targets/go_mod.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "rpmdb"
+path = "fuzz_targets/rpmdb.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "image_layers"
+path = "fuzz_targets/image_layers.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "jar"
+path = "fuzz_targets/jar.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "os_packages"
+path = "fuzz_targets/os_packages.rs"
 test = false
 doc = false
 bench = false

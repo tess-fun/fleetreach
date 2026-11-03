@@ -162,6 +162,14 @@ jobs:
         run: cargo +nightly fuzz run fleet_toml -- -max_total_time=30
       - name: fuzz lockfile
         run: cargo +nightly fuzz run lockfile -- -max_total_time=30
+      - name: fuzz rpm databases
+        run: cargo +nightly fuzz run rpmdb -- -max_total_time=30
+      - name: fuzz image layers
+        run: cargo +nightly fuzz run image_layers -- -max_total_time=30
+      - name: fuzz Java archives
+        run: cargo +nightly fuzz run jar -- -max_total_time=30
+      - name: fuzz OS package databases
+        run: cargo +nightly fuzz run os_packages -- -max_total_time=30
 
   reach-driver:
     name: reach-driver (static reachability + soundness corpus)
