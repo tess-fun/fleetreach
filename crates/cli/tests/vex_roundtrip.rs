@@ -52,6 +52,7 @@ fn empty_report() -> fleetreach_core::FleetReport {
             generated_at: "t".into(),
             osv: Vec::new(),
             sources: Vec::new(),
+            images: Vec::new(),
         },
         summary: fleetreach_core::Summary {
             repos_scanned: 1,

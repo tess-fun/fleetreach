@@ -241,7 +241,7 @@ pub(crate) struct ScanArgs {
     #[arg(
         long = "image",
         value_name = "PATH",
-        help = "also scan this container image: a `docker save` or OCI-layout tarball, an OCI-layout directory, or a root filesystem (directory or tarball). Repeatable; its id is the file name. Its OS packages are matched against the osv.dev distro export for its release (synced per distro, or from --osv-dir), its lockfiles and installed Python and npm packages with the language matchers. With only --image, no fleet.toml is needed."
+        help = "also scan this container image: a `docker save` or OCI-layout tarball, an OCI-layout directory, a root filesystem (directory or tarball), or `docker://<reference>` to pull one from a registry (network build; a digest already pulled also works with --offline). Repeatable; its id is the file name. Its OS packages are matched against the osv.dev distro export for its release (synced per distro, or from --osv-dir), its lockfiles and installed Python and npm packages with the language matchers. With only --image, no fleet.toml is needed."
     )]
     images: Vec<PathBuf>,
     #[arg(
@@ -494,7 +494,7 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         return Ok(run_why(&config, package));
     }
     let db = advisory_db(args)?;
-    let images = crate::images::prepare_all(&config.images);
+    let images = crate::images::prepare_all(&config.images, args.offline);
     let feeds = Feeds::resolve(args, &config, &images)?;
     let mut scan = scan_fleet_with(
         &db,
@@ -621,13 +621,18 @@ fn load_fleet(args: &ScanArgs) -> Result<(Config, sources::Materialized), u8> {
     }
     .map_err(|e| fail(&e.to_string()))?;
     for path in &args.images {
-        if !path.exists() {
+        let reference = path.to_str().and_then(|p| p.strip_prefix("docker://"));
+        if reference.is_none() && !path.exists() {
             return Err(fail(&format!(
                 "--image {}: no such file or directory",
                 path.display()
             )));
         }
-        let image = crate::images::from_arg(path);
+        let image = match reference {
+            Some(reference) => crate::images::from_reference(reference)
+                .map_err(|e| fail(&format!("--image: {e}")))?,
+            None => crate::images::from_arg(path),
+        };
         let taken = config.repos.iter().any(|r| r.id == image.id)
             || config.images.iter().any(|i| i.id == image.id);
         if taken {
@@ -1009,6 +1014,7 @@ fn assemble_report(
         )
         .collect();
     provenance.sources = materialized.provenance.clone();
+    provenance.images.clone_from(&scan.pulled);
     let mut suppressions: Vec<Suppression> = config
         .ignores
         .iter()

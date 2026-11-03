@@ -801,7 +801,19 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     (the other 29 are jars inside `.hpi` plugins in layer 5 that Trivy does not read; it lists
     the same names from `jenkins-plugin-manager.jar` in layer 7). Two BuildKit images on
     `tomcat:9.0.50-jdk11` rolled up as one base of 10 layers, 123 findings counted once.
-    Still open in phase 3: registry pull, VEX from OCI referrers, the published differential.
+    **Status: registry pull implemented 2026-11-03, unreleased** (`crates/cli/src/registry.rs`,
+    `--image docker://<ref>`, `ref` in `[[image]]`). Pulls into a content-addressed cache
+    (`~/.cache/fleetreach/images`, layouts as hard links) read by the existing OCI layout code,
+    so a pulled image and a saved one take one path. A tag's digest is computed from the
+    manifest bytes, never taken from the header, and recorded in `provenance.images`. Layers
+    must be tar media types, so a Helm chart or other artifact is an error, not an empty
+    image. Logins: `credHelpers`, `auths`, `credsStore`, helpers run with no shell and a checked
+    name. A login goes only to the registry and a token realm on its domain, over TLS; redirects
+    are followed by hand, dropping `Authorization` off the registry's host and refusing
+    plain HTTP (localhost excepted). Tested on Docker Hub, gcr.io, ghcr.io, quay.io and
+    mcr.microsoft.com anonymously and a local `registry:2` with a Basic login; the same image
+    pulled and `docker save`d gives 23 of 23 identical findings with identical layers.
+    Still open in phase 3: VEX from OCI referrers, the published differential.
     A base with no declared name shows its distribution and fingerprint, as a config does not
     say which tag it came from.
 - **Effort**: XL. **Release**: 1.6.0, 1.7.0, 1.8.0. **Depends on**: per-distro sync (row 11),

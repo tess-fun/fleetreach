@@ -29,6 +29,7 @@ fn provenance() -> Provenance {
         generated_at: "2026-06-28T00:00:00Z".into(),
         osv: Vec::new(),
         sources: Vec::new(),
+        images: Vec::new(),
     }
 }
 
@@ -93,6 +94,7 @@ fn import_graph_resolves_direct_transitive_and_prune() {
     // and node_modules but imported by nobody.
     let scan = ScanData {
         images: Vec::new(),
+        pulled: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![
@@ -149,6 +151,7 @@ fn script_run_tools_are_entry_points() {
     // so it and what it imports are reachable, and prune must not mark them NotReachable.
     let scan = ScanData {
         images: Vec::new(),
+        pulled: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![

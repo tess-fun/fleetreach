@@ -250,6 +250,36 @@ An archive none of these can place is a coverage gap, never a guess. Fleetreach 
 checksum index of Maven Central, so a jar that was renamed and has no metadata stays a gap
 where a tool with such an index could name it.
 
+## Images in a registry
+
+A network build pulls images itself, with no Docker daemon:
+
+```bash
+fleetreach scan --image docker://ghcr.io/acme/api@sha256:5bd5ab35814f86783561603ebb35d5d5d99006dcdcd5c3f828ea1afb4c12d159
+```
+
+```toml
+[[image]]
+id = "api"
+ref = "ghcr.io/acme/api:1.4"
+platform = "linux/arm64"
+```
+
+References read as Docker reads them, so `debian:12` is on Docker Hub. A multi-platform image
+is scanned for `platform`, or `linux/amd64` when none is given. Prefer a digest: a tag can
+move, so its result holds only for the digest the report records under `provenance.images`.
+
+Every manifest and blob is checked against its digest, and anything that does not match is an
+errored target. Blobs are kept in `~/.cache/fleetreach/images`, once however many images share
+them, and a digest pulled before scans with `--offline` or in a build without network support.
+A tag needs the registry, so `--offline` refuses one. Nothing removes old blobs: delete the
+directory to reclaim the space.
+
+Logins come from Docker's config (`$DOCKER_CONFIG/config.json` or `~/.docker/config.json`):
+`credHelpers`, then `auths`, then `credsStore`, running `docker-credential-<name>` as Docker does.
+A login goes to the registry and to a token service on the registry's own domain, over TLS.
+Redirects to blob storage never carry it, and plain HTTP is refused except on this machine.
+
 ## Layers and base images
 
 Each finding in an image carries a `layer` in the JSON report: its position, its digest, the

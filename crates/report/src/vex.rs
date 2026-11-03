@@ -657,6 +657,7 @@ mod tests {
                 generated_at: "2026-06-25T12:00:00Z".to_string(),
                 osv: Vec::new(),
                 sources: Vec::new(),
+                images: Vec::new(),
             },
             summary: Summary {
                 repos_scanned: 1,

@@ -26,6 +26,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   language matchers, skipping files an OS package owns. Fail-closed: an unreadable image or a
   missing distro export is an errored target, and an unknown distribution or release or an
   unreadable package database is a coverage gap. New crate `fleetreach-os`.
+- **Registry pull** (spec 16, row 10, phase 3; network build). `--image docker://<reference>`
+  and `ref = "..."` in `[[image]]` pull from any OCI registry, with logins from Docker's config
+  and credential helpers. The manifest, config and every layer are checked against their
+  digests, a tag's digest is computed here and recorded in the report's provenance, and blobs
+  are cached by digest, so a digest pulled before also scans with `--offline`. Logins go only
+  to the registry and a token service on its domain, over TLS.
 - **Image layers and base images** (spec 16, row 10, phase 3). Every finding in an image names
   the layer that put the package there, with its digest and build step, and whether it belongs
   to the base image. Where several images share a base, the report's `base_images` and the

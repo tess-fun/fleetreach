@@ -38,7 +38,7 @@
 //! #         schema_version: 1,
 //! #         provenance: Provenance { tool_version: "0".into(), rustsec_crate_version: "0".into(),
 //! #             db_commit: None, db_timestamp: None, host_os: "linux".into(),
-//! #             host_arch: "x86_64".into(), generated_at: "t".into(), osv: vec![], sources: vec![] },
+//! #             host_arch: "x86_64".into(), generated_at: "t".into(), osv: vec![], sources: vec![], images: vec![] },
 //! #         summary: Summary { repos_scanned: 1, repos_errored: 0, vuln_count: 1, warn_count: 0,
 //! #             max_severity: Severity::High, stale_ignores: vec![] },
 //! #         vulnerabilities: vec![vuln], warnings: vec![], outcomes: vec![], coverage: vec![],

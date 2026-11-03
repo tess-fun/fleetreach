@@ -29,6 +29,7 @@ fn provenance() -> Provenance {
         generated_at: "2026-10-30T00:00:00Z".into(),
         osv: Vec::new(),
         sources: Vec::new(),
+        images: Vec::new(),
     }
 }
 
@@ -82,6 +83,7 @@ fn config() -> Config {
 fn assessed(findings: Vec<VulnFinding>) -> fleetreach_core::FleetReport {
     let scan = ScanData {
         images: Vec::new(),
+        pulled: Vec::new(),
         vulnerabilities: findings,
         warnings: vec![],
         outcomes: vec![],

@@ -162,5 +162,6 @@ pub(crate) fn build_provenance(meta: &DatabaseMeta) -> Provenance {
         generated_at: crate::history::format_time(crate::history::now()),
         osv: Vec::new(),
         sources: Vec::new(),
+        images: Vec::new(),
     }
 }

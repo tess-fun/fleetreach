@@ -20,6 +20,7 @@ fn provenance() -> Provenance {
         generated_at: "2026-06-24T00:00:00Z".into(),
         osv: Vec::new(),
         sources: Vec::new(),
+        images: Vec::new(),
     }
 }
 

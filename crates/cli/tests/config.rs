@@ -515,3 +515,24 @@ fn bad_images_are_rejected_up_front() {
     let unknown = parse("[[image]]\nid = \"a\"\npath = \"repos/repo-vuln\"\ntag = \"x\"\n");
     assert!(matches!(unknown, Err(ConfigError::Parse { .. })));
 }
+
+#[test]
+fn an_image_is_a_path_or_a_reference() {
+    let dir = std::path::Path::new("/tmp");
+    let load = |body: &str| Config::from_str(body, dir, "fleet.toml");
+    let config = load("[[image]]\nid = \"a\"\nref = \"ghcr.io/o/app:1\"\n").unwrap();
+    assert_eq!(
+        config.images[0].reference.as_deref(),
+        Some("ghcr.io/o/app:1")
+    );
+    for body in [
+        "[[image]]\nid = \"a\"\n",
+        "[[image]]\nid = \"a\"\npath = \".\"\nref = \"b\"\n",
+        "[[image]]\nid = \"a\"\nref = \"Not Valid\"\n",
+    ] {
+        assert!(
+            matches!(load(body), Err(ConfigError::InvalidImage { .. })),
+            "{body}"
+        );
+    }
+}

@@ -26,6 +26,7 @@ fn provenance() -> Provenance {
         generated_at: "2026-06-24T00:00:00Z".into(),
         osv: Vec::new(),
         sources: Vec::new(),
+        images: Vec::new(),
     }
 }
 
@@ -124,7 +125,7 @@ proptest! {
         warns in prop::collection::vec(arb_warn(), 0..15),
         outcomes in prop::collection::vec(arb_outcome(), 0..8),
     ) {
-        let make = || ScanData { images: Vec::new(), skipped_unparseable: 0, coverage: Vec::new(),
+        let make = || ScanData { images: Vec::new(), pulled: Vec::new(), skipped_unparseable: 0, coverage: Vec::new(),
             vulnerabilities: vulns.clone(),
             warnings: warns.clone(),
             outcomes: outcomes.clone(),

@@ -22,6 +22,7 @@ fn provenance() -> Provenance {
         generated_at: "2026-06-24T00:00:00Z".into(),
         osv: Vec::new(),
         sources: Vec::new(),
+        images: Vec::new(),
     }
 }
 
@@ -57,6 +58,7 @@ fn vuln(id: &str) -> VulnFinding {
 fn report_with(ids: &[&str]) -> fleetreach_core::FleetReport {
     let scan = ScanData {
         images: Vec::new(),
+        pulled: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: ids.iter().map(|id| vuln(id)).collect(),
@@ -127,6 +129,7 @@ fn drop_phantom_removes_unbuilt_keeps_built_and_unknown() {
 
     let scan = ScanData {
         images: Vec::new(),
+        pulled: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![

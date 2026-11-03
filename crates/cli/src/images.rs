@@ -25,8 +25,10 @@ const LANG_DEPTH: usize = 32;
 /// One image, opened (or why it could not be).
 pub(crate) struct Prepared {
     pub(crate) id: RepoId,
-    /// The image path as given, for messages.
+    /// The image path or reference as given, for messages.
     pub(crate) source: String,
+    /// The manifest digest of an image pulled from a registry.
+    pub(crate) digest: Option<String>,
     pub(crate) opened: Result<Opened, String>,
 }
 
@@ -151,25 +153,39 @@ impl Prepared {
 }
 
 /// Open every image, in parallel, in config order.
-pub(crate) fn prepare_all(images: &[Image]) -> Vec<Prepared> {
-    images.par_iter().map(prepare).collect()
+pub(crate) fn prepare_all(images: &[Image], offline: bool) -> Vec<Prepared> {
+    images.par_iter().map(|i| prepare(i, offline)).collect()
 }
 
-fn prepare(image: &Image) -> Prepared {
+fn prepare(image: &Image, offline: bool) -> Prepared {
+    let (source, pulled) = match &image.reference {
+        Some(reference) => (
+            reference.clone(),
+            crate::registry::pull(reference, image.platform.as_deref(), offline).map(Some),
+        ),
+        None => (image.path.display().to_string(), Ok(None)),
+    };
+    let digest = pulled
+        .as_ref()
+        .ok()
+        .and_then(|p| p.as_ref())
+        .map(|p| p.digest.clone());
     Prepared {
         id: image.id.clone(),
-        source: image.path.display().to_string(),
-        opened: open(image),
+        source,
+        digest,
+        opened: pulled.and_then(|p| open(image, p.as_ref())),
     }
 }
 
-fn open(image: &Image) -> Result<Opened, String> {
-    let fs = fleetreach_os::open_image(
-        &image.path,
-        &fleetreach_os::lang::wanted,
-        image.platform.as_deref(),
-    )
-    .map_err(|e| e.to_string())?;
+fn open(image: &Image, pulled: Option<&crate::registry::Pulled>) -> Result<Opened, String> {
+    // A pull already chose the platform: its layout holds the one image.
+    let (path, platform) = match pulled {
+        Some(p) => (p.layout.as_path(), None),
+        None => (image.path.as_path(), image.platform.as_deref()),
+    };
+    let fs = fleetreach_os::open_image(path, &fleetreach_os::lang::wanted, platform)
+        .map_err(|e| e.to_string())?;
     let inspection = fleetreach_os::inspect(&fs, image.distro.as_deref());
     let lang = fleetreach_os::lang::collect(&fs, &inspection.inventory.owned);
     let files = tempfile::Builder::new()
@@ -279,9 +295,22 @@ pub(crate) fn from_arg(path: &Path) -> Image {
     Image {
         id: RepoId(id.to_string()),
         path: path.to_path_buf(),
+        reference: None,
         platform: None,
         distro: None,
     }
+}
+
+/// The `[[image]]` of `--image docker://<reference>`; its id is the reference as written.
+pub(crate) fn from_reference(reference: &str) -> Result<Image, String> {
+    crate::registry::Reference::parse(reference)?;
+    Ok(Image {
+        id: RepoId(reference.to_string()),
+        path: PathBuf::new(),
+        reference: Some(reference.to_string()),
+        platform: None,
+        distro: None,
+    })
 }
 
 #[cfg(test)]

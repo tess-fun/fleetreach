@@ -51,6 +51,8 @@ pub struct ScanData {
     pub coverage: Vec<CoverageGap>,
     /// The base of each image that has a recognizable one.
     pub images: Vec<fleetreach_core::ImageBase>,
+    /// The images pulled from registries.
+    pub pulled: Vec<fleetreach_core::ImagePull>,
 }
 
 /// An installed toolchain to additionally scan against `Collection::Rust`.
@@ -356,6 +358,14 @@ pub(crate) fn scan_fleet_with(
             )
         })
         .collect();
+    data.pulled
+        .extend(images.prepared.iter().filter_map(|image| {
+            Some(fleetreach_core::ImagePull {
+                repo: image.id.clone(),
+                reference: image.source.clone(),
+                digest: image.digest.clone()?,
+            })
+        }));
     data.images
         .extend(images.prepared.iter().filter_map(|image| {
             let opened = image.opened.as_ref().ok()?;

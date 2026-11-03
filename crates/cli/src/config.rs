@@ -155,7 +155,10 @@ struct RawImage {
     id: String,
     /// A `docker save` or OCI-layout tarball, an OCI-layout directory, or a root filesystem
     /// (a directory, or a tarball of one), relative to the config file.
-    path: String,
+    path: Option<String>,
+    /// Or an image in a registry (`ghcr.io/org/app@sha256:...`), pulled for the scan.
+    #[serde(rename = "ref")]
+    reference: Option<String>,
     /// Which image of a multi-platform OCI index to scan (`linux/arm64`).
     platform: Option<String>,
     /// The osv.dev ecosystem to match against (`Debian:12`), instead of `/etc/os-release`.
@@ -488,8 +491,10 @@ pub struct Repo {
 pub struct Image {
     /// Shares the repo id namespace: findings and outcomes carry it as their repo.
     pub id: RepoId,
-    /// Resolved against the config file's directory; validated to exist.
+    /// Resolved against the config file's directory; validated to exist. Empty for `reference`.
     pub path: PathBuf,
+    /// An image in a registry, pulled for the scan.
+    pub reference: Option<String>,
     pub platform: Option<String>,
     pub distro: Option<String>,
 }
@@ -675,13 +680,33 @@ impl Config {
             if !seen.insert(i.id.clone()) {
                 return Err(ConfigError::DuplicateRepoId(i.id));
             }
-            let resolved = base_dir.join(&i.path);
-            if !resolved.exists() {
-                return Err(ConfigError::ImageMissing {
-                    image: i.id,
-                    path: resolved.display().to_string(),
-                });
-            }
+            let resolved = match (&i.path, &i.reference) {
+                (Some(path), None) => {
+                    let resolved = base_dir.join(path);
+                    if !resolved.exists() {
+                        return Err(ConfigError::ImageMissing {
+                            image: i.id,
+                            path: resolved.display().to_string(),
+                        });
+                    }
+                    resolved
+                }
+                (None, Some(reference)) => {
+                    if let Err(message) = crate::registry::Reference::parse(reference) {
+                        return Err(ConfigError::InvalidImage {
+                            image: i.id,
+                            message,
+                        });
+                    }
+                    PathBuf::new()
+                }
+                _ => {
+                    return Err(ConfigError::InvalidImage {
+                        image: i.id,
+                        message: "give exactly one of `path` and `ref`".to_string(),
+                    })
+                }
+            };
             if let Some(platform) = &i.platform {
                 if platform.split('/').count() < 2 || platform.split('/').any(str::is_empty) {
                     return Err(ConfigError::InvalidImage {
@@ -715,6 +740,7 @@ impl Config {
             images.push(Image {
                 id: RepoId(i.id),
                 path: resolved,
+                reference: i.reference,
                 platform: i.platform,
                 distro: i.distro,
             });

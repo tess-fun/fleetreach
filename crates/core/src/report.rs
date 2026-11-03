@@ -224,6 +224,19 @@ pub struct Provenance {
     /// commit scanned, so the report is reproducible. Empty (and omitted) without sources.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sources: Vec<RepoSource>,
+    /// Images pulled from registries: what was asked for and the manifest digest scanned, so a
+    /// tag's result can be reproduced. Empty (and omitted) with no pulls.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<ImagePull>,
+}
+
+/// One image pulled from a registry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImagePull {
+    pub repo: RepoId,
+    /// The reference as given.
+    pub reference: String,
+    pub digest: String,
 }
 
 /// Where one ecosystem's OSV export came from and how old it was, so a clean verdict

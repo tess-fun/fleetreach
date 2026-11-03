@@ -686,6 +686,7 @@ mod tests {
                 generated_at: "t".into(),
                 osv: Vec::new(),
                 sources: Vec::new(),
+                images: Vec::new(),
             },
             summary: Summary {
                 repos_scanned: 0,

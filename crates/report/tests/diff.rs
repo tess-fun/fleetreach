@@ -21,6 +21,7 @@ fn provenance() -> Provenance {
         generated_at: "t".into(),
         osv: Vec::new(),
         sources: Vec::new(),
+        images: Vec::new(),
     }
 }
 

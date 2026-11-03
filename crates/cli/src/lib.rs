@@ -36,6 +36,7 @@ pub mod overlay;
 pub mod py_reach;
 pub mod quality;
 pub mod reach;
+pub mod registry;
 pub mod report_html;
 pub mod resolve;
 pub mod sbom;

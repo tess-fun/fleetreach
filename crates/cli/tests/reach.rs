@@ -28,6 +28,7 @@ fn provenance() -> Provenance {
         generated_at: "2026-06-24T00:00:00Z".into(),
         osv: Vec::new(),
         sources: Vec::new(),
+        images: Vec::new(),
     }
 }
 
@@ -80,6 +81,7 @@ fn config() -> Config {
 fn assess_flags_source_presence_per_repo() {
     let scan = ScanData {
         images: Vec::new(),
+        pulled: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![finding("R-USES", "uses"), finding("R-CLEAN", "clean")],
@@ -213,6 +215,7 @@ fn hex_and_github_actions_reachability() {
     use DependencyKind::Direct;
     let scan = ScanData {
         images: Vec::new(),
+        pulled: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![
@@ -266,6 +269,7 @@ fn name_mapping_ecosystems_detect_imports_securely() {
     use DependencyKind::{Direct, Transitive};
     let scan = ScanData {
         images: Vec::new(),
+        pulled: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![
@@ -341,6 +345,7 @@ fn tier_c_import_presence_is_secure() {
     use DependencyKind::{Direct, Transitive};
     let scan = ScanData {
         images: Vec::new(),
+        pulled: Vec::new(),
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![

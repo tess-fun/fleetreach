@@ -63,9 +63,9 @@ pub use remediation::{
     RemediationItem, Risk,
 };
 pub use report::{
-    max_severity_of, BaseImage, Coverage, CoverageGap, FleetReport, ImageBase, OsvProvenance,
-    PackageVersions, Provenance, RepoContext, RepoSource, SsvcDecision, SsvcReport, Summary,
-    VersionInFleet, SCHEMA_VERSION,
+    max_severity_of, BaseImage, Coverage, CoverageGap, FleetReport, ImageBase, ImagePull,
+    OsvProvenance, PackageVersions, Provenance, RepoContext, RepoSource, SsvcDecision, SsvcReport,
+    Summary, VersionInFleet, SCHEMA_VERSION,
 };
 pub use severity::Severity;
 

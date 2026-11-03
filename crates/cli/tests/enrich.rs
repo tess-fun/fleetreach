@@ -203,6 +203,7 @@ fn summary_max_severity_is_refreshed_after_enrichment_backfill() {
             generated_at: String::new(),
             osv: Vec::new(),
             sources: Vec::new(),
+            images: Vec::new(),
         },
         summary: Summary {
             repos_scanned: 1,

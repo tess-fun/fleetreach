@@ -51,6 +51,8 @@ fleetreach-maven = { path = "../maven", version = "1.5.0" }
 fleetreach-os = { path = "../os", version = "1.5.0" }
 serde = { workspace = true }
 sha2 = { workspace = true }
+# Docker config logins and HTTP Basic (pure Rust).
+base64 = "0.22"
 toml = { workspace = true }
 walkdir = { workspace = true }
 thiserror = { workspace = true }
