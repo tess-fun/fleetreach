@@ -164,6 +164,26 @@ way. Validated against OpenSCAP evaluating SUSE's own OVAL: on the SLES BCI 15.6
 fleetreach reports all 238 CVEs the OVAL finds, plus 1 open status from the newer VEX.
 Without the index, a SUSE image is a coverage gap that names the command.
 
+## End-of-life releases
+
+A release past the end of its standard support gets fewer and fewer advisories, so matching
+it finds less than is there. Each image whose release is past that date gets an
+`unmaintained` warning, from a snapshot of [endoflife.date](https://endoflife.date) bundled
+with fleetreach (no network needed), and the fleet's warnings group images on the same
+release (`EOL-amazon-linux-2`):
+
+```text
+Amazon Linux 2 reached the end of its standard support on 2026-06-30 (endoflife.date): the
+vendor publishes no more security fixes for it
+```
+
+Where the vendor sells extended support (Debian ELTS, Ubuntu Pro, Red Hat ELS, SUSE LTSS), the
+warning gives its end date instead. It covers Debian, Ubuntu, Alpine, Red Hat Enterprise
+Linux, AlmaLinux, Rocky Linux, Oracle Linux, CentOS Linux and Stream, Fedora, Amazon Linux,
+openSUSE Leap, SUSE Linux Enterprise Server, SUSE Linux Micro, Photon OS and Mageia; rolling
+releases have no end of life. The scan date is the clock, or `SOURCE_DATE_EPOCH` when set. A
+warning does not change the exit code.
+
 ## Language packages in the image
 
 Lockfiles in the image (`package-lock.json`, `poetry.lock`, `Gemfile.lock`, `go.mod`, ...) are

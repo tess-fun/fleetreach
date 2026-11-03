@@ -614,6 +614,15 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     (BDSA), which has no public page; those link the feed file. **Still open in phase 2**:
     CentOS and Fedora are gaps; RHEL module streams in the OSV data are not told apart (the
     OSV Red Hat records carry no stream); the rpm comparison against Grype.
+    **Status: OS end-of-life warnings implemented 2026-11-03, unreleased**
+    (`fleetreach_os::eol`). A bundled endoflife.date snapshot (`crates/os/data/eol.tsv`, 250
+    releases of 16 products, MIT data, refreshed by `scripts/update-eol.py`); os-release maps
+    to a product (CentOS 8 Stream told apart by its name) and release (exact `VERSION_ID`,
+    then major.minor, then major). A release past `eol` is an `unmaintained` warning
+    `EOL-<product>-<cycle>` naming the extended-support end where there is one. Checked on
+    the 24 rpm images: flagged Amazon Linux 2 (both), CentOS 7, Fedora 41, Leap 15.5 and
+    15.6, SLES 15.6 (LTSS until 2028-12-31); Grype v0.121.1 flags only Amazon Linux 2 and
+    Fedora 41. Not covered by endoflife.date: Azure Linux, openEuler, Bottlerocket.
     **Status: Bottlerocket implemented 2026-11-03, unreleased.** Feed
     `advisories.bottlerocket.aws/updateinfo.xml.gz` (1,841 advisories, 190 KB) converted by the
     updateinfo converter into one `Bottlerocket` ecosystem; packages from

@@ -28,6 +28,8 @@
 //! - [`db`] and [`scan`]: the per-distro advisory index and the matcher. Unfixed Debian and
 //!   Ubuntu records are findings with no patched version and their urgency. Red Hat and
 //!   AlmaLinux advisories name binary packages, so there each binary is matched on its own;
+//! - [`eol`]: the release's end of life, from a bundled endoflife.date snapshot, reported as
+//!   a warning once standard support has ended;
 //! - [`lang`]: the language lockfiles and installed package metadata in the image, for the
 //!   existing language feeders, skipping files an OS package owns.
 //!
@@ -63,6 +65,7 @@ mod apkver;
 pub mod db;
 pub mod distro;
 mod dpkgver;
+pub mod eol;
 mod error;
 pub mod feeds;
 pub mod image;

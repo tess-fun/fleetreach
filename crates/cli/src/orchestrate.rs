@@ -430,6 +430,15 @@ impl RepoResult {
         self
     }
 
+    /// Add a warning, counted in a scanned outcome.
+    fn with_warning(mut self, warning: WarnFinding) -> Self {
+        self.warnings.push(warning);
+        if let ScanStatus::Scanned { warnings, .. } = &mut self.outcome.status {
+            *warnings = self.warnings.len();
+        }
+        self
+    }
+
     /// Record the count of packages skipped for an unparseable version (Tier-C feeders).
     fn with_skipped(mut self, skipped_unparseable: u32) -> Self {
         self.skipped_unparseable = skipped_unparseable;
@@ -987,10 +996,17 @@ fn scan_image_os(
             }
         },
     };
-    (
-        ecosystem,
-        gaps.into_iter().fold(result, RepoResult::with_coverage),
-    )
+    let mut result = gaps.into_iter().fold(result, RepoResult::with_coverage);
+    // A release past its end of life gets no new advisories, so its findings only shrink.
+    let today = crate::history::now().date().to_string();
+    if let Some(warning) = inspection
+        .os_release
+        .as_ref()
+        .and_then(|os| fleetreach_os::eol::warning(os, id, &today))
+    {
+        result = result.with_warning(warning);
+    }
+    (ecosystem, result)
 }
 
 /// Lockfile formats fleetreach cannot read; reported when no readable lockfile sits beside them.

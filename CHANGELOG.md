@@ -79,6 +79,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   every one of Trivy's 947 and 538 findings is reported with the same status; the 19 and 2
   more are Red Hat's open statuses for the binary's source package, which Trivy matches by
   binary name only.
+- **End-of-life warnings for images** (spec 16, row 10, phase 2). An image whose release is
+  past the end of its standard support (CentOS 7, Debian 10, Amazon Linux 2, Fedora 41, ...)
+  gets an `unmaintained` warning, `EOL-<product>-<release>`, grouped across the fleet, with
+  the date and, where the vendor sells it, when paid extended support ends. The dates come
+  from a snapshot of endoflife.date bundled in `fleetreach-os` (refreshed at release time
+  by `scripts/update-eol.py`), so scans stay offline; the scan date honors
+  `SOURCE_DATE_EPOCH`. On the 24 rpm test images it flags the six releases past their date;
+  Grype v0.121.1 flags Amazon Linux 2 and Fedora 41 but not CentOS 7 or openSUSE Leap 15.5.
 - **Red Hat's unfixed CVEs in AlmaLinux and Rocky Linux images** (spec 16, row 10, phase 2).
   AlmaLinux and Rocky rebuild Red Hat Enterprise Linux from the same sources, so a CVE Red
   Hat has not fixed in RHEL 8 or 9 is not fixed in the rebuild either. Their scans take Red

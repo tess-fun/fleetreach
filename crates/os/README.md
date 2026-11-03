@@ -39,6 +39,8 @@ against it. The pieces:
 - [`db`](https://docs.rs/fleetreach-os/latest/fleetreach_os/db/) and [`scan`](https://docs.rs/fleetreach-os/latest/fleetreach_os/scan/): the per-distro advisory index and the matcher. Unfixed Debian and
   Ubuntu records are findings with no patched version and their urgency. Red Hat and
   AlmaLinux advisories name binary packages, so there each binary is matched on its own;
+- [`eol`](https://docs.rs/fleetreach-os/latest/fleetreach_os/eol/): the release's end of life, from a bundled endoflife.date snapshot, reported as
+  a warning once standard support has ended;
 - [`lang`](https://docs.rs/fleetreach-os/latest/fleetreach_os/lang/): the language lockfiles and installed package metadata in the image, for the
   existing language feeders, skipping files an OS package owns.
 

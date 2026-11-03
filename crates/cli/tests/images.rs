@@ -21,6 +21,9 @@ fn run(args: &[&str], cache: &Path) -> Output {
         .args(args)
         .env("FLEETREACH_OSV_SYNC", "off")
         .env("XDG_CACHE_HOME", cache)
+        // A fixed scan date (2026-11-03), so end-of-life warnings do not appear on their own
+        // as the fixtures' releases age.
+        .env("SOURCE_DATE_EPOCH", "1793664000")
         .env_remove("FLEETREACH_OSV_DIR")
         .current_dir(cache)
         .output()
@@ -329,6 +332,18 @@ fn rpm_distro_without_osv_data_is_a_gap_not_clean() {
         report["coverage"].to_string().contains("Fedora Linux 41"),
         "{report}"
     );
+    // Fedora 41 reached its end of life on 2025-12-15: a warning, from the bundled snapshot.
+    let eol = &report["warnings"][0];
+    assert_eq!(eol["kind"], "unmaintained", "{report}");
+    assert_eq!(eol["advisory_id"], "EOL-fedora-41");
+    assert!(
+        eol["title"]
+            .as_str()
+            .unwrap()
+            .starts_with("Fedora 41 reached the end of its standard support on 2025-12-15"),
+        "{eol}"
+    );
+    assert_eq!(report["outcomes"][0]["warnings"], 1, "{report}");
 }
 
 #[test]
