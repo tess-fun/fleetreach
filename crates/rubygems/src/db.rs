@@ -66,6 +66,28 @@ impl RubyGemsDb {
             .map_err(|e| RubyGemsError::db(e.path, e.source))
     }
 
+    /// [`RubyGemsDb::load`] with an organization's own OSV records from `overlay` layered on top:
+    /// a record with an upstream id replaces it, a new id adds one, a withdrawn one retracts
+    /// (see [`osv::load_with_overlay`]).
+    ///
+    /// # Errors
+    ///
+    /// As [`RubyGemsDb::load`], plus an unreadable overlay directory or an overlay record that is
+    /// not valid OSV JSON.
+    pub fn load_with_overlay(
+        root: &Path,
+        overlay: Option<&Path>,
+    ) -> Result<RubyGemsDb, RubyGemsError> {
+        osv::load_with_overlay(root, overlay, &spec())
+            .map(RubyGemsDb)
+            .map_err(|e| RubyGemsError::db(e.path, e.source))
+    }
+
+    /// Every `(package key, advisory)` pair, in key order (for `db quality`).
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Advisory)> {
+        self.0.iter()
+    }
+
     /// The advisories indexed under `gem` (matched verbatim), or an empty slice if none.
     pub fn advisories_for(&self, gem: &str) -> &[Advisory] {
         self.0.advisories_for(gem)

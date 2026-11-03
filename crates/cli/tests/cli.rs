@@ -202,6 +202,157 @@ fn osv_dir_serves_the_npm_export_without_a_per_ecosystem_flag() {
     assert_eq!(osv["age_basis"], "mtime");
 }
 
+/// A fleet of the npm demo repo with `[settings.advisories] dir = "advisories"` holding
+/// `records` (file name, JSON), in a fresh directory. Returns the config path.
+fn fleet_with_overlay(tag: &str, records: &[(&str, &str)]) -> PathBuf {
+    let root =
+        std::env::temp_dir().join(format!("fleetreach-overlay-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let overlay = root.join("advisories");
+    std::fs::create_dir_all(&overlay).unwrap();
+    for (name, body) in records {
+        std::fs::write(overlay.join(name), body).unwrap();
+    }
+    let repo = manifest().join("tests/fixtures/repos/npm-demo");
+    let config = root.join("fleet.toml");
+    std::fs::write(
+        &config,
+        format!(
+            "[[repo]]\nid = \"npm-demo\"\npath = {:?}\n\n[settings.advisories]\ndir = \"advisories\"\n",
+            repo.display().to_string()
+        ),
+    )
+    .unwrap();
+    config
+}
+
+fn scan_with_overlay(config: &std::path::Path) -> (i32, serde_json::Value, String) {
+    let out = run(&[
+        "scan",
+        "-c",
+        config.to_str().unwrap(),
+        "--db",
+        &db(),
+        "--npm-vuln-db",
+        &file_url("npm-osv"),
+        "-f",
+        "json",
+        "-q",
+    ]);
+    let value = serde_json::from_str(&stdout(&out)).unwrap_or(serde_json::Value::Null);
+    (code(&out), value, stderr(&out))
+}
+
+const LODASH: &str = r#"{"id":"GHSA-p6mc-m468-83gw","aliases":["CVE-2020-8203"],
+  "modified":"2026-01-01T00:00:00Z","database_specific":{"severity":"HIGH"},
+  "affected":[{"package":{"ecosystem":"npm","name":"lodash"},
+  "ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"FIX"}]}]}]}"#;
+
+#[test]
+fn overlay_corrects_upstream_record_by_id() {
+    // Upstream says fixed in 4.17.21 (the demo has 4.17.20). An org correction saying the
+    // fix was 4.17.19 makes the installed version safe; one saying 4.17.30 moves the fix.
+    let config = fleet_with_overlay(
+        "correct",
+        &[("lodash.json", &LODASH.replace("FIX", "4.17.19"))],
+    );
+    let (code, value, err) = scan_with_overlay(&config);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(value["summary"]["vuln_count"], 0);
+    let overlay = value["provenance"]["osv"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["ecosystem"] == "overlay")
+        .expect("overlay provenance");
+    assert_eq!(overlay["sha256"].as_str().unwrap().len(), 64);
+
+    let config = fleet_with_overlay(
+        "move",
+        &[("lodash.json", &LODASH.replace("FIX", "4.17.30"))],
+    );
+    let (code, value, err) = scan_with_overlay(&config);
+    assert_eq!(code, 1, "{err}");
+    assert_eq!(value["summary"]["vuln_count"], 1, "replaced, not doubled");
+}
+
+#[test]
+fn overlay_adds_and_retracts_records() {
+    let retract =
+        r#"{"id":"GHSA-p6mc-m468-83gw","withdrawn":"2026-01-01T00:00:00Z","affected":[]}"#;
+    let config = fleet_with_overlay("retract", &[("r.json", retract)]);
+    let (code, value, err) = scan_with_overlay(&config);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(value["summary"]["vuln_count"], 0);
+
+    let added = r#"{"id":"ORG-2026-1","summary":"internal finding",
+      "database_specific":{"severity":"CRITICAL"},
+      "affected":[{"package":{"ecosystem":"npm","name":"lodash"},
+      "ranges":[{"type":"SEMVER","events":[{"introduced":"4.0.0"},{"fixed":"4.17.22"}]}]}]}"#;
+    let go =
+        r#"{"id":"ORG-2026-2","affected":[{"package":{"ecosystem":"Go","name":"example.com/m"}}]}"#;
+    let config = fleet_with_overlay("add", &[("a.json", added), ("g.json", go)]);
+    let (code, value, err) = scan_with_overlay(&config);
+    assert_eq!(code, 1, "{err}");
+    let mut ids: Vec<&str> = value["vulnerabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["advisory_id"].as_str().unwrap())
+        .collect();
+    ids.sort_unstable();
+    assert_eq!(ids, ["GHSA-p6mc-m468-83gw", "ORG-2026-1"]);
+    assert!(
+        err.contains("ORG-2026-2") && err.contains("not applied"),
+        "{err}"
+    );
+}
+
+#[test]
+fn broken_or_missing_overlay_stops_the_scan() {
+    let config = fleet_with_overlay("broken", &[("bad.json", "{not json")]);
+    let (code, _, err) = scan_with_overlay(&config);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("bad.json"), "{err}");
+    std::fs::remove_dir_all(config.parent().unwrap().join("advisories")).unwrap();
+    let (code, _, err) = scan_with_overlay(&config);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("not a directory"), "{err}");
+}
+
+#[test]
+fn db_quality_reports_overlay_records_nothing_applies() {
+    let go = r#"{"id":"ORG-9","affected":[{"package":{"ecosystem":"Go","name":"m"}}]}"#;
+    let config = fleet_with_overlay("quality", &[("g.json", go)]);
+    let dir = osv_dir_with_npm("quality");
+    let out = run(&[
+        "db",
+        "quality",
+        "-c",
+        config.to_str().unwrap(),
+        "--osv-dir",
+        dir.to_str().unwrap(),
+        "--json",
+    ]);
+    assert_eq!(code(&out), 1, "an error-level issue: {}", stderr(&out));
+    let issues: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert!(issues
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|i| i["check"] == "overlay-not-applied" && i["id"] == "ORG-9"));
+    // Without the overlay the fixture export is clean.
+    let out = run(&[
+        "db",
+        "quality",
+        "--osv-dir",
+        dir.to_str().unwrap(),
+        "--json",
+    ]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    assert_eq!(stdout(&out).trim(), "[]");
+}
+
 #[test]
 fn osv_dir_from_env_and_the_default_cache_are_used() {
     let dir = osv_dir_with_npm("env");

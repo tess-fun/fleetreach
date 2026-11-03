@@ -31,6 +31,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   per-release export where osv.dev has one, else the whole distribution's), and a plain
   `db sync` fetches what the fleet's images need. `db status` lists the distro exports present.
 
+- **Local advisory overlays** (spec 16, row 12). `[settings.advisories] dir` points at a
+  directory of OSV JSON records layered over every OSV feeder's export (npm, PyPI, RubyGems,
+  Packagist, NuGet, Julia, Swift, Hex, GitHub Actions, Maven): a record with an upstream id
+  replaces it, a new id adds an advisory, and `withdrawn` retracts one. Fail-closed: a
+  missing directory, invalid JSON or a duplicate id stops the scan with exit 2. Records for Go
+  or Rust are not applied and say so. The report's `provenance.osv` gains an `overlay` entry
+  with a sha256 over the records.
+- **CVE 5.x and Red Hat CSAF VEX indexes**. `db sync --source osv,cve,csaf:redhat` (network
+  build) and `db import --cve <dir|zip>` / `db import --csaf <dir|tar.zst> --provider redhat`
+  reduce cvelistV5 (CNA affected data, ADP enrichment) and Red Hat's CSAF VEX archive (every
+  product status plus will-not-fix, fix-deferred, out-of-support and similar remediations) to
+  compact indexes next to the OSV exports, with sha256 and dates in `db status`. Scans do not
+  match against them yet.
+- **`db quality`**: data-quality checks on the advisory data as the matchers see it
+  (unmatchable entries, versions outside ranges, events out of order, unparseable bounds,
+  alias conflicts, live records aliasing rejected CVEs, missing severity, withdrawn records,
+  overlay records not applied, stale or reviving). Exit 1 on an error-level issue.
+- **`db crosscheck`**: JSON counts, with examples, of what the CVE and CSAF indexes add to or
+  contradict in the OSV data.
+- Additive APIs: `load_with_overlay` and `iter` on every OSV feeder database, and
+  `osv::load_with_overlay` / `osv::read_overlay` in `fleetreach_core`. `OsvSettings` gains an
+  `advisories` field.
+
 ### Compatibility
 
 - `fleetreach_core::Ecosystem` gains the `Deb` and `Apk` variants (JSON `deb`, `apk`). The

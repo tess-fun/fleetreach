@@ -76,6 +76,25 @@ impl PyPiDb {
             .map_err(|e| PyPiError::db(e.path, e.source))
     }
 
+    /// [`PyPiDb::load`] with an organization's own OSV records from `overlay` layered on top:
+    /// a record with an upstream id replaces it, a new id adds one, a withdrawn one retracts
+    /// (see [`osv::load_with_overlay`]).
+    ///
+    /// # Errors
+    ///
+    /// As [`PyPiDb::load`], plus an unreadable overlay directory or an overlay record that is
+    /// not valid OSV JSON.
+    pub fn load_with_overlay(root: &Path, overlay: Option<&Path>) -> Result<PyPiDb, PyPiError> {
+        osv::load_with_overlay(root, overlay, &spec())
+            .map(PyPiDb)
+            .map_err(|e| PyPiError::db(e.path, e.source))
+    }
+
+    /// Every `(package key, advisory)` pair, in key order (for `db quality`).
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Advisory)> {
+        self.0.iter()
+    }
+
     /// The advisories indexed under `normalized_name` (already PEP 503-normalized by the
     /// caller), or an empty slice if none.
     pub fn advisories_for(&self, normalized_name: &str) -> &[Advisory] {

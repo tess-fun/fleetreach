@@ -288,6 +288,8 @@ struct SettingsTable {
     vex_assertion: Vec<RawVexAssertion>,
     #[serde(default)]
     osv: RawOsv,
+    #[serde(default)]
+    advisories: RawAdvisories,
     licenses: Option<RawLicenses>,
     #[serde(default)]
     signals: RawSignals,
@@ -355,6 +357,15 @@ struct RawOsv {
     dir: Option<String>,
     /// e.g. `6h`; how stale a cached export may get before a sync re-checks it.
     refresh: Option<String>,
+}
+
+/// The `[settings.advisories]` block (spec 16, row 12): the organization's own OSV records,
+/// layered over the upstream exports.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawAdvisories {
+    /// A directory of OSV JSON records (searched recursively), versioned with the config.
+    dir: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -453,6 +464,10 @@ pub struct OsvSettings {
     /// ecosystem directory just falls through to the default cache.
     pub dir: Option<PathBuf>,
     pub refresh: Option<std::time::Duration>,
+    /// `[settings.advisories] dir`: local OSV records that replace (same id), add to, or
+    /// retract (`withdrawn`) upstream records. Resolved against the config file's directory;
+    /// a scan refuses to run when it is set but missing.
+    pub advisories: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -766,6 +781,7 @@ impl Config {
         let osv = OsvSettings {
             dir: raw.settings.osv.dir.map(|d| base_dir.join(d)),
             refresh,
+            advisories: raw.settings.advisories.dir.map(|d| base_dir.join(d)),
         };
 
         let mut sources = Vec::with_capacity(raw.source.len());

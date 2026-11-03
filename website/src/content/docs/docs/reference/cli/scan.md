@@ -14,7 +14,7 @@ Usage: fleetreach scan [OPTIONS]
 
 Options:
   -c, --config <CONFIG>
-          The fleet config [default: ./fleet.toml; without one, the current repo is scanned as a one-repo fleet]
+          The fleet config [default: ./fleet.toml; without one, the current repo is scanned as a one-repo fleet, or with only `--image`, just the images]
 
       --repo <DIR>
           Scan only this directory as a one-repo fleet, without a fleet.toml
