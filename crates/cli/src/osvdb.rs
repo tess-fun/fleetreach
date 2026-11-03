@@ -644,6 +644,133 @@ mod net {
         write_meta(&zip, &meta)
     }
 
+    /// A fetched body with its `ETag` and `Last-Modified`.
+    type Fetched = (Vec<u8>, Option<String>, Option<String>);
+
+    /// Feeds are read whole into memory; Photon 5.0's, the largest, is about 31 MB.
+    const MAX_FEED_BYTES: u64 = 512 * 1024 * 1024;
+
+    /// GET `url` into memory, sending the conditional headers of `previous` when it was
+    /// fetched from the same URL. `None` when the server says it has not changed.
+    fn get_bytes(url: &str, previous: Option<&Meta>) -> Result<Option<Fetched>, String> {
+        let mut request = agent().get(url);
+        if let Some(meta) = previous.filter(|m| m.url == url) {
+            if let Some(etag) = &meta.etag {
+                request = request.header("If-None-Match", etag);
+            }
+            if let Some(lm) = &meta.last_modified {
+                request = request.header("If-Modified-Since", lm);
+            }
+        }
+        let mut response = request.call().map_err(|e| format!("GET {url}: {e}"))?;
+        match response.status().as_u16() {
+            304 if previous.is_some() => return Ok(None),
+            200 => {}
+            status => return Err(format!("GET {url}: HTTP {status}")),
+        }
+        let header = |key: &str| {
+            response
+                .headers()
+                .get(key)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string)
+        };
+        let (etag, last_modified) = (header("etag"), header("last-modified"));
+        let body = response
+            .body_mut()
+            .with_config()
+            .limit(MAX_FEED_BYTES)
+            .read_to_vec()
+            .map_err(|e| format!("reading {url}: {e}"))?;
+        Ok(Some((body, etag, last_modified)))
+    }
+
+    /// Fetch a vendor feed (`fleetreach_os::feeds`), convert it to OSV records and install
+    /// them as `<root>/<dir_name(ecosystem)>/all.zip`, so it loads like an osv.dev export.
+    /// The meta records the vendor file's URL, validators and hash.
+    pub(super) fn download_feed(
+        root: &Path,
+        feed: &fleetreach_os::feeds::Feed,
+        force: bool,
+        quiet: bool,
+    ) -> Result<(), String> {
+        let dir = root.join(super::dir_name(&feed.ecosystem));
+        create_private_dir(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+        let zip = dir.join("all.zip");
+        let previous = if zip.is_file() && !force {
+            read_meta(&zip)
+        } else {
+            None
+        };
+        let url = match feed.kind {
+            fleetreach_os::feeds::Kind::AmazonUpdateinfo => {
+                let mut fetch = |u: &str| {
+                    get_bytes(u, None)?
+                        .map(|(b, _, _)| b)
+                        .ok_or_else(|| format!("GET {u}: not modified on an unconditional request"))
+                };
+                let list = fetch(&feed.url)?;
+                let list = String::from_utf8_lossy(&list).into_owned();
+                fleetreach_os::feeds::updateinfo_url(&list, &mut fetch)?
+            }
+            _ => feed.url.clone(),
+        };
+        let Some((raw, etag, last_modified)) = get_bytes(&url, previous.as_ref())? else {
+            if let Some(mut meta) = previous {
+                meta.fetched_at = super::now_rfc3339();
+                meta.fetched_unix = super::now_unix();
+                write_meta(&zip, &meta)?;
+            }
+            return Ok(());
+        };
+        if !quiet {
+            eprintln!(
+                "fetching {} advisory feed ({})...",
+                feed.ecosystem,
+                super::human_size(raw.len() as u64)
+            );
+        }
+        let records =
+            fleetreach_os::feeds::convert(feed, &raw).map_err(|e| format!("{url}: {e}"))?;
+        let tmp = dir.join("all.zip.partial");
+        let result = (|| {
+            let file = std::fs::File::create(&tmp)
+                .map_err(|e| format!("creating {}: {e}", tmp.display()))?;
+            let mut out = zip::ZipWriter::new(file);
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated);
+            for r in &records {
+                out.start_file(format!("{}.json", r.id), options)
+                    .and_then(|()| out.write_all(&r.json).map_err(Into::into))
+                    .map_err(|e| format!("writing {}: {e}", tmp.display()))?;
+            }
+            let file = out
+                .finish()
+                .map_err(|e| format!("writing {}: {e}", tmp.display()))?;
+            file.sync_all()
+                .map_err(|e| format!("writing {}: {e}", tmp.display()))
+        })();
+        if let Err(e) = result {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e);
+        }
+        let sha256 = Sha256::digest(&raw)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        let meta = Meta {
+            url,
+            etag,
+            last_modified,
+            fetched_at: super::now_rfc3339(),
+            fetched_unix: super::now_unix(),
+            sha256,
+            size: raw.len() as u64,
+        };
+        std::fs::rename(&tmp, &zip).map_err(|e| format!("installing {}: {e}", zip.display()))?;
+        write_meta(&zip, &meta)
+    }
+
     fn write_meta(zip: &Path, meta: &Meta) -> Result<(), String> {
         let path = meta_path(zip);
         let json = serde_json::to_string_pretty(meta).map_err(|e| e.to_string())?;
@@ -735,7 +862,8 @@ fn export_fresh(root: &Path, export: &str, refresh: Duration) -> bool {
 }
 
 /// Fetch the smallest export serving `ecosystem` into `root`: the per-release one where
-/// osv.dev publishes it, else the whole distribution. Returns the export name now cached.
+/// osv.dev publishes it, else the whole distribution, or for a distribution osv.dev lacks,
+/// its converted vendor feed. Returns the export name now cached.
 #[cfg(feature = "network")]
 fn sync_distro(
     root: &Path,
@@ -751,6 +879,9 @@ fn sync_distro(
         {
             return Ok(fresh.clone());
         }
+    }
+    if let Some(feed) = fleetreach_os::feeds::feed_for(ecosystem) {
+        return net::download_feed(root, &feed, force, opts.quiet).map(|()| ecosystem.to_string());
     }
     let mut last = String::new();
     for c in &candidates {

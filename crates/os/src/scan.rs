@@ -108,28 +108,32 @@ struct Source<'a> {
     name: &'a str,
     version: &'a str,
     binaries: Vec<&'a str>,
+    /// The module stream the packages came from, if any.
+    module: Option<&'a str>,
 }
 
 /// What to match: source packages with their binaries folded in, or each binary on its own
 /// where the advisories name binaries (`binary_names`).
 fn sources(packages: &[OsPackage], binary_names: bool) -> Vec<Source<'_>> {
-    let mut by: BTreeMap<(&str, &str), Vec<&str>> = BTreeMap::new();
+    let mut by: BTreeMap<(&str, &str, Option<&str>), Vec<&str>> = BTreeMap::new();
     for p in packages {
+        let module = p.module.as_deref();
         let key = if binary_names {
-            (p.name.as_str(), p.version.as_str())
+            (p.name.as_str(), p.version.as_str(), module)
         } else {
-            (p.source.as_str(), p.source_version.as_str())
+            (p.source.as_str(), p.source_version.as_str(), module)
         };
         by.entry(key).or_default().push(p.name.as_str());
     }
     by.into_iter()
-        .map(|((name, version), mut binaries)| {
+        .map(|((name, version, module), mut binaries)| {
             binaries.sort_unstable();
             binaries.dedup();
             Source {
                 name,
                 version,
                 binaries,
+                module,
             }
         })
         .collect()
@@ -192,7 +196,7 @@ fn finding<V: Ord + Clone + std::fmt::Display>(
         notes.push(format!("{} {u}", ctx.distro.name_of_urgency()));
     }
     let title = format!("{} [{}: {}]", adv.title, ctx.distro.name, notes.join("; "));
-    TierCFinding {
+    let mut f = TierCFinding {
         ecosystem: match ctx.distro.family {
             Family::Deb => Ecosystem::Deb,
             Family::Apk => Ecosystem::Apk,
@@ -219,7 +223,11 @@ fn finding<V: Ord + Clone + std::fmt::Display>(
         repo: ctx.repo,
         reach_reason: "OS package (no toolchain): version match only",
     }
-    .build()
+    .build();
+    if adv.url.is_some() {
+        f.url.clone_from(&adv.url);
+    }
+    f
 }
 
 impl Distro {
@@ -229,6 +237,23 @@ impl Distro {
             _ => "urgency",
         }
     }
+}
+
+/// Whether a package can be a build of module stream `module` (`php:7.4`), the condition
+/// an advisory about that stream's builds carries. A labelled package belongs to its own
+/// stream only, and a package that is no module build (no `.module` in its release) to
+/// none. An older module build can lack the label; it belongs to the stream the image has
+/// enabled for that module, or, with none recorded, possibly to any (so it still matches:
+/// an unknown stream never hides a fix).
+fn in_stream(distro: &Distro, src: &Source, module: &str) -> bool {
+    if let Some(own) = src.module {
+        return own == module;
+    }
+    if !src.version.contains(".module") {
+        return false;
+    }
+    let (name, stream) = module.split_once(':').unwrap_or((module, ""));
+    distro.modules.get(name).is_none_or(|s| s == stream)
 }
 
 /// Match one source package across the release and its overlays.
@@ -262,6 +287,11 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
     for adv in candidates {
         if ctx.opts.ignore_unimportant && adv.unimportant() {
             continue;
+        }
+        if let Some(m) = &adv.module {
+            if !in_stream(ctx.distro, src, m) {
+                continue;
+            }
         }
         if let Some(fixed) = affected(v, adv) {
             out.push(finding(ctx, src, v, adv, fixed));
@@ -333,6 +363,8 @@ mod tests {
             cvss_score: None,
             cvss_vector: None,
             urgency: None,
+            module: None,
+            url: None,
             ranges: vec![osv::parse_range(&range, parse)],
             versions: vec![],
         }
@@ -362,6 +394,7 @@ mod tests {
             source: "foo".into(),
             source_version: "1.0-1".into(),
             arch: None,
+            module: None,
         }];
         let ctx = Ctx {
             distro: &distro,
@@ -421,6 +454,7 @@ mod tests {
                 source: "openssl".into(),
                 source_version: installed.into(),
                 arch: None,
+                module: None,
             }];
             let src = &sources(&pkgs, false)[0];
             let mut out = Vec::new();
@@ -469,6 +503,7 @@ mod tests {
                 source: "x".into(),
                 source_version: ver.into(),
                 arch: None,
+                module: None,
             }];
             let src = &sources(&pkgs, false)[0];
             let mut out = Vec::new();
@@ -496,6 +531,7 @@ mod tests {
                 source: "openssl".into(),
                 source_version: "1:3.0.7-27.el9".into(),
                 arch: None,
+                module: None,
             },
             OsPackage {
                 name: "openssl".into(),
@@ -503,6 +539,7 @@ mod tests {
                 source: "openssl".into(),
                 source_version: "1:3.0.7-27.el9".into(),
                 arch: None,
+                module: None,
             },
         ];
         let fix = |id: &str| {
@@ -554,6 +591,47 @@ mod tests {
     }
 
     #[test]
+    fn module_advisories_match_only_their_stream() {
+        let pkg = |version: &str, module: Option<&str>| OsPackage {
+            name: "php-cli".into(),
+            version: version.into(),
+            source: "php".into(),
+            source_version: version.into(),
+            arch: None,
+            module: module.map(str::to_string),
+        };
+        let mut db = DistroDb::default();
+        for (id, stream) in [("ELSA-74", "php:7.4"), ("ELSA-80", "php:8.0")] {
+            let mut a = adv(
+                id,
+                &[("introduced", "0"), ("fixed", "0:9.0-1.module+el8")],
+                RpmVersion::parse,
+            );
+            a.module = Some(stream.into());
+            db.insert_rpm("Oracle Linux:8", "php-cli", a);
+        }
+        let mut ol = crate::distro::explicit("Oracle Linux:8", Family::Rpm);
+        let repo = RepoId("img".into());
+        let ids = |ol: &Distro, p: OsPackage| -> Vec<String> {
+            scan(ol, &[p], &db, &repo, ScanOptions::default())
+                .findings
+                .iter()
+                .map(|f| f.advisory_id.clone())
+                .collect()
+        };
+        let modular = "7.4.6-4.module+el8.3.0+7685+72d70b58";
+        // Labelled: its own stream only.
+        assert_eq!(ids(&ol, pkg(modular, Some("php:7.4"))), ["ELSA-74"]);
+        // Not a module build: no module advisory applies.
+        assert!(ids(&ol, pkg("7.2.24-1.el8", None)).is_empty());
+        // An unlabelled module build: any stream while the image records none (never a
+        // false clean), the enabled one once it does.
+        assert_eq!(ids(&ol, pkg(modular, None)), ["ELSA-74", "ELSA-80"]);
+        ol.modules.insert("php".into(), "7.4".into());
+        assert_eq!(ids(&ol, pkg(modular, None)), ["ELSA-74"]);
+    }
+
+    #[test]
     fn apk_scan_end_to_end() {
         let distro = crate::distro::explicit("Alpine:v3.20", Family::Apk);
         let a = adv(
@@ -570,6 +648,7 @@ mod tests {
                 source: "openssl".into(),
                 source_version: "3.3.2-r0".into(),
                 arch: None,
+                module: None,
             },
             OsPackage {
                 name: "libssl3".into(),
@@ -577,6 +656,7 @@ mod tests {
                 source: "openssl".into(),
                 source_version: "3.3.2-r0".into(),
                 arch: None,
+                module: None,
             },
         ];
         let s = scan(

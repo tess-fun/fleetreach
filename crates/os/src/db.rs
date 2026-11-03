@@ -37,6 +37,12 @@ pub struct Advisory<V> {
     pub cvss_vector: Option<String>,
     /// Debian's `urgency` or Ubuntu's `ubuntu_priority`, verbatim.
     pub urgency: Option<String>,
+    /// The module stream (`nodejs:18`) whose builds this is about; only packages from that
+    /// stream match.
+    pub module: Option<String>,
+    /// The vendor's page for an advisory from a vendor feed (an ALAS or ELSA id has no
+    /// osv.dev record to link to).
+    pub url: Option<String>,
     pub ranges: Vec<ParsedRange<V>>,
     /// Enumerated affected versions, sorted.
     pub versions: Vec<V>,
@@ -133,6 +139,8 @@ impl DistroDb {
 struct Record {
     id: String,
     #[serde(default)]
+    references: Vec<Reference>,
+    #[serde(default)]
     aliases: Vec<String>,
     #[serde(default)]
     upstream: Vec<String>,
@@ -159,6 +167,13 @@ struct Affected {
 }
 
 #[derive(Deserialize)]
+struct Reference {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    url: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct Package {
     name: Option<String>,
     ecosystem: Option<String>,
@@ -168,6 +183,7 @@ struct Package {
 struct EcosystemSpecific {
     urgency: Option<String>,
     ubuntu_priority: Option<String>,
+    module: Option<String>,
 }
 
 /// Which ecosystems to keep, with their family, and (optionally) which source packages.
@@ -315,6 +331,15 @@ fn entries_of(mut r: Record, wanted: &Wanted) -> (Vec<Entry>, BTreeMap<String, u
                     cvss_score,
                     cvss_vector: cvss_vector.clone(),
                     urgency: urgency.clone(),
+                    module: a.ecosystem_specific.as_ref().and_then(|e| e.module.clone()),
+                    url: crate::feeds::feed_for(eco)
+                        .and_then(|_| {
+                            r.references
+                                .iter()
+                                .find(|x| x.kind.as_deref() == Some("ADVISORY"))
+                        })
+                        .and_then(|x| x.url.clone())
+                        .filter(|u| u.starts_with("https://")),
                     ranges: ranges_of(a, $parse),
                     versions,
                 }

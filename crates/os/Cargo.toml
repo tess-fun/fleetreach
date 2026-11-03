@@ -28,6 +28,10 @@ zip = { version = "9", default-features = false, features = ["deflate-flate2-zli
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 # zstd layers: a pure-Rust decoder (the `zstd` crate binds C).
 ruzstd = { version = "0.9", default-features = false, features = ["std"] }
+# Vendor advisory feeds: Oracle's OVAL is bzip2 (a pure-Rust decoder; the `bzip2` crate's
+# pure-Rust backend carries the bzip2-1.0.6 license), the feeds are XML.
+bzip2-rs = "0.1"
+roxmltree = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

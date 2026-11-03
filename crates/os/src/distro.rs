@@ -4,9 +4,11 @@
 //! Fail-closed: an ID this table does not know, or a release it cannot name (Debian
 //! testing, Alpine edge), is a coverage gap with the reason, never "no vulnerabilities".
 //! A derivative that says `ID_LIKE=debian` is not matched against Debian, because its
-//! backports and version strings are its own; for the same reason CentOS, Oracle Linux and
-//! Fedora are not matched against Red Hat's records, and are gaps until a feed of their own
-//! is read.
+//! backports and version strings are its own; for the same reason CentOS and Fedora are not
+//! matched against Red Hat's records, and are gaps. Oracle Linux, Amazon Linux and Photon OS
+//! are matched against their vendors' own feeds ([`crate::feeds`]).
+
+use std::collections::BTreeMap;
 
 /// Which package format a distribution uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -91,6 +93,9 @@ pub struct Distro {
     /// Ecosystems that take precedence for the same package and CVE: Ubuntu Pro (ESM) and
     /// Root's patched packages, when the installed versions show them.
     pub overlays: Vec<String>,
+    /// The module streams enabled in the image (`php` -> `7.4`), for gating advisories
+    /// about module builds whose packages carry no modularity label.
+    pub modules: BTreeMap<String, String>,
 }
 
 impl Distro {
@@ -109,8 +114,9 @@ impl Distro {
 /// LTS release).
 pub fn export_candidates(ecosystem: &str) -> Vec<String> {
     let base = ecosystem.split(':').next().unwrap_or(ecosystem).to_string();
-    if base == ecosystem {
-        vec![base]
+    // A vendor feed is converted into an export of its own release only.
+    if base == ecosystem || crate::feeds::feed_for(ecosystem).is_some() {
+        vec![ecosystem.to_string()]
     } else {
         vec![ecosystem.to_string(), base]
     }
@@ -163,6 +169,7 @@ pub fn detect(
         also: Vec::new(),
         binary_names: false,
         overlays: Vec::new(),
+        modules: BTreeMap::new(),
     };
     let release = |what: &str| {
         version
@@ -374,7 +381,47 @@ pub fn detect(
                 format!("openEuler:{v}{tag}"),
             )
         }
-        "centos" | "ol" | "fedora" | "amzn" | "photon" => {
+        // Vendor feeds osv.dev does not carry (see `crate::feeds`); all name binaries.
+        "amzn" => {
+            let v = version.ok_or_else(|| format!("{pretty}: no VERSION_ID"))?;
+            if !matches!(v, "2" | "2023") {
+                return Err(format!(
+                    "{pretty}: only Amazon Linux 2 and 2023 have advisory feeds, so its OS \
+                     packages were not matched"
+                ));
+            }
+            let mut d = rpm(
+                format!("Amazon Linux {v}"),
+                "amazon",
+                format!("Amazon Linux:{v}"),
+            );
+            d.binary_names = true;
+            d
+        }
+        "ol" => {
+            let r = release("Oracle Linux")?;
+            let mut d = rpm(
+                format!("Oracle Linux {r}"),
+                "oracle",
+                format!("Oracle Linux:{r}"),
+            );
+            d.binary_names = true;
+            d
+        }
+        "photon" => {
+            let v = version.ok_or_else(|| format!("{pretty}: no VERSION_ID"))?;
+            let eco = format!("Photon OS:{v}");
+            if crate::feeds::feed_for(&eco).is_none() {
+                return Err(format!(
+                    "{pretty}: Photon OS {v} has no advisory feed, so its OS packages were not \
+                     matched"
+                ));
+            }
+            let mut d = rpm(format!("Photon OS {v}"), "photon", eco);
+            d.binary_names = true;
+            d
+        }
+        "centos" | "fedora" => {
             return Err(format!(
                 "{pretty}: osv.dev has no advisories for this distribution, so its OS packages \
                  were not matched"
@@ -416,7 +463,9 @@ pub fn family_of(ecosystem: &str) -> Option<Family> {
     match base {
         "Debian" | "Ubuntu" | "Echo" => Some(Family::Deb),
         "Red Hat" | "AlmaLinux" | "Rocky Linux" | "SUSE" | "openSUSE" | "Azure Linux"
-        | "Mageia" | "openEuler" => Some(Family::Rpm),
+        | "Mageia" | "openEuler" | "Amazon Linux" | "Oracle Linux" | "Photon OS" => {
+            Some(Family::Rpm)
+        }
         "Alpine"
         | "Wolfi"
         | "Chainguard"
@@ -443,12 +492,19 @@ pub fn explicit(ecosystem: &str, family: Family) -> Distro {
         name: ecosystem.replace(':', " "),
         namespace: match base {
             "Red Hat" => "redhat".to_string(),
+            "Amazon Linux" => "amazon".to_string(),
+            "Oracle Linux" => "oracle".to_string(),
+            "Photon OS" => "photon".to_string(),
             other => other.to_ascii_lowercase().replace(' ', "-"),
         },
         ecosystem: ecosystem.to_string(),
         also: Vec::new(),
-        binary_names: matches!(base, "Red Hat" | "AlmaLinux"),
+        binary_names: matches!(
+            base,
+            "Red Hat" | "AlmaLinux" | "Amazon Linux" | "Oracle Linux" | "Photon OS"
+        ),
         overlays: Vec::new(),
+        modules: BTreeMap::new(),
     }
 }
 
@@ -568,8 +624,41 @@ mod tests {
             eco("ID=\"openEuler\"\nVERSION=\"22.03 (LTS-SP3)\"\nVERSION_ID=\"22.03\"\n").0,
             vec!["openEuler:22.03-LTS-SP3"]
         );
-        // No osv.dev data, and not matched against Red Hat's: gaps that say why.
-        for id in ["ol", "centos", "fedora", "amzn", "photon"] {
+        // Vendor feeds, matched by binary name.
+        for (text, want, ns) in [
+            (
+                "ID=amzn\nVERSION_ID=\"2023\"\n",
+                "Amazon Linux:2023",
+                "amazon",
+            ),
+            (
+                "ID=\"amzn\"\nVERSION_ID=\"2\"\n",
+                "Amazon Linux:2",
+                "amazon",
+            ),
+            (
+                "ID=\"ol\"\nVERSION_ID=\"9.4\"\n",
+                "Oracle Linux:9",
+                "oracle",
+            ),
+            ("ID=photon\nVERSION_ID=5.0\n", "Photon OS:5.0", "photon"),
+        ] {
+            let d = detect(&os(text), None, Hints::default()).unwrap();
+            assert_eq!(
+                (d.ecosystem.as_str(), d.namespace.as_str(), d.binary_names),
+                (want, ns, true)
+            );
+            assert_eq!(export_candidates(want), vec![want]);
+        }
+        for text in [
+            "ID=amzn\nVERSION_ID=2018.03\n",
+            "ID=photon\nVERSION_ID=2.0\n",
+        ] {
+            let e = detect(&os(text), None, Hints::default()).unwrap_err();
+            assert!(e.contains("feed"), "{e}");
+        }
+        // No data, and not matched against Red Hat's: gaps that say why.
+        for id in ["centos", "fedora"] {
             let e = detect(
                 &os(&format!("ID={id}\nVERSION_ID=9\n")),
                 None,

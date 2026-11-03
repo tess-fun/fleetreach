@@ -7,7 +7,7 @@
 //! is matched as `openssl`. The files each package owns are collected too, so a language lockfile that
 //! an OS package installed is not reported a second time through its language feeder.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::distro::Family;
 use crate::image::ImageFs;
@@ -25,6 +25,8 @@ pub struct OsPackage {
     /// The source version (differs from the binary one after a binNMU, `+b1`).
     pub source_version: String,
     pub arch: Option<String>,
+    /// The module stream an rpm came from (`nodejs:18`, from its modularity label).
+    pub module: Option<String>,
 }
 
 /// dpkg states in which a package's files are on disk.
@@ -104,6 +106,7 @@ pub fn parse_dpkg_status(text: &str, require_status: bool) -> Vec<OsPackage> {
             source,
             source_version,
             arch: get("Architecture").map(str::to_string),
+            module: None,
         });
     }
     out
@@ -129,6 +132,7 @@ pub fn parse_apk_installed(text: &str) -> (Vec<OsPackage>, BTreeSet<String>) {
                 name: n,
                 version: v,
                 arch: arch.take(),
+                module: None,
             });
         }
         *origin = None;
@@ -203,6 +207,14 @@ pub fn from_rpm(p: &RpmPackage) -> Option<OsPackage> {
         source,
         source_version,
         arch: p.arch.clone(),
+        // `name:stream:version:context`: the stream is what advisories gate on.
+        module: p.modularity_label.as_deref().and_then(|l| {
+            let mut parts = l.split(':');
+            match (parts.next(), parts.next()) {
+                (Some(n), Some(s)) if !n.is_empty() && !s.is_empty() => Some(format!("{n}:{s}")),
+                _ => None,
+            }
+        }),
     })
 }
 
@@ -252,6 +264,40 @@ pub(crate) fn wanted(path: &str) -> bool {
         || path
             .strip_prefix("var/lib/dpkg/info/")
             .is_some_and(|f| !f.contains('/') && f.ends_with(".list"))
+        || path
+            .strip_prefix(MODULES_D)
+            .is_some_and(|f| !f.contains('/') && f.ends_with(".module"))
+}
+
+/// Where dnf records the module streams enabled in the image.
+const MODULES_D: &str = "etc/dnf/modules.d/";
+
+/// The enabled streams in dnf's module state files (`[php]` `stream=7.4` `state=enabled`),
+/// by module name.
+pub fn parse_module_state(text: &str) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
+    let (mut name, mut stream, mut enabled) = (None, None, false);
+    let mut flush = |name: &mut Option<String>, stream: &mut Option<String>, enabled: bool| {
+        if let (Some(n), Some(s), true) = (name.take(), stream.take(), enabled) {
+            out.insert(n, s);
+        }
+    };
+    for line in text.lines().map(str::trim) {
+        if line.starts_with('[') {
+            flush(&mut name, &mut stream, enabled);
+            enabled = false;
+        } else if let Some((k, v)) = line.split_once('=') {
+            let v = v.trim();
+            match k.trim() {
+                "name" => name = Some(v.to_string()),
+                "stream" if !v.is_empty() => stream = Some(v.to_string()),
+                "state" => enabled = v == "enabled",
+                _ => {}
+            }
+        }
+    }
+    flush(&mut name, &mut stream, enabled);
+    out
 }
 
 /// What an image's package database says.
@@ -265,6 +311,8 @@ pub struct Inventory {
     pub owned: BTreeSet<String>,
     /// Problems that make the inventory incomplete (an unreadable database, two formats).
     pub problems: Vec<String>,
+    /// The module streams dnf has enabled (`php` -> `7.4`), from `/etc/dnf/modules.d`.
+    pub modules: BTreeMap<String, String>,
 }
 
 /// Read the image's package database.
@@ -380,6 +428,15 @@ pub fn inventory(fs: &ImageFs) -> Inventory {
             }
             inv.packages = pkgs.iter().filter_map(from_rpm).collect();
         }
+        for name in fs.list_dir(MODULES_D.trim_end_matches('/')) {
+            if let Some(t) = name
+                .ends_with(".module")
+                .then(|| text(&format!("{MODULES_D}{name}")))
+                .flatten()
+            {
+                inv.modules.extend(parse_module_state(&t));
+            }
+        }
     }
     for s in fs.skipped() {
         if wanted(s.split(':').next().unwrap_or_default()) {
@@ -395,6 +452,18 @@ pub fn inventory(fs: &ImageFs) -> Inventory {
 mod tests {
     #![allow(clippy::unwrap_used, clippy::panic)]
     use super::*;
+
+    #[test]
+    fn dnf_module_state() {
+        let text = "[php]\nname=php\nstream=7.4\nprofiles=\nstate=enabled\n\
+                    [nginx]\nname=nginx\nstream=\nprofiles=\nstate=\n\
+                    [perl]\nname=perl\nstream=5.30\nstate=disabled\n";
+        let m = parse_module_state(text);
+        assert_eq!(
+            m.into_iter().collect::<Vec<_>>(),
+            [("php".into(), "7.4".into())]
+        );
+    }
 
     const STATUS: &str = "\
 Package: libssl3

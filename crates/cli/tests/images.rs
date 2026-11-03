@@ -306,7 +306,7 @@ fn rpm_distro_without_osv_data_is_a_gap_not_clean() {
     write(
         &root,
         "etc/os-release",
-        "ID=\"ol\"\nVERSION_ID=\"9.4\"\nPRETTY_NAME=\"Oracle Linux Server 9.4\"\n",
+        "ID=\"fedora\"\nVERSION_ID=\"41\"\nPRETTY_NAME=\"Fedora Linux 41\"\n",
     );
     std::fs::create_dir_all(root.join("var/lib/rpm")).unwrap();
     std::fs::copy(
@@ -318,9 +318,65 @@ fn rpm_distro_without_osv_data_is_a_gap_not_clean() {
     let (code, report, stderr) = fx.scan(&["--image", &rootfs, "--require-full-coverage"]);
     assert_eq!(code, 2, "{stderr}");
     assert!(
-        report["coverage"]
-            .to_string()
-            .contains("Oracle Linux Server 9.4"),
+        report["coverage"].to_string().contains("Fedora Linux 41"),
         "{report}"
+    );
+}
+
+#[test]
+fn vendor_feed_distro_matches_binaries_and_links_the_vendor_page() {
+    // Oracle Linux has no osv.dev data: its export is converted from Oracle's OVAL by sync,
+    // in the shape written here.
+    let fx = Fixture::new("rpm-feed");
+    let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../os/tests/fixtures/rpmdb");
+    let root = fx.dir.join("rpmfs");
+    write(
+        &root,
+        "etc/os-release",
+        "ID=\"ol\"\nVERSION_ID=\"8.10\"\nPRETTY_NAME=\"Oracle Linux Server 8.10\"\n",
+    );
+    std::fs::create_dir_all(root.join("var/lib/rpm")).unwrap();
+    std::fs::copy(
+        fixtures.join("db-bdb/Packages"),
+        root.join("var/lib/rpm/Packages"),
+    )
+    .unwrap();
+    let elsa = |id: &str, fixed: &str, module: &str| {
+        format!(
+            r#"{{"id":"{id}","summary":"{id}: libpng security update (IMPORTANT)",
+            "aliases":["CVE-{}"],"database_specific":{{"severity":"HIGH"}},
+            "references":[{{"type":"ADVISORY","url":"https://linux.oracle.com/errata/{id}.html"}}],
+            "affected":[{{"package":{{"ecosystem":"Oracle Linux:8","name":"libpng"}},{module}
+            "ranges":[{{"type":"ECOSYSTEM","events":[{{"introduced":"0"}},{{"fixed":"{fixed}"}}]}}]}}]}}"#,
+            id.trim_start_matches("ELSA-")
+        )
+    };
+    let osv = fx.dir.join("osv/Oracle Linux_8");
+    write(
+        &osv,
+        "ELSA-2026-1.json",
+        &elsa("ELSA-2026-1", "2:1.6.34-12.el8_10", ""),
+    );
+    // About a module stream's builds: the installed libpng is no module build.
+    write(
+        &osv,
+        "ELSA-2026-2.json",
+        &elsa(
+            "ELSA-2026-2",
+            "2:1.6.99-1.module+el8.10.0",
+            r#""ecosystem_specific":{"module":"libpng:1"},"#,
+        ),
+    );
+    let rootfs = fx.path("rpmfs");
+    let (code, report, stderr) = fx.scan(&["--image", &rootfs, "--require-full-coverage"]);
+    assert_eq!(code, 1, "{stderr}");
+    assert_eq!(
+        findings(&report),
+        vec![("ELSA-2026-1".into(), "oracle/libpng".into())],
+        "{report}"
+    );
+    assert_eq!(
+        report["vulnerabilities"][0]["url"],
+        "https://linux.oracle.com/errata/ELSA-2026-1.html"
     );
 }

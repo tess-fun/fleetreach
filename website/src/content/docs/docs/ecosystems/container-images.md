@@ -52,9 +52,26 @@ rpm-based images are recognized too: Red Hat Enterprise Linux and UBI (matched a
 release's BaseOS, AppStream and CRB repositories), AlmaLinux, Rocky Linux, openSUSE Leap,
 Leap Micro and Tumbleweed, SUSE Linux Enterprise 15 (its Basesystem and Server Applications
 modules), SLE Micro and SUSE Linux Micro, Azure Linux 3 and CBL-Mariner 2, Mageia and
-openEuler. CentOS, Oracle Linux, Fedora, Amazon Linux and Photon publish no advisories to
-osv.dev, so their images are a coverage gap: they are not matched against Red Hat's records,
-whose versions and backports are not theirs.
+openEuler. CentOS and Fedora have no advisories to match, so their images are a coverage gap:
+they are not matched against Red Hat's records, whose versions and backports are not theirs.
+
+Amazon Linux, Oracle Linux and Photon OS publish no advisories to osv.dev, so fleetreach reads
+their vendors' own feeds and converts them to OSV records, cached beside the osv.dev exports:
+
+| Distribution | Releases | Feed | Advisory ids |
+|---|---|---|---|
+| Amazon Linux | 2, 2023 | the core repository's `updateinfo.xml` (what `yum updateinfo` reads) | ALAS |
+| Oracle Linux | 7, 8, 9, 10 | Oracle's OVAL definitions | ELSA |
+| Photon OS | 3.0, 4.0, 5.0 | VMware's CVE metadata | CVE |
+
+These advisories name binary packages, and findings link the vendor's advisory page. Oracle
+publishes separate fixes for each module stream (`nodejs:18`, `php:7.4`); such an advisory
+matches only packages built for that stream, read from the package's modularity label or,
+for an older build without one, from the stream `/etc/dnf/modules.d` enables. A feed whose
+shape fleetreach does not recognize fails the sync rather than load partly. Results equal
+`yum updateinfo` on Amazon Linux 2 and `dnf updateinfo` on Amazon Linux 2023 and Oracle
+Linux 8. One known difference: Oracle's OVAL leaves out a few reissued ELSAs, so dnf can name
+an advisory fleetreach does not, while the same CVEs are reported under the reissue's id.
 
 The rpm database is read without `rpm` and without a database library, in whichever of rpm's
 three formats the image uses: SQLite (`rpmdb.sqlite`, with its write-ahead log applied; RHEL 9

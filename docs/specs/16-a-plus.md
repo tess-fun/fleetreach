@@ -589,11 +589,32 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     Mageia, openEuler. **Found**: Oracle Linux 9 ships an empty stray
     `/usr/lib/sysimage/rpm/rpmdb.sqlite` while its real database is `/var/lib/rpm`; both
     locations are read, the empty one gives way, and two that disagree are a gap (simpler and
-    as safe as evaluating the `%_dbpath` macro). **Still open in phase 2**: CentOS, Oracle,
-    Fedora, Amazon Linux and Photon are gaps until their direct feeds land; RHEL module
-    streams are not told apart (a modular package is compared on its EVR alone, as the OSV
-    records carry no stream); Red Hat and SUSE CSAF unfixed statuses; the rpm comparison
-    against Trivy and Grype.
+    as safe as evaluating the `%_dbpath` macro).
+    **Status: direct feeds implemented 2026-11-03, unreleased** (`fleetreach_os::feeds`,
+    fetched by distro sync). Amazon Linux 2 and 2023 (`updateinfo.xml` from the core
+    repository's mirror list and `repomd.xml`), Oracle Linux 7 to 10 (OVAL, decoded by
+    `bzip2-rs`, pure Rust and MIT/Apache; the `bzip2` crate's pure-Rust backend carries the
+    bzip2-1.0.6 license, which `deny.toml` does not allow) and Photon OS 3.0 to 5.0 (CVE
+    metadata) converted to OSV records with
+    binary names. Oracle's criteria are read structurally (test, object, `evr` state "less
+    than"); Ksplice and FIPS branches are left out (their own epoch-10 or `ksplice` builds);
+    each file's definitions for other releases and its ELBA (bug fix) definitions are
+    skipped; an unrecognized criterion fails the conversion. Module streams: the record
+    carries `ecosystem_specific.module` and matches only its stream, from the modularity
+    label or `/etc/dnf/modules.d` for unlabelled module builds (an unknown stream still
+    matches). Validated against the distributions' own tools: Amazon Linux 2 old image 261
+    of 261 (`yum updateinfo list security`), Amazon Linux 2023 old image 260 of 260 (`dnf
+    updateinfo list --security --releasever=latest`), Oracle Linux 8.7 with `nodejs:18` and
+    `php:7.4` installed 371 of 374, Oracle Linux 9 3 of 3, current Amazon images 0 and 0;
+    Photon 4.0 252 of 252 against the raw feed evaluated with rpm's `rpm.vercmp`. **Found**:
+    (1) Oracle's OVAL omits some reissued ELSAs (ELSA-2024-0606, whose CVEs ELSA-2024-12164
+    carries): the 3 misses, no CVE lost. (2) An older module build carries no modularity
+    label (php 7.4.6 for el8.3): gating on the label alone was a false clean on 26 pairs,
+    fixed by the `modules.d` fallback. (3) Photon's `cve_id` is sometimes a Black Duck id
+    (BDSA), which has no public page; those link the feed file. **Still open in phase 2**:
+    CentOS and Fedora are gaps; RHEL module streams in the OSV data are not told apart (the
+    OSV Red Hat records carry no stream); Bottlerocket; Red Hat and SUSE CSAF unfixed
+    statuses; the rpm comparison against Trivy and Grype.
   - **Phase 3 (1.8.0)**: pull by digest from an OCI registry (behind `network`, docker
     config credentials); per-layer attribution and base-image detection from image history;
     base-image rollup and rebuild advice across the fleet; VEX discovered from OCI

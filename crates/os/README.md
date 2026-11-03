@@ -24,10 +24,12 @@ against it. The pieces:
 - [`distro`](https://docs.rs/fleetreach-os/latest/fleetreach_os/distro/): `/etc/os-release` to the osv.dev ecosystem (`Debian:12`, `Ubuntu:24.04:LTS`,
   `Alpine:v3.20`, `Wolfi`, `Chainguard`, `MinimOS`, `Alpaquita:stream`, `Echo`,
   `CleanStart`, `Red Hat:enterprise_linux:9::baseos`, `AlmaLinux:9`, `Rocky Linux:9`,
-  `openSUSE:Leap 15.6`, `SUSE:...`, `Azure Linux:3`, `Mageia:9`, `openEuler:...`), plus the
-  Ubuntu Pro and Root overlays; an unknown distribution or release, or one osv.dev has no
-  advisories for (CentOS, Oracle Linux, Fedora, Amazon Linux, Photon), is a coverage gap,
-  never clean;
+  `openSUSE:Leap 15.6`, `SUSE:...`, `Azure Linux:3`, `Mageia:9`, `openEuler:...`, and the
+  vendor-feed ecosystems `Amazon Linux:2023`, `Oracle Linux:9`, `Photon OS:5.0`), plus the
+  Ubuntu Pro and Root overlays; an unknown distribution or release, or one with no
+  advisories to match (CentOS, Fedora), is a coverage gap, never clean;
+- [`feeds`](https://docs.rs/fleetreach-os/latest/fleetreach_os/feeds/): Amazon Linux `updateinfo.xml`, Oracle OVAL and Photon CVE metadata converted
+  into OSV records, for the distributions osv.dev does not carry;
 - [`packages`](https://docs.rs/fleetreach-os/latest/fleetreach_os/packages/): dpkg `status` and distroless `status.d`, apk `installed`, and the rpm
   database ([`rpmdb`](https://docs.rs/fleetreach-os/latest/fleetreach_os/rpmdb/): SQLite, Berkeley DB and NDB, read in pure Rust), each binary package
   mapped to the source package advisories name, and the files each package owns;

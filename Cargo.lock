@@ -277,6 +277,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
+name = "bzip2-rs"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "beeb59e7e4c811ab37cc73680c798c7a5da77fc9989c62b09138e31ee740f735"
+dependencies = [
+ "crc32fast",
+ "tinyvec",
+]
+
+[[package]]
 name = "cafebabe"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -932,9 +942,11 @@ dependencies = [
 name = "fleetreach-os"
 version = "1.5.0"
 dependencies = [
+ "bzip2-rs",
  "flate2",
  "fleetreach-core",
  "rayon",
+ "roxmltree",
  "ruzstd",
  "serde",
  "serde_json",

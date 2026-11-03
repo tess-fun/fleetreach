@@ -35,10 +35,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   an empty stray database beside the real one (Oracle Linux 9 ships one) is skipped, and two
   that disagree are a coverage gap. Versions compare with rpm's ordering (epoch, `~`, `^`).
   Red Hat and AlmaLinux advisories name binary packages, so there each binary is matched on
-  its own; elsewhere binaries fold into their source rpm. CentOS, Oracle Linux, Fedora,
-  Amazon Linux and Photon have no osv.dev advisories and are coverage gaps, never clean.
+  its own; elsewhere binaries fold into their source rpm. CentOS and Fedora have no
+  advisories to match and are coverage gaps, never clean.
   Package names are `<distro>/<package>` (`rocky-linux/openssl`, `redhat/openssl-libs`),
   ecosystem `rpm`.
+- **Vendor feeds for rpm distributions osv.dev lacks** (spec 16, row 10, phase 2). Amazon
+  Linux 2 and 2023 (the core repository's `updateinfo.xml`, the ALAS advisories `yum
+  updateinfo` reads), Oracle Linux 7 to 10 (Oracle's OVAL, the ELSA advisories) and Photon OS
+  3.0 to 5.0 (VMware's CVE metadata) are fetched from the vendor, converted to OSV records and
+  cached like an osv.dev export, so their images are matched instead of being gaps. Findings
+  link the vendor's advisory page. Oracle's advisories for a module stream match only
+  packages from that stream (from the package's modularity label, or for an older build
+  without one, the stream `/etc/dnf/modules.d` enables). Conversion is strict: a feed whose
+  shape is not understood fails the sync rather than load partly. Validated against the
+  distributions' own tools: equal to `yum updateinfo list security` on Amazon Linux 2 (261
+  advisory and package pairs) and `dnf updateinfo list --security` on Amazon Linux 2023
+  (260) and Oracle Linux 8 with module streams enabled (371 of 374; the other 3 are one ELSA
+  Oracle's OVAL omits, a reissue whose CVEs a later ELSA in the feed covers), and to the raw
+  Photon feed evaluated with rpm's comparator (252).
 - `db sync --distros Debian:12,Wolfi` fetches distro exports one distribution at a time (the
   per-release export where osv.dev has one, else the whole distribution's), and a plain
   `db sync` fetches what the fleet's images need. `db status` lists the distro exports present.
