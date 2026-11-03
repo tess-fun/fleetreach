@@ -1,6 +1,7 @@
 //! The installed-package databases: dpkg's `/var/lib/dpkg/status` (and distroless's
-//! `/var/lib/dpkg/status.d/*`, one file per package), apk's `/lib/apk/db/installed`, and
-//! rpm's database ([`crate::rpmdb`]).
+//! `/var/lib/dpkg/status.d/*`, one file per package), apk's `/lib/apk/db/installed`,
+//! rpm's database ([`crate::rpmdb`]), and Bottlerocket's application inventory (it ships rpms
+//! but no rpm database).
 //!
 //! Advisories name **source** packages (Debian's `Source:`, apk's origin `o:`, rpm's
 //! `SOURCERPM`), so every binary package is mapped to its source name and version: `libssl3`
@@ -244,29 +245,108 @@ fn rpm_databases(fs: &ImageFs) -> Vec<(String, Result<Vec<RpmPackage>, String>)>
     out
 }
 
+/// Bottlerocket's record of its installed rpms (`{"Content": [{"Name", "Epoch", "Version",
+/// "Release", ...}]}`), written at build time; the image has no rpm database.
+pub const BOTTLEROCKET_INVENTORY: &str = "usr/share/bottlerocket/application-inventory.json";
+
+/// A path under Bottlerocket's system root (`x86_64-bottlerocket-linux-gnu/sys-root/usr/...`)
+/// as the path it is reached by (`usr/...`; `/usr` is a symlink there). Files are selected
+/// while a layer is read, before symlinks can be followed, so the real path must be known.
+fn bottlerocket_sysroot(path: &str) -> &str {
+    match path.split_once("/sys-root/") {
+        Some((triple, rest))
+            if !triple.contains('/') && triple.ends_with("-bottlerocket-linux-gnu") =>
+        {
+            rest
+        }
+        _ => path,
+    }
+}
+
 /// Where each format keeps its database, for opening only what is needed.
 pub(crate) fn wanted(path: &str) -> bool {
-    matches!(
-        path,
-        "etc/os-release"
-            | "usr/lib/os-release"
-            | "etc/debian_version"
-            | "var/lib/dpkg/status"
-            | "lib/apk/db/installed"
-            | "usr/lib/apk/db/installed"
-    ) || RPM_DIRS.iter().any(|d| {
-        path.strip_prefix(d)
-            .and_then(|f| f.strip_prefix('/'))
-            .is_some_and(|f| RPM_FILES.contains(&f))
-    }) || path
-        .strip_prefix("var/lib/dpkg/status.d/")
-        .is_some_and(|f| !f.contains('/'))
+    let path = bottlerocket_sysroot(path);
+    path == BOTTLEROCKET_INVENTORY
+        || matches!(
+            path,
+            "etc/os-release"
+                | "usr/lib/os-release"
+                | "etc/debian_version"
+                | "var/lib/dpkg/status"
+                | "lib/apk/db/installed"
+                | "usr/lib/apk/db/installed"
+        )
+        || RPM_DIRS.iter().any(|d| {
+            path.strip_prefix(d)
+                .and_then(|f| f.strip_prefix('/'))
+                .is_some_and(|f| RPM_FILES.contains(&f))
+        })
+        || path
+            .strip_prefix("var/lib/dpkg/status.d/")
+            .is_some_and(|f| !f.contains('/'))
         || path
             .strip_prefix("var/lib/dpkg/info/")
             .is_some_and(|f| !f.contains('/') && f.ends_with(".list"))
         || path
             .strip_prefix(MODULES_D)
             .is_some_and(|f| !f.contains('/') && f.ends_with(".module"))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct BottlerocketInventory {
+    content: Vec<BottlerocketApp>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct BottlerocketApp {
+    name: String,
+    #[serde(default)]
+    epoch: String,
+    version: String,
+    release: String,
+    #[serde(default)]
+    architecture: Option<String>,
+}
+
+/// The packages in Bottlerocket's application inventory. Each is its own source: Bottlerocket's
+/// advisories name the packages as the inventory does (`kernel-6.12`, `runc`). The epoch is
+/// kept, as the advisories' versions need it (packages moved from the OS version, epoch 0, to
+/// upstream versions, epoch 1).
+///
+/// # Errors
+///
+/// An inventory that is not the documented shape, or a package without a usable epoch: fail
+/// closed, never a partial list.
+pub fn parse_bottlerocket_inventory(text: &str) -> Result<Vec<OsPackage>, String> {
+    let inv: BottlerocketInventory =
+        serde_json::from_str(text).map_err(|e| format!("{BOTTLEROCKET_INVENTORY}: {e}"))?;
+    inv.content
+        .into_iter()
+        .map(|a| {
+            let epoch = match a.epoch.trim() {
+                "" => None,
+                e => Some(e.parse::<u32>().map_err(|_| {
+                    format!("{BOTTLEROCKET_INVENTORY}: {} has epoch {e:?}", a.name)
+                })?),
+            };
+            if a.name.is_empty() || a.version.is_empty() || a.release.is_empty() {
+                return Err(format!(
+                    "{BOTTLEROCKET_INVENTORY}: a package without name, version or release"
+                ));
+            }
+            let version = evr(epoch, &a.version, &a.release);
+            Ok(OsPackage {
+                source: a.name.clone(),
+                source_version: version.clone(),
+                name: a.name,
+                version,
+                arch: a.architecture.filter(|s| !s.is_empty()),
+                module: None,
+            })
+        })
+        .collect()
 }
 
 /// Where dnf records the module streams enabled in the image.
@@ -329,10 +409,12 @@ pub fn inventory(fs: &ImageFs) -> Inventory {
         .find(|p| fs.is_file(p));
     let has_dpkg = dpkg_status || !status_d.is_empty();
     let rpm_dbs = rpm_databases(fs);
+    let bottlerocket = fs.is_file(BOTTLEROCKET_INVENTORY);
     let found: Vec<&str> = [
         (has_dpkg, "dpkg"),
         (apk_db.is_some(), "apk"),
         (!rpm_dbs.is_empty(), "rpm"),
+        (bottlerocket, "Bottlerocket inventory"),
     ]
     .into_iter()
     .filter_map(|(has, name)| has.then_some(name))
@@ -437,6 +519,15 @@ pub fn inventory(fs: &ImageFs) -> Inventory {
                 inv.modules.extend(parse_module_state(&t));
             }
         }
+    } else if bottlerocket {
+        inv.family = Some(Family::Rpm);
+        match text(BOTTLEROCKET_INVENTORY).map(|t| parse_bottlerocket_inventory(&t)) {
+            Some(Ok(pkgs)) => inv.packages = pkgs,
+            Some(Err(e)) => inv.problems.push(e),
+            None => inv
+                .problems
+                .push(format!("{BOTTLEROCKET_INVENTORY} could not be read")),
+        }
     }
     for s in fs.skipped() {
         if wanted(s.split(':').next().unwrap_or_default()) {
@@ -452,6 +543,73 @@ pub fn inventory(fs: &ImageFs) -> Inventory {
 mod tests {
     #![allow(clippy::unwrap_used, clippy::panic)]
     use super::*;
+
+    /// Bottlerocket's inventory, trimmed from 1.68.1: epochs as strings, and a source-package
+    /// entry with no `PackageId`.
+    #[test]
+    fn bottlerocket_inventory() {
+        let text = r#"{"Content":[
+          {"Name":"runc","Publisher":"bottlerocket-core-kit","Version":"1.3.6",
+           "Release":"1.1792624615.46ecbcc6.br1","Epoch":"1","InstalledTime":"2026-10-30T23:52:19Z",
+           "ApplicationType":"Unspecified","Architecture":"x86_64","Url":"https://github.com/opencontainers/runc",
+           "Summary":"CLI for running Open Containers",
+           "PackageId":"bottlerocket-runc-1.3.6-1.1792624615.46ecbcc6.br1.x86_64.rpm@sha256:00"},
+          {"Name":"kernel-6.12","Version":"6.12.113","Release":"1.1793397975.cb1065fd.br1",
+           "Epoch":"0","Architecture":"x86_64","PackageId":""}]}"#;
+        let pkgs = parse_bottlerocket_inventory(text).unwrap();
+        assert_eq!(pkgs[0].name, "runc");
+        assert_eq!(pkgs[0].version, "1:1.3.6-1.1792624615.46ecbcc6.br1");
+        assert_eq!(pkgs[0].source, "runc");
+        assert_eq!(pkgs[1].version, "0:6.12.113-1.1793397975.cb1065fd.br1");
+        // Fail closed on a shape it does not know.
+        assert!(parse_bottlerocket_inventory(r#"{"Content":[{"Name":"x"}]}"#).is_err());
+        assert!(parse_bottlerocket_inventory(
+            r#"{"Content":[{"Name":"x","Version":"1","Release":"1","Epoch":"one"}]}"#
+        )
+        .is_err());
+
+        // Kept under its real path below the system root, read through the `/usr` symlink.
+        assert!(wanted(
+            "x86_64-bottlerocket-linux-gnu/sys-root/usr/share/bottlerocket/application-inventory.json"
+        ));
+        assert!(wanted(
+            "aarch64-bottlerocket-linux-gnu/sys-root/usr/lib/os-release"
+        ));
+        assert!(!wanted(
+            "x86_64-other-linux-gnu/sys-root/usr/lib/os-release"
+        ));
+        #[cfg(unix)]
+        {
+            let dir = std::env::temp_dir().join(format!("fr-bottlerocket-{}", std::process::id()));
+            let sysroot = dir.join("x86_64-bottlerocket-linux-gnu/sys-root");
+            std::fs::create_dir_all(sysroot.join("usr/share/bottlerocket")).unwrap();
+            std::fs::create_dir_all(sysroot.join("usr/lib")).unwrap();
+            std::fs::write(
+                sysroot
+                    .join("usr")
+                    .join(BOTTLEROCKET_INVENTORY.trim_start_matches("usr/")),
+                text,
+            )
+            .unwrap();
+            std::fs::write(
+                sysroot.join("usr/lib/os-release"),
+                "ID=bottlerocket\nVERSION_ID=1.68.1\n",
+            )
+            .unwrap();
+            std::os::unix::fs::symlink(
+                "./x86_64-bottlerocket-linux-gnu/sys-root/usr",
+                dir.join("usr"),
+            )
+            .unwrap();
+            let fs = crate::open_image(&dir, &|_| false, None).unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+            assert!(fs.read("usr/lib/os-release").is_some());
+            let inv = inventory(&fs);
+            assert_eq!(inv.family, Some(Family::Rpm));
+            assert!(inv.problems.is_empty(), "{:?}", inv.problems);
+            assert_eq!(inv.packages.len(), 2);
+        }
+    }
 
     #[test]
     fn dnf_module_state() {

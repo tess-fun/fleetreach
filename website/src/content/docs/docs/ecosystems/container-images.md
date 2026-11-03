@@ -8,7 +8,7 @@ sidebar:
 | | |
 |---|---|
 | Reads | a `docker save` or OCI-layout tarball, an OCI-layout directory, or a root filesystem (a directory or a tarball of one) |
-| OS packages | dpkg `status` and distroless `status.d`; apk `installed`; the rpm database (SQLite, Berkeley DB or NDB) |
+| OS packages | dpkg `status` and distroless `status.d`; apk `installed`; the rpm database (SQLite, Berkeley DB or NDB); Bottlerocket's application inventory |
 | Advisory data | the osv.dev distro exports: Debian, Ubuntu (and Ubuntu Pro), Alpine, Wolfi, Chainguard, MinimOS, Alpaquita and BellSoft, Echo, CleanStart, Root, Red Hat, AlmaLinux, Rocky Linux, openSUSE, SUSE, Azure Linux, Mageia, openEuler |
 | Version rules | dpkg's (`dpkg --compare-versions`), apk-tools' (`apk version -t`) and rpm's (`rpm.vercmp`) |
 
@@ -56,14 +56,16 @@ Micro and SUSE Linux Micro, Azure Linux 3 and CBL-Mariner 2, Mageia and
 openEuler. CentOS and Fedora have no advisories to match, so their images are a coverage gap:
 they are not matched against Red Hat's records, whose versions and backports are not theirs.
 
-Amazon Linux, Oracle Linux and Photon OS publish no advisories to osv.dev, so fleetreach reads
-their vendors' own feeds and converts them to OSV records, cached beside the osv.dev exports:
+Amazon Linux, Oracle Linux, Photon OS and Bottlerocket publish no advisories to osv.dev, so
+fleetreach reads their vendors' own feeds and converts them to OSV records, cached beside the
+osv.dev exports:
 
 | Distribution | Releases | Feed | Advisory ids |
 |---|---|---|---|
 | Amazon Linux | 2, 2023 | the core repository's `updateinfo.xml` (what `yum updateinfo` reads) | ALAS |
 | Oracle Linux | 7, 8, 9, 10 | Oracle's OVAL definitions | ELSA |
 | Photon OS | 3.0, 4.0, 5.0 | VMware's CVE metadata | CVE |
+| Bottlerocket | every variant and version | `advisories.bottlerocket.aws/updateinfo.xml.gz` | BRSA, GHSA |
 
 These advisories name binary packages, and findings link the vendor's advisory page. Oracle
 publishes separate fixes for each module stream (`nodejs:18`, `php:7.4`); such an advisory
@@ -73,6 +75,18 @@ shape fleetreach does not recognize fails the sync rather than load partly. Resu
 `yum updateinfo` on Amazon Linux 2 and `dnf updateinfo` on Amazon Linux 2023 and Oracle
 Linux 8. One known difference: Oracle's OVAL leaves out a few reissued ELSAs, so dnf can name
 an advisory fleetreach does not, while the same CVEs are reported under the reissue's id.
+
+Bottlerocket is a host OS rather than a container image, and it ships no rpm database: scan its
+root filesystem (for example the root partition of a release image, extracted) with `--image
+<dir>`, and its packages are read from `/usr/share/bottlerocket/application-inventory.json`.
+Versions keep their epoch: Bottlerocket's older advisories give the OS release as the package
+version (`0:1.19.0`), and packages that moved to upstream versions took epoch 1, so dropping the
+epoch would read every installed package as older than those fixes. Since the packages were
+renamed with a `bottlerocket-` prefix, the advisories list both names
+(`bottlerocket-kernel-6.12` and `kernel-6.12`) and both are matched. Validated on Bottlerocket
+1.66.0 and 1.68.1 (aws-k8s-1.33): equal to the whole feed evaluated with rpm's comparator (330
+and 0), and every one of Trivy 0.73.0's 200 findings on 1.66.0 is reported; the other 130 are
+kernel advisories of 2026-10-26 that Trivy's data does not have yet.
 
 The rpm database is read without `rpm` and without a database library, in whichever of rpm's
 three formats the image uses: SQLite (`rpmdb.sqlite`, with its write-ahead log applied; RHEL 9

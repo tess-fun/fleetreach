@@ -750,3 +750,66 @@ fn suse_without_the_vex_index_is_a_gap() {
         "{report}"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn bottlerocket_inventory_matches_its_advisories() {
+    // Bottlerocket ships no rpm database: its packages are in the application inventory,
+    // under the system root that `/usr` links to. The export is converted from Bottlerocket's
+    // updateinfo by sync, in the shape written here.
+    let fx = Fixture::new("bottlerocket");
+    let root = fx.dir.join("brfs");
+    let sysroot = "x86_64-bottlerocket-linux-gnu/sys-root";
+    write(
+        &root,
+        &format!("{sysroot}/usr/lib/os-release"),
+        "NAME=Bottlerocket\nID=bottlerocket\nVERSION_ID=1.66.0\nVARIANT_ID=aws-k8s-1.33\n",
+    );
+    write(
+        &root,
+        &format!("{sysroot}/usr/share/bottlerocket/application-inventory.json"),
+        r#"{"Content":[
+          {"Name":"runc","Version":"1.3.6","Release":"1.1792624615.46ecbcc6.br1","Epoch":"1",
+           "Architecture":"x86_64"},
+          {"Name":"kernel-6.12","Version":"6.12.103","Release":"1.1789773142.51308e97.br1",
+           "Epoch":"0","Architecture":"x86_64"}]}"#,
+    );
+    std::os::unix::fs::symlink(format!("./{sysroot}/usr"), root.join("usr")).unwrap();
+    let advisory = |id: &str, name: &str, fixed: &str| {
+        format!(
+            r#"{{"id":"{id}","summary":"{name} update","aliases":[],
+            "database_specific":{{"severity":"MEDIUM"}},
+            "references":[{{"type":"ADVISORY","url":"https://github.com/bottlerocket-os/bottlerocket-kernel-kit/blob/develop/advisories/9.6.1/{id}.toml"}}],
+            "affected":[{{"package":{{"ecosystem":"Bottlerocket","name":"{name}"}},
+            "ranges":[{{"type":"ECOSYSTEM","events":[{{"introduced":"0"}},{{"fixed":"{fixed}"}}]}}]}}]}}"#
+        )
+    };
+    let osv = fx.dir.join("osv/Bottlerocket");
+    write(
+        &osv,
+        "BRSA-1.json",
+        &advisory(
+            "BRSA-1",
+            "kernel-6.12",
+            "0:6.12.113-1.1793052464.3031f223.br1",
+        ),
+    );
+    // From before runc moved to upstream versions (epoch 1): the OS version, epoch 0.
+    write(
+        &osv,
+        "GHSA-1.json",
+        &advisory("GHSA-1", "runc", "0:1.19.0-2b1a7872"),
+    );
+    let rootfs = fx.path("brfs");
+    let (code, report, stderr) = fx.scan(&["--image", &rootfs, "--require-full-coverage"]);
+    assert_eq!(code, 1, "{stderr}");
+    assert_eq!(
+        findings(&report),
+        vec![("BRSA-1".into(), "bottlerocket/kernel-6.12".into())],
+        "{report}"
+    );
+    assert!(report["vulnerabilities"][0]["url"]
+        .as_str()
+        .unwrap()
+        .ends_with("/BRSA-1.toml"));
+}

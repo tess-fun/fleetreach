@@ -613,7 +613,21 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     fixed by the `modules.d` fallback. (3) Photon's `cve_id` is sometimes a Black Duck id
     (BDSA), which has no public page; those link the feed file. **Still open in phase 2**:
     CentOS and Fedora are gaps; RHEL module streams in the OSV data are not told apart (the
-    OSV Red Hat records carry no stream); Bottlerocket; the rpm comparison against Grype.
+    OSV Red Hat records carry no stream); the rpm comparison against Grype.
+    **Status: Bottlerocket implemented 2026-11-03, unreleased.** Feed
+    `advisories.bottlerocket.aws/updateinfo.xml.gz` (1,841 advisories, 190 KB) converted by the
+    updateinfo converter into one `Bottlerocket` ecosystem; packages from
+    `usr/share/bottlerocket/application-inventory.json` (no rpm database). **Found**: (1) the
+    real files are under `<arch>-bottlerocket-linux-gnu/sys-root/` with `/usr` a symlink, and
+    the image reader selects files before symlinks resolve, so the selector strips that prefix.
+    (2) Release images are EROFS, not ext4, despite the `root.ext4.lz4` name. (3) Old GHSA
+    advisories give the OS release as the package version at epoch 0 (`runc 0:1.19.0`); the
+    packages took epoch 1 with upstream versions, so the epoch is load-bearing. (4) Advisories
+    since the `bottlerocket-` rename list both names; the inventory has the short one (except
+    true `bottlerocket-*` packages), so prefixed names are recorded under both. Validated on
+    aws-k8s-1.33 1.66.0 and 1.68.1 (root images from the TUF repository, sha256-checked):
+    equal to the feed evaluated with `rpm.labelCompare` (330 and 0); Trivy 0.73.0 200 of 200
+    reported, 130 extra = kernel BRSAs of 2026-10-26 missing from Trivy's vuln-list.
     **Status: Red Hat CSAF statuses implemented 2026-11-03, unreleased.** The CSAF index
     (`csaf:redhat`, 415 MB archive, about 7 minutes and 6.8 GB RSS to index, so never
     started by a scan) is derived on first use into `Red Hat:enterprise_linux:N::vex`

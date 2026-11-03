@@ -53,6 +53,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (260) and Oracle Linux 8 with module streams enabled (371 of 374; the other 3 are one ELSA
   Oracle's OVAL omits, a reissue whose CVEs a later ELSA in the feed covers), and to the raw
   Photon feed evaluated with rpm's comparator (252).
+- **Bottlerocket** (spec 16, row 10, phase 2). A Bottlerocket root filesystem is matched against
+  Bottlerocket's own advisory feed (`updateinfo.xml.gz`, BRSA and GHSA advisories for every
+  variant and version; `db sync --distros Bottlerocket`), with its packages read from
+  `/usr/share/bottlerocket/application-inventory.json`, as Bottlerocket ships no rpm database.
+  Both the `bottlerocket-` prefixed and the short package names in an advisory are matched, and
+  epochs are kept, which Bottlerocket's switch from OS-release to upstream versions relies on.
+  Findings link the advisory's page. Validated on 1.66.0 and 1.68.1: equal to the feed evaluated
+  with rpm's comparator, and a superset of Trivy 0.73.0 (its 200 findings plus 130 kernel
+  advisories its data does not carry yet).
 - **Red Hat's unfixed CVEs in RHEL and UBI images** (spec 16, row 10, phase 2). The CSAF VEX
   index (`db sync --source csaf:redhat` or `db import --csaf`) is turned into a per-release
   export on the first scan that needs it (about 20 seconds, then cached until the index

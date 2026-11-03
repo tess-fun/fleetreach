@@ -531,6 +531,18 @@ pub fn detect(
             d.binary_names = true;
             d
         }
+        // One advisory feed for every variant and version; packages from the application
+        // inventory, each its own source.
+        "bottlerocket" => {
+            let v = version.ok_or_else(|| format!("{pretty}: no VERSION_ID"))?;
+            let mut d = rpm(
+                format!("Bottlerocket {v}"),
+                "bottlerocket",
+                crate::feeds::BOTTLEROCKET.to_string(),
+            );
+            d.binary_names = true;
+            d
+        }
         "ol" => {
             let r = release("Oracle Linux")?;
             let mut d = rpm(
@@ -596,9 +608,8 @@ pub fn family_of(ecosystem: &str) -> Option<Family> {
     match base {
         "Debian" | "Ubuntu" | "Echo" => Some(Family::Deb),
         "Red Hat" | "AlmaLinux" | "Rocky Linux" | "SUSE" | "openSUSE" | "Azure Linux"
-        | "Mageia" | "openEuler" | "Amazon Linux" | "Oracle Linux" | "Photon OS" => {
-            Some(Family::Rpm)
-        }
+        | "Mageia" | "openEuler" | "Amazon Linux" | "Oracle Linux" | "Photon OS"
+        | "Bottlerocket" => Some(Family::Rpm),
         "Alpine"
         | "Wolfi"
         | "Chainguard"
@@ -634,7 +645,12 @@ pub fn explicit(ecosystem: &str, family: Family) -> Distro {
         also: Vec::new(),
         binary_names: matches!(
             base,
-            "Red Hat" | "AlmaLinux" | "Amazon Linux" | "Oracle Linux" | "Photon OS"
+            "Red Hat"
+                | "AlmaLinux"
+                | "Amazon Linux"
+                | "Oracle Linux"
+                | "Photon OS"
+                | "Bottlerocket"
         ),
         overlays: Vec::new(),
         modules: BTreeMap::new(),
@@ -727,6 +743,12 @@ mod tests {
             assert_eq!(d.family, Family::Rpm);
             (d.ecosystems(), d.binary_names)
         };
+        // One feed for every Bottlerocket variant and version.
+        assert_eq!(
+            eco("ID=bottlerocket\nVERSION_ID=1.68.1\nVARIANT_ID=aws-k8s-1.33\n"),
+            (vec!["Bottlerocket".to_string()], true)
+        );
+        assert!(known_ecosystem("Bottlerocket"));
         assert_eq!(
             eco("ID=\"rhel\"\nVERSION_ID=\"9.4\"\n"),
             (

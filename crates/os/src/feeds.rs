@@ -14,8 +14,13 @@
 //!   definitions are skipped.
 //! - **Photon OS 3.0 to 5.0**: VMware's CVE metadata (`cve_data_photon5.0.json`), one record
 //!   per CVE, `Not Affected` rows dropped.
+//! - **Bottlerocket**: its `updateinfo.xml.gz`, one record per BRSA (or older GHSA) advisory,
+//!   for every variant and version at once. Since the packages were renamed with a
+//!   `bottlerocket-` prefix the advisories list both names (`bottlerocket-kernel-6.1` and
+//!   `kernel-6.1`) while the image's inventory has the short one, so a prefixed name is
+//!   recorded under both.
 //!
-//! All three name binary packages. Conversion is strict: a feed whose shape is not the one
+//! All four name binary packages. Conversion is strict: a feed whose shape is not the one
 //! described here is an error, never a partial set of records.
 
 use std::collections::BTreeMap;
@@ -33,6 +38,8 @@ pub enum Kind {
     OracleOval,
     /// Photon's CVE metadata JSON.
     PhotonCves,
+    /// Bottlerocket's `updateinfo.xml.gz`.
+    BottlerocketUpdateinfo,
 }
 
 /// A vendor feed serving one ecosystem.
@@ -47,8 +54,18 @@ pub struct Feed {
     pub url: String,
 }
 
+/// Bottlerocket's ecosystem: one for all its variants and versions, as its advisories are.
+pub const BOTTLEROCKET: &str = "Bottlerocket";
+
 /// The vendor feed for `ecosystem`, if it is one fleetreach reads from its vendor.
 pub fn feed_for(ecosystem: &str) -> Option<Feed> {
+    if ecosystem == BOTTLEROCKET {
+        return Some(Feed {
+            ecosystem: ecosystem.to_string(),
+            kind: Kind::BottlerocketUpdateinfo,
+            url: "https://advisories.bottlerocket.aws/updateinfo.xml.gz".to_string(),
+        });
+    }
     let (base, release) = ecosystem.split_once(':')?;
     let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
     let (kind, url) = match (base, release) {
@@ -130,7 +147,7 @@ const MAX_FEED_BYTES: u64 = 1 << 30;
 fn decompress(raw: &[u8], kind: Kind) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     let read = match kind {
-        Kind::AmazonUpdateinfo => flate2::read::GzDecoder::new(raw)
+        Kind::AmazonUpdateinfo | Kind::BottlerocketUpdateinfo => flate2::read::GzDecoder::new(raw)
             .take(MAX_FEED_BYTES)
             .read_to_end(&mut out),
         Kind::OracleOval => bzip2_rs::DecoderReader::new(raw)
@@ -154,7 +171,10 @@ fn decompress(raw: &[u8], kind: Kind) -> Result<Vec<u8>, String> {
 pub fn convert(feed: &Feed, raw: &[u8]) -> Result<Vec<Record>, String> {
     let body = decompress(raw, feed.kind)?;
     let records = match feed.kind {
-        Kind::AmazonUpdateinfo => amazon(&feed.ecosystem, text(&body)?)?,
+        Kind::AmazonUpdateinfo => updateinfo(&feed.ecosystem, text(&body)?, Vendor::Amazon)?,
+        Kind::BottlerocketUpdateinfo => {
+            updateinfo(&feed.ecosystem, text(&body)?, Vendor::Bottlerocket)?
+        }
         Kind::OracleOval => oracle(&feed.ecosystem, text(&body)?)?,
         Kind::PhotonCves => photon(&feed.ecosystem, &body)?,
     };
@@ -242,7 +262,14 @@ fn keep_max(fixed: &mut Fixed, key: (String, Option<String>), evr: String) -> Re
     Ok(())
 }
 
-fn amazon(ecosystem: &str, xml: &str) -> Result<Vec<(String, Value)>, String> {
+/// Whose `updateinfo.xml` it is: the names and advisory pages differ.
+#[derive(Clone, Copy)]
+enum Vendor {
+    Amazon,
+    Bottlerocket,
+}
+
+fn updateinfo(ecosystem: &str, xml: &str, vendor: Vendor) -> Result<Vec<(String, Value)>, String> {
     let doc = roxmltree::Document::parse(xml).map_err(|e| format!("updateinfo.xml: {e}"))?;
     let root = doc.root_element();
     if !root.has_tag_name("updates") {
@@ -271,27 +298,46 @@ fn amazon(ecosystem: &str, xml: &str) -> Result<Vec<(String, Value)>, String> {
             };
             let (name, version, release) = (attr("name")?, attr("version")?, attr("release")?);
             let epoch = p.attribute("epoch").unwrap_or("0");
-            keep_max(
-                &mut fixed,
-                (name.to_string(), None),
-                format!("{epoch}:{version}-{release}"),
-            )?;
+            let evr = format!("{epoch}:{version}-{release}");
+            if let (Vendor::Bottlerocket, Some(short)) =
+                (vendor, name.strip_prefix("bottlerocket-"))
+            {
+                keep_max(&mut fixed, (short.to_string(), None), evr.clone())?;
+            }
+            keep_max(&mut fixed, (name.to_string(), None), evr)?;
         }
         if fixed.is_empty() {
             return Err(format!("{id}: no packages"));
         }
         let title = child_text(u, "title").unwrap_or_else(|| id.clone());
         let severity = child_text(u, "severity").and_then(|s| band(&s));
-        let source = format!(
-            "https://alas.aws.amazon.com/{}{id}.html",
-            if id.starts_with("ALAS2023") {
-                "AL2023/"
-            } else if id.starts_with("ALAS2") {
-                "AL2/"
-            } else {
-                ""
-            }
-        );
+        let source = match vendor {
+            Vendor::Amazon => format!(
+                "https://alas.aws.amazon.com/{}{id}.html",
+                if id.starts_with("ALAS2023") {
+                    "AL2023/"
+                } else if id.starts_with("ALAS2") {
+                    "AL2/"
+                } else {
+                    ""
+                }
+            ),
+            // The advisory's own page (a BRSA file in the kit's repository, or a GitHub
+            // security advisory), else the feed.
+            Vendor::Bottlerocket => u
+                .descendants()
+                .filter(|n| n.has_tag_name("reference"))
+                .filter(|n| matches!(n.attribute("type"), Some("brsa" | "ghsa")))
+                .find(|n| {
+                    n.attribute("id") == Some(id.as_str()) || n.attribute("type") == Some("brsa")
+                })
+                .and_then(|n| n.attribute("href"))
+                .filter(|h| h.starts_with("https://"))
+                .map_or_else(
+                    || "https://advisories.bottlerocket.aws/updateinfo.xml.gz".to_string(),
+                    str::to_string,
+                ),
+        };
         out.push((
             id.clone(),
             record(ecosystem, &id, &title, aliases, severity, &source, &fixed),
@@ -562,6 +608,10 @@ mod tests {
             .url
             .ends_with("elsa-ol9.xml.bz2"));
         assert_eq!(feed_for("Photon OS:5.0").unwrap().kind, Kind::PhotonCves);
+        assert_eq!(
+            feed_for("Bottlerocket").unwrap().kind,
+            Kind::BottlerocketUpdateinfo
+        );
         assert!(feed_for("Amazon Linux:1").is_none());
         assert!(feed_for("Oracle Linux:x").is_none());
         assert!(feed_for("Debian:12").is_none());
@@ -612,6 +662,48 @@ mod tests {
             "1:1.0.2k-24.amzn2.0.1"
         );
         assert_eq!(r["affected"][0]["package"]["ecosystem"], "Amazon Linux:2");
+    }
+
+    /// Bottlerocket's shape (BRSA-x6xvhd26anlv, trimmed): both package names, both arches,
+    /// and the advisory's page among the references.
+    #[test]
+    fn bottlerocket_updateinfo() {
+        let xml = r#"<?xml version="1.0"?><updates>
+          <update status="final" type="security" version="1.4"><id>BRSA-x6xvhd26anlv</id>
+          <title>kernel CVE-2026-98588</title><severity>medium</severity>
+          <references>
+            <reference href="http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-98588" id="CVE-2026-98588" type="cve"/>
+            <reference href="https://github.com/bottlerocket-os/bottlerocket-kernel-kit/blob/develop/advisories/9.6.1/BRSA-x6xvhd26anlv.toml" id="BRSA-x6xvhd26anlv" type="brsa"/>
+          </references>
+          <pkglist><collection short="bottlerocket"><name>Bottlerocket</name>
+            <package arch="x86_64" name="bottlerocket-kernel-6.12" version="6.12.113" release="1.1793052464.3031f223.br1" epoch="0"/>
+            <package arch="aarch64" name="bottlerocket-kernel-6.12" version="6.12.113" release="1.1793052464.3031f223.br1" epoch="0"/>
+            <package arch="x86_64" name="kernel-6.12" version="6.12.113" release="1.1793052464.3031f223.br1" epoch="0"/>
+          </collection></pkglist></update></updates>"#;
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        std::io::Write::write_all(&mut gz, xml.as_bytes()).unwrap();
+        let feed = feed_for("Bottlerocket").unwrap();
+        let recs = parsed(&convert(&feed, &gz.finish().unwrap()).unwrap());
+        let r = &recs[0];
+        assert_eq!(r["id"], "BRSA-x6xvhd26anlv");
+        assert_eq!(r["aliases"], json!(["CVE-2026-98588"]));
+        let names: Vec<&str> = r["affected"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["package"]["name"].as_str().unwrap())
+            .collect();
+        // The image's inventory has the short name.
+        assert_eq!(names, ["bottlerocket-kernel-6.12", "kernel-6.12"]);
+        assert_eq!(
+            r["affected"][1]["ranges"][0]["events"][1]["fixed"],
+            "0:6.12.113-1.1793052464.3031f223.br1"
+        );
+        assert_eq!(r["affected"][1]["package"]["ecosystem"], "Bottlerocket");
+        assert!(r["references"][0]["url"]
+            .as_str()
+            .unwrap()
+            .ends_with("/advisories/9.6.1/BRSA-x6xvhd26anlv.toml"));
     }
 
     const OVAL: &str = r#"<oval_definitions xmlns="http://oval.mitre.org/XMLSchema/oval-definitions-5">
