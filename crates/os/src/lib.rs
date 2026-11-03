@@ -70,6 +70,7 @@ pub mod eol;
 mod error;
 pub mod feeds;
 pub mod image;
+pub mod jar;
 pub mod lang;
 pub mod packages;
 pub mod rpmdb;

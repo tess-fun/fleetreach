@@ -231,8 +231,24 @@ Lockfiles in the image (`package-lock.json`, `poetry.lock`, `Gemfile.lock`, `go.
 scanned by the same matchers as repositories. Installed Python packages (`*.dist-info`) and
 npm packages (`node_modules/*/package.json`) with no lockfile beside them are matched too.
 Files that belong to an OS package are skipped, so Debian's `python3-requests` is reported
-once, as the Debian package. Java archives and installed gems are not read yet; when an image
-has them, the scan says so as a coverage gap.
+once, as the Debian package. Installed gems (`specifications/*.gemspec`) are matched as
+RubyGems.
+
+Java archives (`.jar`, `.war`, `.ear`, `.par`, `.kar`, `.jpi`, `.hpi`) are opened, along with
+the archives nested in them, and matched as Maven packages. Nothing in them is run. Each is
+identified by the best evidence it holds:
+
+1. `META-INF/maven/**/pom.properties` gives exact coordinates, one for each library a shaded
+   jar holds.
+2. A file name such as `spring-core-5.3.20.jar` gives the artifact and version. The group comes
+   from the advisory data: the coordinate with that artifact name that the archive's OSGi
+   bundle name or class packages point to.
+3. For a file name with no version, such as Tomcat's `catalina.jar`, the OSGi headers in
+   `META-INF/MANIFEST.MF` name the bundle and version.
+
+An archive none of these can place is a coverage gap, never a guess. Fleetreach has no
+checksum index of Maven Central, so a jar that was renamed and has no metadata stays a gap
+where a tool with such an index could name it.
 
 ## Advisory data
 

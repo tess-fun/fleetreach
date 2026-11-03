@@ -59,6 +59,39 @@ pub fn scan_offline(repo_dir: &Path, db: &MavenDb, repo: &RepoId) -> Result<Tier
     })
 }
 
+/// Match packages found outside a manifest (Java archives in an image) against the OSV DB,
+/// each with where it was found as its dependency path.
+pub fn scan_located(
+    installed: &[(InstalledPackage, Vec<String>)],
+    db: &MavenDb,
+    repo: &RepoId,
+) -> TierCScan {
+    let mut out: Vec<VulnFinding> = Vec::new();
+    let mut skipped_unparseable = 0u32;
+    for (pkg, path) in installed {
+        let Some(version) = parse_maven_version(&pkg.version) else {
+            skipped_unparseable += 1;
+            continue;
+        };
+        for adv in db.advisories_for(&pkg.name) {
+            if let Some(mut finding) = match_advisory(adv, pkg, &version, repo, false) {
+                if let Some(fleetreach_core::Occurrence::InRepo {
+                    dependency_path, ..
+                }) = finding.occurrences.first_mut()
+                {
+                    dependency_path.clone_from(path);
+                }
+                out.push(finding);
+            }
+        }
+    }
+    sort_dedup_findings(&mut out);
+    TierCScan {
+        findings: out,
+        skipped_unparseable,
+    }
+}
+
 /// Match a resolved tree ([`crate::resolve`]) against the OSV DB: every artifact, with its
 /// dev scope (`test`/`provided`) and the chain that pulls it in.
 pub fn scan_resolution(

@@ -170,6 +170,126 @@ fn findings(report: &serde_json::Value) -> Vec<(String, String)> {
     out
 }
 
+/// A jar or war holding `entries`.
+fn archive(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    use std::io::Write;
+    let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let opts =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    for (name, data) in entries {
+        w.start_file(*name, opts).unwrap();
+        w.write_all(data).unwrap();
+    }
+    w.finish().unwrap().into_inner()
+}
+
+fn language_record(id: &str, ecosystem: &str, package: &str, fixed: &str) -> String {
+    format!(
+        r#"{{"id":"{id}","modified":"2026-01-01T00:00:00Z","summary":"issue in {package}",
+        "affected":[{{"package":{{"ecosystem":"{ecosystem}","name":"{package}"}},
+        "ranges":[{{"type":"ECOSYSTEM","events":[{{"introduced":"0"}},{{"fixed":"{fixed}"}}]}}]}}]}}"#
+    )
+}
+
+#[test]
+fn java_archives_and_gems_in_an_image_are_matched() {
+    let fx = Fixture::new("java");
+    let root = fx.dir.join("rootfs");
+    let osv = fx.dir.join("osv");
+    write(
+        &osv.join("Maven"),
+        "GHSA-1.json",
+        &language_record(
+            "GHSA-1",
+            "Maven",
+            "org.apache.logging.log4j:log4j-core",
+            "2.15.0",
+        ),
+    );
+    write(
+        &osv.join("Maven"),
+        "GHSA-2.json",
+        &language_record(
+            "GHSA-2",
+            "Maven",
+            "org.springframework:spring-core",
+            "5.3.21",
+        ),
+    );
+    write(
+        &osv.join("Maven"),
+        "GHSA-3.json",
+        &language_record("GHSA-3", "Maven", "com.other:common", "9.0"),
+    );
+    write(
+        &osv.join("Maven"),
+        "GHSA-5.json",
+        &language_record(
+            "GHSA-5",
+            "Maven",
+            "org.apache.tomcat:tomcat-catalina",
+            "9.0.70",
+        ),
+    );
+    write(
+        &osv.join("RubyGems"),
+        "GHSA-4.json",
+        &language_record("GHSA-4", "RubyGems", "rack", "2.2.9"),
+    );
+    write(
+        &root,
+        "usr/local/bundle/specifications/rack-2.2.8.gemspec",
+        "Gem::Specification.new do |s|\n  s.name = \"rack\".freeze\n  s.version = \"2.2.8\"\nend\n",
+    );
+    let log4j = archive(&[(
+        "META-INF/maven/org.apache.logging.log4j/log4j-core/pom.properties",
+        b"groupId=org.apache.logging.log4j\nartifactId=log4j-core\nversion=2.14.1\n",
+    )]);
+    // Built by Gradle: no pom.properties, only a file name and classes.
+    let spring = archive(&[("org/springframework/core/Foo.class", b"")]);
+    // Tomcat's: no version in the file name, and an OSGi bundle in the manifest.
+    let catalina = archive(&[(
+        "META-INF/MANIFEST.MF",
+        b"Bundle-SymbolicName: org.apache.tomcat-catalina\nBundle-Version: 9.0.50\n",
+    )]);
+    std::fs::create_dir_all(root.join("usr/local/tomcat/lib")).unwrap();
+    std::fs::write(root.join("usr/local/tomcat/lib/catalina.jar"), catalina).unwrap();
+    // The name of an artifact with advisories, with someone else's classes.
+    let common = archive(&[("com/acme/Foo.class", b"")]);
+    let app = archive(&[
+        ("BOOT-INF/lib/log4j-core-2.14.1.jar", &log4j),
+        ("BOOT-INF/lib/spring-core-5.3.20.jar", &spring),
+        ("BOOT-INF/lib/common-1.0.jar", &common),
+    ]);
+    std::fs::create_dir_all(root.join("opt")).unwrap();
+    std::fs::write(root.join("opt/app.jar"), app).unwrap();
+    let rootfs = fx.path("rootfs");
+    let (_, report, stderr) = fx.scan(&["--image", &rootfs]);
+    let got = findings(&report);
+    for (id, package) in [
+        ("GHSA-1", "org.apache.logging.log4j:log4j-core"),
+        ("GHSA-2", "org.springframework:spring-core"),
+        ("GHSA-4", "rack"),
+        ("GHSA-5", "org.apache.tomcat:tomcat-catalina"),
+    ] {
+        assert!(
+            got.contains(&(id.to_string(), package.to_string())),
+            "{id}: {got:?} {stderr}"
+        );
+    }
+    assert!(!got.iter().any(|(id, _)| id == "GHSA-3"), "{got:?}");
+    // Where a nested jar is, and that the unplaced one is a gap.
+    let text = report.to_string();
+    assert!(
+        text.contains("BOOT-INF/lib/log4j-core-2.14.1.jar"),
+        "{report}"
+    );
+    assert!(
+        report["coverage"].to_string().contains("common-1.0.jar"),
+        "{report}"
+    );
+}
+
 #[test]
 fn image_os_packages_match_with_dpkg_order_and_keep_unfixed() {
     let fx = Fixture::new("match");

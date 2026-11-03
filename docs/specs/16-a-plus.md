@@ -562,9 +562,16 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     over 619,997 dpkg and 619,999 apk pairs from the exports (apk validity agrees on all
     42,587 distinct versions). Installed sets equal `dpkg-query -W` / `apk info -v` on 8 real
     images, and findings equal an independent real-tool evaluation of the exports on 11.
-    Still open: fuzzing the layer merge, Java archives and gems inside images (reported as
-    coverage gaps), and the language records some hardened-image exports carry
-    (`Echo:PyPI`, `Root:npm`).
+    Still open: fuzzing the layer merge and the language records some hardened-image
+    exports carry (`Echo:PyPI`, `Root:npm`).
+    **Java archives and gems in images: implemented 2026-11-03, unreleased**
+    (`fleetreach_os::jar`). Evidence in order: `pom.properties`, file name with the group
+    settled against the advisory data, OSGi manifest; anything else is a coverage gap. On
+    five images (Tomcat 9.0.50, Jenkins 2.346.1, Elasticsearch 7.10.1, Spring PetClinic,
+    Ruby 3.1.2), all 90 packages Trivy 0.73.0 reports as vulnerable are reported, with no
+    advisory missing except two from ruby-advisory-db that osv.dev lacks. Trivy names some
+    jars from its Maven Central checksum index, which fleetreach does not have: those stay
+    coverage gaps (38 on Tomcat, none vulnerable there).
   - **Phase 2 (1.7.0)**: rpm family: read-only SQLite, BDB and NDB readers, RPM header
     parsing, `rpmvercmp` comparator; Red Hat, Alma, Rocky, CentOS, SUSE, openSUSE, SLE
     Micro, Azure Linux, openEuler, Mageia, TuxCare. Unfixed statuses (affected, will not fix,

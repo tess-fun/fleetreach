@@ -35,6 +35,10 @@ pub(crate) struct Opened {
     /// Installed PyPI and npm packages with no lockfile beside them.
     pub(crate) pypi: Vec<Installed>,
     pub(crate) npm: Vec<Installed>,
+    /// Installed gems.
+    pub(crate) gems: Vec<Installed>,
+    /// What the image's Java archives hold.
+    pub(crate) java: Vec<fleetreach_os::jar::Found>,
     /// Language artifacts present but read by nothing, with a count.
     pub(crate) unread: BTreeMap<&'static str, usize>,
     /// Wanted files the image reader could not keep (too large, unreadable).
@@ -100,6 +104,8 @@ fn open(image: &Image) -> Result<Opened, String> {
         inspection,
         pypi: lang.pypi,
         npm: lang.npm,
+        gems: lang.gems,
+        java: lang.java,
         unread: lang.unread,
         skipped: fs.skipped().to_vec(),
         _files: files,
@@ -121,7 +127,7 @@ fn write_file(root: &Path, rel: &str, data: &[u8]) -> Result<(), String> {
 }
 
 /// The language ecosystems the images need OSV data for: what their lockfiles hold, plus
-/// PyPI and npm for installed packages read from metadata.
+/// the ecosystems of installed packages read from metadata and archives.
 pub(crate) fn language_ecosystems(images: &[Prepared]) -> BTreeSet<Ecosystem> {
     let mut out = BTreeSet::new();
     for image in images {
@@ -134,6 +140,12 @@ pub(crate) fn language_ecosystems(images: &[Prepared]) -> BTreeSet<Ecosystem> {
         }
         if !o.npm.is_empty() {
             out.insert(Ecosystem::Npm);
+        }
+        if !o.gems.is_empty() {
+            out.insert(Ecosystem::RubyGems);
+        }
+        if !o.java.is_empty() {
+            out.insert(Ecosystem::Maven);
         }
     }
     out

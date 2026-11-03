@@ -24,9 +24,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with their urgency; `--distro-ignore-unimportant` drops the `unimportant` and `negligible`
   ones. Lockfiles and installed Python and npm packages in the image go through the
   language matchers, skipping files an OS package owns. Fail-closed: an unreadable image or a
-  missing distro export is an errored target, and an unknown distribution or release, an
-  unreadable package database, or Java archives and gems no matcher reads yet are coverage
-  gaps. New crate `fleetreach-os`.
+  missing distro export is an errored target, and an unknown distribution or release or an
+  unreadable package database is a coverage gap. New crate `fleetreach-os`.
+- **Java archives and gems inside images** (spec 16, row 10). `.jar`, `.war`, `.ear`, `.par`,
+  `.kar`, `.jpi` and `.hpi` files are read through, nested archives included, and matched as
+  Maven packages; installed gems (`specifications/*.gemspec`) are matched as RubyGems. An
+  archive is identified by its `pom.properties`, by its file name with the group settled from
+  its OSGi bundle name and class packages, or by its OSGi manifest. Nothing in an archive is
+  run. An archive that cannot be placed is a coverage gap, never a guess. On Tomcat, Jenkins,
+  Elasticsearch, Spring and Ruby images, every package Trivy 0.73.0 reports as vulnerable is
+  reported, and fleetreach also reaches jars inside Jenkins plugins that Trivy does not.
 - **rpm-based container images** (spec 16, row 10, phase 2). Red Hat Enterprise Linux (UBI),
   AlmaLinux, Rocky Linux, openSUSE Leap and Tumbleweed, SUSE Linux Enterprise 15 and SLE
   Micro, Azure Linux and CBL-Mariner 2, Mageia and openEuler images are matched against their

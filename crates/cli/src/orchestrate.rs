@@ -848,6 +848,39 @@ fn scan_image(
         };
         extra.push((own(Ecosystem::Npm), result));
     }
+    if !opened.gems.is_empty() {
+        let installed: Vec<fleetreach_rubygems::InstalledGem> = opened
+            .gems
+            .iter()
+            .map(|p| fleetreach_rubygems::InstalledGem {
+                name: p.name.clone(),
+                version: p.version.clone(),
+                direct: false,
+            })
+            .collect();
+        let result = match tier_c_db(dbs.rubygems.as_ref(), &RUBYGEMS) {
+            Ok(db) => {
+                let scan = fleetreach_rubygems::scan_installed(&installed, &graph, db, &image.id);
+                RepoResult::scanned(&image.id, scan.findings, Vec::new())
+                    .with_skipped(scan.skipped_unparseable)
+            }
+            Err(reason) => RepoResult::errored(
+                &image.id,
+                format!("{} installed gems: {reason}", installed.len()),
+            ),
+        };
+        extra.push((own(Ecosystem::RubyGems), result));
+    }
+    if !opened.java.is_empty() {
+        let result = match tier_c_db(dbs.maven.as_ref(), &MAVEN) {
+            Ok(db) => scan_image_java(&image.id, &opened.java, db),
+            Err(reason) => RepoResult::errored(
+                &image.id,
+                format!("{} Java archive entries: {reason}", opened.java.len()),
+            ),
+        };
+        extra.push((own(Ecosystem::Maven), result));
+    }
     let lang: Vec<RepoResult> = plan.units.par_iter().map(scan_unit).collect();
     let (units, results): (Vec<ScanUnit>, Vec<RepoResult>) = extra.into_iter().unzip();
     let merged = merge_units(
@@ -855,6 +888,97 @@ fn scan_image(
         units.iter().zip(results).chain(plan.units.iter().zip(lang)),
     );
     (merged, plan.unsupported.clone())
+}
+
+/// Match what an image's Java archives hold. A jar known only by its file name is placed by
+/// [`fleetreach_maven::settle_group`]; one advisories could apply to but whose group cannot be
+/// settled is a coverage gap, as an unread archive is.
+fn scan_image_java(
+    id: &RepoId,
+    found: &[fleetreach_os::jar::Found],
+    db: &fleetreach_maven::MavenDb,
+) -> RepoResult {
+    use fleetreach_maven::{settle_bundle, settle_group, Group, InstalledPackage};
+    use fleetreach_os::jar::Found;
+    let artifacts = db.artifacts();
+    let mut installed: Vec<(InstalledPackage, Vec<String>)> = Vec::new();
+    let mut unsettled: Vec<&str> = Vec::new();
+    let mut unplaced: Vec<&str> = Vec::new();
+    let package = |name: &str, version: &str, path: &str| {
+        let pkg = InstalledPackage {
+            name: name.to_string(),
+            version: version.to_string(),
+            direct: false,
+        };
+        (pkg, path.split('!').map(str::to_string).collect())
+    };
+    for f in found {
+        match f {
+            Found::Coordinates {
+                name,
+                version,
+                path,
+            } => installed.push(package(name, version, path)),
+            Found::FileName {
+                artifact,
+                version,
+                path,
+                packages,
+                bundle,
+            } => {
+                let candidates = artifacts.get(artifact.as_str());
+                let candidates = candidates.map_or(&[][..], Vec::as_slice);
+                match settle_group(candidates, packages, bundle.as_deref()) {
+                    Group::NoAdvisories => {}
+                    Group::Settled(name) => installed.push(package(name, version, path)),
+                    Group::Unsettled => unsettled.push(path),
+                }
+            }
+            Found::Bundle {
+                name,
+                version,
+                path,
+            } => match settle_bundle(&artifacts, name) {
+                Some(coordinate) => installed.push(package(coordinate, version, path)),
+                None => unplaced.push(path),
+            },
+            Found::Unknown { .. } | Found::Unreadable { .. } => {}
+        }
+    }
+    installed.sort_by(|a, b| (&a.0.name, &a.0.version, &a.1).cmp(&(&b.0.name, &b.0.version, &b.1)));
+    let scan = fleetreach_maven::scan_located(&installed, db, id);
+    let mut result =
+        RepoResult::scanned(id, scan.findings, Vec::new()).with_skipped(scan.skipped_unparseable);
+    let gap = |paths: &[&str], reason: String| CoverageGap {
+        repo: id.clone(),
+        source: paths[0].split('!').next().unwrap_or_default().to_string(),
+        ecosystem: Ecosystem::Maven,
+        level: Coverage::Partial,
+        reason,
+    };
+    if !unsettled.is_empty() {
+        result = result.with_coverage(gap(
+            &unsettled,
+            format!(
+                "{} Java archives share an artifact name with packages that have advisories, \
+                 but nothing in them says which (first: {}), so they were not matched",
+                unsettled.len(),
+                unsettled[0]
+            ),
+        ));
+    }
+    if !unplaced.is_empty() {
+        result = result.with_coverage(gap(
+            &unplaced,
+            format!(
+                "{} Java archives have a bundle name but no Maven coordinates (first: {}), so \
+                 they were not matched",
+                unplaced.len(),
+                unplaced[0]
+            ),
+        ));
+    }
+    result
 }
 
 /// Match an image's OS packages. Returns the ecosystem the result is filed under (dpkg, apk

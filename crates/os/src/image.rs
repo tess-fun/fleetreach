@@ -29,6 +29,25 @@ pub const MAX_FILE_BYTES: u64 = 64 << 20;
 /// How many symlinks a path lookup follows before giving up (Linux's own limit).
 const MAX_LINK_HOPS: usize = 40;
 
+/// The largest wanted file at `path` that is read.
+fn file_limit(path: &str) -> u64 {
+    if crate::jar::is_archive(path) {
+        crate::jar::MAX_ARCHIVE_BYTES
+    } else {
+        MAX_FILE_BYTES
+    }
+}
+
+/// What to keep of a wanted file: its content, or for a Java archive its digest, so a large
+/// archive is held only while it is read.
+fn kept(path: &str, data: Vec<u8>) -> Vec<u8> {
+    if crate::jar::is_archive(path) {
+        crate::jar::digest(path, &data)
+    } else {
+        data
+    }
+}
+
 /// What is at a path in the merged image.
 #[derive(Debug, Clone)]
 enum Node {
@@ -270,7 +289,8 @@ impl ImageFs {
         };
         for (path, data) in files {
             if let Ok(Some(p)) = normalize(path) {
-                fs.apply(0, p, Node::File(Some(Arc::new(data.to_vec()))));
+                let kept = kept(&p, data.to_vec());
+                fs.apply(0, p, Node::File(Some(Arc::new(kept))));
             }
         }
         fs
@@ -292,12 +312,14 @@ impl ImageFs {
             };
             let node = match entry.kind {
                 Kind::File if want(&path) => {
-                    if entry.size > MAX_FILE_BYTES {
+                    let limit = file_limit(&path);
+                    if entry.size > limit {
                         self.skipped
-                            .push(format!("{path}: larger than {MAX_FILE_BYTES} bytes"));
+                            .push(format!("{path}: larger than {limit} bytes"));
                         Node::File(None)
                     } else {
-                        Node::File(Some(Arc::new(reader.read_data(MAX_FILE_BYTES)?)))
+                        let data = reader.read_data(limit)?;
+                        Node::File(Some(Arc::new(kept(&path, data))))
                     }
                 }
                 Kind::File => Node::File(None),
@@ -855,14 +877,14 @@ fn open_rootfs(root: &Path, want: &dyn Fn(&str) -> bool) -> Result<ImageFs, OsEr
             Node::Dir
         } else if ft.is_file() {
             if want(&rel) {
+                let limit = file_limit(&rel);
                 match entry.metadata() {
-                    Ok(md) if md.len() > MAX_FILE_BYTES => {
-                        fs.skipped
-                            .push(format!("{rel}: larger than {MAX_FILE_BYTES} bytes"));
+                    Ok(md) if md.len() > limit => {
+                        fs.skipped.push(format!("{rel}: larger than {limit} bytes"));
                         Node::File(None)
                     }
                     _ => match std::fs::read(entry.path()) {
-                        Ok(data) => Node::File(Some(Arc::new(data))),
+                        Ok(data) => Node::File(Some(Arc::new(kept(&rel, data)))),
                         Err(e) => {
                             fs.skipped.push(format!("{rel}: {e}"));
                             Node::File(None)

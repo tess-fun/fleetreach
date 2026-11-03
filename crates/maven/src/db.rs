@@ -5,6 +5,7 @@
 //! Maven advisory ranges are `ECOSYSTEM`-typed; bounds are Maven versions, parsed by
 //! [`crate::parse_maven_version`] and compared with Maven's `ComparableVersion` ordering.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use fleetreach_core::osv::{self, Match, OsvDb, ParsedRange, Spec};
@@ -40,6 +41,100 @@ fn spec() -> Spec<Version> {
         normalize_name: |name| name.to_string(),
         use_versions: true,
         severity: osv::default_severity,
+    }
+}
+
+/// Where a jar with an artifact name but no group belongs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Group<'a> {
+    /// No advisory names this artifact in any group: nothing to match.
+    NoAdvisories,
+    /// One coordinate fits the jar's class packages.
+    Settled(&'a str),
+    /// Advisories name the artifact, and the class packages do not single one out: a
+    /// coverage gap, never a guess.
+    Unsettled,
+}
+
+/// Whether an OSGi bundle name is `group`, or starts with it as a name: `com.h2database` and
+/// `org.apache.tomcat-catalina` for `org.apache.tomcat`.
+fn bundle_in_group(bundle: &str, coordinate: &str) -> bool {
+    let group = coordinate.split(':').next().unwrap_or_default();
+    bundle
+        .strip_prefix(group)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with(['.', '-']))
+}
+
+/// The coordinate of an OSGi bundle with no file name to go on, from the coordinates with
+/// advisories (`artifacts`, from [`MavenDb::artifacts`]): the last word of the bundle name is
+/// the artifact and the name starts with its group (`org.apache.tomcat-catalina` is
+/// `org.apache.tomcat:tomcat-catalina`). `None` says nothing about the bundle: names do not
+/// always follow its coordinates.
+pub fn settle_bundle<'a>(
+    artifacts: &BTreeMap<&str, Vec<&'a str>>,
+    bundle: &str,
+) -> Option<&'a str> {
+    let artifact = bundle.rsplit('.').next().unwrap_or(bundle);
+    let fits: Vec<&'a str> = artifacts
+        .get(artifact)?
+        .iter()
+        .copied()
+        .filter(|c| bundle_in_group(bundle, c))
+        .collect();
+    match fits[..] {
+        [one] => Some(one),
+        _ => None,
+    }
+}
+
+/// Settle a jar's group from `candidates` (the coordinates with advisories that share its
+/// artifact name, from [`MavenDb::artifacts`]), first by its OSGi `bundle` name, then by its
+/// class `packages` (`org/springframework`): a candidate fits when a package word other than
+/// a top-level domain is a word of its group (`okhttp3` in `com.squareup.okhttp3`). Of several
+/// that fit, one whose whole group is a package wins (`org.dom4j:dom4j` over `dom4j:dom4j`).
+pub fn settle_group<'a>(
+    candidates: &[&'a str],
+    packages: &[String],
+    bundle: Option<&str>,
+) -> Group<'a> {
+    const DOMAINS: &[&str] = &["com", "org", "net", "io", "edu", "gov", "de", "uk", "fr"];
+    if candidates.is_empty() {
+        return Group::NoAdvisories;
+    }
+    if let Some(bundle) = bundle {
+        let named: Vec<&'a str> = candidates
+            .iter()
+            .copied()
+            .filter(|c| bundle_in_group(bundle, c))
+            .collect();
+        if let [one] = named[..] {
+            return Group::Settled(one);
+        }
+    }
+    let words: Vec<&str> = packages
+        .iter()
+        .flat_map(|p| p.split('/'))
+        .filter(|w| !DOMAINS.contains(w))
+        .collect();
+    let fits: Vec<&'a str> = candidates
+        .iter()
+        .copied()
+        .filter(|c| {
+            let group = c.split(':').next().unwrap_or_default();
+            group.split('.').any(|g| words.contains(&g))
+        })
+        .collect();
+    let whole: Vec<&'a str> = fits
+        .iter()
+        .copied()
+        .filter(|c| {
+            let group = c.split(':').next().unwrap_or_default().replace('.', "/");
+            packages.contains(&group)
+        })
+        .collect();
+    match (&fits[..], &whole[..]) {
+        ([one], _) | (_, [one]) => Group::Settled(one),
+        _ => Group::Unsettled,
     }
 }
 
@@ -85,6 +180,21 @@ impl MavenDb {
         self.0.advisories_for(coordinate)
     }
 
+    /// The coordinates with advisories, by artifact name, for placing a jar known only by its
+    /// file name (see [`settle_group`]).
+    pub fn artifacts(&self) -> BTreeMap<&str, Vec<&str>> {
+        let mut out: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        for (coordinate, _) in self.0.iter() {
+            if let Some((_, artifact)) = coordinate.split_once(':') {
+                let at = out.entry(artifact).or_default();
+                if at.last() != Some(&coordinate) {
+                    at.push(coordinate);
+                }
+            }
+        }
+        out
+    }
+
     /// Total advisory-package index entries — for diagnostics/tests.
     pub fn len(&self) -> usize {
         self.0.len()
@@ -112,6 +222,81 @@ mod tests {
 
     fn v(s: &str) -> Version {
         parse_maven_version(s).unwrap()
+    }
+
+    #[test]
+    fn a_group_needs_evidence_from_the_jars_classes() {
+        let packages = |p: &[&str]| p.iter().map(ToString::to_string).collect::<Vec<_>>();
+        let spring = "org.springframework:spring-core";
+        assert_eq!(settle_group(&[], &[], None), Group::NoAdvisories);
+        assert_eq!(
+            settle_group(&[spring], &packages(&["org/springframework"]), None),
+            Group::Settled(spring)
+        );
+        // A class package need not be the group: `okhttp3` in `com.squareup.okhttp3`.
+        let okhttp = "com.squareup.okhttp3:okhttp";
+        assert_eq!(
+            settle_group(&[okhttp], &packages(&["okhttp3"]), None),
+            Group::Settled(okhttp)
+        );
+        // A jar of the same name and other classes, or none: not placed.
+        assert_eq!(
+            settle_group(&["com.foo:core"], &packages(&["com/acme"]), None),
+            Group::Unsettled
+        );
+        assert_eq!(settle_group(&[spring], &[], None), Group::Unsettled);
+        // Top-level domains are no evidence, and two that fit are a gap, not a guess.
+        assert_eq!(
+            settle_group(&["org.a:core"], &packages(&["org/b"]), None),
+            Group::Unsettled
+        );
+        assert_eq!(
+            settle_group(
+                &["org.a.x:core", "org.a.y:core"],
+                &packages(&["org/a"]),
+                None
+            ),
+            Group::Unsettled
+        );
+        // A class package that is the whole group beats one that shares a word with it.
+        assert_eq!(
+            settle_group(
+                &["dom4j:dom4j", "org.dom4j:dom4j"],
+                &packages(&["org/dom4j"]),
+                None
+            ),
+            Group::Settled("org.dom4j:dom4j")
+        );
+        // The bundle name goes first: h2's classes are `org/h2`, its group `com.h2database`.
+        assert_eq!(
+            settle_group(
+                &["com.h2database:h2"],
+                &packages(&["org/h2"]),
+                Some("com.h2database")
+            ),
+            Group::Settled("com.h2database:h2")
+        );
+    }
+
+    #[test]
+    fn a_bundle_name_finds_its_coordinate() {
+        let artifacts: BTreeMap<&str, Vec<&str>> = [
+            ("tomcat-catalina", vec!["org.apache.tomcat:tomcat-catalina"]),
+            ("guava", vec!["com.google.guava:guava"]),
+            ("core", vec!["org.other:core"]),
+        ]
+        .into();
+        for (bundle, want) in [
+            (
+                "org.apache.tomcat-catalina",
+                Some("org.apache.tomcat:tomcat-catalina"),
+            ),
+            ("com.google.guava", Some("com.google.guava:guava")),
+            ("org.acme.core", None),
+            ("org.acme.unknown", None),
+        ] {
+            assert_eq!(settle_bundle(&artifacts, bundle), want, "{bundle}");
+        }
     }
 
     fn ranges(events: &[(&str, &str)]) -> Vec<ParsedRange<Version>> {
