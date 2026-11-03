@@ -24,7 +24,7 @@ use fleetreach_core::{Ecosystem, RepoId, VulnFinding};
 
 use crate::apkver::ApkVersion;
 use crate::db::{Advisory, DistroDb};
-use crate::distro::{Distro, Family};
+use crate::distro::{is_suse_vex, Distro, Family};
 use crate::dpkgver::DebVersion;
 use crate::packages::OsPackage;
 use crate::rpmver::RpmVersion;
@@ -110,16 +110,24 @@ struct Source<'a> {
     source: &'a str,
     version: &'a str,
     binaries: Vec<&'a str>,
+    /// Binaries whose own version differs from the source one (SUSE's `libreadline7`
+    /// 7.0 built from `bash` 4.4), with that version.
+    other_versions: BTreeMap<&'a str, &'a str>,
     /// The module stream the packages came from, if any.
     module: Option<&'a str>,
 }
+
+/// A binary at a version of its own, with that version (see [`Source::other_versions`]).
+type OwnVersion<'a> = Option<(&'a str, &'a str)>;
 
 /// What to match: source packages with their binaries folded in, or each binary on its own
 /// where the advisories name binaries (`binary_names`).
 fn sources(packages: &[OsPackage], binary_names: bool) -> Vec<Source<'_>> {
     /// Name, version and module stream.
     type Key<'a> = (&'a str, &'a str, Option<&'a str>);
-    let mut by: BTreeMap<Key<'_>, (&str, Vec<&str>)> = BTreeMap::new();
+    /// The source name, the binaries, and those at a version of their own.
+    type Group<'a> = (&'a str, Vec<&'a str>, BTreeMap<&'a str, &'a str>);
+    let mut by: BTreeMap<Key<'_>, Group<'_>> = BTreeMap::new();
     for p in packages {
         let module = p.module.as_deref();
         let key = if binary_names {
@@ -127,23 +135,29 @@ fn sources(packages: &[OsPackage], binary_names: bool) -> Vec<Source<'_>> {
         } else {
             (p.source.as_str(), p.source_version.as_str(), module)
         };
-        by.entry(key)
-            .or_insert((p.source.as_str(), Vec::new()))
-            .1
-            .push(p.name.as_str());
+        let entry = by
+            .entry(key)
+            .or_insert((p.source.as_str(), Vec::new(), BTreeMap::new()));
+        entry.1.push(p.name.as_str());
+        if p.version != key.1 {
+            entry.2.insert(p.name.as_str(), p.version.as_str());
+        }
     }
     by.into_iter()
-        .map(|((name, version, module), (source, mut binaries))| {
-            binaries.sort_unstable();
-            binaries.dedup();
-            Source {
-                name,
-                source,
-                version,
-                binaries,
-                module,
-            }
-        })
+        .map(
+            |((name, version, module), (source, mut binaries, other_versions))| {
+                binaries.sort_unstable();
+                binaries.dedup();
+                Source {
+                    name,
+                    source,
+                    version,
+                    binaries,
+                    other_versions,
+                    module,
+                }
+            },
+        )
         .collect()
 }
 
@@ -180,6 +194,7 @@ fn finding<V: Ord + Clone + std::fmt::Display>(
     v: &V,
     adv: &Advisory<V>,
     fixed: Option<V>,
+    binary: OwnVersion<'_>,
 ) -> VulnFinding {
     let installed = to_semver(src.version);
     let mut patched = osv::patched_reqs(&osv::safe_intervals(v, &adv.ranges), |b| {
@@ -187,10 +202,14 @@ fn finding<V: Ord + Clone + std::fmt::Display>(
     });
     // Fail closed: if the coerced form would read the installed version as fixed, keep the
     // finding vulnerable with no patched range.
-    if patched.iter().any(|r| r.matches(&installed)) {
+    // A binary at its own version: its fix is in that version's terms, not the source's.
+    if binary.is_some() || patched.iter().any(|r| r.matches(&installed)) {
         patched.clear();
     }
     let mut notes = Vec::new();
+    if let Some((name, version)) = binary {
+        notes.push(format!("{name} {version}"));
+    }
     if fixed.is_none() {
         notes.push(if has_fix(&adv.ranges) {
             "fixed only in another line".to_string()
@@ -242,7 +261,8 @@ impl Distro {
     fn name_of_urgency(&self) -> &'static str {
         match self.namespace.as_str() {
             "ubuntu" => "priority",
-            "redhat" => "status",
+            // The vendors' VEX statuses (Red Hat, SUSE): no other urgency reaches these distros.
+            "redhat" | "suse" | "opensuse" => "status",
             _ => "urgency",
         }
     }
@@ -271,6 +291,7 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
     ctx: &Ctx,
     src: &Source,
     v: &V,
+    parse: impl Fn(&str) -> Option<V>,
     by_name: impl Fn(&str, &str) -> &'d [Advisory<V>],
     out: &mut Vec<VulnFinding>,
 ) {
@@ -300,50 +321,122 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
         .flat_map(Advisory::keys)
         .filter(|k| k.starts_with("CVE-"))
         .collect();
-    // By binary name first. A source package's entry stands for its binaries only where it
-    // has no fix (vendors list fixes and "not affected" per binary, open issues per source),
-    // and never for a binary the fallback speaks about itself.
-    let mut fallback_ids: BTreeSet<&str> = BTreeSet::new();
-    let mut fallbacks: Vec<&Advisory<V>> = Vec::new();
-    let mut by_binary: BTreeSet<&str> = BTreeSet::new();
-    for eco in &ctx.distro.fallbacks {
-        for adv in by_name(eco, src.name) {
-            by_binary.extend(adv.keys().filter(|k| k.starts_with("CVE-")));
-            if !adv.keys().any(|k| known.contains(k)) && fallback_ids.insert(adv.id.as_str()) {
-                fallbacks.push(adv);
-            }
-        }
-    }
+    // Fallbacks in order: the first that speaks about a CVE for this package is the one
+    // that counts. Within one, by binary name first: vendors list fixes and "not affected"
+    // per binary package (Red Hat, SUSE). A source package's entry stands for its binaries
+    // only where it has no fix (Red Hat lists open issues per source), and never for a CVE
+    // a binary's entry speaks about.
+    let mut source_names = vec![src.name];
     if src.source != src.name {
-        for eco in &ctx.distro.fallbacks {
-            for adv in by_name(eco, src.source) {
-                if !has_fix(&adv.ranges)
-                    && !adv
-                        .keys()
-                        .any(|k| known.contains(k) || by_binary.contains(k))
-                    && fallback_ids.insert(adv.id.as_str())
-                {
-                    fallbacks.push(adv);
-                }
+        source_names.push(src.source);
+    }
+    // SUSE's open status is its word that no build fixes the CVE yet, which a release
+    // record's fix (one this package already has) does not overrule: SUSE lists CVEs an
+    // update did not fix among those it names (SUSE-SU-2025:4092-1 and CVE-2025-1372).
+    // Only a release record that finds this package affected speaks first. Red Hat's open
+    // entries can be about another stream, so a release fix stays first there.
+    let hit: BTreeSet<&str> = base
+        .clone()
+        .chain(overlays.iter().flat_map(|e| lookup(e).iter()))
+        .filter(|a| affected(v, a).is_some())
+        .flat_map(Advisory::keys)
+        .filter(|k| k.starts_with("CVE-"))
+        .collect();
+    let is_open = |a: &Advisory<V>| !a.ranges.is_empty() && !has_fix(&a.ranges);
+    let mut spoken: BTreeSet<&str> = known.clone();
+    let mut spoken_open: BTreeSet<&str> = hit;
+    // Each with whether it is borrowed (its fix is not the release's) and the binary it names
+    // when that binary's version is not the source's: its entry is in that version's terms.
+    let mut fallbacks: Vec<(&Advisory<V>, bool, OwnVersion<'_>)> = Vec::new();
+    for eco in &ctx.distro.fallbacks {
+        let borrowed = ctx.distro.borrowed.contains(eco);
+        let mut by_binary: BTreeSet<&str> = BTreeSet::new();
+        let mut here: Vec<(&Advisory<V>, OwnVersion<'_>)> = Vec::new();
+        for bin in &src.binaries {
+            let own = src.other_versions.get(bin).map(|ver| (*bin, *ver));
+            for adv in by_name(eco, bin) {
+                by_binary.extend(adv.keys().filter(|k| k.starts_with("CVE-")));
+                here.push((adv, own));
             }
         }
+        for name in source_names.iter().filter(|n| !src.binaries.contains(n)) {
+            here.extend(
+                by_name(eco, name)
+                    .iter()
+                    .filter(|a| !has_fix(&a.ranges) && !a.keys().any(|k| by_binary.contains(k)))
+                    .map(|a| (a, None)),
+            );
+        }
+        // From a borrowed codestream only its fixes count: an older build is vulnerable, while
+        // its open statuses are not the vendor's word about this release.
+        let fresh: Vec<(&Advisory<V>, OwnVersion<'_>)> = here
+            .into_iter()
+            .filter(|(a, _)| {
+                let before = if is_suse_vex(eco) && is_open(a) {
+                    &spoken_open
+                } else {
+                    &spoken
+                };
+                !a.keys().any(|k| before.contains(k))
+            })
+            .filter(|(a, _)| !borrowed || has_fix(&a.ranges))
+            .collect();
+        for (adv, _) in &fresh {
+            spoken.extend(adv.keys().filter(|k| k.starts_with("CVE-")));
+            spoken_open.extend(adv.keys().filter(|k| k.starts_with("CVE-")));
+        }
+        fallbacks.extend(fresh.into_iter().map(|(a, own)| (a, borrowed, own)));
     }
+    let wanted = |adv: &Advisory<V>| {
+        !(ctx.opts.ignore_unimportant && adv.unimportant())
+            && adv
+                .module
+                .as_ref()
+                .is_none_or(|m| in_stream(ctx.distro, src, m))
+    };
     let candidates = base
         .filter(|a| !a.keys().any(|k| superseded.contains(k)))
-        .chain(overlays.iter().flat_map(|e| lookup(e).iter()))
-        .chain(fallbacks);
-    for adv in candidates {
-        if ctx.opts.ignore_unimportant && adv.unimportant() {
-            continue;
-        }
-        if let Some(m) = &adv.module {
-            if !in_stream(ctx.distro, src, m) {
-                continue;
-            }
-        }
+        .chain(overlays.iter().flat_map(|e| lookup(e).iter()));
+    for adv in candidates.filter(|a| wanted(a)) {
         if let Some(fixed) = affected(v, adv) {
-            out.push(finding(ctx, src, v, adv, fixed));
+            out.push(finding(ctx, src, v, adv, fixed, None));
         }
+    }
+    // One finding per fallback advisory, though several binaries may speak about it: open
+    // if any affected binary has no fix (upgrading fixes nothing then), else the highest fix
+    // in the source's own terms, else one in a binary's own.
+    type Chosen<'a, V> = (Option<V>, &'a Advisory<V>, OwnVersion<'a>);
+    let rank = |c: &Chosen<'_, V>| match c {
+        (None, ..) => 2,
+        (Some(_), _, None) => 1,
+        (Some(_), _, Some(_)) => 0,
+    };
+    let mut chosen: BTreeMap<&str, Chosen<'_, V>> = BTreeMap::new();
+    for (adv, borrowed, own) in fallbacks.into_iter().filter(|(a, ..)| wanted(a)) {
+        // Fail closed: a binary version that does not parse is read as the source's.
+        let own_v = own.and_then(|(_, ver)| parse(ver).map(|bv| (own, bv)));
+        let (installed, own) = match &own_v {
+            Some((own, bv)) => (bv, *own),
+            None => (v, None),
+        };
+        let Some(fixed) = affected(installed, adv) else {
+            continue;
+        };
+        let new = (fixed.filter(|_| !borrowed), adv, own);
+        let better = match chosen.get(adv.id.as_str()) {
+            None => true,
+            Some(old) => match rank(&new).cmp(&rank(old)) {
+                std::cmp::Ordering::Greater => true,
+                std::cmp::Ordering::Less => false,
+                std::cmp::Ordering::Equal => new.0.as_ref() > old.0.as_ref(),
+            },
+        };
+        if better {
+            chosen.insert(adv.id.as_str(), new);
+        }
+    }
+    for (fixed, adv, own) in chosen.into_values() {
+        out.push(finding(ctx, src, v, adv, fixed, own));
     }
 }
 
@@ -361,15 +454,36 @@ pub fn scan(
     for src in sources(packages, distro.binary_names) {
         match distro.family {
             Family::Deb => match DebVersion::parse(src.version) {
-                Some(v) => match_source(&ctx, &src, &v, |e, n| db.deb(e, n), &mut out),
+                Some(v) => match_source(
+                    &ctx,
+                    &src,
+                    &v,
+                    DebVersion::parse,
+                    |e, n| db.deb(e, n),
+                    &mut out,
+                ),
                 None => skipped_unparseable += 1,
             },
             Family::Apk => match ApkVersion::parse(src.version) {
-                Some(v) => match_source(&ctx, &src, &v, |e, n| db.apk(e, n), &mut out),
+                Some(v) => match_source(
+                    &ctx,
+                    &src,
+                    &v,
+                    ApkVersion::parse,
+                    |e, n| db.apk(e, n),
+                    &mut out,
+                ),
                 None => skipped_unparseable += 1,
             },
             Family::Rpm => match RpmVersion::parse(src.version) {
-                Some(v) => match_source(&ctx, &src, &v, |e, n| db.rpm(e, n), &mut out),
+                Some(v) => match_source(
+                    &ctx,
+                    &src,
+                    &v,
+                    RpmVersion::parse,
+                    |e, n| db.rpm(e, n),
+                    &mut out,
+                ),
                 None => skipped_unparseable += 1,
             },
         }
@@ -452,7 +566,14 @@ mod tests {
         let src = &sources(&pkgs, false)[0];
         let mut out = Vec::new();
         let v = DebVersion::parse("1.0-1").unwrap();
-        match_source(&ctx, src, &v, |_, _| std::slice::from_ref(&a), &mut out);
+        match_source(
+            &ctx,
+            src,
+            &v,
+            DebVersion::parse,
+            |_, _| std::slice::from_ref(&a),
+            &mut out,
+        );
         assert_eq!(out.len(), 1);
         assert!(out[0].title.contains("no fix yet"), "{}", out[0].title);
         assert!(out[0].title.contains("urgency unimportant"));
@@ -473,7 +594,14 @@ mod tests {
             ..ctx
         };
         let mut out = Vec::new();
-        match_source(&ctx, src, &v, |_, _| std::slice::from_ref(&a), &mut out);
+        match_source(
+            &ctx,
+            src,
+            &v,
+            DebVersion::parse,
+            |_, _| std::slice::from_ref(&a),
+            &mut out,
+        );
         assert!(out.is_empty());
     }
 
@@ -507,7 +635,14 @@ mod tests {
             let src = &sources(&pkgs, false)[0];
             let mut out = Vec::new();
             let v = DebVersion::parse(installed).unwrap();
-            match_source(&ctx, src, &v, |_, _| std::slice::from_ref(&a), &mut out);
+            match_source(
+                &ctx,
+                src,
+                &v,
+                DebVersion::parse,
+                |_, _| std::slice::from_ref(&a),
+                &mut out,
+            );
             assert_eq!(!out.is_empty(), hit, "{installed}");
             if hit {
                 assert!(out[0].occurrences[0].is_vulnerable());
@@ -559,6 +694,7 @@ mod tests {
                 &ctx,
                 src,
                 &DebVersion::parse(ver).unwrap(),
+                DebVersion::parse,
                 lookup,
                 &mut out,
             );
@@ -758,6 +894,137 @@ mod tests {
             got[0].1.ends_with("no fix yet; status will not fix]"),
             "{}",
             got[0].1
+        );
+    }
+
+    #[test]
+    fn suse_vex_entries_name_binaries() {
+        // SUSE's osv.dev records name source packages, its VEX names binaries.
+        let pkg = |name: &str| OsPackage {
+            name: name.into(),
+            version: "6.8.2-150600.3.3.1".into(),
+            source: "qt6-svg".into(),
+            source_version: "6.8.2-150600.3.3.1".into(),
+            arch: None,
+            module: None,
+        };
+        let mut compat = pkg("libqt7-compat");
+        compat.version = "7.0-150600.3.3.1".into();
+        let pkgs = vec![pkg("libQt6Svg6"), pkg("qt6-svg-imports"), compat];
+        let leap = crate::distro::explicit("openSUSE:Leap 15.6", Family::Rpm);
+        let vex = "openSUSE:Leap 15.6::vex";
+        let mut db = DistroDb::default();
+        let status = |cve: &str, events: &[(&str, &str)], status: &str| {
+            let mut a = adv(cve, events, RpmVersion::parse);
+            a.aliases = vec![cve.into()];
+            a.urgency = Some(status.to_string()).filter(|s| !s.is_empty());
+            if events.is_empty() {
+                a.ranges.clear();
+            }
+            a
+        };
+        // One binary not affected, the other open: open.
+        db.insert_rpm(vex, "libQt6Svg6", status("CVE-2026-1", &[], "not affected"));
+        db.insert_rpm(
+            vex,
+            "qt6-svg-imports",
+            status("CVE-2026-1", &[("introduced", "0")], "affected"),
+        );
+        // Both fixed: the higher fix.
+        for (bin, fix) in [
+            ("libQt6Svg6", "6.8.2-150600.3.6.1"),
+            ("qt6-svg-imports", "6.8.2-150600.3.9.1"),
+        ] {
+            db.insert_rpm(
+                vex,
+                bin,
+                status("CVE-2026-2", &[("introduced", "0"), ("fixed", fix)], ""),
+            );
+        }
+        // Fixed in osv.dev's own record, which this build has, but SUSE says it is still
+        // affected (an update that names CVEs it did not fix): open.
+        let mut own = adv(
+            "openSUSE-SU-2026:3",
+            &[("introduced", "0"), ("fixed", "6.8.2-150600.3.3.1")],
+            RpmVersion::parse,
+        );
+        own.aliases = vec!["CVE-2026-3".into()];
+        db.insert_rpm("openSUSE:Leap 15.6", "qt6-svg", own);
+        db.insert_rpm(
+            vex,
+            "libQt6Svg6",
+            status("CVE-2026-3", &[("introduced", "0")], "affected"),
+        );
+        // osv.dev's own record finds the package affected: it speaks, the VEX adds nothing.
+        let mut own = adv(
+            "openSUSE-SU-2026:5",
+            &[("introduced", "0"), ("fixed", "6.8.2-150600.3.4.1")],
+            RpmVersion::parse,
+        );
+        own.aliases = vec!["CVE-2026-5".into()];
+        db.insert_rpm("openSUSE:Leap 15.6", "qt6-svg", own);
+        db.insert_rpm(
+            vex,
+            "libQt6Svg6",
+            status("CVE-2026-5", &[("introduced", "0")], "affected"),
+        );
+        // A binary at its own version (SUSE's libreadline7 7.0 from bash 4.4): its fix is
+        // compared with that version, not the source's.
+        db.insert_rpm(
+            vex,
+            "libqt7-compat",
+            status(
+                "CVE-2026-6",
+                &[("introduced", "0"), ("fixed", "7.0-150600.3.1.1")],
+                "",
+            ),
+        );
+        db.insert_rpm(
+            vex,
+            "libqt7-compat",
+            status(
+                "CVE-2026-7",
+                &[("introduced", "0"), ("fixed", "7.0-150600.3.5.1")],
+                "",
+            ),
+        );
+        // Only "not affected": nothing.
+        db.insert_rpm(vex, "libQt6Svg6", status("CVE-2026-4", &[], "not affected"));
+        let s = scan(
+            &leap,
+            &pkgs,
+            &db,
+            &RepoId("img".into()),
+            ScanOptions::default(),
+        );
+        let got: Vec<(&str, bool)> = s
+            .findings
+            .iter()
+            .map(|f| (f.advisory_id.as_str(), f.title.contains("no fix yet")))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                ("CVE-2026-1", true),
+                ("CVE-2026-2", false),
+                ("CVE-2026-3", true),
+                ("CVE-2026-7", false),
+                ("openSUSE-SU-2026:5", false),
+            ],
+            "{:?}",
+            s.findings
+        );
+        assert!(
+            s.findings[3]
+                .title
+                .contains("libqt7-compat 7.0-150600.3.3.1; fixed in 7.0-150600.3.5.1"),
+            "{}",
+            s.findings[3].title
+        );
+        let fixed = format!("{:?}", s.findings[1].occurrences);
+        assert!(
+            fixed.contains("150600.3.9.1") && !fixed.contains("150600.3.6.1"),
+            "{fixed}"
         );
     }
 

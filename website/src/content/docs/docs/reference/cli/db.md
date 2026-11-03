@@ -39,7 +39,7 @@ Options:
       --all                fetch every language osv.dev export fleetreach can read (distro exports are fetched only by name or for a fleet's images: some are over a gigabyte)
       --distros <DISTROS>  fetch the exports for these distro releases (comma-separated, e.g. Debian:12,Wolfi): the per-release export where osv.dev has one, else the whole distribution's
       --osv-dir <DIR>      sync into this directory instead of the default cache (e.g. to copy to an air-gapped host)
-      --source <SOURCES>   what to fetch: `osv` (the exports), `cve` (cvelistV5) and `csaf:<provider>` (vendor CSAF VEX; `csaf:redhat`) [default: osv]
+      --source <SOURCES>   what to fetch: `osv` (the exports), `cve` (cvelistV5) and `csaf:<provider>` (vendor CSAF VEX; `csaf:redhat`, `csaf:suse`) [default: osv]
       --force              re-download even if the cached export was checked recently
   -q, --quiet              no progress output
   -h, --help               Print help
@@ -56,8 +56,8 @@ Usage: fleetreach db import [OPTIONS]
 
 Options:
       --cve <PATH>           a cvelistV5 checkout, its `cves.zip`, or a release's `*_all_CVEs_at_midnight.zip.zip`
-      --csaf <PATH>          a directory of CSAF documents, or a `.tar.zst` archive (Red Hat's `csaf_vex_<date>.tar.zst`)
-      --provider <PROVIDER>  the provider name the CSAF index is filed under [default: redhat]
+      --csaf <PATH>          a directory of CSAF documents, or a `.tar.zst` or `.tar.bz2` archive (Red Hat's `csaf_vex_<date>.tar.zst`, SUSE's `csaf-vex.tar.bz2`)
+      --provider <PROVIDER>  the provider name the CSAF index is filed under (`redhat`, `suse`) [default: redhat]
       --osv-dir <DIR>        index into this directory instead of the default cache
   -q, --quiet                no progress output
   -h, --help                 Print help

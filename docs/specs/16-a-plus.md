@@ -613,8 +613,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     fixed by the `modules.d` fallback. (3) Photon's `cve_id` is sometimes a Black Duck id
     (BDSA), which has no public page; those link the feed file. **Still open in phase 2**:
     CentOS and Fedora are gaps; RHEL module streams in the OSV data are not told apart (the
-    OSV Red Hat records carry no stream); Bottlerocket; SUSE CSAF unfixed statuses; the rpm
-    comparison against Grype.
+    OSV Red Hat records carry no stream); Bottlerocket; the rpm comparison against Grype.
     **Status: Red Hat CSAF statuses implemented 2026-11-03, unreleased.** The CSAF index
     (`csaf:redhat`, 415 MB archive, about 7 minutes and 6.8 GB RSS to index, so never
     started by a scan) is derived on first use into `Red Hat:enterprise_linux:N::vex`
@@ -637,6 +636,35 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     entries and no source fixes for binaries. (3) Purl versions are percent-encoded
     (`module%2Bel8`), and rpm's order treats `%` as a separator: decoded on index and on
     derive.
+    **Status: SUSE CSAF statuses implemented 2026-11-03, unreleased.** `csaf:suse` (526 MB
+    `.tar.bz2`, 19 GB of JSON over 73,700 documents; about 14 minutes and 10.4 GB RSS to
+    index into 61,548 records, 207 MB) derives into `<osv ecosystem>::vex` exports per
+    product (`openSUSE:Leap 15.6::vex`, `SUSE:Linux Enterprise Server 15 SP6-LTSS::vex`);
+    products are matched by name, modules and other products are dropped. SUSE's entries
+    name binaries with a `pkg:rpm/suse/` purl. **Found**: (1) SLES matched only the
+    Basesystem and Server Applications modules and not LTSS, a false clean on SLES BCI
+    15.6 (15 of 238 CVEs): osv.dev's Basesystem SP6 records stop at 2026-01-05 and later
+    fixes are only under `Server 15 SP6-LTSS`, and packages of other modules (Containers,
+    Python 3, Public Cloud, ...) are in their own ecosystems. Now all are matched, as
+    optional ecosystems (absent is no gap). (2) Binary-named entries were dropped at load
+    (the wanted set held source names only). (3) SUSE's `recommended` names the build to
+    use, also for a package it lists `known_affected` (214,371 such pairs, CVE-2025-1372
+    on libdw1): an explicit status outranks it, unlike Red Hat where a fix outranks. (4) A
+    SUSE update advisory names CVEs it did not fix (SUSE-SU-2025:4092-1 lists
+    CVE-2025-1372), so a SUSE open status is suppressed only by a release record that
+    matches as affected; Red Hat keeps the release-first rule (its open entries can be about
+    another stream). (5) A binary at a version of its own (`libreadline7` 7.0 from `bash`
+    4.4) was compared with the source version, a false positive: binary entries now compare
+    with the binary's version. (6) Borrowing SLE's open statuses for Leap gave about 190
+    extras SUSE's Leap OVAL does not list; Leap borrows SLE SPx fixes only, reported as
+    fixed only in another line. (7) SUSE's published `.sha256` matches neither the archive
+    nor the tar. Validated against OpenSCAP 1.3.6 evaluating SUSE's OVAL (fixed and
+    `-affected` files): SLES BCI 15.6 238 of 238, 0 missed, 1 extra (a gcc15 CVE the VEX
+    lists open, newer than the OVAL); Tumbleweed 2 of 2; Leap 15.6 11 of 13 (CVE-2026-40226
+    is only an SLE open status, not borrowed; CVE-2026-6732 is in no VEX entry), with the
+    extras being borrowed SLE fixes the frozen post-end-of-life Leap OVAL does not track;
+    Leap 15.5 2 of 2 (frozen OVAL). Tumbleweed's 2014 bash CVEs come from an osv.dev record
+    (openSUSE-SU-2024:10106-1, "fixed in 7.0-92.1" for bash) and are left as osv.dev says.
   - **Phase 3 (1.8.0)**: pull by digest from an OCI registry (behind `network`, docker
     config credentials); per-layer attribution and base-image detection from image history;
     base-image rollup and rebuild advice across the fleet; VEX discovered from OCI

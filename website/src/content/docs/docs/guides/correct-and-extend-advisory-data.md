@@ -1,6 +1,6 @@
 ---
 title: Correct and extend advisory data
-description: Add your own advisories and corrections as OSV files, bring in CVE 5.x records and Red Hat CSAF VEX, check the local data for quality problems, and measure what each source adds.
+description: Add your own advisories and corrections as OSV files, bring in CVE 5.x records and Red Hat and SUSE CSAF VEX, check the local data for quality problems, and measure what each source adds.
 sidebar:
   order: 17
 ---
@@ -42,9 +42,10 @@ with.
 ## CVE 5.x records and vendor CSAF
 
 ```sh
-fleetreach db sync --source cve,csaf:redhat     # network build
-fleetreach db import --cve ./cvelistV5          # or a local copy
+fleetreach db sync --source cve,csaf:redhat,csaf:suse   # network build
+fleetreach db import --cve ./cvelistV5                  # or a local copy
 fleetreach db import --csaf ./csaf_vex_2026-11-01.tar.zst --provider redhat
+fleetreach db import --csaf ./csaf-vex.tar.bz2 --provider suse
 ```
 
 - **CVE 5.x** (the CVE Program's [cvelistV5](https://github.com/CVEProject/cvelistV5)) carries
@@ -55,18 +56,22 @@ fleetreach db import --csaf ./csaf_vex_2026-11-01.tar.zst --provider redhat
 - **Red Hat CSAF VEX** gives a status for every Red Hat product and component per CVE,
   including the ones OSV's Red Hat export does not carry: affected with no fix yet, will not
   fix, fix deferred, out of support scope, under investigation, and not affected with a
-  justification. `db import --csaf` reads any CSAF 2.0 directory or `.tar.zst`. Scans of
-  RHEL and UBI images use it for the CVEs Red Hat has not fixed (see
+  justification. `db import --csaf` reads any CSAF 2.0 directory, `.tar.zst` or `.tar.bz2`.
+  Scans of RHEL and UBI images use it for the CVEs Red Hat has not fixed (see
   [container images](/fleetreach/docs/ecosystems/container-images/)).
+- **SUSE CSAF VEX** does the same for SUSE and openSUSE products, per binary package. Scans
+  of openSUSE, SLES and SLE Micro images use it. SUSE publishes a `.sha256` beside the
+  archive that matches neither the archive nor its contents, so fleetreach records the
+  sha256 of what it downloaded instead.
 
 Both are reduced to a compact index next to the OSV exports (`cvelistV5/index.jsonl.gz`,
 `csaf/<provider>/index.jsonl.gz`, each with a `.meta.json` recording the upstream file,
 sha256 and date), so one directory still serves an air-gapped host. `db status` lists them.
 A failed fetch or index never replaces a good one.
 
-In this release they feed `db quality` and `db crosscheck`; scans do not match against them
-yet. CVE-derived package data is the CNA's claim, unreviewed; Red Hat's statuses are for OS
-packages, which scans read in a later release.
+Both feed `db quality` and `db crosscheck`. Scans match the vendor CSAF indexes for images
+of that vendor's distributions, but never the CVE 5.x records: CVE-derived package data is
+the CNA's claim, unreviewed.
 
 ## Check the data: `db quality`
 

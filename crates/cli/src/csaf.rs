@@ -119,8 +119,9 @@ impl VendorState {
         }
     }
 
-    /// Derive the state from a product's status and its remediation. `None` for `recommended`,
-    /// which names a version to use rather than a vulnerability status.
+    /// Derive the state from a product's status and its remediation. `recommended` (the version
+    /// to use) reads as fixed: SUSE names its fixes that way, though it also recommends the
+    /// current build of a package it lists as still affected, which [`suse_vex`] resolves.
     #[must_use]
     pub fn derive(
         status: ProductStatus,
@@ -129,10 +130,11 @@ impl VendorState {
     ) -> Option<VendorState> {
         let details = details.unwrap_or("").to_ascii_lowercase();
         Some(match status {
-            ProductStatus::Fixed | ProductStatus::FirstFixed => Self::Fixed,
+            ProductStatus::Fixed | ProductStatus::FirstFixed | ProductStatus::Recommended => {
+                Self::Fixed
+            }
             ProductStatus::KnownNotAffected => Self::NotAffected,
             ProductStatus::UnderInvestigation => Self::UnderInvestigation,
-            ProductStatus::Recommended => return None,
             ProductStatus::KnownAffected
             | ProductStatus::FirstAffected
             | ProductStatus::LastAffected => match remediation {
@@ -432,7 +434,9 @@ fn component_identity(
 ) -> (String, Option<String>, Option<String>) {
     if let Some(purl) = purl {
         let (base, qualifiers) = purl.split_once('?').unwrap_or((purl, ""));
+        // SUSE writes an unversioned component as `name@` or `name@?upstream=...`.
         let (path, version) = match base.rsplit_once('@') {
+            Some((p, "")) if p.contains('/') => (p, None),
             Some((p, v)) if p.contains('/') => (p, Some(v.to_string())),
             _ => (base, None),
         };
@@ -529,7 +533,8 @@ pub struct ReadResult {
 }
 
 /// Read every CSAF document under `input`: a directory of `*.json` documents (searched
-/// recursively), or a `.tar.zst` archive like Red Hat's `csaf_vex_<date>.tar.zst`.
+/// recursively), or a tar archive compressed with zstd (Red Hat's `csaf_vex_<date>.tar.zst`)
+/// or bzip2 (SUSE's `csaf-vex.tar.bz2`), told apart by their magic bytes.
 ///
 /// # Errors
 ///
@@ -555,10 +560,21 @@ pub fn read_all(input: &Path) -> Result<ReadResult, String> {
             .collect::<Result<_, _>>()?;
         absorb(&mut result, parsed);
     } else {
-        let file =
-            std::fs::File::open(input).map_err(|e| format!("reading {}: {e}", input.display()))?;
-        let decoder = ruzstd::decoding::StreamingDecoder::new(std::io::BufReader::new(file))
-            .map_err(|e| format!("{}: not a zstd stream: {e}", input.display()))?;
+        let mut file = std::io::BufReader::new(
+            std::fs::File::open(input).map_err(|e| format!("reading {}: {e}", input.display()))?,
+        );
+        let magic = std::io::BufRead::fill_buf(&mut file)
+            .map_err(|e| format!("reading {}: {e}", input.display()))?;
+        let decoder: Box<dyn std::io::Read> = if magic.starts_with(b"BZh") {
+            Box::new(bzip2_rs::DecoderReader::new(file))
+        } else {
+            Box::new(ruzstd::decoding::StreamingDecoder::new(file).map_err(|e| {
+                format!(
+                    "{}: neither a zstd nor a bzip2 stream: {e}",
+                    input.display()
+                )
+            })?)
+        };
         let mut archive = tar::Archive::new(decoder);
         // Parse in batches so a 24 GB archive never sits in memory, while JSON parsing (the
         // slow half) runs on every core.
@@ -643,7 +659,7 @@ fn rhel_release(platform: &str) -> Option<&str> {
         .filter(|r| !r.is_empty() && r.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// How a Red Hat state reads in a finding (`will not fix`), for the states that leave a
+/// How a vendor state reads in a finding (`will not fix`), for the states that leave a
 /// package exposed; `None` for fixed and not affected.
 fn unfixed_status(state: VendorState) -> Option<&'static str> {
     match state {
@@ -656,7 +672,7 @@ fn unfixed_status(state: VendorState) -> Option<&'static str> {
     }
 }
 
-/// Red Hat's aggregate severity as an OSV `database_specific.severity` band.
+/// A vendor's aggregate severity (Red Hat's `Important`, SUSE's `moderate`) as an OSV `database_specific.severity` band.
 fn severity_band(text: &str) -> Option<&'static str> {
     match text.to_ascii_lowercase().as_str() {
         "critical" => Some("CRITICAL"),
@@ -705,72 +721,55 @@ impl Verdict {
     }
 }
 
-/// The OSV records of one Red Hat record's RHEL rpm entries, by ecosystem
-/// ([`fleetreach_os::distro::red_hat_vex`]): one record per release, its id the CVE, one
-/// affected package per (component, module stream). A package fixed on a main-stream
-/// platform (`cpe:/o:redhat:enterprise_linux:8::baseos`) gets its fix version; one Red Hat
-/// lists as not fixed on the release gets no fix event and its status in
-/// `ecosystem_specific.status`; one it lists as not affected gets an empty range.
-#[must_use]
-pub fn red_hat_vex(record: &VexRecord) -> Vec<(String, Value)> {
-    type Key<'a> = (&'a str, Option<&'a str>);
-    let mut by_release: BTreeMap<&str, BTreeMap<Key<'_>, Verdict>> = BTreeMap::new();
-    for e in &record.entries {
-        if !e
-            .purl
-            .as_deref()
-            .is_some_and(|p| p.starts_with("pkg:rpm/redhat/"))
-            || e.component.is_empty()
-        {
-            continue;
-        }
-        let key = (e.component.as_str(), e.module.as_deref());
-        if e.state == VendorState::Fixed {
-            let (Some(release), Some(version)) = (
-                record
-                    .platforms
-                    .get(&e.platform)
-                    .and_then(|c| rhel_cpe_release(c)),
-                e.version.as_deref(),
-            ) else {
-                continue;
-            };
-            // Indexes written before versions were decoded hold `module%2Bel8...`.
-            let version = percent_decode(version);
-            let Some(parsed) = fleetreach_os::RpmVersion::parse(&version) else {
-                continue;
-            };
-            let slot = by_release.entry(release).or_default();
-            match slot.get(&key) {
-                Some(Verdict::Fixed(old))
-                    if fleetreach_os::RpmVersion::parse(old).is_some_and(|o| o >= parsed) => {}
-                _ => {
-                    slot.insert(key, Verdict::Fixed(version));
-                }
-            }
-        } else {
-            let release = rhel_release(&e.platform).or_else(|| {
-                record
-                    .platforms
-                    .get(&e.platform)
-                    .and_then(|c| rhel_cpe_release(c))
-            });
-            let verdict = match (e.state, unfixed_status(e.state)) {
-                (VendorState::NotAffected, _) => Verdict::NotAffected,
-                (_, Some(status)) if rhel_release(&e.platform).is_some() => Verdict::Open(status),
-                _ => continue,
-            };
-            let Some(release) = release else { continue };
-            let slot = by_release.entry(release).or_default();
-            if slot.get(&key).is_none_or(|old| old.rank() < verdict.rank()) {
-                slot.insert(key, verdict);
+/// What a vendor's VEX says per ecosystem, per (component, module stream).
+type Verdicts<'a> = BTreeMap<String, BTreeMap<(&'a str, Option<&'a str>), Verdict>>;
+
+/// Record `verdict` unless a stronger one is there: a fix outranks not affected, which
+/// outranks an open status, and of two fixes the higher version wins.
+fn add_verdict<'a>(
+    verdicts: &mut Verdicts<'a>,
+    ecosystem: String,
+    key: (&'a str, Option<&'a str>),
+    verdict: Verdict,
+) {
+    let slot = verdicts.entry(ecosystem).or_default();
+    let stronger = match (slot.get(&key), &verdict) {
+        (None, _) => true,
+        (Some(Verdict::Fixed(old)), Verdict::Fixed(new)) => {
+            match (
+                fleetreach_os::RpmVersion::parse(old),
+                fleetreach_os::RpmVersion::parse(new),
+            ) {
+                (Some(old), Some(new)) => new > old,
+                _ => false,
             }
         }
+        (Some(old), new) => old.rank() < new.rank(),
+    };
+    if stronger {
+        slot.insert(key, verdict);
     }
-    by_release
+}
+
+/// A fix version as rpm reads it, or `None` when it does not parse (the entry is skipped).
+fn rpm_fix(version: Option<&str>) -> Option<String> {
+    // Indexes written before versions were decoded hold `module%2Bel8...`.
+    let version = percent_decode(version?);
+    fleetreach_os::RpmVersion::parse(&version).map(|_| version)
+}
+
+/// The OSV records of one record's verdicts: one per ecosystem, its id the CVE, one affected
+/// package per (component, module stream). A fixed package gets its fix version; an open one
+/// no fix event and its status in `ecosystem_specific.status`; one not affected no range.
+fn vex_osv(
+    record: &VexRecord,
+    verdicts: Verdicts<'_>,
+    source: &str,
+    url: &str,
+) -> Vec<(String, Value)> {
+    verdicts
         .into_iter()
-        .map(|(release, components)| {
-            let ecosystem = fleetreach_os::distro::red_hat_vex(release);
+        .map(|(ecosystem, components)| {
             let affected: Vec<Value> = components
                 .into_iter()
                 .map(|((name, module), verdict)| {
@@ -805,11 +804,8 @@ pub fn red_hat_vex(record: &VexRecord) -> Vec<(String, Value)> {
                 "summary": record.cve,
                 "modified": record.modified,
                 "affected": affected,
-                "references": [{
-                    "type": "ADVISORY",
-                    "url": format!("https://access.redhat.com/security/cve/{}", record.cve),
-                }],
-                "database_specific": {"source": "Red Hat CSAF VEX", "document": record.document},
+                "references": [{"type": "ADVISORY", "url": url}],
+                "database_specific": {"source": source, "document": record.document},
             });
             if let Some(band) = record.severity.as_deref().and_then(severity_band) {
                 osv["database_specific"]["severity"] = Value::from(band);
@@ -817,6 +813,121 @@ pub fn red_hat_vex(record: &VexRecord) -> Vec<(String, Value)> {
             (ecosystem, osv)
         })
         .collect()
+}
+
+/// The OSV records of one Red Hat record's RHEL rpm entries, by ecosystem
+/// ([`fleetreach_os::distro::red_hat_vex`]), as [`vex_osv`] writes them. A package fixed on
+/// a main-stream platform (`cpe:/o:redhat:enterprise_linux:8::baseos`) gets its fix
+/// version; one Red Hat lists against the release (`red_hat_enterprise_linux_8`) as not
+/// fixed gets its status; one not affected on either gets an empty range.
+#[must_use]
+pub fn red_hat_vex(record: &VexRecord) -> Vec<(String, Value)> {
+    let mut verdicts = Verdicts::new();
+    for e in &record.entries {
+        if !e
+            .purl
+            .as_deref()
+            .is_some_and(|p| p.starts_with("pkg:rpm/redhat/"))
+            || e.component.is_empty()
+        {
+            continue;
+        }
+        let key = (e.component.as_str(), e.module.as_deref());
+        let main_stream = || {
+            record
+                .platforms
+                .get(&e.platform)
+                .and_then(|c| rhel_cpe_release(c))
+        };
+        let (release, verdict) = match (e.state, unfixed_status(e.state)) {
+            (VendorState::Fixed, _) => {
+                let (Some(release), Some(version)) = (main_stream(), rpm_fix(e.version.as_deref()))
+                else {
+                    continue;
+                };
+                (release, Verdict::Fixed(version))
+            }
+            (VendorState::NotAffected, _) => {
+                let Some(release) = rhel_release(&e.platform).or_else(main_stream) else {
+                    continue;
+                };
+                (release, Verdict::NotAffected)
+            }
+            (_, Some(status)) => {
+                let Some(release) = rhel_release(&e.platform) else {
+                    continue;
+                };
+                (release, Verdict::Open(status))
+            }
+            _ => continue,
+        };
+        add_verdict(
+            &mut verdicts,
+            fleetreach_os::distro::red_hat_vex(release),
+            key,
+            verdict,
+        );
+    }
+    let url = format!("https://access.redhat.com/security/cve/{}", record.cve);
+    vex_osv(record, verdicts, "Red Hat CSAF VEX", &url)
+}
+
+/// The OSV records of one SUSE record's rpm entries, by ecosystem
+/// ([`fleetreach_os::distro::suse_vex`] of the product's osv.dev ecosystem), as [`vex_osv`]
+/// writes them. SUSE names binary packages and its fixes `recommended` (read as fixed);
+/// products images are not matched against (SUSE Manager, cloud images) are left out.
+#[must_use]
+pub fn suse_vex(record: &VexRecord) -> Vec<(String, Value)> {
+    let suse = |e: &&VexEntry| {
+        e.purl
+            .as_deref()
+            .is_some_and(|p| p.starts_with("pkg:rpm/suse/"))
+            && !e.component.is_empty()
+    };
+    // SUSE's `recommended` names the build to use, not a fix: next to an explicit status for
+    // the same component (`known_affected`, `known_not_affected`) the status is the verdict.
+    // A package still affected in its current build is listed both ways (CVE-2025-1372,
+    // libdw1); taking the version as a fix would be a false clean.
+    let stated: BTreeSet<(&str, &str)> = record
+        .entries
+        .iter()
+        .filter(suse)
+        .filter(|e| {
+            !matches!(
+                e.status,
+                ProductStatus::Recommended | ProductStatus::Fixed | ProductStatus::FirstFixed
+            )
+        })
+        .map(|e| (e.platform.as_str(), e.component.as_str()))
+        .collect();
+    let mut verdicts = Verdicts::new();
+    for e in record.entries.iter().filter(suse) {
+        if matches!(e.status, ProductStatus::Recommended)
+            && stated.contains(&(e.platform.as_str(), e.component.as_str()))
+        {
+            continue;
+        }
+        let Some(ecosystem) = fleetreach_os::distro::suse_product_ecosystem(&e.platform) else {
+            continue;
+        };
+        let verdict = match (e.state, unfixed_status(e.state)) {
+            (VendorState::Fixed, _) => match rpm_fix(e.version.as_deref()) {
+                Some(version) => Verdict::Fixed(version),
+                None => continue,
+            },
+            (VendorState::NotAffected, _) => Verdict::NotAffected,
+            (_, Some(status)) => Verdict::Open(status),
+            _ => continue,
+        };
+        add_verdict(
+            &mut verdicts,
+            fleetreach_os::distro::suse_vex(&ecosystem),
+            (e.component.as_str(), None),
+            verdict,
+        );
+    }
+    let url = format!("https://www.suse.com/security/cve/{}.html", record.cve);
+    vex_osv(record, verdicts, "SUSE CSAF VEX", &url)
 }
 
 /// The directory under an OSV directory holding a provider's CSAF index.
@@ -973,7 +1084,11 @@ mod tests {
             d(S::Fixed, Some(R::VendorFix), None),
             Some(VendorState::Fixed)
         );
-        assert_eq!(d(S::Recommended, None, None), None);
+        // SUSE names its fixes `recommended`.
+        assert_eq!(
+            d(S::Recommended, Some(R::VendorFix), None),
+            Some(VendorState::Fixed)
+        );
     }
 
     #[test]
@@ -1072,6 +1187,68 @@ mod tests {
             !by_name.contains_key("gvim"),
             "an AUS-only fix is not the release's"
         );
+    }
+
+    /// SUSE's shape (from CVE-2025-1372): binary names, products by name, `recommended` for
+    /// both fixes and the current build of a package still affected.
+    #[test]
+    fn suse_records_per_product() {
+        let line = r#"{"cve":"CVE-2025-1372","document":"CVE-2025-1372","modified":"2026-10-17",
+          "severity":"moderate",
+          "platforms":{"SUSE Linux Enterprise Server 15 SP6":"cpe:/o:suse:sles:15:sp6",
+            "SUSE Linux Enterprise Module for Basesystem 15 SP6":"cpe:/o:suse:sle-module-basesystem:15:sp6",
+            "openSUSE Leap 15.6":"cpe:/o:opensuse:leap:15.6"},
+          "entries":[
+            {"platform":"SUSE Linux Enterprise Server 15 SP6","component":"libdw1","purl":"pkg:rpm/suse/libdw1",
+             "status":"known_affected","state":"affected"},
+            {"platform":"SUSE Linux Enterprise Server 15 SP6","component":"libdw1","purl":"pkg:rpm/suse/libdw1",
+             "version":"0:0.185-150400.5.8.3","status":"recommended","state":"fixed"},
+            {"platform":"SUSE Linux Enterprise Server 15 SP6","component":"libelf1","purl":"pkg:rpm/suse/libelf1",
+             "version":"0:0.185-150400.5.8.3","status":"recommended","state":"fixed"},
+            {"platform":"SUSE Linux Enterprise Server 15 SP6","component":"libasm1","purl":"pkg:rpm/suse/libasm1",
+             "status":"known_not_affected","state":"not_affected"},
+            {"platform":"SUSE Linux Enterprise Server 15 SP6","component":"libasm1","purl":"pkg:rpm/suse/libasm1",
+             "version":"0:0.185-150400.5.8.3","status":"recommended","state":"fixed"},
+            {"platform":"SUSE Linux Enterprise Module for Basesystem 15 SP6","component":"libdw1","purl":"pkg:rpm/suse/libdw1",
+             "version":"0:0.185-150400.5.8.3","status":"recommended","state":"fixed"},
+            {"platform":"openSUSE Leap 15.6","component":"elfutils","purl":"pkg:rpm/suse/elfutils@",
+             "status":"known_affected","state":"affected"}]}"#;
+        let record: VexRecord = serde_json::from_str(line).unwrap();
+        let out: BTreeMap<String, Value> = suse_vex(&record).into_iter().collect();
+        // Modules are not products an image names.
+        assert_eq!(
+            out.keys().collect::<Vec<_>>(),
+            [
+                "SUSE:Linux Enterprise Server 15 SP6::vex",
+                "openSUSE:Leap 15.6::vex"
+            ]
+        );
+        let sles = &out["SUSE:Linux Enterprise Server 15 SP6::vex"];
+        assert_eq!(
+            sles["references"][0]["url"],
+            "https://www.suse.com/security/cve/CVE-2025-1372.html"
+        );
+        let by_name: BTreeMap<&str, &Value> = sles["affected"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| (a["package"]["name"].as_str().unwrap(), a))
+            .collect();
+        // Still affected, though its current build is recommended.
+        assert_eq!(
+            by_name["libdw1"]["ranges"][0]["events"],
+            serde_json::json!([{"introduced": "0"}])
+        );
+        assert_eq!(
+            by_name["libdw1"]["ecosystem_specific"]["status"],
+            "affected"
+        );
+        // A recommendation alone is a fix.
+        assert_eq!(
+            by_name["libelf1"]["ranges"][0]["events"],
+            serde_json::json!([{"introduced": "0"}, {"fixed": "0:0.185-150400.5.8.3"}])
+        );
+        assert_eq!(by_name["libasm1"]["ranges"], serde_json::json!([]));
     }
 
     #[test]

@@ -336,12 +336,13 @@ fn entries_of(mut r: Record, wanted: &Wanted) -> (Vec<Entry>, BTreeMap<String, u
                     cvss_vector: cvss_vector.clone(),
                     urgency: urgency.clone(),
                     module: a.ecosystem_specific.as_ref().and_then(|e| e.module.clone()),
-                    url: (crate::feeds::feed_for(eco).is_some()
-                        || crate::distro::is_red_hat_vex(eco))
-                    .then_some(&r.references)
-                    .and_then(|refs| refs.iter().find(|x| x.kind.as_deref() == Some("ADVISORY")))
-                    .and_then(|x| x.url.clone())
-                    .filter(|u| u.starts_with("https://")),
+                    url: (crate::feeds::feed_for(eco).is_some() || crate::distro::is_vex(eco))
+                        .then_some(&r.references)
+                        .and_then(|refs| {
+                            refs.iter().find(|x| x.kind.as_deref() == Some("ADVISORY"))
+                        })
+                        .and_then(|x| x.url.clone())
+                        .filter(|u| u.starts_with("https://")),
                     ranges: ranges_of(a, $parse),
                     versions,
                 }

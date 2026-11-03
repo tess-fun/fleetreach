@@ -17,10 +17,14 @@ use crate::osvdb::{self, Meta};
 use crate::{csaf, cve5};
 
 /// The CSAF providers fleetreach knows how to fetch.
-pub const CSAF_PROVIDERS: &[&str] = &["redhat"];
+pub const CSAF_PROVIDERS: &[&str] = &["redhat", "suse"];
 
 /// Red Hat's VEX directory: `archive_latest.txt` names the newest full archive.
 pub const REDHAT_VEX: &str = "https://security.access.redhat.com/data/csaf/v2/vex";
+
+/// SUSE's full VEX archive, rebuilt in place (its `.sha256` beside it has not matched the
+/// archive it was published with, so the download's own sha256 is what is recorded).
+pub const SUSE_VEX: &str = "https://ftp.suse.com/pub/projects/security/csaf-vex.tar.bz2";
 
 /// The newest `cvelistV5` release.
 pub const CVELIST_LATEST: &str =
@@ -254,7 +258,10 @@ pub fn sync_csaf(
     if !force && is_fresh(&index, refresh) {
         return Ok(Indexed::default());
     }
-    net::sync_redhat(root, &index, force, quiet)
+    match provider {
+        "suse" => net::sync_suse(root, &index, force, quiet),
+        _ => net::sync_redhat(root, &index, force, quiet),
+    }
 }
 
 #[cfg(not(feature = "network"))]
@@ -273,6 +280,10 @@ mod net {
     pub(super) fn sync_redhat(_: &Path, _: &Path, _: bool, _: bool) -> Result<Indexed, String> {
         Err(NO_NETWORK.to_string())
     }
+
+    pub(super) fn sync_suse(_: &Path, _: &Path, _: bool, _: bool) -> Result<Indexed, String> {
+        Err(NO_NETWORK.to_string())
+    }
 }
 
 #[cfg(feature = "network")]
@@ -284,7 +295,7 @@ mod net {
 
     use sha2::{Digest, Sha256};
 
-    use super::{import_csaf, import_cve, Indexed, CVELIST_LATEST, REDHAT_VEX};
+    use super::{import_csaf, import_cve, Indexed, CVELIST_LATEST, REDHAT_VEX, SUSE_VEX};
     use crate::osvdb::{self, Meta};
 
     /// Far above either archive today (650 MB and 420 MB).
@@ -391,10 +402,18 @@ mod net {
 
     /// When the upstream file is the one already indexed, only the check time moves.
     fn unchanged(index: &Path, url: &str) -> bool {
+        unchanged_since(index, url, None)
+    }
+
+    /// [`unchanged`], and when `last_modified` is given, also indexed from that version.
+    fn unchanged_since(index: &Path, url: &str, last_modified: Option<&str>) -> bool {
         let Some(mut meta) = osvdb::read_meta(index) else {
             return false;
         };
-        if meta.url != url || !index.is_file() {
+        if meta.url != url
+            || !index.is_file()
+            || last_modified.is_some_and(|lm| meta.last_modified.as_deref() != Some(lm))
+        {
             return false;
         }
         meta.fetched_at = osvdb::now_rfc3339();
@@ -480,6 +499,39 @@ mod net {
             "Red Hat CSAF VEX archive",
             quiet,
             |tmp, meta| import_csaf(root, "redhat", tmp, Some(meta)),
+        )
+    }
+
+    /// SUSE publishes one archive at a fixed URL: its `Last-Modified` tells a new build.
+    pub(super) fn sync_suse(
+        root: &Path,
+        index: &Path,
+        force: bool,
+        quiet: bool,
+    ) -> Result<Indexed, String> {
+        let head = agent()
+            .head(SUSE_VEX)
+            .call()
+            .map_err(|e| format!("HEAD {SUSE_VEX}: {e}"))?;
+        let last_modified = head
+            .headers()
+            .get("last-modified")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
+        if !force
+            && last_modified
+                .as_deref()
+                .is_some_and(|lm| unchanged_since(index, SUSE_VEX, Some(lm)))
+        {
+            return Ok(Indexed::default());
+        }
+        let dir = crate::csaf::provider_dir(root, "suse");
+        fetch_and_index(
+            &dir,
+            SUSE_VEX,
+            "SUSE CSAF VEX archive",
+            quiet,
+            |tmp, meta| import_csaf(root, "suse", tmp, Some(meta)),
         )
     }
 }

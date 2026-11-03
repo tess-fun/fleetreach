@@ -35,7 +35,7 @@ pub struct DbSyncArgs {
     #[arg(long, value_name = "DIR")]
     osv_dir: Option<PathBuf>,
     /// what to fetch: `osv` (the exports), `cve` (cvelistV5) and `csaf:<provider>`
-    /// (vendor CSAF VEX; `csaf:redhat`)
+    /// (vendor CSAF VEX; `csaf:redhat`, `csaf:suse`)
     #[arg(
         long,
         value_delimiter = ',',
@@ -55,10 +55,11 @@ pub struct DbImportArgs {
     /// a cvelistV5 checkout, its `cves.zip`, or a release's `*_all_CVEs_at_midnight.zip.zip`
     #[arg(long, value_name = "PATH", required_unless_present = "csaf")]
     cve: Option<PathBuf>,
-    /// a directory of CSAF documents, or a `.tar.zst` archive (Red Hat's `csaf_vex_<date>.tar.zst`)
+    /// a directory of CSAF documents, or a `.tar.zst` or `.tar.bz2` archive (Red Hat's
+    /// `csaf_vex_<date>.tar.zst`, SUSE's `csaf-vex.tar.bz2`)
     #[arg(long, value_name = "PATH")]
     csaf: Option<PathBuf>,
-    /// the provider name the CSAF index is filed under
+    /// the provider name the CSAF index is filed under (`redhat`, `suse`)
     #[arg(long, default_value = "redhat", requires = "csaf")]
     provider: String,
     /// index into this directory instead of the default cache

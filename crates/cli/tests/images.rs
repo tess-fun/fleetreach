@@ -2,6 +2,7 @@
 //! filesystem built here, matched against a small Debian OSV export, offline.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 
@@ -547,6 +548,205 @@ fn red_hat_without_the_vex_index_is_a_gap() {
     let coverage = report["coverage"].to_string();
     assert!(
         coverage.contains("fleetreach db sync --source csaf:redhat"),
+        "{report}"
+    );
+}
+
+/// A SUSE CSAF VEX document for one CVE, in SUSE's shape: products by name, components by
+/// binary name with `@version` purls, `(product, binary, version)` in each status list.
+fn suse_vex_doc(cve: &str, statuses: &[(&str, &str, &str, &str)]) -> String {
+    let mut names: Vec<&str> = statuses.iter().map(|s| s.1).collect();
+    names.sort_unstable();
+    names.dedup();
+    let mut products: Vec<String> = names
+        .iter()
+        .map(|p| {
+            format!(
+                r#"{{"category":"product_name","name":"{p}","product":{{"name":"{p}","product_id":"{p}"}}}}"#
+            )
+        })
+        .collect();
+    let (mut rels, mut by_status) = (Vec::new(), BTreeMap::<&str, Vec<String>>::new());
+    for (status, product, name, version) in statuses {
+        let id = format!("{name}-{version}");
+        let purl = format!("pkg:rpm/suse/{name}@{version}");
+        products.push(format!(
+            r#"{{"category":"product_version","name":"{id}","product":{{"name":"{id}","product_id":"{id}",
+              "product_identification_helper":{{"purl":"{purl}"}}}}}}"#
+        ));
+        let full = format!("{product}:{id}");
+        rels.push(format!(
+            r#"{{"category":"default_component_of","product_reference":"{id}",
+              "relates_to_product_reference":"{product}",
+              "full_product_name":{{"name":"x","product_id":"{full}"}}}}"#
+        ));
+        by_status
+            .entry(status)
+            .or_default()
+            .push(format!("\"{full}\""));
+    }
+    let status: Vec<String> = by_status
+        .iter()
+        .map(|(k, v)| format!("\"{k}\":[{}]", v.join(",")))
+        .collect();
+    let fixes = by_status
+        .get("recommended")
+        .map(|v| v.join(","))
+        .unwrap_or_default();
+    format!(
+        r#"{{"document":{{"category":"csaf_vex","csaf_version":"2.0",
+          "aggregate_severity":{{"text":"important"}},
+          "publisher":{{"namespace":"https://www.suse.com/","name":"SUSE Product Security Team"}},
+          "tracking":{{"id":"{cve}","current_release_date":"2026-10-01T00:00:00Z"}}}},
+        "product_tree":{{"branches":[{{"category":"vendor","name":"SUSE","branches":[{{
+          "category":"product_family","name":"SUSE Linux Enterprise","branches":[{}]}}]}}],
+          "relationships":[{}]}},
+        "vulnerabilities":[{{"cve":"{cve}","product_status":{{{}}},
+          "remediations":[{{"category":"vendor_fix","details":"zypper patch","product_ids":[{fixes}]}}]}}]}}"#,
+        products.join(","),
+        rels.join(","),
+        status.join(",")
+    )
+}
+
+/// An openSUSE Leap 15.6 root filesystem (the NDB fixture: `libpng16-16`, built from
+/// `libpng16`, and `which`) and an `openSUSE` export that says nothing about its packages.
+fn leap_fixture(name: &str) -> Fixture {
+    let fx = Fixture::new(name);
+    let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../os/tests/fixtures/rpmdb");
+    let root = fx.dir.join("rpmfs");
+    write(
+        &root,
+        "etc/os-release",
+        "NAME=\"openSUSE Leap\"\nID=\"opensuse-leap\"\nVERSION_ID=\"15.6\"\n",
+    );
+    std::fs::create_dir_all(root.join("usr/lib/sysimage/rpm")).unwrap();
+    std::fs::copy(
+        fixtures.join("db-ndb/Packages.db"),
+        root.join("usr/lib/sysimage/rpm/Packages.db"),
+    )
+    .unwrap();
+    write(
+        &fx.dir.join("osv/openSUSE"),
+        "openSUSE-SU-2026:1.json",
+        r#"{"id":"openSUSE-SU-2026:1","modified":"2026-01-01T00:00:00Z","summary":"zsh update",
+        "affected":[{"package":{"ecosystem":"openSUSE:Leap 15.6","name":"zsh"},
+        "ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"0"},{"fixed":"5.6-150600.1.1"}]}]}]}"#,
+    );
+    fx
+}
+
+#[test]
+fn suse_vex_matches_binaries_and_borrows_sle_fixes() {
+    let fx = leap_fixture("leap-vex");
+    let leap = "openSUSE Leap 15.6";
+    let docs = fx.dir.join("csaf-docs");
+    let doc = |cve: &str, statuses: &[(&str, &str, &str, &str)]| {
+        write(
+            &docs,
+            &format!("2026/{}.json", cve.to_lowercase()),
+            &suse_vex_doc(cve, statuses),
+        );
+    };
+    // A fix for the binary, which is named apart from its source package.
+    doc(
+        "CVE-2026-0201",
+        &[("recommended", leap, "libpng16-16", "1.6.40-150600.3.20.1")],
+    );
+    // Still affected: the current build is recommended next to the status.
+    doc(
+        "CVE-2026-0202",
+        &[
+            (
+                "known_affected",
+                leap,
+                "libpng16-16",
+                "1.6.40-150600.3.17.1",
+            ),
+            ("recommended", leap, "libpng16-16", "1.6.40-150600.3.17.1"),
+        ],
+    );
+    doc(
+        "CVE-2026-0203",
+        &[("known_not_affected", leap, "which", "2.21-2.20")],
+    );
+    // Fixed in the SLE codestream Leap is built from.
+    doc(
+        "CVE-2026-0204",
+        &[(
+            "recommended",
+            "SUSE Linux Enterprise Server 15 SP6",
+            "libpng16-16",
+            "1.6.40-150600.3.25.1",
+        )],
+    );
+    let osv = fx.path("osv");
+    let out = run(
+        &[
+            "db",
+            "import",
+            "-q",
+            "--csaf",
+            &docs.to_string_lossy(),
+            "--provider",
+            "suse",
+            "--osv-dir",
+            &osv,
+        ],
+        &fx.dir.join("cache"),
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let rootfs = fx.path("rpmfs");
+    let (code, report, stderr) = fx.scan(&["--image", &rootfs, "--require-full-coverage"]);
+    assert_eq!(code, 1, "{stderr}");
+    assert_eq!(
+        findings(&report),
+        vec![
+            ("CVE-2026-0201".into(), "opensuse/libpng16".into()),
+            ("CVE-2026-0202".into(), "opensuse/libpng16".into()),
+            ("CVE-2026-0204".into(), "opensuse/libpng16".into()),
+        ],
+        "{report}"
+    );
+    let titles: Vec<&str> = report["vulnerabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["title"].as_str().unwrap())
+        .collect();
+    assert!(
+        titles[0].contains("fixed in 0:1.6.40-150600.3.20.1"),
+        "{titles:?}"
+    );
+    assert!(
+        titles[1].contains("no fix yet; status affected"),
+        "{titles:?}"
+    );
+    assert!(
+        titles[2].contains("fixed only in another line"),
+        "{titles:?}"
+    );
+    assert!(
+        report
+            .to_string()
+            .contains("https://www.suse.com/security/cve/CVE-2026-0201.html"),
+        "{report}"
+    );
+}
+
+#[test]
+fn suse_without_the_vex_index_is_a_gap() {
+    let fx = leap_fixture("leap-novex");
+    let rootfs = fx.path("rpmfs");
+    let (code, report, stderr) = fx.scan(&["--image", &rootfs, "--require-full-coverage"]);
+    assert_eq!(code, 2, "{stderr}");
+    let coverage = report["coverage"].to_string();
+    assert!(
+        coverage.contains("fleetreach db sync --source csaf:suse"),
         "{report}"
     );
 }

@@ -68,6 +68,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   every one of Trivy's 947 and 538 findings is reported with the same status; the 19 and 2
   more are Red Hat's open statuses for the binary's source package, which Trivy matches by
   binary name only.
+- **SUSE's unfixed CVEs in openSUSE, SLES and SLE Micro images** (spec 16, row 10, phase 2).
+  `db sync --source csaf:suse` or `db import --csaf csaf-vex.tar.bz2 --provider suse`
+  indexes SUSE's CSAF VEX (a 526 MB `.tar.bz2`, read in pure Rust), which scans of openSUSE
+  Leap, Leap Micro and Tumbleweed, SUSE Linux Enterprise Server 15, SLE Micro and SUSE Linux
+  Micro images consult as Red Hat's is consulted: open statuses become findings marked `no
+  fix yet`, and fixes osv.dev lacks are reported with their version. SUSE names binary
+  packages, each looked up by its own name and compared with its own version. A SUSE status
+  outranks SUSE's `recommended` build, and a SUSE open status stands unless the release's
+  records find the package affected (SUSE's update advisories also name CVEs they did not
+  fix). Leap 15.x takes the fixes of the SLE 15 service pack it is built from, as `fixed
+  only in another line`. Findings link SUSE's CVE page. A SUSE image scanned without the
+  index is a coverage gap naming the command. Validated against OpenSCAP evaluating SUSE's
+  OVAL: all 238 CVEs on SLES BCI 15.6.
+- SLES images are now matched against every SLE 15 module's osv.dev records (Containers,
+  Python 3, Public Cloud and the rest) and against LTSS, which carries the service pack's
+  later fixes.
 - `db sync --distros Debian:12,Wolfi` fetches distro exports one distribution at a time (the
   per-release export where osv.dev has one, else the whole distribution's), and a plain
   `db sync` fetches what the fleet's images need. `db status` lists the distro exports present.

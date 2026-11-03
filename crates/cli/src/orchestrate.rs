@@ -748,9 +748,10 @@ fn load_distro_db(images: &Images) -> Option<Result<fleetreach_os::db::DistroDb,
             wanted.ecosystems.insert(eco, distro.family);
         }
         let installed = &opened.inspection.inventory.packages;
-        // Source names, and binary names for distros whose advisories name binaries.
+        // Source names, and binary names for distros whose advisories or vendor VEX name
+        // binaries (SUSE's VEX does, its osv.dev records do not).
         packages.extend(installed.iter().map(|p| p.source.clone()));
-        if distro.binary_names {
+        if distro.binary_names || !distro.fallbacks.is_empty() {
             packages.extend(installed.iter().map(|p| p.name.clone()));
         }
     }
@@ -934,13 +935,26 @@ fn scan_image_os(
             Some(Err(e)) => RepoResult::errored(id, format!("{} OSV DB: {e}", distro.name)),
             Some(Ok(db)) => {
                 for eco in distro.ecosystems() {
-                    let derived = fleetreach_os::distro::is_red_hat_vex(&eco);
-                    let reason = if derived && images.missing.contains(&eco) {
+                    // A module the image may not use, or an LTSS stream not reached yet.
+                    if distro.optional.contains(&eco) {
+                        continue;
+                    }
+                    let vendor = if fleetreach_os::distro::is_red_hat_vex(&eco) {
+                        Some(("Red Hat", "redhat"))
+                    } else if fleetreach_os::distro::is_suse_vex(&eco) {
+                        Some(("SUSE", "suse"))
+                    } else {
+                        None
+                    };
+                    let reason = if let (Some((vendor, provider)), true) =
+                        (vendor, images.missing.contains(&eco))
+                    {
                         format!(
-                            "Red Hat's CSAF VEX is not loaded, so CVEs Red Hat has not fixed \
+                            "{vendor}'s CSAF VEX is not loaded, so CVEs {vendor} has not fixed \
                              in {} packages (affected, will not fix, fix deferred) and fixes \
                              osv.dev has not imported yet were not reported; index it with \
-                             `fleetreach db sync --source csaf:redhat` (or `db import --csaf`)",
+                             `fleetreach db sync --source csaf:{provider}` (or `db import --csaf \
+                             --provider {provider}`)",
                             distro.name
                         )
                     } else if images.missing.contains(&eco) {

@@ -1,6 +1,6 @@
 ---
 title: Advisory data
-description: Where fleetreach's vulnerability data comes from (RustSec, osv.dev exports, vuln.go.dev, CVE 5.x, Red Hat CSAF, CISA KEV, FIRST EPSS, Vulnrichment, NVD, your own overlay), how it is cached, and how to pin or mirror it.
+description: Where fleetreach's vulnerability data comes from (RustSec, osv.dev exports, vuln.go.dev, CVE 5.x, Red Hat and SUSE CSAF, CISA KEV, FIRST EPSS, Vulnrichment, NVD, your own overlay), how it is cached, and how to pin or mirror it.
 sidebar:
   order: 4
 ---
@@ -18,7 +18,7 @@ scrapes web pages.
 | CISA's SSVC inputs | [Vulnrichment](https://github.com/cisagov/vulnrichment) | SSVC Exploitation and Automatable |
 | Missing severities | [NVD](https://nvd.nist.gov) | CVSS when the advisory has none |
 | CNA data and ADP enrichment | [CVE 5.x records](https://github.com/CVEProject/cvelistV5) | `db quality`, `db crosscheck` |
-| Vendor statuses | [Red Hat CSAF VEX](https://security.access.redhat.com/data/csaf/v2/vex/) | `db crosscheck`; RHEL image statuses |
+| Vendor statuses | [Red Hat CSAF VEX](https://security.access.redhat.com/data/csaf/v2/vex/), [SUSE CSAF VEX](https://ftp.suse.com/pub/projects/security/csaf-vex/) | `db crosscheck`; RHEL and SUSE image statuses |
 | Your corrections | OSV files in `[settings.advisories] dir` | layered over every OSV export |
 | Licenses | lockfiles and local package caches, else deps.dev with `licenses --fetch` | `fleetreach licenses`, SBOMs |
 

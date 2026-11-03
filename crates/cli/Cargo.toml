@@ -71,6 +71,8 @@ flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 # Red Hat's CSAF VEX archive is a `.tar.zst` (spec 16, row 12): pure-Rust zstd decoder and
 # tar reader (no xattr support needed, so no default features).
 ruzstd = "0.9"
+# SUSE's CSAF VEX archive is a `.tar.bz2` (decode-only, MIT/Apache; see fleetreach-os).
+bzip2-rs = "0.1"
 tar = { version = "0.4", default-features = false }
 
 [dev-dependencies]

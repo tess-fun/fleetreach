@@ -97,9 +97,17 @@ pub struct Distro {
     /// about module builds whose packages carry no modularity label.
     pub modules: BTreeMap<String, String>,
     /// Ecosystems consulted for a package and CVE only when the release's own ecosystems
-    /// say nothing about that CVE for it, matched by binary or source name: Red Hat's CSAF
-    /// VEX ([`red_hat_vex`]).
+    /// say nothing about that CVE for it, matched by binary or source name: the vendors'
+    /// CSAF VEX ([`red_hat_vex`], [`suse_vex`]).
     pub fallbacks: Vec<String>,
+    /// Ecosystems among `also` and `fallbacks` that may be absent or empty without a gap:
+    /// a SUSE module the image may not use, or an LTSS stream a release has not reached.
+    pub optional: Vec<String>,
+    /// Fallbacks that speak about the codestream the release is built from rather than the
+    /// release itself (SLE 15 SP6 for openSUSE Leap 15.6). Only their fixes count: an older
+    /// build is vulnerable, but the fix is not in the release's repositories, so the match is
+    /// reported as fixed only in another line.
+    pub borrowed: Vec<String>,
 }
 
 impl Distro {
@@ -127,15 +135,84 @@ pub fn is_red_hat_vex(ecosystem: &str) -> bool {
     ecosystem.starts_with("Red Hat:enterprise_linux:") && ecosystem.ends_with("::vex")
 }
 
+/// The ecosystem holding what SUSE's CSAF VEX says about the product osv.dev calls
+/// `ecosystem` (`openSUSE:Leap 15.6::vex`): unfixed statuses and fixes, per binary package.
+pub fn suse_vex(ecosystem: &str) -> String {
+    format!("{ecosystem}::vex")
+}
+
+/// Whether `ecosystem` is one of the [`suse_vex`] ecosystems.
+pub fn is_suse_vex(ecosystem: &str) -> bool {
+    (ecosystem.starts_with("SUSE:") || ecosystem.starts_with("openSUSE:"))
+        && ecosystem.ends_with("::vex")
+}
+
+/// Whether `ecosystem` is derived from a vendor's CSAF VEX ([`red_hat_vex`], [`suse_vex`]).
+pub fn is_vex(ecosystem: &str) -> bool {
+    is_red_hat_vex(ecosystem) || is_suse_vex(ecosystem)
+}
+
+/// The osv.dev ecosystem of a product in SUSE's CSAF (`openSUSE Leap 15.6` is
+/// `openSUSE:Leap 15.6`), for the products images are matched against: openSUSE Leap, Leap
+/// Micro and Tumbleweed, SLE Micro, SUSE Linux Micro, and SLES 15 as the whole product
+/// (`SUSE Linux Enterprise Server 15 SP6`, and `...-LTSS`), as SUSE's OVAL checks it; `None`
+/// for the rest (modules, SUSE Manager, cloud images, SLES 12, NonFree, ...).
+pub fn suse_product_ecosystem(product: &str) -> Option<String> {
+    let version = |v: &str| !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit() || b == b'.');
+    let known = match product.split_once(' ')? {
+        ("openSUSE", "Tumbleweed") => true,
+        ("openSUSE", rest) => rest
+            .strip_prefix("Leap Micro ")
+            .or_else(|| rest.strip_prefix("Leap "))
+            .is_some_and(version),
+        ("SUSE", rest) => {
+            if let Some(sp) = rest.strip_prefix("Linux Enterprise Server 15 SP") {
+                version(sp.strip_suffix("-LTSS").unwrap_or(sp))
+            } else {
+                rest.strip_prefix("Linux Enterprise Micro ")
+                    .or_else(|| rest.strip_prefix("Linux Micro "))
+                    .is_some_and(version)
+            }
+        }
+        _ => false,
+    };
+    known.then(|| product.replacen(' ', ":", 1))
+}
+
+/// The osv.dev ecosystems of SUSE Linux Enterprise 15 SP`sp` beyond its Basesystem module:
+/// the other modules an image can take packages from, and the LTSS stream that carries the
+/// release's fixes once its general support ends. All are optional.
+fn sles_optional(sp: &str) -> Vec<String> {
+    const MODULES: &[&str] = &[
+        "Certifications",
+        "Containers",
+        "Desktop Applications",
+        "Development Tools",
+        "HPC",
+        "Legacy",
+        "Package Hub",
+        "Public Cloud",
+        "Python 3",
+        "SAP Applications",
+        "Systems Management",
+        "Transactional Server",
+        "Web and Scripting",
+    ];
+    MODULES
+        .iter()
+        .map(|m| format!("SUSE:Linux Enterprise Module for {m} 15 SP{sp}"))
+        .chain([format!("SUSE:Linux Enterprise Server 15 SP{sp}-LTSS")])
+        .collect()
+}
+
 /// The osv.dev export directories that can serve `ecosystem`, smallest first: the
 /// per-release export where osv.dev publishes one (`Debian:12/all.zip`, 43 MB), then the
 /// whole distribution (`Debian/all.zip`, 80 MB; Ubuntu's is 806 MB against 142 MB for one
 /// LTS release).
 pub fn export_candidates(ecosystem: &str) -> Vec<String> {
     let base = ecosystem.split(':').next().unwrap_or(ecosystem).to_string();
-    // A vendor feed, or Red Hat's VEX, is an export of its own release only.
-    if base == ecosystem || crate::feeds::feed_for(ecosystem).is_some() || is_red_hat_vex(ecosystem)
-    {
+    // A vendor feed, or a vendor's VEX, is an export of its own release only.
+    if base == ecosystem || crate::feeds::feed_for(ecosystem).is_some() || is_vex(ecosystem) {
         vec![ecosystem.to_string()]
     } else {
         vec![ecosystem.to_string(), base]
@@ -191,6 +268,23 @@ pub fn detect(
         overlays: Vec::new(),
         modules: BTreeMap::new(),
         fallbacks: Vec::new(),
+        optional: Vec::new(),
+        borrowed: Vec::new(),
+    };
+    // A SUSE product takes SUSE's VEX for each of its products.
+    let suse = |mut d: Distro| {
+        d.fallbacks = std::iter::once(&d.ecosystem)
+            .chain(&d.also)
+            .map(|e| suse_vex(e))
+            .collect();
+        d
+    };
+    // Fallbacks from the codestream a community release is built from, after its own.
+    let borrow = |mut d: Distro, from: &[String]| {
+        d.fallbacks.extend(from.iter().cloned());
+        d.optional.extend(from.iter().cloned());
+        d.borrowed.extend(from.iter().cloned());
+        d
     };
     let release = |what: &str| {
         version
@@ -320,25 +414,34 @@ pub fn detect(
         }
         "opensuse-leap" => {
             let v = version.ok_or_else(|| format!("{pretty}: no VERSION_ID"))?;
-            rpm(
+            let d = suse(rpm(
                 format!("openSUSE Leap {v}"),
                 "opensuse",
                 format!("openSUSE:Leap {v}"),
-            )
+            ));
+            // Leap 15.6 is built from SLE 15 SP6, whose statuses SUSE's own Leap OVAL takes.
+            match v.strip_prefix("15.").filter(|sp| *sp != "0") {
+                Some(sp) => {
+                    let server = format!("SUSE:Linux Enterprise Server 15 SP{sp}");
+                    borrow(d, &[suse_vex(&server), suse_vex(&format!("{server}-LTSS"))])
+                }
+                None => d,
+            }
         }
         "opensuse-leap-micro" => {
             let v = version.ok_or_else(|| format!("{pretty}: no VERSION_ID"))?;
-            rpm(
+            let d = suse(rpm(
                 format!("openSUSE Leap Micro {v}"),
                 "opensuse",
                 format!("openSUSE:Leap Micro {v}"),
-            )
+            ));
+            borrow(d, &[suse_vex(&format!("SUSE:Linux Enterprise Micro {v}"))])
         }
-        "opensuse-tumbleweed" => rpm(
+        "opensuse-tumbleweed" => suse(rpm(
             "openSUSE Tumbleweed".into(),
             "opensuse",
             "openSUSE:Tumbleweed".into(),
-        ),
+        )),
         "sles" => {
             let v = version.ok_or_else(|| format!("{pretty}: no VERSION_ID"))?;
             let (maj, sp) = v.split_once('.').unwrap_or((v, "0"));
@@ -354,24 +457,32 @@ pub fn detect(
                 "suse",
                 product("Basesystem"),
             );
-            d.also = vec![product("Server Applications")];
+            d.optional = sles_optional(sp);
+            d.also = std::iter::once(product("Server Applications"))
+                .chain(d.optional.iter().cloned())
+                .collect();
+            // SUSE's VEX speaks about the whole product, as its OVAL does.
+            let server = format!("SUSE:Linux Enterprise Server 15 SP{sp}");
+            let ltss = suse_vex(&format!("{server}-LTSS"));
+            d.fallbacks = vec![suse_vex(&server), ltss.clone()];
+            d.optional.push(ltss);
             d
         }
         "sle-micro" => {
             let v = version.ok_or_else(|| format!("{pretty}: no VERSION_ID"))?;
-            rpm(
+            suse(rpm(
                 format!("SUSE Linux Enterprise Micro {v}"),
                 "suse",
                 format!("SUSE:Linux Enterprise Micro {v}"),
-            )
+            ))
         }
         "sl-micro" => {
             let v = version.ok_or_else(|| format!("{pretty}: no VERSION_ID"))?;
-            rpm(
+            suse(rpm(
                 format!("SUSE Linux Micro {v}"),
                 "suse",
                 format!("SUSE:Linux Micro {v}"),
-            )
+            ))
         }
         "azurelinux" | "mariner" => {
             let r = release("Azure Linux")?;
@@ -527,15 +638,22 @@ pub fn explicit(ecosystem: &str, family: Family) -> Distro {
         ),
         overlays: Vec::new(),
         modules: BTreeMap::new(),
-        // `Red Hat:enterprise_linux:9::baseos` takes RHEL 9's VEX too.
+        // `Red Hat:enterprise_linux:9::baseos` takes RHEL 9's VEX too, and a SUSE product its own.
         fallbacks: match ecosystem.split(':').collect::<Vec<_>>().as_slice() {
             ["Red Hat", "enterprise_linux", release, ..]
                 if !release.is_empty() && release.bytes().all(|b| b.is_ascii_digit()) =>
             {
                 vec![red_hat_vex(release)]
             }
+            _ if suse_product_ecosystem(&ecosystem.replacen(':', " ", 1)).as_deref()
+                == Some(ecosystem) =>
+            {
+                vec![suse_vex(ecosystem)]
+            }
             _ => Vec::new(),
         },
+        optional: Vec::new(),
+        borrowed: Vec::new(),
     }
 }
 
@@ -629,6 +747,37 @@ mod tests {
             ]
         );
         assert!(is_red_hat_vex("Red Hat:enterprise_linux:7::vex"));
+        assert!(is_suse_vex("openSUSE:Leap 15.6::vex") && !is_suse_vex("openSUSE:Leap 15.6"));
+        assert_eq!(
+            suse_product_ecosystem("SUSE Linux Enterprise Server 15 SP6-LTSS").as_deref(),
+            Some("SUSE:Linux Enterprise Server 15 SP6-LTSS")
+        );
+        assert_eq!(
+            suse_product_ecosystem("SUSE Linux Enterprise Module for Basesystem 15 SP6"),
+            None
+        );
+        assert_eq!(suse_product_ecosystem("openSUSE Leap 15.6 NonFree"), None);
+        assert_eq!(
+            suse_product_ecosystem("SUSE Linux Enterprise Micro for Rancher 5.4"),
+            None
+        );
+        assert_eq!(
+            suse_product_ecosystem("openSUSE Tumbleweed").as_deref(),
+            Some("openSUSE:Tumbleweed")
+        );
+        assert_eq!(
+            suse_product_ecosystem("SUSE Linux Enterprise Server 12 SP5"),
+            None
+        );
+        assert_eq!(suse_product_ecosystem("SUSE Manager Server 4.3"), None);
+        assert_eq!(
+            explicit("SUSE:Linux Micro 6.1", Family::Rpm).fallbacks,
+            vec!["SUSE:Linux Micro 6.1::vex"]
+        );
+        assert_eq!(
+            export_candidates("openSUSE:Leap 15.6::vex"),
+            vec!["openSUSE:Leap 15.6::vex"]
+        );
         assert_eq!(
             export_candidates("Red Hat:enterprise_linux:7::vex"),
             vec!["Red Hat:enterprise_linux:7::vex"]
@@ -647,15 +796,44 @@ mod tests {
         );
         assert_eq!(
             eco("ID=\"opensuse-leap\"\nVERSION_ID=\"15.6\"\n").0,
-            vec!["openSUSE:Leap 15.6"]
-        );
-        assert_eq!(
-            eco("ID=\"sles\"\nVERSION_ID=\"15.6\"\n").0,
             vec![
-                "SUSE:Linux Enterprise Module for Basesystem 15 SP6",
-                "SUSE:Linux Enterprise Module for Server Applications 15 SP6"
+                "openSUSE:Leap 15.6",
+                "openSUSE:Leap 15.6::vex",
+                // Borrowed: SUSE's fixes for the SLE codestream Leap is built from.
+                "SUSE:Linux Enterprise Server 15 SP6::vex",
+                "SUSE:Linux Enterprise Server 15 SP6-LTSS::vex",
             ]
         );
+        assert_eq!(
+            eco("ID=\"sles\"\nVERSION_ID=\"15.6\"\n").0[..3],
+            [
+                "SUSE:Linux Enterprise Module for Basesystem 15 SP6",
+                "SUSE:Linux Enterprise Module for Server Applications 15 SP6",
+                "SUSE:Linux Enterprise Module for Certifications 15 SP6",
+            ]
+        );
+        let sles = detect(
+            &parse_os_release("ID=\"sles\"\nVERSION_ID=\"15.6\"\n"),
+            None,
+            Hints::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            sles.fallbacks,
+            [
+                "SUSE:Linux Enterprise Server 15 SP6::vex",
+                "SUSE:Linux Enterprise Server 15 SP6-LTSS::vex"
+            ]
+        );
+        assert!(sles
+            .also
+            .contains(&"SUSE:Linux Enterprise Server 15 SP6-LTSS".to_string()));
+        assert!(sles
+            .optional
+            .contains(&"SUSE:Linux Enterprise Server 15 SP6-LTSS::vex".to_string()));
+        assert!(!sles
+            .optional
+            .contains(&"SUSE:Linux Enterprise Server 15 SP6::vex".to_string()));
         assert_eq!(
             eco("ID=azurelinux\nVERSION_ID=\"3.0\"\n").0,
             vec!["Azure Linux:3"]

@@ -51,7 +51,8 @@ Debian, read from `/var/lib/dpkg/status.d`.
 rpm-based images are recognized too: Red Hat Enterprise Linux and UBI (matched against the
 release's BaseOS, AppStream and CRB repositories), AlmaLinux, Rocky Linux, openSUSE Leap,
 Leap Micro and Tumbleweed, SUSE Linux Enterprise 15 (its Basesystem and Server Applications
-modules), SLE Micro and SUSE Linux Micro, Azure Linux 3 and CBL-Mariner 2, Mageia and
+modules, the optional modules such as Containers, Python 3 and Public Cloud, and LTSS), SLE
+Micro and SUSE Linux Micro, Azure Linux 3 and CBL-Mariner 2, Mageia and
 openEuler. CentOS and Fedora have no advisories to match, so their images are a coverage gap:
 they are not matched against Red Hat's records, whose versions and backports are not theirs.
 
@@ -84,7 +85,8 @@ Advisories name **source** packages, so each installed binary package is matched
 source: `libssl3` as `openssl`. The finding's dependency path shows both, with the real
 installed version: `Debian 12 > openssl 3.0.17-1~deb12u2 > libssl3`. Red Hat and AlmaLinux
 are the exception: their advisories name binary packages (`openssl-libs`), so there each
-binary is matched on its own (`redhat/openssl-libs`).
+binary is matched on its own (`redhat/openssl-libs`). Vendor VEX statuses (Red Hat, SUSE)
+name binaries too; they are looked up by the binary's name under its source package.
 
 ## Unfixed and unimportant advisories
 
@@ -114,6 +116,30 @@ so fleetreach reports somewhat more on RHEL images (19 more on UBI 8.8, 2 more o
 with every one of Trivy's findings also reported). Entries for a module stream (`php:7.3`)
 match only packages from that stream. Without the index, a RHEL image is a coverage gap that
 names the command.
+
+SUSE's open CVEs come the same way, from SUSE's CSAF VEX: `db sync --source csaf:suse` (a
+526 MB download that expands to 19 GB of JSON; indexing takes about 15 minutes and 10 GB of
+memory) or `db import --csaf csaf-vex.tar.bz2 --provider suse`. It covers openSUSE Leap,
+Leap Micro and Tumbleweed, SUSE Linux Enterprise Server 15 (with LTSS), SLE Micro and SUSE
+Linux Micro. SUSE's VEX names binary packages (`libdw1`) while osv.dev's SUSE records name
+source packages (`elfutils`), so each binary is looked up by its own name, and a binary built
+at a version of its own (`libreadline7` 7.0 from `bash` 4.4) is compared with that version.
+Two SUSE conventions shape the result:
+
+- SUSE marks a fix `recommended`, but also recommends the current build of a package it
+  still lists as affected. A `known_affected` or `known_not_affected` status for the same
+  package wins over the recommendation.
+- SUSE's update advisories name every CVE the update refers to, including ones it did not
+  fix (SUSE-SU-2025:4092-1 names CVE-2025-1372, which SUSE still lists as affected). So a
+  SUSE open status applies unless the release's own records find the package affected.
+
+openSUSE Leap 15.x is built from SUSE Linux Enterprise 15 SPx, and its own VEX entries stop
+once the release reaches its end of life. A fix SUSE ships for the matching SLE service pack
+is reported against Leap as `fixed only in another line`; SLE's open statuses are not
+borrowed, as they are not SUSE's word about Leap. Leap Micro borrows from SLE Micro the same
+way. Validated against OpenSCAP evaluating SUSE's own OVAL: on the SLES BCI 15.6 image,
+fleetreach reports all 238 CVEs the OVAL finds, plus 1 open status from the newer VEX.
+Without the index, a SUSE image is a coverage gap that names the command.
 
 ## Language packages in the image
 

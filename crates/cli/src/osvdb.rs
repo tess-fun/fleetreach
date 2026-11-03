@@ -798,15 +798,34 @@ pub(crate) fn install_export<'a>(
     std::fs::write(&path, json).map_err(|e| format!("writing {}: {e}", path.display()))
 }
 
-/// Derive Red Hat's VEX exports ([`fleetreach_os::distro::red_hat_vex`], one
-/// per RHEL release) from the Red Hat CSAF index under `root`, unless they are already
-/// derived from this index. Nothing happens without an index. Returns whether it derived.
+type VexConverter = fn(&crate::csaf::VexRecord) -> Vec<(String, serde_json::Value)>;
+/// Whether an ecosystem is one a provider's VEX derives.
+type IsVex = fn(&str) -> bool;
+
+/// The CSAF providers whose VEX becomes distro exports, with the converter and how to tell
+/// their ecosystems ([`fleetreach_os::distro::red_hat_vex`], [`fleetreach_os::distro::suse_vex`]).
+pub const VEX_PROVIDERS: &[(&str, VexConverter, IsVex)] = &[
+    (
+        "redhat",
+        crate::csaf::red_hat_vex,
+        fleetreach_os::distro::is_red_hat_vex,
+    ),
+    (
+        "suse",
+        crate::csaf::suse_vex,
+        fleetreach_os::distro::is_suse_vex,
+    ),
+];
+
+/// Derive a provider's VEX exports (one per release or product) from its CSAF index under
+/// `root`, unless they are already derived from this index. Nothing happens without an
+/// index. Returns whether it derived.
 ///
 /// # Errors
 ///
 /// A corrupt index, or a failed write (the previous exports stay).
-pub fn derive_red_hat_vex(root: &Path) -> Result<bool, String> {
-    let index = crate::csaf::index_path(root, "redhat");
+pub fn derive_vex(root: &Path, provider: &str, convert: VexConverter) -> Result<bool, String> {
+    let index = crate::csaf::index_path(root, provider);
     let Ok(md) = std::fs::metadata(&index) else {
         return Ok(false);
     };
@@ -817,13 +836,14 @@ pub fn derive_red_hat_vex(root: &Path) -> Result<bool, String> {
         .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
         .map_or(0, |d| d.as_nanos());
     let stamp = format!("csaf-index:{}:{mtime}", md.len());
-    let marker = root.join(dir_name(&fleetreach_os::distro::red_hat_vex("9")));
-    if read_meta(&marker.join("all.zip")).is_some_and(|m| m.etag.as_deref() == Some(&stamp)) {
+    // Written last, so an interrupted derivation runs again.
+    let marker = crate::csaf::provider_dir(root, provider).join("derived");
+    if std::fs::read_to_string(&marker).is_ok_and(|m| m == stamp) {
         return Ok(false);
     }
     let mut by_eco: BTreeMap<String, Vec<(String, Vec<u8>)>> = BTreeMap::new();
     crate::csaf::for_each_record(&index, |record| {
-        for (eco, osv) in crate::csaf::red_hat_vex(&record) {
+        for (eco, osv) in convert(&record) {
             let id = osv["id"].as_str().unwrap_or_default().to_string();
             let json = serde_json::to_vec(&osv).map_err(|e| e.to_string())?;
             by_eco.entry(eco).or_default().push((id, json));
@@ -833,7 +853,7 @@ pub fn derive_red_hat_vex(root: &Path) -> Result<bool, String> {
     let upstream = read_meta(&index);
     for (eco, mut records) in by_eco {
         records.sort_by(|a, b| a.0.cmp(&b.0));
-        // One Red Hat document per CVE: two records with one id would be one CVE twice.
+        // One document per CVE: two records with one id would be one CVE twice.
         records.dedup_by(|a, b| a.0 == b.0);
         let meta = Meta {
             url: upstream
@@ -855,6 +875,7 @@ pub fn derive_red_hat_vex(root: &Path) -> Result<bool, String> {
             &meta,
         )?;
     }
+    std::fs::write(&marker, &stamp).map_err(|e| format!("writing {}: {e}", marker.display()))?;
     Ok(true)
 }
 
@@ -1010,19 +1031,19 @@ pub fn resolve_distros(
     let mut found: BTreeMap<String, DistroSource> = BTreeMap::new();
     let mut warnings = Vec::new();
     let mut missing = Vec::new();
-    // Red Hat's VEX exports come from the CSAF index, not from osv.dev: derive them
-    // where an index is (indexing it is `db sync --source csaf:redhat`, minutes of work).
-    if ecosystems
-        .iter()
-        .any(|e| fleetreach_os::distro::is_red_hat_vex(e))
-    {
+    // The vendors' VEX exports come from their CSAF indexes, not from osv.dev: derive them
+    // where an index is (indexing is `db sync --source csaf:<provider>`, minutes of work).
+    for (provider, convert, is_ours) in VEX_PROVIDERS {
+        if !ecosystems.iter().any(|e| is_ours(e)) {
+            continue;
+        }
         for root in [opts.dir.as_deref(), opts.cache.as_deref()]
             .into_iter()
             .flatten()
         {
-            if let Err(e) = derive_red_hat_vex(root) {
+            if let Err(e) = derive_vex(root, provider, *convert) {
                 warnings.push(format!(
-                    "could not derive Red Hat's VEX statuses from {}: {e}",
+                    "could not derive the {provider} VEX statuses from {}: {e}",
                     root.display()
                 ));
             }
@@ -1030,7 +1051,7 @@ pub fn resolve_distros(
     }
     for eco in ecosystems {
         let candidates = fleetreach_os::distro::export_candidates(eco);
-        let derived = fleetreach_os::distro::is_red_hat_vex(eco);
+        let derived = fleetreach_os::distro::is_vex(eco);
         let from_dir = opts.dir.as_deref().and_then(|d| {
             candidates
                 .iter()
