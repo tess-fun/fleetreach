@@ -1,6 +1,6 @@
 # Spec 16: A+ on every matrix row by 1.8.0
 
-Status: in progress (1.6.0: E2 jar-diff and commit-first runs done, both gates missed) · Written 2026-11-02 after the 1.5.0 release, revised the same day
+Status: in progress (1.6.0: E2 jar-diff and commit-first runs done, both gates missed; 1.7.0: rpm reader spike done) · Written 2026-11-02 after the 1.5.0 release, revised the same day
 (three releases instead of two; a path to A+ researched for every row) · Supersedes the
 "out of scope" parts of [spec 14](14-out-of-scope.md) for containers, curated research,
 hosted triage and malware analysis (user decisions of 2026-11-02, not re-argued here)
@@ -572,6 +572,22 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     since the OSV Red Hat export holds only fixes. Direct feeds for distros osv.dev lacks:
     Amazon Linux (ALAS), Oracle Linux (OVAL), Photon (CVE metadata), Bottlerocket. OS
     end-of-life warnings from endoflife.date data, bundled for offline use.
+    **Reader spike done 2026-11-02, unreleased** (`fleetreach_os::rpmdb`, not wired into
+    scans): pure-Rust readers for all three databases, about 1,000 lines with their unit tests and no new
+    dependency. SQLite is a read-only b-tree walker (overflow chains, interior pages, the
+    write-ahead log applied up to its last valid commit frame); Berkeley DB reads only pages
+    a hash bucket reaches, so headers of erased packages left on free pages are never
+    reported; NDB verifies each blob's adler32. Installed sets equal `rpm -qa` (name, epoch,
+    version, release, arch, source rpm, modularity label) on 12 real images, 1,574 packages,
+    0 differences: SQLite on Alma 9, Amazon Linux 2023, Fedora 41, Azure Linux 3, Oracle 9,
+    Photon 5, UBI 9, Rocky 9; Berkeley DB on Amazon Linux 2, CentOS 7, Rocky 8; NDB on
+    openSUSE Leap 15.6. Fixtures written by rpm itself, and every single-byte corruption of
+    them, are in the test suite (fail-closed, no panic). **Found**: Oracle Linux 9 ships an
+    empty stray `/usr/lib/sysimage/rpm/rpmdb.sqlite` while its real database is
+    `/var/lib/rpm`, so 1.7.0 must pick the location by the image's `%_dbpath` macro (from
+    `/usr/lib/rpm/macros` and `/etc/rpm/macros*`), not by which file exists first; until
+    then a scan would report 0 packages for that image, which is the false-clean the
+    fail-closed rule forbids.
   - **Phase 3 (1.8.0)**: pull by digest from an OCI registry (behind `network`, docker
     config credentials); per-layer attribution and base-image detection from image history;
     base-image rollup and rebuild advice across the fleet; VEX discovered from OCI

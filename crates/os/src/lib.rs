@@ -59,6 +59,7 @@ mod error;
 pub mod image;
 pub mod lang;
 pub mod packages;
+pub mod rpmdb;
 pub mod scan;
 mod tar;
 
