@@ -244,7 +244,7 @@ Why it misses:
 - **Wrong or partial commits**: Infinispan's project-kb commit is a data-format refactor
   with the vulnerable transcoders merely moved.
 
-**Decision (autonomous, for the user to confirm)**: no automatic method gets JVM sinks to
+**Decision (confirmed by the user on 2026-11-02)**: no automatic method gets JVM sinks to
 90% precision for 80% of advisories, so automatic sinks never drive suppression. But C1 is
 an excellent candidate generator: median 2 methods, nothing the fix added, and every true
 sink inside it. A reviewer confirms a 2-method set in about a minute. So:
@@ -661,8 +661,9 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   - The sink data is published in the open feed (row 12) for correction by anyone.
 - **Effort**: XL. **Release**: 1.6.0 (pipeline, experiments), 1.7.0 (JVM), 1.8.0 (rest).
   **Depends on**: Maven resolution (done), containers (app jars from images), row 14.
-- **Proof**: sink precision on the labelled 100 (bar: 80% of high/critical Maven advisories
-  with a sink whose precision is at least 90%); zero false `NotReachable` on a soundness
+- **Proof**: coverage of reviewed records (bar: 80% of high/critical Maven advisories have
+  a reviewed sink, a deny-list rule, or a reviewed "no method-level sink" marker); unreviewed
+  automatic sinks only ever produce witnesses; zero false `NotReachable` on a soundness
   corpus of known-reachable CVE reproducers (vul4j-style); suppression yield published per
   ecosystem (Endor claims up to 97% noise reduction; fleetreach publishes its measured
   number, whatever it is).
@@ -671,9 +672,10 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   published with its number, as for Python's 3%.
 - **E2 outcome (2026-11-02)**: jar diffs alone MISSED (14 of 100 at 90% precision against a
   bar of 80); see "E2 result" under Research findings. Commit-first (E2b, 40 hand-labelled)
-  MISSED too: 45% at best, with 15% of advisories having no sink in the fix at all. Proposed:
-  sinks become reviewed, curated records (pipeline proposes, a person accepts); unreviewed
-  sinks are witnesses only; the proof becomes coverage of reviewed sinks. See "E2b result".
+  MISSED too: 45% at best, with 15% of advisories having no sink in the fix at all. Decided (user,
+  2026-11-02): sinks become reviewed, curated records (pipeline proposes, a person accepts);
+  unreviewed sinks are witnesses only; the proof is coverage of reviewed records. See "E2b
+  result".
 
 #### 14. Import-graph witness chains (A- to A+)
 
