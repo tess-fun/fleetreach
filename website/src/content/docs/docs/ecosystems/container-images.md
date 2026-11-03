@@ -280,6 +280,35 @@ Logins come from Docker's config (`$DOCKER_CONFIG/config.json` or `~/.docker/con
 A login goes to the registry and to a token service on the registry's own domain, over TLS.
 Redirects to blob storage never carry it, and plain HTTP is refused except on this machine.
 
+## VEX attached to images
+
+A publisher can attach an OpenVEX document to an image with `cosign attest --type openvex`.
+`--vex-oci` reads what is attached to an image pulled from a registry, as OCI 1.1 referrers, the
+referrers tag, or cosign's `.att` tag, on the image and on its multi-platform index.
+
+```bash
+fleetreach scan --image docker://ghcr.io/org/app@sha256:... --vex-oci-key cosign.pub
+```
+
+An attachment is not part of the image's digest, so anyone who can push to the repository can
+add one to an image you pinned long ago. So a document sets findings aside only when a key you
+named with `--vex-oci-key` signed it. With `--vex-oci` alone, documents are listed and change
+nothing. `--vex-oci-unsigned` accepts every document, which is what Trivy's `--vex oci` does:
+use it only for a repository whose push access you trust. Keyless signatures are not checked, so
+they count as unsigned. A document whose in-toto subject is another image is always refused.
+
+A statement applies to the image (`pkg:oci/app@sha256:...`), to a subcomponent of the image, or
+to a package named as the product. Purl versions must be the installed version. For one
+vulnerability and package the latest statement decides, so a later `affected` undoes an earlier
+`not_affected`, and on a tie the finding stays. Only `not_affected`, with a justification or an
+impact statement, and `fixed` set a finding aside. An advisory covering several CVEs needs a
+statement for each, and a source package needs one for each binary: if `ssl_client` is still
+open, a statement on the `busybox` binary leaves the `busybox` finding standing.
+
+Every document read is in the report's `provenance.images[].vex`, with the key that verified it,
+why it was refused, and how many occurrences it set aside. Failing to read attachments is a
+warning and the findings stand. `--offline` uses what the last online scan found.
+
 ## Layers and base images
 
 Each finding in an image carries a `layer` in the JSON report: its position, its digest, the

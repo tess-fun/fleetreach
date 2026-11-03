@@ -29,6 +29,7 @@ pub mod licenses_cmd;
 pub mod maven_repo;
 pub mod notify;
 pub mod npm_reach;
+pub(crate) mod oci_vex;
 pub mod orchestrate;
 pub mod osvdb;
 pub mod osvrecords;

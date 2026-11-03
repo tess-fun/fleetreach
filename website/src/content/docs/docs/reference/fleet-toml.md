@@ -115,6 +115,10 @@ approved_by   = "security@acme.example"
 
 `author`, `role`, `scope` and `product_id_base` for VEX documents; flags (`--vex-author`) win.
 
+`oci = true` reads OpenVEX attached to images pulled from registries, `oci_keys` lists the cosign
+public keys to accept (relative to `fleet.toml`), and `oci_unsigned = true` accepts documents no
+key signed. See [VEX attached to images](/docs/ecosystems/container-images/#vex-attached-to-images).
+
 ## `[settings.osv]`
 
 | Key | Meaning |

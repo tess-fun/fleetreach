@@ -53,6 +53,8 @@ serde = { workspace = true }
 sha2 = { workspace = true }
 # Docker config logins and HTTP Basic (pure Rust).
 base64 = "0.22"
+# Checks cosign signatures on VEX attached to images (RustCrypto, pure Rust).
+p256 = { version = "0.14", default-features = false, features = ["ecdsa", "pem", "pkcs8"] }
 toml = { workspace = true }
 walkdir = { workspace = true }
 thiserror = { workspace = true }

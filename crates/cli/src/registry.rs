@@ -12,6 +12,11 @@
 //! and its credential helpers. They go to the registry and to a token service of the same
 //! domain, over TLS, and to nothing else: a redirect (to a blob store) drops them, and a token
 //! realm on another domain gets an anonymous request.
+//!
+//! [`attachments`] lists what is attached to a pulled image, as OCI 1.1 referrers (or the
+//! referrers tag of a registry without that API) and cosign's `.att` tag. Attachments are not
+//! part of the image's digest, so anyone who can push to the repository can add one: they are
+//! only fetched here, and [`crate::oci_vex`] decides what they may do.
 
 // Without `network` only the cache is read, and the login and challenge code goes unused.
 #![cfg_attr(not(feature = "network"), allow(dead_code))]
@@ -31,6 +36,10 @@ const MAX_MANIFEST_BYTES: u64 = 4 << 20;
 const MAX_BLOB_BYTES: u64 = 16 << 30;
 /// The platform of a multi-platform image when none is named.
 const DEFAULT_PLATFORM: &str = "linux/amd64";
+/// The most attachments read per image, as cosign caps them.
+const MAX_ATTACHMENTS: usize = 100;
+/// The largest attachment read: real attestations are far smaller.
+const MAX_ATTACHMENT_BYTES: u64 = 20 << 20;
 const ACCEPT: &str = "application/vnd.oci.image.index.v1+json, \
     application/vnd.oci.image.manifest.v1+json, \
     application/vnd.docker.distribution.manifest.list.v2+json, \
@@ -137,21 +146,83 @@ pub struct Pulled {
     pub layout: PathBuf,
     /// The digest of the image's manifest, for this platform.
     pub digest: String,
+    /// The digest the reference resolved to: the image index of a multi-platform image, where
+    /// attestations are usually attached.
+    pub top: String,
+}
+
+impl Pulled {
+    /// The digests that name this image, and that an attachment may be attached to.
+    pub fn subjects(&self) -> Vec<String> {
+        let mut out = vec![self.digest.clone()];
+        if self.top != self.digest {
+            out.push(self.top.clone());
+        }
+        out
+    }
+}
+
+/// A file attached to an image, checked against its digest.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Attachment {
+    pub digest: String,
+    pub bytes: Vec<u8>,
+}
+
+/// Why a fetch failed. `absent` when the registry says there is no such thing.
+#[derive(Debug)]
+pub(crate) struct Failed {
+    message: String,
+    absent: bool,
+}
+
+impl From<String> for Failed {
+    fn from(message: String) -> Self {
+        Failed {
+            message,
+            absent: false,
+        }
+    }
+}
+
+impl From<&str> for Failed {
+    fn from(message: &str) -> Self {
+        message.to_string().into()
+    }
+}
+
+impl std::fmt::Display for Failed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl Failed {
+    #[cfg(all(test, feature = "network"))]
+    fn contains(&self, text: &str) -> bool {
+        self.message.contains(text)
+    }
+}
+
+impl From<Failed> for String {
+    fn from(failed: Failed) -> Self {
+        failed.message
+    }
 }
 
 /// Where manifests and blobs come from.
 pub(crate) trait Fetch {
     /// Write what the registry has at `path` (`manifests/<selector>`, `blobs/<digest>`) to
     /// `out`, up to `limit` bytes.
-    fn get(&mut self, path: &str, limit: u64, out: &mut dyn Write) -> Result<(), String>;
+    fn get(&mut self, path: &str, limit: u64, out: &mut dyn Write) -> Result<(), Failed>;
 }
 
 /// The source of a run that must not touch the network.
 struct NoRegistry(&'static str);
 
 impl Fetch for NoRegistry {
-    fn get(&mut self, path: &str, _: u64, _: &mut dyn Write) -> Result<(), String> {
-        Err(format!("{path} is not in the cache, and {}", self.0))
+    fn get(&mut self, path: &str, _: u64, _: &mut dyn Write) -> Result<(), Failed> {
+        Err(format!("{path} is not in the cache, and {}", self.0).into())
     }
 }
 
@@ -164,6 +235,10 @@ struct Descriptor {
     size: Option<u64>,
     #[serde(default)]
     platform: Option<Platform>,
+    #[serde(rename = "artifactType", default)]
+    artifact_type: Option<String>,
+    #[serde(default)]
+    annotations: BTreeMap<String, String>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -184,6 +259,8 @@ struct Manifest {
     config: Option<Descriptor>,
     #[serde(default)]
     layers: Vec<Descriptor>,
+    #[serde(default)]
+    subject: Option<Descriptor>,
 }
 
 fn hex_of(digest: &str) -> Result<&str, String> {
@@ -458,7 +535,159 @@ fn pull_into(
     Ok(Pulled {
         layout: store.layout(&digest, &blobs)?,
         digest,
+        top,
     })
+}
+
+/// Whether `kind` is a media type attestations travel in.
+fn attestation_type(kind: &str) -> bool {
+    kind.starts_with("application/vnd.dev.sigstore.bundle")
+        || kind == "application/vnd.dsse.envelope.v1+json"
+        || kind == "application/vnd.in-toto+json"
+}
+
+/// Whether a referrer may hold VEX: an attestation not announced as something else.
+fn may_hold_vex(referrer: &Descriptor) -> bool {
+    attestation_type(referrer.artifact_type.as_deref().unwrap_or_default())
+        && referrer
+            .annotations
+            .get("in-toto.io/predicate-type")
+            .is_none_or(|t| t.starts_with("https://openvex.dev/ns"))
+}
+
+/// What the registry has at `path`, or `None` when it has nothing there.
+fn listing(source: &mut dyn Fetch, path: &str) -> Result<Option<Vec<u8>>, String> {
+    let mut out = Vec::new();
+    match source.get(path, MAX_MANIFEST_BYTES, &mut out) {
+        Ok(()) => Ok(Some(out)),
+        Err(failed) if failed.absent => Ok(None),
+        Err(failed) => Err(failed.into()),
+    }
+}
+
+/// Fetch what is attached to `subject` into `store`. Returns the blobs' digests.
+fn discover(store: &Store, source: &mut dyn Fetch, subject: &str) -> Result<Vec<String>, String> {
+    let parse = |bytes: &[u8]| {
+        serde_json::from_slice::<Manifest>(bytes).map_err(|e| format!("attachment: {e}"))
+    };
+    let tag = subject.replacen(':', "-", 1);
+    let index = match listing(source, &format!("referrers/{subject}"))? {
+        Some(index) => Some(index),
+        None => listing(source, &format!("manifests/{tag}"))?,
+    };
+    let mut layers: Vec<Descriptor> = Vec::new();
+    if let Some(index) = index {
+        let referrers = parse(&index)?.manifests.unwrap_or_default();
+        for referrer in referrers
+            .iter()
+            .filter(|r| may_hold_vex(r))
+            .take(MAX_ATTACHMENTS)
+        {
+            let manifest = parse(&store.manifest(source, &referrer.digest)?)?;
+            // A listing is the registry's word; the manifest says what it is attached to.
+            if manifest.subject.as_ref().map(|s| s.digest.as_str()) == Some(subject) {
+                layers.extend(manifest.layers);
+            }
+        }
+    }
+    if let Some(manifest) = listing(source, &format!("manifests/{tag}.att"))? {
+        layers.extend(parse(&manifest)?.layers);
+    }
+    let mut digests = Vec::new();
+    for layer in layers.iter().take(MAX_ATTACHMENTS) {
+        if !attestation_type(&layer.media_type) || digests.contains(&layer.digest) {
+            continue;
+        }
+        store.blob(source, layer, MAX_ATTACHMENT_BYTES)?;
+        digests.push(layer.digest.clone());
+    }
+    Ok(digests)
+}
+
+impl Store {
+    /// Where the blobs attached to `subject` are listed, for a later offline scan.
+    fn attached_path(&self, subject: &str) -> Result<PathBuf, String> {
+        let dir = self.root.join("attached");
+        std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        Ok(dir.join(format!("{}.json", hex_of(subject)?)))
+    }
+
+    /// A blob of the store, checked again.
+    fn read_blob(&self, digest: &str) -> Result<Vec<u8>, String> {
+        let path = self.blob_path(digest)?;
+        let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        if format!("sha256:{}", sha256_hex(&bytes)) != digest {
+            let _ = std::fs::remove_file(&path);
+            return Err(format!("the cached blob {digest} is corrupt"));
+        }
+        Ok(bytes)
+    }
+}
+
+/// What is attached to `subjects`, from `source` and remembered, or with `source` absent, as
+/// remembered by the last run that could ask.
+fn attachments_of(
+    store: &Store,
+    source: Option<&mut dyn Fetch>,
+    subjects: &[String],
+) -> Result<Vec<Attachment>, String> {
+    let mut digests: Vec<String> = Vec::new();
+    match source {
+        Some(source) => {
+            for subject in subjects {
+                let found = discover(store, source, subject)?;
+                let path = store.attached_path(subject)?;
+                let list = serde_json::to_vec(&found).map_err(|e| e.to_string())?;
+                std::fs::write(&path, list).map_err(|e| format!("{}: {e}", path.display()))?;
+                digests.extend(found);
+            }
+        }
+        None => {
+            for subject in subjects {
+                let path = store.attached_path(subject)?;
+                let Ok(list) = std::fs::read(&path) else {
+                    return Err(format!("no attachments of {subject} are cached"));
+                };
+                let found: Vec<String> = serde_json::from_slice(&list)
+                    .map_err(|e| format!("{}: {e}", path.display()))?;
+                digests.extend(found);
+            }
+        }
+    }
+    digests.sort();
+    digests.dedup();
+    digests
+        .into_iter()
+        .map(|digest| {
+            let bytes = store.read_blob(&digest)?;
+            Ok(Attachment { digest, bytes })
+        })
+        .collect()
+}
+
+/// What is attached to a pulled image. `offline` keeps to what the last online run found.
+pub fn attachments(
+    reference: &str,
+    pulled: &Pulled,
+    offline: bool,
+) -> Result<Vec<Attachment>, String> {
+    let root = crate::osvdb::private_subdir("images")
+        .ok_or("no usable cache directory for pulled images")?;
+    let store = Store { root };
+    if offline || !cfg!(feature = "network") {
+        return attachments_of(&store, None, &pulled.subjects());
+    }
+    #[cfg(feature = "network")]
+    {
+        let reference = Reference::parse(reference)?;
+        let mut client = client::Client::new(&reference)?;
+        attachments_of(&store, Some(&mut client), &pulled.subjects())
+    }
+    #[cfg(not(feature = "network"))]
+    {
+        let _ = reference;
+        Err("this build has no network support".to_string())
+    }
 }
 
 /// Pull `reference`, or find it in the cache. `offline` keeps to the cache, so a tag, which
@@ -694,8 +923,8 @@ fn realm_trusted(realm: &str, registry: &str) -> bool {
 #[cfg(feature = "network")]
 mod client {
     use super::{
-        allowed_url, challenge, credentials, host_of, is_local, realm_trusted, Credentials, Fetch,
-        Reference, ACCEPT,
+        allowed_url, challenge, credentials, host_of, is_local, realm_trusted, Credentials, Failed,
+        Fetch, Reference, ACCEPT,
     };
     use std::io::{Read, Write};
     use std::time::Duration;
@@ -827,7 +1056,7 @@ mod client {
     }
 
     impl Fetch for Client {
-        fn get(&mut self, path: &str, limit: u64, out: &mut dyn Write) -> Result<(), String> {
+        fn get(&mut self, path: &str, limit: u64, out: &mut dyn Write) -> Result<(), Failed> {
             let mut url = format!("{}/v2/{}/{path}", self.base, self.repository);
             let origin = host_of(&url).unwrap_or_default().to_string();
             let mut challenged = false;
@@ -855,7 +1084,7 @@ mod client {
                         let n =
                             std::io::copy(&mut reader, out).map_err(|e| format!("{path}: {e}"))?;
                         if n > limit {
-                            return Err(format!("{path}: larger than its limit"));
+                            return Err(format!("{path}: larger than its limit").into());
                         }
                         return Ok(());
                     }
@@ -883,17 +1112,32 @@ mod client {
                             location.to_string()
                         };
                         if !allowed_url(&url) {
-                            return Err(format!("{path}: redirected off TLS"));
+                            return Err(format!("{path}: redirected off TLS").into());
                         }
                     }
                     401 | 403 => {
                         return Err(format!(
                             "{path}: access denied ({status}); log in with `docker login`"
-                        ))
+                        )
+                        .into())
                     }
-                    404 => return Err(format!("{path}: not found in {}", self.repository)),
-                    429 => return Err(format!("{path}: the registry is rate limiting (429)")),
-                    other => return Err(format!("{path}: the registry answered {other}")),
+                    // A registry without the referrers API may answer either of these.
+                    400 | 405 if path.starts_with("referrers/") => {
+                        return Err(Failed {
+                            message: format!("{path}: no referrers API"),
+                            absent: true,
+                        })
+                    }
+                    404 => {
+                        return Err(Failed {
+                            message: format!("{path}: not found in {}", self.repository),
+                            absent: true,
+                        })
+                    }
+                    429 => {
+                        return Err(format!("{path}: the registry is rate limiting (429)").into())
+                    }
+                    other => return Err(format!("{path}: the registry answered {other}").into()),
                 }
             }
         }
@@ -1075,13 +1319,18 @@ mod tests {
     }
 
     impl Fetch for Fake {
-        fn get(&mut self, path: &str, limit: u64, out: &mut dyn Write) -> Result<(), String> {
+        fn get(&mut self, path: &str, limit: u64, out: &mut dyn Write) -> Result<(), Failed> {
             self.asked.push(path.to_string());
-            let data = self.paths.get(path).ok_or(format!("{path}: not found"))?;
+            let Some(data) = self.paths.get(path) else {
+                return Err(Failed {
+                    message: format!("{path}: not found"),
+                    absent: true,
+                });
+            };
             if data.len() as u64 > limit {
-                return Err(format!("{path}: larger than its limit"));
+                return Err(format!("{path}: larger than its limit").into());
             }
-            out.write_all(data).map_err(|e| e.to_string())
+            out.write_all(data).map_err(|e| e.to_string().into())
         }
     }
 
@@ -1180,6 +1429,8 @@ mod tests {
                 architecture: arch.into(),
                 variant: variant.map(String::from),
             }),
+            artifact_type: None,
+            annotations: BTreeMap::new(),
         };
         let entries = [
             entry("unknown", "unknown", None),
@@ -1202,6 +1453,92 @@ mod tests {
         assert!(!readable_layer(
             "application/vnd.cncf.helm.chart.content.v1.tar+gzip"
         ));
+    }
+
+    /// Attach `blob` to `subject` as a referrer, returning the referrer's manifest digest.
+    fn attach(fake: &mut Fake, subject: &str, target: &str, blob: &[u8]) -> String {
+        let kind = "application/vnd.dev.sigstore.bundle.v0.3+json";
+        let manifest = format!(
+            r#"{{"subject":{{"digest":"{target}"}},"layers":[{{"mediaType":"{kind}",
+            "digest":"{}","size":{}}}]}}"#,
+            digest(blob),
+            blob.len()
+        )
+        .into_bytes();
+        let id = digest(&manifest);
+        let listed = format!(
+            r#"{{"manifests":[{{"digest":"{id}","artifactType":"{kind}"}},
+            {{"digest":"sha256:{}","artifactType":"application/spdx+json"}}]}}"#,
+            "0".repeat(64)
+        );
+        fake.paths
+            .insert(format!("blobs/{}", digest(blob)), blob.to_vec());
+        fake.paths.insert(format!("manifests/{id}"), manifest);
+        fake.paths
+            .insert(format!("referrers/{subject}"), listed.into_bytes());
+        id
+    }
+
+    #[test]
+    fn attachments_come_from_referrers_and_the_att_tag_and_stay_for_offline() {
+        let (store, mut fake, id) = fixture("attach");
+        std::fs::create_dir_all(store.root.join("blobs/sha256")).unwrap();
+        let pulled = pull_into(&store, &mut fake, &r("a/b:1"), None).unwrap();
+        attach(&mut fake, &id, &id, b"by referrer");
+        let legacy = b"by tag".to_vec();
+        let att = format!(
+            r#"{{"layers":[{{"mediaType":"application/vnd.dsse.envelope.v1+json",
+            "digest":"{}","size":{}}}]}}"#,
+            digest(&legacy),
+            legacy.len()
+        );
+        fake.paths
+            .insert(format!("blobs/{}", digest(&legacy)), legacy);
+        fake.paths.insert(
+            format!("manifests/{}.att", id.replacen(':', "-", 1)),
+            att.into_bytes(),
+        );
+        let found = attachments_of(&store, Some(&mut fake), &pulled.subjects()).unwrap();
+        let mut bytes: Vec<&[u8]> = found.iter().map(|a| a.bytes.as_slice()).collect();
+        bytes.sort();
+        assert_eq!(bytes, [&b"by referrer"[..], b"by tag"]);
+        // The SPDX referrer was never fetched.
+        assert!(!fake.asked.iter().any(|p| p.contains(&"0".repeat(64))));
+        assert_eq!(
+            attachments_of(&store, None, &pulled.subjects()).unwrap(),
+            found
+        );
+    }
+
+    #[test]
+    fn a_registry_without_referrers_is_asked_for_the_tag_and_nothing_is_no_error() {
+        let (store, mut fake, id) = fixture("noref");
+        std::fs::create_dir_all(store.root.join("blobs/sha256")).unwrap();
+        pull_into(&store, &mut fake, &r("a/b:1"), None).unwrap();
+        attach(&mut fake, &id, &id, b"attached");
+        let listed = fake.paths.remove(&format!("referrers/{id}")).unwrap();
+        let tag = id.replacen(':', "-", 1);
+        fake.paths.insert(format!("manifests/{tag}"), listed);
+        let found = attachments_of(&store, Some(&mut fake), std::slice::from_ref(&id)).unwrap();
+        assert_eq!(found[0].bytes, b"attached");
+        fake.paths.remove(&format!("manifests/{tag}"));
+        assert!(
+            attachments_of(&store, Some(&mut fake), std::slice::from_ref(&id))
+                .unwrap()
+                .is_empty()
+        );
+        // Never asked is not the same as nothing attached.
+        assert!(attachments_of(&store, None, &[digest(b"other")]).is_err());
+    }
+
+    #[test]
+    fn a_referrer_attached_to_another_image_is_not_read() {
+        let (store, mut fake, id) = fixture("subject");
+        std::fs::create_dir_all(store.root.join("blobs/sha256")).unwrap();
+        attach(&mut fake, &id, &digest(b"another image"), b"replayed");
+        assert!(attachments_of(&store, Some(&mut fake), &[id])
+            .unwrap()
+            .is_empty());
     }
 
     #[test]

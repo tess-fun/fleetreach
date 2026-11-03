@@ -96,6 +96,26 @@ pub(crate) struct ScanArgs {
     )]
     ignore_dev_deps: bool,
 
+    #[arg(
+        long,
+        help = "read OpenVEX attached to images pulled from registries; a document sets \
+                findings aside when --vex-oci-key signed it"
+    )]
+    vex_oci: bool,
+    #[arg(
+        long,
+        value_name = "PUBLIC_KEY",
+        help = "cosign public key whose signature on attached VEX is accepted (repeatable); \
+                implies --vex-oci"
+    )]
+    vex_oci_key: Vec<PathBuf>,
+    #[arg(
+        long,
+        help = "accept attached VEX no key signed, as Trivy does: anyone who can push to the \
+                repository can then hide findings; implies --vex-oci"
+    )]
+    vex_oci_unsigned: bool,
+
     // exploit-risk enrichment (CISA KEV + FIRST EPSS)
     #[arg(long, help = "enrich findings with CISA KEV + EPSS (network)")]
     enrich: bool,
@@ -494,7 +514,24 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         return Ok(run_why(&config, package));
     }
     let db = advisory_db(args)?;
-    let images = crate::images::prepare_all(&config.images, args.offline);
+    let vex_policy = oci_vex_policy(args, &config).map_err(|e| fail(&e))?;
+    let mut images = crate::images::prepare_all(&config.images, args.offline, vex_policy.as_ref());
+    for image in &images {
+        if let Some(why) = &image.vex_problem {
+            eprintln!(
+                "warning: no attached VEX read for image {}, so its findings stand: {why}",
+                image.source
+            );
+        }
+        for document in image.attested.iter().flat_map(|a| &a.documents) {
+            if let Some(why) = &document.refused {
+                eprintln!(
+                    "warning: VEX {} on image {} not applied: {why}",
+                    document.digest, image.source
+                );
+            }
+        }
+    }
     let feeds = Feeds::resolve(args, &config, &images)?;
     let mut scan = scan_fleet_with(
         &db,
@@ -505,6 +542,10 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         &feeds.mirrors(),
         &feeds.images(args, &images),
     );
+    let attested: Vec<crate::oci_vex::Attested> = images
+        .iter_mut()
+        .filter_map(|image| image.attested.take())
+        .collect();
     // The images' temporary lockfile copies are removed here.
     drop(images);
     let fleet_packages = add_fleet_signals(args, &config, &feeds, &materialized, &mut scan)?;
@@ -513,7 +554,7 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
     let Assembled {
         report: mut fleet_report,
         suppressed,
-    } = assemble_report(args, &config, &db, &feeds, &materialized, scan);
+    } = assemble_report(args, &config, &db, &feeds, &materialized, scan, &attested);
     let exploitation_known = enrich_report(args, &mut fleet_report);
     assess_reachability(args, &config, &mut fleet_report)?;
     let baseline_new = apply_baseline(args, &mut fleet_report)?;
@@ -983,6 +1024,21 @@ fn note_scan(args: &ScanArgs, scan: &crate::orchestrate::ScanData) {
     }
 }
 
+/// What may read attached VEX, when the scan was asked to.
+fn oci_vex_policy(
+    args: &ScanArgs,
+    config: &Config,
+) -> Result<Option<crate::oci_vex::Policy>, String> {
+    let vex = &config.vex;
+    let mut keys = args.vex_oci_key.clone();
+    keys.extend(vex.oci_keys.iter().cloned());
+    let unsigned = args.vex_oci_unsigned || vex.oci_unsigned;
+    if !(args.vex_oci || vex.oci || unsigned || !keys.is_empty()) {
+        return Ok(None);
+    }
+    crate::oci_vex::Policy::load(&keys, unsigned).map(Some)
+}
+
 /// The report: findings with ignores and VEX assertions applied, then phantom and dev-only
 /// findings dropped when asked.
 fn assemble_report(
@@ -992,6 +1048,7 @@ fn assemble_report(
     feeds: &Feeds,
     materialized: &sources::Materialized,
     scan: crate::orchestrate::ScanData,
+    attested: &[crate::oci_vex::Attested],
 ) -> Assembled {
     // 5. Assemble. Ignores + vex_assertions suppress findings; the removed
     //    occurrences are captured for VEX promotion (used only by `-f vex`).
@@ -1026,6 +1083,17 @@ fn assemble_report(
             .iter()
             .map(Suppression::from_assertion),
     );
+    let (image_vex, set_aside) = crate::oci_vex::suppressions(attested, &scan.vulnerabilities);
+    if !image_vex.is_empty() {
+        eprintln!(
+            "set aside {} finding(s) on VEX attached to images",
+            image_vex.len()
+        );
+    }
+    suppressions.extend(image_vex);
+    for attestation in provenance.images.iter_mut().flat_map(|i| &mut i.vex) {
+        attestation.set_aside = set_aside.get(&attestation.digest).copied().unwrap_or(0);
+    }
     let mut assembled = assemble(
         scan,
         &suppressions,

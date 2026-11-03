@@ -813,7 +813,17 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     plain HTTP (localhost excepted). Tested on Docker Hub, gcr.io, ghcr.io, quay.io and
     mcr.microsoft.com anonymously and a local `registry:2` with a Basic login; the same image
     pulled and `docker save`d gives 23 of 23 identical findings with identical layers.
-    Still open in phase 3: VEX from OCI referrers, the published differential.
+    **VEX from OCI referrers implemented 2026-11-03, unreleased.** `--vex-oci` reads OCI 1.1
+    referrers, the referrers tag, and cosign's `.att` tag, on the platform manifest and the
+    index. Trivy applies the first document with no signature check; fleetreach reads all of
+    them, applies one only when `--vex-oci-key` verifies it (or `--vex-oci-unsigned` is given),
+    and refuses a subject naming another image. Validated with real cosign 2.6.1 (`.att` on
+    `registry:2`) and 3.0.2 (a Sigstore bundle referrer on zot, on a tag and on a 14-platform
+    index) against Trivy 0.73.0: on nginx 1.25.3-alpine and seven statements, Trivy removes 8
+    of 74 per-binary findings and fleetreach the same ones rolled up to 4 of 23 source findings,
+    keeping `CVE-2023-42363` where one of three binaries is still open. The diff found one bug
+    (a binary's name read as its source's). Keyless signatures are not checked: they count as
+    unsigned. Still open in phase 3: the published differential.
     A base with no declared name shows its distribution and fingerprint, as a config does not
     say which tag it came from.
 - **Effort**: XL. **Release**: 1.6.0, 1.7.0, 1.8.0. **Depends on**: per-distro sync (row 11),

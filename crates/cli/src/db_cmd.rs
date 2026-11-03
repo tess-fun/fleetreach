@@ -265,7 +265,7 @@ fn sync_osv(args: &DbSyncArgs, dir: &Path) -> Result<bool, u8> {
             Ok(config) => {
                 // The fleet's images decide which distros to fetch, and add the language
                 // ecosystems their lockfiles and installed packages need.
-                let images = crate::images::prepare_all(&config.images, false);
+                let images = crate::images::prepare_all(&config.images, false, None);
                 for image in &images {
                     if let Err(e) = &image.opened {
                         eprintln!("warning: image {}: {e}", image.source);

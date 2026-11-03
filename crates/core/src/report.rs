@@ -237,6 +237,24 @@ pub struct ImagePull {
     /// The reference as given.
     pub reference: String,
     pub digest: String,
+    /// The OpenVEX attached to it, with `--vex-oci`, read or refused.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub vex: Vec<ImageAttestation>,
+}
+
+/// An OpenVEX document attached to an image in its registry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImageAttestation {
+    pub digest: String,
+    /// The key file that verified its signature.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signed_by: Option<String>,
+    /// Why it was not applied, when it was not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refused: Option<String>,
+    pub statements: usize,
+    /// How many occurrences it set aside.
+    pub set_aside: usize,
 }
 
 /// Where one ecosystem's OSV export came from and how old it was, so a clean verdict

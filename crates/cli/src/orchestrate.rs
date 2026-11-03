@@ -364,6 +364,7 @@ pub(crate) fn scan_fleet_with(
                 repo: image.id.clone(),
                 reference: image.source.clone(),
                 digest: image.digest.clone()?,
+                vex: image.vex_attestations(),
             })
         }));
     data.images

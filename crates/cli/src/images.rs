@@ -29,6 +29,10 @@ pub(crate) struct Prepared {
     pub(crate) source: String,
     /// The manifest digest of an image pulled from a registry.
     pub(crate) digest: Option<String>,
+    /// The VEX attached to it, with `--vex-oci`.
+    pub(crate) attested: Option<crate::oci_vex::Attested>,
+    /// Why attachments could not be read.
+    pub(crate) vex_problem: Option<String>,
     pub(crate) opened: Result<Opened, String>,
 }
 
@@ -138,6 +142,20 @@ impl Layers {
 }
 
 impl Prepared {
+    /// The attached documents as a report records them.
+    pub(crate) fn vex_attestations(&self) -> Vec<fleetreach_core::ImageAttestation> {
+        let documents = self.attested.iter().flat_map(|a| &a.documents);
+        documents
+            .map(|d| fleetreach_core::ImageAttestation {
+                digest: d.digest.clone(),
+                signed_by: d.signed_by.clone(),
+                refused: d.refused.clone(),
+                statements: d.statements,
+                set_aside: 0,
+            })
+            .collect()
+    }
+
     /// The distro ecosystems to load advisories for (the base plus its overlays).
     pub(crate) fn distro_ecosystems(&self) -> Vec<String> {
         match &self.opened {
@@ -153,11 +171,36 @@ impl Prepared {
 }
 
 /// Open every image, in parallel, in config order.
-pub(crate) fn prepare_all(images: &[Image], offline: bool) -> Vec<Prepared> {
-    images.par_iter().map(|i| prepare(i, offline)).collect()
+pub(crate) fn prepare_all(
+    images: &[Image],
+    offline: bool,
+    vex: Option<&crate::oci_vex::Policy>,
+) -> Vec<Prepared> {
+    images
+        .par_iter()
+        .map(|i| prepare(i, offline, vex))
+        .collect()
 }
 
-fn prepare(image: &Image, offline: bool) -> Prepared {
+/// What is attached to a pulled image. A failure only leaves its findings standing.
+fn attached(
+    image: &Image,
+    reference: &str,
+    pulled: &crate::registry::Pulled,
+    offline: bool,
+    policy: &crate::oci_vex::Policy,
+) -> Result<crate::oci_vex::Attested, String> {
+    let attachments = crate::registry::attachments(reference, pulled, offline)?;
+    Ok(crate::oci_vex::read(
+        &image.id,
+        reference,
+        &pulled.subjects(),
+        &attachments,
+        policy,
+    ))
+}
+
+fn prepare(image: &Image, offline: bool, vex: Option<&crate::oci_vex::Policy>) -> Prepared {
     let (source, pulled) = match &image.reference {
         Some(reference) => (
             reference.clone(),
@@ -170,10 +213,25 @@ fn prepare(image: &Image, offline: bool) -> Prepared {
         .ok()
         .and_then(|p| p.as_ref())
         .map(|p| p.digest.clone());
+    let (attested, vex_problem) = match (vex, pulled.as_ref().ok().and_then(|p| p.as_ref())) {
+        (None, _) => (None, None),
+        (Some(_), None) => (
+            None,
+            pulled
+                .is_ok()
+                .then(|| "it did not come from a registry".to_string()),
+        ),
+        (Some(policy), Some(p)) => match attached(image, &source, p, offline, policy) {
+            Ok(attested) => (Some(attested), None),
+            Err(why) => (None, Some(why)),
+        },
+    };
     Prepared {
         id: image.id.clone(),
         source,
         digest,
+        attested,
+        vex_problem,
         opened: pulled.and_then(|p| open(image, p.as_ref())),
     }
 }

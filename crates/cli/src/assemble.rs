@@ -146,6 +146,8 @@ pub struct Suppression {
     pub id: String,
     /// `None` = fleet-wide; else only this repo.
     pub repo: Option<RepoId>,
+    /// `None` = every package; else only this package at this version.
+    pub package: Option<(String, fleetreach_core::semver::Version)>,
     pub justification: Option<String>,
     /// The OpenVEX `impact_statement` when there is no `justification`.
     pub reason: String,
@@ -158,6 +160,7 @@ impl Suppression {
         Self {
             id: ignore.id.clone(),
             repo: None,
+            package: None,
             justification: None,
             reason: ignore.reason.clone(),
             approved_by: None,
@@ -168,6 +171,7 @@ impl Suppression {
         Self {
             id: assertion.id.clone(),
             repo: assertion.repo.clone(),
+            package: None,
             justification: assertion.justification.clone(),
             reason: assertion.reason.clone(),
             approved_by: Some(assertion.approved_by.clone()),
@@ -371,7 +375,11 @@ fn apply_suppressions(
 
     // Warnings have no per-occurrence subcomponent; suppressed only fleet-wide.
     correlated.warnings.retain(|w| match &w.advisory_id {
-        Some(id) if suppressions.iter().any(|s| &s.id == id && s.repo.is_none()) => {
+        Some(id)
+            if suppressions
+                .iter()
+                .any(|s| &s.id == id && s.repo.is_none() && s.package.is_none()) =>
+        {
             matched.insert(id.clone());
             false
         }
@@ -399,9 +407,14 @@ fn matching_suppression<'a>(
     aliases: &[String],
     occ: &Occurrence,
 ) -> Option<&'a Suppression> {
-    let repo = match occ {
-        Occurrence::InRepo { repo, .. } => Some(repo),
-        Occurrence::Toolchain { .. } => None,
+    let (repo, at) = match occ {
+        Occurrence::InRepo {
+            repo,
+            package,
+            installed,
+            ..
+        } => (Some(repo), Some((package, installed))),
+        Occurrence::Toolchain { .. } => (None, None),
     };
     suppressions.iter().find(|s| {
         (s.id == advisory_id || aliases.contains(&s.id))
@@ -409,6 +422,7 @@ fn matching_suppression<'a>(
                 None => true,
                 Some(scoped) => repo == Some(scoped),
             }
+            && s.package.as_ref().is_none_or(|(p, v)| at == Some((p, v)))
     })
 }
 

@@ -285,6 +285,7 @@ fn repo_scoped_suppression_removes_only_that_repos_occurrence() {
     let suppressions = vec![Suppression {
         id: "RUSTSEC-SCOPED".into(),
         repo: Some(RepoId("a".into())),
+        package: None,
         justification: Some("component_not_present".into()),
         reason: "dev only in a".into(),
         approved_by: Some("secteam".into()),

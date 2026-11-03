@@ -86,6 +86,15 @@ Options:
       --ignore-dev-deps
           suppress findings on dev/build-only deps (npm devDependencies, uv/poetry dev groups, Pipfile dev-packages, composer require-dev)
 
+      --vex-oci
+          read OpenVEX attached to images pulled from registries; a document sets findings aside when --vex-oci-key signed it
+
+      --vex-oci-key <PUBLIC_KEY>
+          cosign public key whose signature on attached VEX is accepted (repeatable); implies --vex-oci
+
+      --vex-oci-unsigned
+          accept attached VEX no key signed, as Trivy does: anyone who can push to the repository can then hide findings; implies --vex-oci
+
       --enrich
           enrich findings with CISA KEV + EPSS (network)
 
