@@ -1,0 +1,33 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-qpwj-mvv7-v3m9",
+  "aliases": [
+    "CVE-2016-4464"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.cxf.fediz:fediz-spring",
+    "org.apache.cxf.fediz:fediz-spring2"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.cxf.fediz.core.handler.SigninHandler",
+      "method": "handleRequest"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/cxf-fediz/commit/0006581e9cacbeef46381a223e5671e524d416b6"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.cxf.fediz.core.config.FedizContext",
+        "method": "getAudienceUris",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

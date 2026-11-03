@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-vqqg-xgv7-cf68",
+  "aliases": [
+    "CVE-2017-8045"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.springframework.amqp:spring-amqp"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.springframework.amqp.core.Message",
+      "method": "getBodyContentAsString"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/spring-projects/spring-amqp/commit/6e9e00bb5bf0aa88444146db3c2eae138cc7b0a1",
+      "https://github.com/spring-projects/spring-amqp/commit/83fe9fdec2c86a57898d56c5e109debd9d5c07d9",
+      "https://github.com/spring-projects/spring-amqp/commit/296d481f980fcbecbee01244e3644e254470a86e",
+      "https://github.com/spring-projects/spring-amqp/commit/36e55998f6352ba3498be950ccab1d5f4d0ce655"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

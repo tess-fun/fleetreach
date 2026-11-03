@@ -1,0 +1,38 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-4rjf-mxfm-98h5",
+  "aliases": [
+    "CVE-2016-2174"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.ranger:ranger"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.ranger.db.XXDataHistDao",
+      "method": "findObjByEventTimeClassTypeAndId"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/ranger/commit/8618870d1b4acfae4114dd247a362cfa8493ab9e",
+      "https://github.com/apache/ranger/commit/da3a3233d5679284142eb2887c91a754a0da70b9"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.ranger.db.XXPortalUserDao",
+        "method": "findXPortalUserRolebyXPortalUserId",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.ranger.patch.PatchPersmissionModel_J10003",
+        "method": "assignPermissionToExistingUsers",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

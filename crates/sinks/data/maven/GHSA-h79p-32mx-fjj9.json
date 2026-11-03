@@ -1,0 +1,36 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-h79p-32mx-fjj9",
+  "aliases": [
+    "CVE-2020-11973"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.camel:camel-netty"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.camel.component.netty.ChannelHandlerFactories",
+      "method": "newObjectDecoder"
+    },
+    {
+      "class": "org.apache.camel.component.netty.NettyConfiguration",
+      "method": "parseURI"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/camel/commit/28104c45df424730006a90c52cafda8f7dbcd303"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.camel.component.netty.ChannelHandlerFactories",
+        "method": "newObjectEncoder",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

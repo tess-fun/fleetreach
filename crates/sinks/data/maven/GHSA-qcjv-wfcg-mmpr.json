@@ -1,0 +1,68 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-qcjv-wfcg-mmpr",
+  "aliases": [
+    "CVE-2018-8018"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.ignite:ignite-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.ignite.internal.client.marshaller.jdk.GridClientJdkMarshaller",
+      "method": "unmarshal"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/ignite/commit/82a7b8209fcf56971d12cb10410a38ed632215b2",
+      "https://github.com/apache/ignite/commit/bc374f85ca4a5e69572902d2167fe6bedebd40a2"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.ignite.internal.IgniteKernal",
+        "method": "addClassNames",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.ignite.internal.IgniteKernal",
+        "method": "classBlackList",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.ignite.internal.IgniteKernal",
+        "method": "classNameFilter",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.ignite.internal.IgniteKernal",
+        "method": "classWhiteList",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.ignite.internal.IgniteKernal",
+        "method": "start",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.ignite.internal.client.router.impl.GridTcpRouterNioListenerAdapter",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.ignite.internal.processors.hadoop.mapreduce.MapReduceClient",
+        "method": "client",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.ignite.internal.processors.rest.protocols.tcp.GridTcpRestProtocol",
+        "method": "onKernalStart",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

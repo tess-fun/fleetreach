@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-cf8f-w2c5-p5jr",
+  "aliases": [
+    "CVE-2019-14837"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.keycloak:keycloak-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.keycloak.services.managers.ClientManager",
+      "method": "clientIdChanged"
+    },
+    {
+      "class": "org.keycloak.services.managers.ClientManager",
+      "method": "enableServiceAccount"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/keycloak/keycloak/commit/9a7c1a91a59ab85e7f8889a505be04a71580777f"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

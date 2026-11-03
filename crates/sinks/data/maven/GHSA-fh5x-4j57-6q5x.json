@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-fh5x-4j57-6q5x",
+  "aliases": [
+    "CVE-2015-4165"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.elasticsearch:elasticsearch"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.elasticsearch.repositories.fs.FsRepository",
+      "method": "<init>"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/elastic/elasticsearch/commit/f5cfb2a1869d1a52930cbd3138278a6e2c1b22e6"
+    ],
+    "excluded": [
+      {
+        "class": "org.elasticsearch.env.Environment",
+        "method": "<init>",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-694p-xrhg-x3wm",
+  "aliases": [
+    "CVE-2020-7611"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.micronaut:micronaut-http-client"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.micronaut.http.netty.NettyHttpHeaders",
+      "method": "<init>"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/micronaut-projects/micronaut-core/commit/9d1eff5c8df1d6cda1fe00ef046729b2a6abe7f1",
+      "https://github.com/micronaut-projects/micronaut-core/commit/6deb60b75517f80c57b42d935f07955c773b766d"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

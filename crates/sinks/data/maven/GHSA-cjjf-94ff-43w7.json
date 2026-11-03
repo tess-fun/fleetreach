@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-cjjf-94ff-43w7",
+  "aliases": [
+    "CVE-2018-12022"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind"
+  ],
+  "status": "proposed",
+  "verdict": "deny-list",
+  "gadgets": [
+    "jodd.db.connection.DataSourceConnectionProvider",
+    "oracle.jdbc.connector.OracleManagedConnectionFactory",
+    "oracle.jdbc.rowset.OracleJDBCRowSet"
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/28badf7ef60ac3e7ef151cd8e8ec010b8479226a",
+      "https://github.com/FasterXML/jackson-databind/commit/7487cf7eb14be2f65a1eb108e8629c07ef45e0a1"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

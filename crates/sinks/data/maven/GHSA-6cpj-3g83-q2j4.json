@@ -1,0 +1,33 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-6cpj-3g83-q2j4",
+  "aliases": [
+    "CVE-2012-6612"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.solr:solr-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.solr.handler.dataimport.XPathRecordReader",
+      "method": "<clinit>"
+    },
+    {
+      "class": "org.apache.solr.handler.loader.XMLLoader",
+      "method": "init"
+    },
+    {
+      "class": "org.apache.solr.handler.loader.XMLLoader",
+      "method": "load"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/lucene-solr/commit/f230486ce6707762c1a6e81655d0fac52887906d"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

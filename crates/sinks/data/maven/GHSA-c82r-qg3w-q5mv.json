@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-c82r-qg3w-q5mv",
+  "aliases": [
+    "CVE-2017-7660"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.solr:solr-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.solr.security.PKIAuthenticationPlugin",
+      "method": "getRemotePublicKey"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/lucene-solr/commit/2f5ecbcf9ed7a3a4fd37b5c55860ad8eace1beae",
+      "https://github.com/apache/lucene-solr/commit/9f91c619a35db89544f5c85795df4128c9f0d96a",
+      "https://github.com/apache/lucene-solr/commit/e3b0cfff396a7f92a4f621d598780116da916f3f",
+      "https://github.com/apache/lucene-solr/commit/e912b7cb5c68fbb87b874d41068cf5a3aea17da0"
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

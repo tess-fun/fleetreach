@@ -1,0 +1,89 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-jfh8-c2jp-5v3q",
+  "aliases": [
+    "CVE-2021-44228"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.logging.log4j:log4j-core",
+    "org.ops4j.pax.logging:pax-logging-log4j2"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.logging.log4j.core.lookup.JndiLookup",
+      "method": "lookup"
+    },
+    {
+      "class": "org.apache.logging.log4j.core.net.JndiManager$JndiManagerFactory",
+      "method": "createManager"
+    },
+    {
+      "class": "org.apache.logging.log4j.core.net.JndiManager",
+      "method": "lookup"
+    },
+    {
+      "class": "org.apache.logging.log4j.core.pattern.MessagePatternConverter",
+      "method": "format"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/logging-log4j2/commit/001aaada7dab82c3c09cde5f8e14245dc9d8b454",
+      "https://github.com/apache/logging-log4j2/commit/c77b3cb39312b83b053d23a2158b99ac7de44dd3",
+      "https://github.com/apache/logging-log4j2/commit/bac0d8a35c7e354a0d3f706569116dff6c6bd658",
+      "https://github.com/apache/logging-log4j2/commit/70edc233343815d5efa043b54294a6fb065aa1c5",
+      "https://github.com/apache/logging-log4j2/commit/f819c83804152cb6ed94cb408302e36b21b65053"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.logging.log4j.core.appender.mom.JmsAppender$Builder",
+        "method": "build",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.logging.log4j.core.appender.mom.JmsAppender$Builder",
+        "method": "toString",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.logging.log4j.core.appender.mom.JmsManager$JmsManagerFactory",
+        "method": "createManager",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.logging.log4j.core.lookup.Interpolator",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.logging.log4j.core.lookup.JndiLookup",
+        "method": "convertJndiName",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.logging.log4j.core.net.JndiManager",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.logging.log4j.core.pattern.MessagePatternConverter",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.logging.log4j.core.pattern.MessagePatternConverter",
+        "method": "loadNoLookups",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.logging.log4j.core.pattern.MessagePatternConverter",
+        "method": "newInstance",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

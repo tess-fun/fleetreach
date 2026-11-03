@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-gv2w-88hx-8m9r",
+  "aliases": [
+    "CVE-2020-1745"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.undertow:undertow-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.undertow.server.protocol.ajp.AjpRequestParser",
+      "method": "parse"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/undertow-io/undertow/commit/e60e04f4e9bab49f406c8c57770c4a1bbbc37067"
+    ],
+    "excluded": [
+      {
+        "class": "io.undertow.server.protocol.ajp.AjpOpenListener",
+        "method": "<init>",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "io.undertow.server.protocol.ajp.AjpRequestParser",
+        "method": "<init>",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-4prj-vw9j-v6pr",
+  "aliases": [
+    "CVE-2016-4438"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.struts:struts2-core",
+    "org.apache.struts:struts2-rest-plugin"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.struts2.rest.RestActionMapper",
+      "method": "handleDynamicMethodInvocation"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/struts/commit/76eb8f38a33ad0f1f48464ee1311559c8d52dd6d"
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

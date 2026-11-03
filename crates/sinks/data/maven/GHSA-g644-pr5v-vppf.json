@@ -1,0 +1,72 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-g644-pr5v-vppf",
+  "aliases": [
+    "CVE-2020-9486"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.nifi:nifi-stateless"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.nifi.stateless.runtimes.Program",
+      "method": "runLocal"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/nifi/commit/148537d64a017b73160b0d49943183c18f883ab0"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.nifi.fingerprint.FingerprintFactory",
+        "method": "getLoggableRepresentationOfSensitiveValue",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.nifi.stateless.core.StatelessFlow",
+        "method": "createAndEnqueueFromJSON",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.nifi.stateless.core.StatelessFlow",
+        "method": "run",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.nifi.stateless.core.StatelessFlow",
+        "method": "runOnce",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.nifi.stateless.core.StatelessFlowFile",
+        "method": "<init>",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.nifi.stateless.runtimes.Program",
+        "method": "launch",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.nifi.stateless.runtimes.Program",
+        "method": "runOnYarn",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.nifi.stateless.runtimes.openwhisk.StatelessNiFiOpenWhiskAction$RunHandler",
+        "method": "handle",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.nifi.stateless.runtimes.yarn.YARNServiceUtil",
+        "method": "launchYARNService",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

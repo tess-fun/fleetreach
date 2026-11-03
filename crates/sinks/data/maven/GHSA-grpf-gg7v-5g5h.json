@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-grpf-gg7v-5g5h",
+  "aliases": [
+    "CVE-2020-13921"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.skywalking:oap-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.skywalking.oap.server.storage.plugin.jdbc.h2.dao.H2AlarmQueryDAO",
+      "method": "getAlarm"
+    },
+    {
+      "class": "org.apache.skywalking.oap.server.storage.plugin.jdbc.h2.dao.H2MetadataQueryDAO",
+      "method": "searchEndpoint"
+    },
+    {
+      "class": "org.apache.skywalking.oap.server.storage.plugin.jdbc.h2.dao.H2MetadataQueryDAO",
+      "method": "searchServices"
+    },
+    {
+      "class": "org.apache.skywalking.oap.server.storage.plugin.jdbc.h2.dao.H2TraceQueryDAO",
+      "method": "queryBasicTraces"
+    },
+    {
+      "class": "org.apache.skywalking.oap.server.storage.plugin.jdbc.mysql.MySQLAlarmQueryDAO",
+      "method": "getAlarm"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/skywalking/commit/fb7912c6bdda06a233f4b3e18e71a87d3e4a8951"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

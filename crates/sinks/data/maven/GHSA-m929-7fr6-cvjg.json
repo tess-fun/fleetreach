@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-m929-7fr6-cvjg",
+  "aliases": [
+    "CVE-2018-1259"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.springframework.data:spring-data-commons"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.xmlbeam.config.DefaultXMLFactoriesConfig",
+      "method": "createDocumentBuilderFactory"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/SvenEwald/xmlbeam/commit/f8e943f44961c14cf1316deb56280f7878702ee1"
+    ],
+    "excluded": [
+      {
+        "class": "org.xmlbeam.config.DefaultXMLFactoriesConfig",
+        "method": "createDocumentBuilder",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.xmlbeam.config.DefaultXMLFactoriesConfig",
+        "method": "createTransformer",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

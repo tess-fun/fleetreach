@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-xphj-m9cc-8fmq",
+  "aliases": [
+    "CVE-2016-6814"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.codehaus.groovy:groovy",
+    "org.codehaus.groovy:groovy-all"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/groovy/commit/4df8b652aa018a5d5d1cda8fba938bf3422db31c"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

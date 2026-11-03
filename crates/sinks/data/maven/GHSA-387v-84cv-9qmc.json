@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-387v-84cv-9qmc",
+  "aliases": [
+    "CVE-2017-3163"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.solr:solr-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.solr.handler.ReplicationHandler$DirectoryFileStream",
+      "method": "<init>"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/lucene-solr/commit/3a4f885b18bc963a8326c752bd229497908f1dbc",
+      "https://github.com/apache/lucene-solr/commit/6f598d24692a89da9b5b671be6cf4b947aa39266",
+      "https://github.com/apache/lucene-solr/commit/7088137d52256354a52ed86547b9faa0e7042934",
+      "https://github.com/apache/lucene-solr/commit/ae789c252687dc8a18bfdb677f2e6cd14570e4db"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-w7f2-gjxf-2gm9",
+  "aliases": [
+    "CVE-2015-0225"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.cassandra:apache-cassandra"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/cassandra/commit/c041ea8b3748089937168839791a6d64382b34de"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.cassandra.service.CassandraDaemon",
+        "method": "setup",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.cassandra.service.CassandraDaemon",
+        "method": "stop",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      }
+    ]
+  },
+  "note": "E2b pilot label: Cassandra: JMX bind-all is in cassandra-env.sh, not Java"
+}

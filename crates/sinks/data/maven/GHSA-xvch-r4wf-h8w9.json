@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-xvch-r4wf-h8w9",
+  "aliases": [
+    "CVE-2018-17187"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.qpid:proton-j"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.qpid.proton.engine.impl.ssl.SimpleSslTransportWrapper",
+      "method": "process"
+    },
+    {
+      "class": "org.apache.qpid.proton.engine.impl.ssl.SslDomainImpl",
+      "method": "getPeerAuthentication"
+    },
+    {
+      "class": "org.apache.qpid.proton.engine.impl.ssl.SslDomainImpl",
+      "method": "setPeerAuthentication"
+    },
+    {
+      "class": "org.apache.qpid.proton.engine.impl.ssl.SslEngineFacadeFactory",
+      "method": "createAndInitialiseSslEngine"
+    },
+    {
+      "class": "org.apache.qpid.proton.engine.impl.ssl.SslImpl",
+      "method": "<init>"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/qpid-proton-j/commit/0cb8ca03cec42120dcfc434561592d89a89a805e"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

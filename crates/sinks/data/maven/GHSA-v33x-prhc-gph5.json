@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-v33x-prhc-gph5",
+  "aliases": [
+    "CVE-2019-11272"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.springframework.security:spring-security-cas",
+    "org.springframework.security:spring-security-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.springframework.security.authentication.encoding.PlaintextPasswordEncoder",
+      "method": "isPasswordValid"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/spring-projects/spring-security/commit/b2d4fec3617c497c5a8eb9c7e5270e0c7db293ee"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

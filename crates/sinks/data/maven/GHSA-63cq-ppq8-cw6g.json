@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-63cq-ppq8-cw6g",
+  "aliases": [
+    "CVE-2020-1695"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.jboss.resteasy:resteasy-client"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.jboss.resteasy.plugins.delegates.MediaTypeHeaderDelegate",
+      "method": "isValid"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/resteasy/Resteasy/commit/acf15f2a8067f7e4cf5838342cecfa0b78a174fb"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

@@ -1,0 +1,83 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-ghgj-3xqr-6jfm",
+  "aliases": [
+    "CVE-2015-2080"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.eclipse.jetty:jetty-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.eclipse.jetty.http.HttpParser$BadMessage",
+      "method": "<init>"
+    },
+    {
+      "class": "org.eclipse.jetty.http.HttpParser$IllegalCharacter",
+      "method": "<init>"
+    },
+    {
+      "class": "org.eclipse.jetty.http.HttpParser$IllegalCharacterException",
+      "method": "<init>"
+    },
+    {
+      "class": "org.eclipse.jetty.http.HttpParser$IllegalCharacterException",
+      "method": "appendContentChar"
+    },
+    {
+      "class": "org.eclipse.jetty.http.HttpParser$IllegalCharacterException",
+      "method": "toDebugString"
+    },
+    {
+      "class": "org.eclipse.jetty.util.BufferUtil",
+      "method": "toDebugString"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/eclipse/jetty.project/commit/3e7b5f0fa918633ec24bd1bc23d6ee76d32c7729",
+      "https://github.com/eclipse/jetty.project/commit/4df5647f6dfdc5fa7abb812afe9290d60b17c098"
+    ],
+    "excluded": [
+      {
+        "class": "org.eclipse.jetty.http.HttpParser",
+        "method": "getProxyField",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.eclipse.jetty.http.HttpParser",
+        "method": "handleKnownHeaders",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.eclipse.jetty.http.HttpParser",
+        "method": "next",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.eclipse.jetty.http.HttpParser",
+        "method": "parseHeaders",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.eclipse.jetty.http.HttpParser",
+        "method": "parseLine",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.eclipse.jetty.http.HttpParser",
+        "method": "parseNext",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.eclipse.jetty.http.HttpParser",
+        "method": "quickStart",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

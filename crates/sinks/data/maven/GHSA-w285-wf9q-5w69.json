@@ -1,0 +1,154 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-w285-wf9q-5w69",
+  "aliases": [
+    "CVE-2016-1000352"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.bouncycastle:bcprov-jdk14",
+    "org.bouncycastle:bcprov-jdk15",
+    "org.bouncycastle:bcprov-jdk15on"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.bouncycastle.jcajce.provider.asymmetric.dh.IESCipher$IESwithAES",
+      "method": "<init>"
+    },
+    {
+      "class": "org.bouncycastle.jcajce.provider.asymmetric.dh.IESCipher$IESwithDESede",
+      "method": "<init>"
+    },
+    {
+      "class": "org.bouncycastle.jcajce.provider.asymmetric.dh.IESCipher$OldIESwithAES",
+      "method": "<init>"
+    },
+    {
+      "class": "org.bouncycastle.jcajce.provider.asymmetric.dh.IESCipher$OldIESwithCipher",
+      "method": "<init>"
+    },
+    {
+      "class": "org.bouncycastle.jcajce.provider.asymmetric.dh.IESCipher$OldIESwithDESede",
+      "method": "<init>"
+    },
+    {
+      "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$ECIESwithAES",
+      "method": "<init>"
+    },
+    {
+      "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$ECIESwithCipher",
+      "method": "<init>"
+    },
+    {
+      "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$ECIESwithDESede",
+      "method": "<init>"
+    },
+    {
+      "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$OldECIESwithAES",
+      "method": "<init>"
+    },
+    {
+      "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$OldECIESwithCipher",
+      "method": "<init>"
+    },
+    {
+      "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$OldECIESwithDESede",
+      "method": "<init>"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/bcgit/bc-java/commit/9385b0ebd277724b167fe1d1456e3c112112be1f"
+    ],
+    "excluded": [
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.DH$Mappings",
+        "method": "configure",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.EC$Mappings",
+        "method": "configure",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.dh.IESCipher",
+        "method": "<init>",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.dh.IESCipher",
+        "method": "engineDoFinal",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.dh.IESCipher",
+        "method": "engineGetIV",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.dh.IESCipher",
+        "method": "engineInit",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.dh.IESCipher$OldIES",
+        "method": "<init>",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher",
+        "method": "engineGetIV",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher",
+        "method": "engineInit",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$ECIESwithAESCBC",
+        "method": "<init>",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$OldECIES",
+        "method": "<init>",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$OldECIESwithAESCBC",
+        "method": "<init>",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$OldECIESwithDESedeCBC",
+        "method": "<init>",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.ies.AlgorithmParametersSpi",
+        "method": "engineGetEncoded",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.ies.AlgorithmParametersSpi",
+        "method": "engineInit",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.util.IESUtil",
+        "method": "guessParameterSpec",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.bouncycastle.jce.spec.IESParameterSpec",
+        "method": "<init>",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

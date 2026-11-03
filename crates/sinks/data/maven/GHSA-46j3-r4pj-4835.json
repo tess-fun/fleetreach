@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-46j3-r4pj-4835",
+  "aliases": [
+    "CVE-2018-8034"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.tomcat.embed:tomcat-embed-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.tomcat.websocket.WsWebSocketContainer",
+      "method": "createSSLEngine"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/tomcat/commit/2835bb4e030c1c741ed0847bb3b9c3822e4fbc8a"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.tomcat.websocket.WsWebSocketContainer",
+        "method": "connectToServerRecursive",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

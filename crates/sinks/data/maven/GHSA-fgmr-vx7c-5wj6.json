@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-fgmr-vx7c-5wj6",
+  "aliases": [
+    "CVE-2019-10071"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.tapestry:tapestry-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.tapestry5.internal.services.ClientDataEncoderImpl",
+      "method": "validateHMAC"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/tapestry-5/commit/cdcf49c0a2b36ffc7a004d54405bb4357870c4b2"
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-9qf9-28h9-hqcj",
+  "aliases": [
+    "CVE-2017-8046"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.springframework.data:spring-data-rest-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.springframework.data.rest.webmvc.json.patch.AddOperation",
+      "method": "evaluateValueFromTarget"
+    },
+    {
+      "class": "org.springframework.data.rest.webmvc.json.patch.PatchOperation",
+      "method": "evaluateValueFromTarget"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/spring-projects/spring-data-rest/commit/824e51a1304bbc8334ac0b96ffaef588177e6ccd",
+      "https://github.com/spring-projects/spring-data-rest/commit/8f269e28fe8038a6c60f31a1c36cfda04795ab45"
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

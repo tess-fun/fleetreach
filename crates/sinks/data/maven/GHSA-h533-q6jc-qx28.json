@@ -1,0 +1,62 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-h533-q6jc-qx28",
+  "aliases": [
+    "CVE-2015-5171"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.cloudfoundry.identity:cloudfoundry-identity-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.cloudfoundry.identity.uaa.login.ChangePasswordController",
+      "method": "changePassword"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/cloudfoundry/uaa/commit/9730cd6a3bbb481ee4e400b51952b537589c469d"
+    ],
+    "excluded": [
+      {
+        "class": "org.cloudfoundry.identity.uaa.authentication.AuthzAuthenticationFilter",
+        "method": "setMethods",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.cloudfoundry.identity.uaa.authentication.UaaAuthentication",
+        "method": "<init>",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.cloudfoundry.identity.uaa.authentication.UaaAuthentication",
+        "method": "getName",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.cloudfoundry.identity.uaa.scim.jdbc.JdbcScimUserProvisioning",
+        "method": "changePassword",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.cloudfoundry.identity.uaa.scim.jdbc.JdbcScimUserProvisioning",
+        "method": "create",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.cloudfoundry.identity.uaa.scim.jdbc.JdbcScimUserProvisioning",
+        "method": "update",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.cloudfoundry.identity.uaa.zone.IdentityZoneSwitchingFilter",
+        "method": "stripScopesFromAuthentication",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

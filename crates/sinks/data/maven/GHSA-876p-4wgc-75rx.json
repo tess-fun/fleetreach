@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-876p-4wgc-75rx",
+  "aliases": [
+    "CVE-2016-0785"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.struts:struts2-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.struts2.components.Component",
+      "method": "findValue"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/struts/commit/15857a69e7baf3675804495a5954cd0756ac8364"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.struts2.util.ComponentUtils",
+        "method": "isExpression",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.struts2.views.jsp.ui.AbstractUITag",
+        "method": "setDynamicAttribute",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

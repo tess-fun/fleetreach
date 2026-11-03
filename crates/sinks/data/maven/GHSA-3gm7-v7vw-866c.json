@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3gm7-v7vw-866c",
+  "aliases": [
+    "CVE-2019-0193"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.solr:solr-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.solr.handler.dataimport.DataImportHandler",
+      "method": "handleRequestBody"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/lucene-solr/commit/325824cd391c8e71f36f17d687f52344e50e9715"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.solr.core.PluginBag$RuntimeLib",
+        "method": "isEnabled",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

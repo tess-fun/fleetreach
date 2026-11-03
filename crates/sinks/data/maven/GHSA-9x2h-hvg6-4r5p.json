@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-9x2h-hvg6-4r5p",
+  "aliases": [
+    "CVE-2018-1317"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.zeppelin:zeppelin"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.zeppelin.notebook.Note",
+      "method": "runAll"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/zeppelin/commit/eb7969b0c60bc82658e3033ba7a40741b7204fce"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.zeppelin.user.AuthenticationInfo",
+        "method": "setRoles",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

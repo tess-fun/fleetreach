@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-42wx-65g4-5cxv",
+  "aliases": [
+    "CVE-2018-1309"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.nifi:nifi-standard-processors"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.nifi.processors.standard.SplitXml",
+      "method": "onTrigger"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/nifi/commit/28067a29fd13cdf8e21b440fc65c6dd67872522f"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

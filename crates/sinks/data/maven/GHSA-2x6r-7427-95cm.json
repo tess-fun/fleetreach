@@ -1,0 +1,55 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2x6r-7427-95cm",
+  "aliases": [
+    "CVE-2020-11972"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.camel:camel-rabbitmq"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.camel.component.rabbitmq.RabbitMQEndpointConfigurer",
+      "method": "configure"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/camel/commit/26f7d74755c436513719147f6bafb6f06c655a97",
+      "https://github.com/apache/camel/commit/7c8a2785b11e705cb5445fde1cebd3eff3d53b1c",
+      "https://github.com/apache/camel/commit/94b2c15247c83f233e4dd7870a526113ead9476c",
+      "https://github.com/apache/camel/commit/c7d6a6bfd8d9bf2ee17a7d40897b1ce4574f4103"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.camel.component.rabbitmq.RabbitMQEndpoint",
+        "method": "createRabbitExchange",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.camel.component.rabbitmq.RabbitMQMessageConverter",
+        "method": "populateMessageBody",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.camel.component.rabbitmq.RabbitMQMessageConverter",
+        "method": "populateRabbitExchange",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.camel.component.rabbitmq.RabbitMQMessagePublisher",
+        "method": "publish",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.camel.component.rabbitmq.reply.ReplyManagerSupport",
+        "method": "processReply",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

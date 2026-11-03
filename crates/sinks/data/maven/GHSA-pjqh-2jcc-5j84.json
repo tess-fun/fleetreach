@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-pjqh-2jcc-5j84",
+  "aliases": [
+    "CVE-2017-8028"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.springframework.ldap:spring-ldap-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.springframework.ldap.core.support.DefaultTlsDirContextAuthenticationStrategy",
+      "method": "applyAuthentication"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/spring-projects/spring-ldap/commit/08e8ae289bbd1b581986c7238604a147119c1336"
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

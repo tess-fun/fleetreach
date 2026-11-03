@@ -1,0 +1,114 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-xgc9-9w4v-h33h",
+  "aliases": [
+    "CVE-2018-1321"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.syncope:syncope-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.syncope.core.logic.cocoon.XSLTTransformer",
+      "method": "createNewSAXTransformerFactory"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/syncope/commit/ad31479c1c543ac7d26b8c882aa14f6c00c1fd0a",
+      "https://github.com/apache/syncope/commit/717289bc10b6f3b204cb6d14881f530174c62359",
+      "https://github.com/apache/syncope/commit/726231fbf7b817bd2a9467171dcb1c0087c75bc6"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.syncope.client.cli.commands.configuration.ConfigurationExport",
+        "method": "export",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.syncope.client.cli.commands.report.ReportExportExecution",
+        "method": "export",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.syncope.client.cli.commands.report.ReportSyncopeOperations",
+        "method": "exportExecutionResult",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.syncope.client.cli.util.XMLUtils",
+        "method": "createXMLFile",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.syncope.console.commons.XMLRolesReader",
+        "method": "init",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.syncope.core.logic.cocoon.XSLTTransformer",
+        "method": "setParameters",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.syncope.core.logic.init.CamelRouteLoader",
+        "method": "loadRoutes",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.syncope.core.logic.saml2.SAML2ReaderWriter",
+        "method": "<clinit>",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.syncope.core.persistence.jpa.content.XMLContentExporter",
+        "method": "export",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.syncope.core.provisioning.java.job.report.DefaultReportJobDelegate",
+        "method": "execute",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.syncope.core.report.ReportJob",
+        "method": "execute",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.syncope.core.rest.controller.ReportController",
+        "method": "exportExecutionResult",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.syncope.core.util.ContentExporter",
+        "method": "export",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.syncope.installer.processes.ArchetypeProcess",
+        "method": "run",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.syncope.installer.processes.ContainerProcess",
+        "method": "run",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.syncope.installer.utilities.FileSystemUtils",
+        "method": "writeXML",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.syncope.installer.utilities.MavenUtils",
+        "method": "createSettingsWithProxy",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

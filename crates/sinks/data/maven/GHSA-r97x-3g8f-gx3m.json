@@ -1,0 +1,43 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-r97x-3g8f-gx3m",
+  "aliases": [
+    "CVE-2016-1000340"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.bouncycastle:bcprov-jdk14",
+    "org.bouncycastle:bcprov-jdk15",
+    "org.bouncycastle:bcprov-jdk15on"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.bouncycastle.math.raw.Nat128",
+      "method": "square"
+    },
+    {
+      "class": "org.bouncycastle.math.raw.Nat160",
+      "method": "square"
+    },
+    {
+      "class": "org.bouncycastle.math.raw.Nat192",
+      "method": "square"
+    },
+    {
+      "class": "org.bouncycastle.math.raw.Nat224",
+      "method": "square"
+    },
+    {
+      "class": "org.bouncycastle.math.raw.Nat256",
+      "method": "square"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/bcgit/bc-java/commit/790642084c4e0cadd47352054f868cc8397e2c00"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

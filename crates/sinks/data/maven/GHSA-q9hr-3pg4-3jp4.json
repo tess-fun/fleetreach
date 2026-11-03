@@ -1,0 +1,70 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-q9hr-3pg4-3jp4",
+  "aliases": [
+    "CVE-2015-5254"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.activemq:activemq-client"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.activemq.transport.stomp.JmsFrameTranslator",
+      "method": "createXStream"
+    },
+    {
+      "class": "org.apache.activemq.transport.xstream.XStreamWireFormat",
+      "method": "createXStream"
+    },
+    {
+      "class": "org.apache.activemq.util.ClassLoadingAwareObjectInputStream",
+      "method": "resolveClass"
+    },
+    {
+      "class": "org.apache.activemq.util.ClassLoadingAwareObjectInputStream",
+      "method": "resolveProxyClass"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/activemq/commit/6f03921b31d9fefeddb0f4fa63150ed1f94a14b1",
+      "https://github.com/apache/activemq/commit/73a0caf758f9e4916783a205c7e422b4db27905c",
+      "https://github.com/apache/activemq/commit/7eb9b218b2705cf9273e30ee2da026e43b6dd4e0",
+      "https://github.com/apache/activemq/commit/e7a4b53f799685e337972dd36ba0253c04bcc01f",
+      "https://github.com/apache/activemq/commit/a7e2a44fe8d4435ae99532eb0ab852e6247f7b16",
+      "https://github.com/apache/activemq/commit/d7a3b9406b8496c3f1508bebf3c7ff5367374b90",
+      "https://github.com/apache/activemq/commit/e100638244c4ca5eb2a1f16bcdc671c9859c2694"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.activemq.transport.http.HttpTunnelServlet",
+        "method": "doPost",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.activemq.transport.stomp.JmsFrameTranslator",
+        "method": "convertFrame",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.activemq.transport.xstream.XStreamWireFormat",
+        "method": "getXStream",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.activemq.transport.xstream.XStreamWireFormat",
+        "method": "setXStream",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.activemq.web.MessageQuery",
+        "method": "getBody",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

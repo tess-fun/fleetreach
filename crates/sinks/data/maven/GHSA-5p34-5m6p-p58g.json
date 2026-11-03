@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-5p34-5m6p-p58g",
+  "aliases": [
+    "CVE-2020-9546"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind"
+  ],
+  "status": "proposed",
+  "verdict": "deny-list",
+  "gadgets": [
+    "org.apache.hadoop.shaded.com.zaxxer.hikari.HikariConfig",
+    "com.ibatis.sqlmap.engine.transaction.jta.JtaTransactionConfig",
+    "br.com.anteros.dbcp.AnterosDBCPConfig"
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/9f4e97019fb0dd836533d0b6198c88787e235ae2"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

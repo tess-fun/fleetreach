@@ -1,0 +1,379 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-xfv3-rrfm-f2rv",
+  "aliases": [
+    "CVE-2015-2156"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty",
+    "io.netty:netty-parent",
+    "org.jboss.netty:netty"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http.ClientCookieDecoder$CookieBuilder",
+      "method": "cookie"
+    },
+    {
+      "class": "io.netty.handler.codec.http.DefaultCookie",
+      "method": "name"
+    },
+    {
+      "class": "io.netty.handler.codec.http.DefaultCookie",
+      "method": "value"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/commit/97d871a7553a01384b43df855dccdda5205ae77a",
+      "https://github.com/netty/netty/commit/2caa38a2795fe1f1ae6ceda4d69e826ed7c55e55",
+      "https://github.com/netty/netty/commit/31815598a2af37f0b71ea94eada70d6659c23752"
+    ],
+    "excluded": [
+      {
+        "class": "io.netty.example.http.snoop.HttpSnoopClient",
+        "method": "main",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.example.http.snoop.HttpSnoopServerHandler",
+        "method": "writeResponse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.example.http.upload.HttpUploadClient",
+        "method": "formget",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.example.http.upload.HttpUploadServerHandler",
+        "method": "channelRead0",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.example.http.upload.HttpUploadServerHandler",
+        "method": "writeResponse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ClientCookieDecoder",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ClientCookieDecoder",
+        "method": "decode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ClientCookieDecoder$CookieBuilder",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ClientCookieDecoder$CookieBuilder",
+        "method": "appendAttribute",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ClientCookieDecoder$CookieBuilder",
+        "method": "mergeMaxAgeAndExpire",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ClientCookieDecoder$CookieBuilder",
+        "method": "parse4",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ClientCookieDecoder$CookieBuilder",
+        "method": "parse6",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ClientCookieDecoder$CookieBuilder",
+        "method": "parse7",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ClientCookieDecoder$CookieBuilder",
+        "method": "parse8",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ClientCookieDecoder$CookieBuilder",
+        "method": "setCookieAttribute",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ClientCookieDecoder$CookieBuilder",
+        "method": "setExpire",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ClientCookieDecoder$CookieBuilder",
+        "method": "setMaxAge",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ClientCookieEncoder",
+        "method": "encode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.CookieDecoder",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.CookieDecoder",
+        "method": "decode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.CookieEncoderUtil",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.CookieEncoderUtil",
+        "method": "add",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.CookieEncoderUtil",
+        "method": "addQuoted",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.CookieEncoderUtil",
+        "method": "addUnquoted",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.CookieEncoderUtil",
+        "method": "stringBuilder",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.CookieEncoderUtil",
+        "method": "stripTrailingSeparator",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.CookieEncoderUtil",
+        "method": "stripTrailingSeparatorOrNull",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.CookieHeaderNames",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "comment",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "commentUrl",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "compareTo",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "domain",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "equals",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "hashCode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "isDiscard",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "isHttpOnly",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "isSecure",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "maxAge",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "path",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "ports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "rawValue",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "setComment",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "setCommentUrl",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "setDiscard",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "setDomain",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "setHttpOnly",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "setMaxAge",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "setPath",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "setPorts",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "setRawValue",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "setSecure",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "setValue",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "setVersion",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "toString",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "validateValue",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultCookie",
+        "method": "version",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.HttpHeaderDateFormat",
+        "method": "get",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ServerCookieDecoder",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ServerCookieDecoder",
+        "method": "decode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.ServerCookieEncoder",
+        "method": "encode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.jboss.netty.handler.codec.http.CookieDecoder",
+        "method": "decode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.jboss.netty.handler.codec.http.DefaultCookie",
+        "method": "getMaxAge",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.jboss.netty.handler.codec.http.cookie.ClientCookieDecoder$CookieBuilder",
+        "method": "mergeMaxAgeAndExpire",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.jboss.netty.handler.codec.http.cookie.ClientCookieDecoder$CookieBuilder",
+        "method": "setMaxAge",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.jboss.netty.handler.codec.http.cookie.DefaultCookie",
+        "method": "maxAge",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.jboss.netty.handler.codec.http.cookie.DefaultCookie",
+        "method": "setMaxAge",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.jboss.netty.handler.codec.http.cookie.ServerCookieEncoder",
+        "method": "encode",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

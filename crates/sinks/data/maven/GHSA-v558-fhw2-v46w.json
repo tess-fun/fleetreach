@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-v558-fhw2-v46w",
+  "aliases": [
+    "CVE-2019-10328"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.jenkins-ci.plugins:workflow-remote-loader"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.jenkinsci.plugins.workflow.remoteloader.FileLoaderDSL$MiscWhitelist",
+      "method": "<init>"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/jenkinsci/workflow-remote-loader-plugin/commit/6f9d60f614359720ec98e22b80ba15e8bf88e712"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

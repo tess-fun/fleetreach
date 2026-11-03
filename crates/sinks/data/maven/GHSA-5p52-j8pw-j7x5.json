@@ -1,0 +1,36 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-5p52-j8pw-j7x5",
+  "aliases": [
+    "CVE-2018-20000"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.bedework:bw-webdav"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.bedework.webdav.servlet.common.MethodBase",
+      "method": "parseContent"
+    },
+    {
+      "class": "org.bedework.webdav.servlet.common.PostRequestPars",
+      "method": "parseXml"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/Bedework/bw-webdav/commit/ccb87c2757bab531c53faf0637ee342a378caa7f"
+    ],
+    "excluded": [
+      {
+        "class": "org.bedework.webdav.servlet.common.PostRequestPars",
+        "method": "processXml",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

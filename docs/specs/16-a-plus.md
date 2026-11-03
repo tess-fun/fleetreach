@@ -683,6 +683,13 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   2026-11-02): sinks become reviewed, curated records (pipeline proposes, a person accepts);
   unreviewed sinks are witnesses only; the proof is coverage of reviewed records. See "E2b
   result".
+- **Curated sink records (built 2026-11-02, unreleased)**: `crates/sinks` holds the record
+  format (`fleetreach-sinks/1`, fail-closed loader), a Java source reader, and `sinkpropose`
+  (fix commits to a `proposed` record, from a local clone or fetched files). On the pilot the
+  Rust proposer is right for 24 of 40 (sinks at least 90% precise, or no sinks where none
+  exist), including all 4 Jackson deny lists, which it proposes as gadget rules. Seed data:
+  100 `proposed` Maven records in `crates/sinks/data/` (40 with E2b labels, 60 straight from
+  the proposer), none reviewed yet; `data/README.md` has the review steps.
 
 #### 14. Import-graph witness chains (A- to A+)
 

@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-38cr-2ph5-frr9",
+  "aliases": [
+    "CVE-2018-1327"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.struts:struts2-rest-plugin"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/struts/commit/67ecf3a21608e20449bcb7895b22204b400fecd4"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

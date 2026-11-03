@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-x5jm-rj37-5qh7",
+  "aliases": [
+    "CVE-2019-1003005"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.jenkins-ci.plugins:script-security"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.jenkinsci.plugins.scriptsecurity.sandbox.groovy.SecureGroovyScript$DescriptorImpl",
+      "method": "doCheckScript"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/jenkinsci/script-security-plugin/commit/35119273101af26792457ec177f34f6f4fa49d99"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

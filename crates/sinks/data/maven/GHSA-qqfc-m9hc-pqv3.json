@@ -1,0 +1,831 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-qqfc-m9hc-pqv3",
+  "aliases": [
+    "CVE-2018-1131"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.infinispan:infinispan-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.infinispan.rest.dataconversion.JsonTranscoder",
+      "method": "transcode"
+    },
+    {
+      "class": "org.infinispan.rest.dataconversion.XMLTranscoder",
+      "method": "transcode"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/infinispan/infinispan/commit/c630752604332c4cc84fc44dfbb9011a296ab966"
+    ],
+    "excluded": [
+      {
+        "class": "org.infinispan.cache.impl.EncoderCache",
+        "method": "lookupEncoderWrapper",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.cache.impl.EncoderEntryMapper",
+        "method": "apply",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.cache.impl.EncoderEntryMapper",
+        "method": "decode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.RemoteCacheManager",
+        "method": "start",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.counter.operation.BaseCounterOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "addClientListener",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "containsKey",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "execute",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "getAll",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "getAsync",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "getVersioned",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "getWithMetadata",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "init",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "marshallParams",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "obj2bytes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "putAllAsync",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "putAsync",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "putIfAbsentAsync",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "removeAsync",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "removeEntry",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "removeWithVersionAsync",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "replaceAsync",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "replaceWithVersionAsync",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "retrieveEntries",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl",
+        "method": "retrieveEntriesWithMetadata",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl$WithFlagsCallable",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.RemoteCacheImpl$WithFlagsCallable",
+        "method": "setFlagsIfPresent",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.StreamingRemoteCacheImpl",
+        "method": "get",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.StreamingRemoteCacheImpl",
+        "method": "put",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.StreamingRemoteCacheImpl",
+        "method": "putIfAbsent",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.StreamingRemoteCacheImpl",
+        "method": "replaceWithVersion",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.iteration.KeyTrackerFactory",
+        "method": "create",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.iteration.RemoteCloseableIterator",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.iteration.RemoteCloseableIterator",
+        "method": "fetch",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.iteration.RemoteCloseableIterator",
+        "method": "start",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.iteration.RemoteCloseableIterator",
+        "method": "startInternal",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.iteration.SegmentKeyTracker",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.iteration.SegmentKeyTracker",
+        "method": "track",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.multimap.operations.ContainsEntryMultimapOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.multimap.operations.ContainsKeyMultimapOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.multimap.operations.ContainsValueMultimapOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.multimap.operations.GetKeyMultimapOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.multimap.operations.GetKeyWithMetadataMultimapOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.multimap.operations.MultimapOperationsFactory",
+        "method": "newPutKeyValueOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.multimap.operations.PutKeyValueMultimapOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.multimap.operations.RemoveEntryMultimapOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.multimap.operations.RemoveKeyMultimapOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.multimap.operations.SizeMultimapOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.AbstractKeyOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.AbstractKeyValueOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.AddClientListenerOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.AddClientListenerOperation",
+        "method": "copy",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.AddClientListenerOperation",
+        "method": "executeOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.BulkGetKeysOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.BulkGetOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.ClearOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.ContainsKeyOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.ExecuteOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.FaultTolerantPingOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.GetAllOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.GetAllOperation",
+        "method": "acceptResponse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.GetAllParallelOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.GetAllParallelOperation",
+        "method": "mapOperations",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.GetOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.GetOperation",
+        "method": "acceptResponse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.GetStreamOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.GetWithMetadataOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.GetWithMetadataOperation",
+        "method": "acceptResponse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.GetWithVersionOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.HotRodOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.IterationNextOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.IterationNextOperation",
+        "method": "acceptResponse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.IterationNextOperation",
+        "method": "unmarshall",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.IterationStartOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newAddClientListenerOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newContainsKeyOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newGetAllOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newGetKeyOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newGetWithMetadataOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newGetWithVersionOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newIterationNextOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newIterationStartOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newPutAllOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newPutIfAbsentOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newPutKeyValueOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newRemoveIfUnmodifiedOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newRemoveOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newReplaceIfUnmodifiedOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.OperationsFactory",
+        "method": "newReplaceOperation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.ParallelHotRodOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.PutAllOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.PutAllParallelOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.PutAllParallelOperation",
+        "method": "mapOperations",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.PutIfAbsentOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.PutOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.PutStreamOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.QueryOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.RemoveIfUnmodifiedOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.RemoveOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.ReplaceIfUnmodifiedOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.ReplaceOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.RetryOnFailureOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.SizeOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.operations.StatsOperation",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.protocol.Codec10",
+        "method": "readCacheEvent",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.protocol.Codec20",
+        "method": "readCacheEvent",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.protocol.Codec21",
+        "method": "readCacheEvent",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.protocol.Codec28",
+        "method": "writeHeader",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.transport.netty.ChannelFactory",
+        "method": "start",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.impl.transport.netty.HeaderDecoder",
+        "method": "decode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.client.hotrod.marshall.MarshallerUtil",
+        "method": "getShort",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.commons.dataconversion.MediaTypeIds",
+        "method": "<clinit>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.commons.dataconversion.MediaTypeIds",
+        "method": "getId",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.commons.dataconversion.MediaTypeIds",
+        "method": "getMediaType",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.commons.dataconversion.StandardConversions",
+        "method": "convertTextToObject",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.notifications.cachelistener.CacheNotifierImpl",
+        "method": "convertKey",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.notifications.cachelistener.CacheNotifierImpl",
+        "method": "convertValue",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.query.remote.impl.dataconversion.ProtostreamJsonTranscoder",
+        "method": "transcode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.rest.LifecycleCallbacks",
+        "method": "cacheManagerStarting",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.rest.dataconversion.JBossMarshallingTranscoder",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.rest.dataconversion.JBossMarshallingTranscoder",
+        "method": "transcode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.rest.dataconversion.JavaSerializationTranscoder",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.rest.dataconversion.JavaSerializationTranscoder",
+        "method": "getSupportedMediaTypes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.rest.dataconversion.JavaSerializationTranscoder",
+        "method": "transcode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.rest.dataconversion.JsonTranscoder",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.rest.dataconversion.XMLTranscoder",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.rest.dataconversion.XMLTranscoder",
+        "method": "validate",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.rest.search.HitSerializer",
+        "method": "serialize",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.core.LifecycleCallbacks",
+        "method": "cacheManagerStarting",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.AbstractEncoder1x",
+        "method": "generateTopologyResponse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.AbstractEncoder1x",
+        "method": "getTopologyResponse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.AbstractEncoder1x",
+        "method": "writeHashTopologyUpdate",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.AbstractTopologyAwareEncoder1x",
+        "method": "writeHashTopologyUpdate11",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.CacheRequestProcessor",
+        "method": "cacheStopped",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.CacheRequestProcessor",
+        "method": "containsKey",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.CacheRequestProcessor",
+        "method": "get",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.CacheRequestProcessor",
+        "method": "getAll",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.CacheRequestProcessor",
+        "method": "getCacheInfo",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.CacheRequestProcessor",
+        "method": "getKeyMetadata",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.CacheRequestProcessor",
+        "method": "isBlockingWrite",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.CacheRequestProcessor$CacheInfo",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.CacheRequestProcessor$CacheInfo",
+        "method": "localNonBlocking",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.ContextHandler",
+        "method": "cache",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.ContextHandler",
+        "method": "channelRead0",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.ContextHandler",
+        "method": "initCache",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.ContextHandler",
+        "method": "initMultimap",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.ContextHandler",
+        "method": "obtainCache",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.Decoder2x",
+        "method": "readHeader",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.HotRodHeader",
+        "method": "toString",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.HotRodServer",
+        "method": "getAddressCache",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.HotRodServer",
+        "method": "getCacheInstance",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.HotRodServer",
+        "method": "getExecutor",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.HotRodServer",
+        "method": "getKnownCache",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.HotRodServer",
+        "method": "preStartCaches",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.HotRodServer",
+        "method": "startDefaultCache",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.HotRodServer",
+        "method": "tryRegisterMigrationManager",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.HotRodServer$RemoveCacheListener",
+        "method": "cacheStopped",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.HotRodServer$ToEmptyBytesKeyValueFilterConverter$ToEmptyBytesKeyValueFilterConverterExternalizer",
+        "method": "readObject",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.infinispan.server.hotrod.HotRodServer$ToEmptyBytesKeyValueFilterConverter$ToEmptyBytesKeyValueFilterConverterExternalizer",
+        "method": "writeObject",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

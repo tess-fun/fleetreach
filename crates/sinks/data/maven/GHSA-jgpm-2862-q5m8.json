@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-jgpm-2862-q5m8",
+  "aliases": [
+    "CVE-2019-1003024"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.jenkins-ci.plugins:script-security"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.jenkinsci.plugins.scriptsecurity.sandbox.groovy.RejectASTTransformsCustomizer$RejectASTTransformsVisitor",
+      "method": "visitAnnotations"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/jenkinsci/script-security-plugin/commit/3228c88e84f0b2f24845b6466cae35617e082059"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-m59c-jpc8-m2x4",
+  "aliases": [
+    "CVE-2018-1336"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.tomcat.embed:tomcat-embed-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.tomcat.util.buf.Utf8Decoder",
+      "method": "decodeHasArray"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/tomcat/commit/92cd494555598e99dd691712e8ee426a2f9c2e93"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

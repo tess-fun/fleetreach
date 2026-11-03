@@ -1,0 +1,95 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-mwcx-532g-8pq3",
+  "aliases": [
+    "CVE-2018-12538"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.eclipse.jetty:jetty-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+      "method": "delete"
+    },
+    {
+      "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+      "method": "deleteAllFiles"
+    },
+    {
+      "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+      "method": "deleteOldFiles"
+    },
+    {
+      "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+      "method": "doGetExpired"
+    },
+    {
+      "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+      "method": "getExpiryFromFile"
+    },
+    {
+      "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+      "method": "getExpiryFromString"
+    },
+    {
+      "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+      "method": "getFile"
+    },
+    {
+      "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+      "method": "getIdFromFile"
+    },
+    {
+      "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+      "method": "getIdWithContextFromFile"
+    },
+    {
+      "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+      "method": "getIdWithContextFromString"
+    },
+    {
+      "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+      "method": "initializeStore"
+    },
+    {
+      "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+      "method": "load"
+    },
+    {
+      "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+      "method": "match"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/eclipse/jetty.project/commit/a0b8321ef452dddff9bc6c14e3ac0108239bfa2c"
+    ],
+    "excluded": [
+      {
+        "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+        "method": "doStop",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+        "method": "doStore",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+        "method": "exists",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.eclipse.jetty.server.session.FileSessionDataStore",
+        "method": "getIdWithContext",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

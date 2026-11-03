@@ -1,0 +1,34 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-4wjq-69rc-8wcp",
+  "aliases": [
+    "CVE-2019-0194"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.camel:camel-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.camel.component.file.GenericFileProducer",
+      "method": "createFileName"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/camel/commit/2d399aa6062fccd6af496bd776314d1944f7090f",
+      "https://github.com/apache/camel/commit/53185f0b221b899aacb3c379647a866a8f408a87",
+      "https://github.com/apache/camel/commit/5e1d70c6957703cdebbfe5d796462e5a89c8bc26",
+      "https://github.com/apache/camel/commit/f337a98e86ef18611b14570e6780053fe3ddcc02",
+      "https://github.com/apache/camel/commit/68f2de31b7752bd49b7898d7098b3bfe8e0d0bdb",
+      "https://github.com/apache/camel/commit/a8a2b8c0a37e348981a4cf41fd2b329b6079f40b",
+      "https://github.com/apache/camel/commit/05ff65d5cebf1fa5172c59dd16359ed583c099ca",
+      "https://github.com/apache/camel/commit/5b64969d37cf2906efd4623cfd473041ce5132fd",
+      "https://github.com/apache/camel/commit/15a1f10fb532bdcba184cda17be602a2358bd5e8",
+      "https://github.com/apache/camel/commit/e030f6665db037a2f73f30b9125fb770f29a7bd4"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-vq9j-jh62-5hmp",
+  "aliases": [
+    "CVE-2017-5643"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.camel:camel-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.camel.processor.validation.SchemaReader",
+      "method": "createSchemaFactory"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/camel/commit/2c6964ae94d8f9a9c9a32e5ae5a0b794e8b8d3be",
+      "https://github.com/apache/camel/commit/87c92b7b38890c217bc76f2c55036e6a5cca9a07",
+      "https://github.com/apache/camel/commit/9f7376abbff7434794f2c7c2909e02bac232fb5b",
+      "https://github.com/apache/camel/commit/ec3d0db81ba061b27e934d5ff56e9baca0049ebf",
+      "https://github.com/apache/camel/commit/8afc5d1757795fde715902067360af5d90f046da"
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-wjxj-f8rg-99wx",
+  "aliases": [
+    "CVE-2018-1320"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.thrift:libthrift"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.thrift.transport.TSaslTransport",
+      "method": "open"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/thrift/commit/d973409661f820d80d72c0034d06a12348c8705e"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

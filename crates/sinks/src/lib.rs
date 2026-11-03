@@ -6,6 +6,15 @@
 //! constant-pool order, compiler-numbered lambdas) is not reported as a change.
 //!
 //! Jars are data: they are unzipped and parsed, never loaded or run.
+//!
+//! Neither jar diffs nor fix-commit diffs give sinks precise enough to act on unreviewed (the
+//! E2 and E2b experiments in spec 16), so sinks are curated data: [`propose`] turns a fix
+//! into a `proposed` [`record`], a person reviews it, and only reviewed records may ever
+//! support "not reached".
+
+pub mod java;
+pub mod propose;
+pub mod record;
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};

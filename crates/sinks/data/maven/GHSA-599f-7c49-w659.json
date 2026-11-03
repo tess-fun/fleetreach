@@ -1,0 +1,51 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-599f-7c49-w659",
+  "aliases": [
+    "CVE-2022-42889"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.commons:commons-text"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/commons-text/commit/b9b40b903e2d1f9935039803c9852439576780ea"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.commons.text.lookup.DefaultStringLookup",
+        "method": "main",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.commons.text.lookup.InterpolatorStringLookup",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.commons.text.lookup.InterpolatorStringLookup",
+        "method": "lookup",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.commons.text.lookup.InterpolatorStringLookup",
+        "method": "toKey",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.commons.text.lookup.StringLookupFactory",
+        "method": "addDefaultStringLookups",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.commons.text.lookup.StringLookupFactory",
+        "method": "loadProperties",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  },
+  "note": "E2b pilot label: commons-text: the script/dns/url lookups are not in the diff"
+}

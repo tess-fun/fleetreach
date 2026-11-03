@@ -1,0 +1,27 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-836g-5fr5-fgcr",
+  "aliases": [
+    "CVE-2020-11969"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.tomee:tomee"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.openejb.resource.activemq.ActiveMQ5Factory",
+      "method": "createBroker"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/tomee/commit/17168ad95e35f1758e16364c2398dea10a4034d8",
+      "https://github.com/apache/tomee/commit/5db25b2850b7bd29d3311c623c7ee2ed5cbb5749",
+      "https://github.com/apache/tomee/commit/6e4c385b9a675c853a539c6b4a0b4d8d9be190c9"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

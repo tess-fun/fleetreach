@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-p4q6-qxjx-8jgp",
+  "aliases": [
+    "CVE-2021-21234"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "eu.hinsch:spring-boot-actuator-logview"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "eu.hinsch.spring.boot.actuator.logview.LogViewEndpoint",
+      "method": "view"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/lukashinsch/spring-boot-actuator-logview/commit/760acbb939a8d1f7d1a7dfcd51ca848eea04e772"
+    ],
+    "excluded": [
+      {
+        "class": "eu.hinsch.spring.boot.actuator.logview.LogViewEndpoint",
+        "method": "list",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "eu.hinsch.spring.boot.actuator.logview.LogViewEndpoint",
+        "method": "securityCheck",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

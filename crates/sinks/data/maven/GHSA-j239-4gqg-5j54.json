@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-j239-4gqg-5j54",
+  "aliases": [
+    "CVE-2017-1000486"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.primefaces:primefaces"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.primefaces.application.resource.StreamedContentHandler",
+      "method": "handle"
+    },
+    {
+      "class": "org.primefaces.util.DynamicResourceBuilder",
+      "method": "build"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/primefaces/primefaces/commit/26e44eb7962cbdb6aa2f47eca0f230f3274358f0"
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

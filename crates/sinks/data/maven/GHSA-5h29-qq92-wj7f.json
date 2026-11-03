@@ -1,0 +1,263 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-5h29-qq92-wj7f",
+  "aliases": [
+    "CVE-2019-0231"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.mina:mina-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.mina.filter.ssl.SslHandler",
+      "method": "checkStatus"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/mina/commit/294b8ce638df6e237e819537b333e02853bb612c",
+      "https://github.com/apache/mina/commit/73e881ad935e5aa6080b90585ac8dc8ddfc377e1"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.mina.core.filterchain.DefaultIoFilterChainBuilder",
+        "method": "isOrderedMap",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.core.service.AbstractIoService",
+        "method": "dispose",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.filter.buffer.BufferedWriteFilter",
+        "method": "internalFlush",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.filter.codec.ProtocolCodecFilter",
+        "method": "messageReceived",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.filter.codec.statemachine.DecodingStateMachine",
+        "method": "cleanup",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.filter.codec.statemachine.DecodingStateMachine",
+        "method": "finishDecode",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.filter.compression.Zlib",
+        "method": "deflate",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.mina.filter.compression.Zlib",
+        "method": "inflate",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.mina.filter.executor.OrderedThreadPoolExecutor",
+        "method": "print",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.filter.firewall.BlacklistFilter",
+        "method": "setBlacklist",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.mina.filter.firewall.ConnectionThrottleFilter",
+        "method": "isConnectionOk",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.filter.ssl.SslFilter",
+        "method": "initiateHandshake",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.filter.ssl.SslFilter",
+        "method": "onPreAdd",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.filter.ssl.SslHandler",
+        "method": "destroy",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.filter.ssl.SslHandler",
+        "method": "init",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.http.HttpClientDecoder",
+        "method": "decode",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.http.HttpClientEncoder",
+        "method": "encode",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.http.HttpServerDecoder",
+        "method": "decode",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.http.HttpServerEncoder",
+        "method": "encode",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.integration.jmx.ObjectMBean",
+        "method": "expandAttribute",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.AbstractProxyIoHandler",
+        "method": "sessionOpened",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.AbstractProxyLogicHandler",
+        "method": "flushPendingWriteRequests",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.AbstractProxyLogicHandler",
+        "method": "setHandshakeComplete",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.AbstractProxyLogicHandler",
+        "method": "writeData",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.filter.ProxyFilter",
+        "method": "messageReceived",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.filter.ProxyFilter",
+        "method": "sessionCreated",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.filter.ProxyFilter",
+        "method": "writeData",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.http.AbstractAuthLogicHandler",
+        "method": "writeRequest",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.http.AbstractHttpLogicHandler",
+        "method": "decodeResponse",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.http.AbstractHttpLogicHandler",
+        "method": "messageReceived",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.http.AbstractHttpLogicHandler",
+        "method": "reconnect",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.http.AbstractHttpLogicHandler",
+        "method": "writeRequest0",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.http.HttpProxyRequest",
+        "method": "getHost",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.http.HttpSmartProxyHandler",
+        "method": "autoSelectAuthHandler",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.http.HttpSmartProxyHandler",
+        "method": "doHandshake",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.http.basic.HttpBasicAuthLogicHandler",
+        "method": "doHandshake",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.http.basic.HttpNoAuthLogicHandler",
+        "method": "doHandshake",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.http.digest.HttpDigestAuthLogicHandler",
+        "method": "doHandshake",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.http.ntlm.HttpNTLMAuthLogicHandler",
+        "method": "doHandshake",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.socks.Socks4LogicHandler",
+        "method": "doHandshake",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.socks.Socks4LogicHandler",
+        "method": "writeRequest",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.socks.Socks5LogicHandler",
+        "method": "doHandshake",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.socks.Socks5LogicHandler",
+        "method": "encodeGSSAPIAuthenticationPacket",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.proxy.handlers.socks.Socks5LogicHandler",
+        "method": "handleResponse",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.statemachine.StateMachineProxyBuilder$MethodInvocationHandler",
+        "method": "invoke",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.mina.transport.serial.SerialConnector",
+        "method": "<init>",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.mina.transport.serial.SerialConnector",
+        "method": "connect0",
+        "reason": "only comments, braces, imports or logging changed"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

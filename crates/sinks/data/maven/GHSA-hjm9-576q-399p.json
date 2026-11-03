@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-hjm9-576q-399p",
+  "aliases": [
+    "CVE-2018-1000854"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.esigate:esigate-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.esigate.xml.XsltRenderer",
+      "method": "createTransformer"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/esigate/esigate/commit/30cad23a8f282600c9b045e1af09f6f8a65357b1"
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

@@ -1,0 +1,64 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-ww97-9w65-2crx",
+  "aliases": [
+    "CVE-2019-17558"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.solr:solr-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.solr.response.VelocityResponseWriter",
+      "method": "createContext"
+    },
+    {
+      "class": "org.apache.solr.response.VelocityResponseWriter",
+      "method": "createEngine"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/lucene-solr/commit/128360856d50d7b39473644e6c1c21ba11766195",
+      "https://github.com/apache/lucene-solr/commit/212593d3624f9a85401a55833bc725d47a0cc543",
+      "https://github.com/apache/lucene-solr/commit/50e8cea918062780299b2be1343a59a8bc7eb594",
+      "https://github.com/apache/lucene-solr/commit/6a72b81ed308b56d7a5dae1fd42e811924572763"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.solr.response.SolrParamResourceLoader",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.solr.response.SolrParamResourceLoader",
+        "method": "getLastModified",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.solr.response.SolrParamResourceLoader",
+        "method": "getResourceReader",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.solr.response.SolrParamResourceLoader",
+        "method": "init",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.solr.response.SolrParamResourceLoader",
+        "method": "isSourceModified",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.solr.response.VelocityResponseWriter",
+        "method": "init",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

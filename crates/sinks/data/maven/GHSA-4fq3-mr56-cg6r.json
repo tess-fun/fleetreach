@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-4fq3-mr56-cg6r",
+  "aliases": [
+    "CVE-2018-1273"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.springframework.data:spring-data-commons"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.springframework.data.web.MapDataBinder$MapPropertyAccessor",
+      "method": "setPropertyValue"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/spring-projects/spring-data-commons/commit/ae1dd2741ce06d44a0966ecbd6f47beabde2b653",
+      "https://github.com/spring-projects/spring-data-commons/commit/b1a20ae1e82a63f99b3afc6f2aaedb3bf4dc432a"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

@@ -1,0 +1,52 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-pq4w-qm9g-qx68",
+  "aliases": [
+    "CVE-2019-19135"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.eclipse.milo:sdk-client"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.eclipse.milo.opcua.sdk.client.api.identity.UsernameProvider",
+      "method": "getIdentityToken"
+    },
+    {
+      "class": "org.eclipse.milo.opcua.sdk.client.api.identity.X509IdentityProvider",
+      "method": "getIdentityToken"
+    },
+    {
+      "class": "org.eclipse.milo.opcua.sdk.client.session.SessionFsmFactory",
+      "method": "activateSession"
+    },
+    {
+      "class": "org.eclipse.milo.opcua.sdk.server.SessionManager",
+      "method": "onCreateSession"
+    },
+    {
+      "class": "org.eclipse.milo.opcua.stack.client.transport.uasc.UascClientMessageHandler",
+      "method": "onOpenSecureChannel"
+    },
+    {
+      "class": "org.eclipse.milo.opcua.stack.server.transport.uasc.UascServerAsymmetricHandler",
+      "method": "openSecureChannel"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/eclipse/milo/commit/cac0e710bf2b8bed9c602fc597e9de1d8903abed"
+    ],
+    "excluded": [
+      {
+        "class": "org.eclipse.milo.opcua.stack.core.util.NonceUtil",
+        "method": "getNonceLength",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

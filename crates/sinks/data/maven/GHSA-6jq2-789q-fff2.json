@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-6jq2-789q-fff2",
+  "aliases": [
+    "CVE-2018-11761"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.tika:tika-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.tika.utils.XMLReaderUtils",
+      "method": "trySetStaxSecurityManager"
+    },
+    {
+      "class": "org.apache.tika.utils.XMLReaderUtils",
+      "method": "trySetXercesSecurityManager"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/tika/commit/4e67928412ad56333d400f3728ecdb59d07d9d63"
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

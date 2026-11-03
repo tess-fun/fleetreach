@@ -1,0 +1,22 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-f3j5-rmmp-3fc5",
+  "aliases": [
+    "CVE-2019-17267"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind"
+  ],
+  "status": "proposed",
+  "verdict": "deny-list",
+  "gadgets": [
+    "net.sf.ehcache.hibernate.EhcacheJtaTransactionManagerLookup"
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/191a4cdf87b56d2ddddb77edd895ee756b7f75eb"
+    ]
+  },
+  "note": "E2b pilot label: deny-list fix; exposure needs a gadget class and polymorphic typing"
+}

@@ -1,0 +1,52 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-7ghm-rpc7-p7g5",
+  "aliases": [
+    "CVE-2013-2115"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.struts.xwork:xwork-core",
+    "org.apache.struts:struts2-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.opensymphony.xwork2.ognl.SecurityMemberAccess",
+      "method": "setAllowStaticMethodAccess"
+    },
+    {
+      "class": "org.apache.struts2.views.util.DefaultUrlHelper",
+      "method": "translateAndDecode"
+    },
+    {
+      "class": "org.apache.struts2.views.util.DefaultUrlHelper",
+      "method": "translateAndEncode"
+    },
+    {
+      "class": "org.apache.struts2.views.util.DefaultUrlHelper",
+      "method": "translateVariable"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/struts/commit/d7804297e319c7a12245e1b536e565fcea6d6503",
+      "https://github.com/apache/struts/commit/fed4f8e8a4ec69b5e7612b92d8ce3e476680474b",
+      "https://github.com/apache/struts/commit/d934c6e7430b7b98e43a0a085a2304bd31a75c3d"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.struts2.views.util.DefaultUrlHelper",
+        "method": "buildParameterSubstring",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.struts2.views.util.DefaultUrlHelper",
+        "method": "parseQueryString",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

@@ -1,0 +1,57 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-4vhf-2hv7-8mrx",
+  "aliases": [
+    "CVE-2014-3600"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.activemq:activemq-broker",
+    "org.apache.activemq:activemq-client"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.activemq.filter.JAXPXPathEvaluator",
+      "method": "evaluate"
+    },
+    {
+      "class": "org.apache.activemq.filter.XalanXPathEvaluator",
+      "method": "evaluate"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/activemq/commit/b9696ac80bb496b52d05c3884f81b0746d9af9e2"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.activemq.filter.JAXPXPathEvaluator",
+        "method": "<init>",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.activemq.filter.XPathExpression",
+        "method": "<clinit>",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.activemq.filter.XPathExpression",
+        "method": "createEvaluator",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.activemq.filter.XPathExpression",
+        "method": "getXPathEvaluatorConstructor",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.activemq.filter.XalanXPathEvaluator",
+        "method": "<init>",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

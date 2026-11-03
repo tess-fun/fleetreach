@@ -1,0 +1,39 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-83r3-c79w-f6wc",
+  "aliases": [
+    "CVE-2015-7521"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.hive:hive",
+    "org.apache.hive:hive-exec",
+    "org.apache.hive:hive-service"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.hadoop.hive.ql.Driver",
+      "method": "doAuthorization"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/hive/commit/98f933f269e6b528ef84912b3d701ca3272ec04b"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.hadoop.hive.ql.Driver",
+        "method": "doAuthorizationV2",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.hadoop.hive.ql.Driver",
+        "method": "getHivePrivObjects",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

@@ -1,0 +1,191 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-c9h6-xhg9-xxrv",
+  "aliases": [
+    "CVE-2019-0200"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.qpid:apache-qpid-broker-j"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.qpid.server.management.amqp.ManagementNode",
+      "method": "enqueue"
+    },
+    {
+      "class": "org.apache.qpid.server.message.AbstractServerMessageImpl",
+      "method": "getContent"
+    },
+    {
+      "class": "org.apache.qpid.server.protocol.v0_10.ConsumerTarget_0_10",
+      "method": "doSend"
+    },
+    {
+      "class": "org.apache.qpid.server.protocol.v0_8.AMQChannel",
+      "method": "receiveMessageHeader"
+    },
+    {
+      "class": "org.apache.qpid.server.protocol.v0_8.AMQPConnection_0_8Impl",
+      "method": "onReceive"
+    },
+    {
+      "class": "org.apache.qpid.server.protocol.v0_8.ConsumerTarget_0_8",
+      "method": "doSend"
+    },
+    {
+      "class": "org.apache.qpid.server.protocol.v0_8.FieldTable",
+      "method": "decode"
+    },
+    {
+      "class": "org.apache.qpid.server.protocol.v0_8.MessageMetaData$MetaDataFactory",
+      "method": "createMetaData"
+    },
+    {
+      "class": "org.apache.qpid.server.protocol.v0_8.transport.BasicContentHeaderProperties",
+      "method": "<init>"
+    },
+    {
+      "class": "org.apache.qpid.server.protocol.v1_0.ConsumerTarget_1_0",
+      "method": "doSend"
+    },
+    {
+      "class": "org.apache.qpid.server.queue.AbstractQueue",
+      "method": "checkMessageStatus"
+    },
+    {
+      "class": "org.apache.qpid.server.queue.AbstractQueue",
+      "method": "createMessageContent"
+    },
+    {
+      "class": "org.apache.qpid.server.queue.AbstractQueue",
+      "method": "doEnqueue"
+    },
+    {
+      "class": "org.apache.qpid.server.queue.AbstractQueue",
+      "method": "enqueue"
+    },
+    {
+      "class": "org.apache.qpid.server.queue.AbstractQueue",
+      "method": "reallocateMessages"
+    },
+    {
+      "class": "org.apache.qpid.server.queue.AbstractQueue",
+      "method": "visit"
+    },
+    {
+      "class": "org.apache.qpid.server.queue.FlowToDiskOverflowPolicyHandler$Handler",
+      "method": "flowNewEntryToDiskIfNecessary"
+    },
+    {
+      "class": "org.apache.qpid.server.queue.FlowToDiskOverflowPolicyHandler$Handler",
+      "method": "flowToDisk"
+    },
+    {
+      "class": "org.apache.qpid.server.queue.QueueEntryImpl",
+      "method": "routeToAlternate"
+    },
+    {
+      "class": "org.apache.qpid.server.queue.SortedQueueImpl",
+      "method": "doEnqueue"
+    },
+    {
+      "class": "org.apache.qpid.server.store.berkeleydb.AbstractBDBMessageStore$MessageDataRef",
+      "method": "clear"
+    },
+    {
+      "class": "org.apache.qpid.server.store.jdbc.AbstractJDBCMessageStore$MessageDataRef",
+      "method": "clear"
+    },
+    {
+      "class": "org.apache.qpid.server.txn.FlowToDiskTransactionObserver",
+      "method": "onMessageEnqueue"
+    },
+    {
+      "class": "org.apache.qpid.server.virtualhost.AbstractVirtualHost$FlowToDiskCheckingTask",
+      "method": "execute"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/qpid-broker-j/commit/a1fbde2bac77c9305a4347876c6a27409361ec77",
+      "https://github.com/apache/qpid-broker-j/commit/adb2a34306d67559ee81db155826dc67a02cc85e",
+      "https://github.com/apache/qpid-broker-j/commit/94de25eb9fb8be6e6deba38a72afcf7b14ce1d0b"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.qpid.server.logging.messages.QueueMessages",
+        "method": "<clinit>",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.server.protocol.v0_10.AMQPConnection_0_10Impl",
+        "method": "onReceive",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.server.protocol.v0_8.AMQChannel",
+        "method": "<init>",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.server.protocol.v0_8.FieldTable",
+        "method": "clearEncodedForm",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.server.protocol.v0_8.FieldTable",
+        "method": "decodeIfNecessary",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.server.protocol.v0_8.transport.BasicContentHeaderProperties",
+        "method": "reallocate",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "org.apache.qpid.server.queue.FlowToDiskOverflowPolicyHandler$Handler",
+        "method": "flowTailToDiskIfNecessary",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.server.store.berkeleydb.AbstractBDBMessageStore",
+        "method": "closeMessageStore",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.server.store.berkeleydb.AbstractBDBMessageStore$StoredBDBMessage",
+        "method": "clear",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.server.store.berkeleydb.AbstractBDBMessageStore$StoredBDBMessage",
+        "method": "flowToDisk",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.server.store.jdbc.AbstractJDBCMessageStore",
+        "method": "closeMessageStore",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.server.store.jdbc.AbstractJDBCMessageStore$StoredJDBCMessage",
+        "method": "clear",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.server.store.jdbc.AbstractJDBCMessageStore$StoredJDBCMessage",
+        "method": "flowToDisk",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.server.transport.NonBlockingConnection",
+        "method": "readFromNetwork",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-fx92-wh72-8g9q",
+  "aliases": [
+    "CVE-2017-3154"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.atlas:atlas-common"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.atlas.web.util.Servlets",
+      "method": "getErrorResponse"
+    },
+    {
+      "class": "org.apache.atlas.web.util.Servlets",
+      "method": "printStackTrace"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/atlas/commit/0dcfd21bbfaac6f037f46b7aaaab0e5546fd2a78"
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

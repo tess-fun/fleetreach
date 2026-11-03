@@ -1,0 +1,22 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-c265-37vj-cwcc",
+  "aliases": [
+    "CVE-2020-14062"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind"
+  ],
+  "status": "proposed",
+  "verdict": "deny-list",
+  "gadgets": [
+    "com.sun.org.apache.xalan.internal.lib.sql.JNDIConnectionPool"
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/840eae2ca81c597a0010b2126f32dce17d384b70"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

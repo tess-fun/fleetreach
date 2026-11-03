@@ -1,0 +1,65 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-f38p-mq64-h784",
+  "aliases": [
+    "CVE-2016-4974"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.qpid:qpid-jms-client"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.qpid.client.AMQConnection",
+      "method": "<init>"
+    },
+    {
+      "class": "org.apache.qpid.client.util.ClassLoadingAwareObjectInputStream",
+      "method": "resolveClass"
+    },
+    {
+      "class": "org.apache.qpid.client.util.ClassLoadingAwareObjectInputStream",
+      "method": "resolveProxyClass"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/qpid-jms-amqp-0-x/commit/7e6843e2e1967bfdba477a683353dbf6287d6291"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.qpid.client.AMQSession",
+        "method": "createObjectMessage",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.client.message.JMSObjectMessage",
+        "method": "<init>",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.client.message.JMSObjectMessage",
+        "method": "read",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.client.message.JMSObjectMessageFactory",
+        "method": "createMessage",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.client.message.MessageFactoryRegistry",
+        "method": "newDefaultRegistry",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.qpid.client.util.ClassLoadingAwareObjectInputStream",
+        "method": "<init>",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

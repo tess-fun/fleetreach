@@ -1,0 +1,47 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-fxph-q3j8-mv87",
+  "aliases": [
+    "CVE-2017-5645"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.logging.log4j:log4j",
+    "org.apache.logging.log4j:log4j-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.logging.log4j.core.net.server.TcpSocketServer",
+      "method": "createSerializedSocketServer"
+    },
+    {
+      "class": "org.apache.logging.log4j.core.net.server.UdpSocketServer",
+      "method": "createSerializedSocketServer"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/logging-log4j2/commit/5dcc19215827db29c993d0305ee2b0d8dd05939d"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.logging.log4j.core.net.server.ObjectInputStreamLogEventBridge",
+        "method": "wrapStream",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.logging.log4j.core.net.server.TcpSocketServer",
+        "method": "main",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.logging.log4j.core.net.server.UdpSocketServer",
+        "method": "main",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

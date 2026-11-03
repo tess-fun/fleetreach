@@ -1,0 +1,52 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-rhqj-4pp8-vvgf",
+  "aliases": [
+    "CVE-2018-1000130"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.jolokia:jolokia-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.jolokia.backend.BackendManager",
+      "method": "createDispatcher"
+    },
+    {
+      "class": "org.jolokia.jsr160.Jsr160RequestDispatcher",
+      "method": "createConnector"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/rhuss/jolokia/commit/1b360b8889f0ed51165a8d1ac55dd8e0aa2dfd4a",
+      "https://github.com/rhuss/jolokia/commit/fd7b93da30c61a45bac10d8b311f1b79a74910f5"
+    ],
+    "excluded": [
+      {
+        "class": "org.jolokia.backend.BackendManager",
+        "method": "createRequestDispatchers",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.jolokia.backend.BackendManager",
+        "method": "init",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.jolokia.http.AgentServlet",
+        "method": "init",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.jolokia.jsr160.Jsr160RequestDispatcher",
+        "method": "<init>",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

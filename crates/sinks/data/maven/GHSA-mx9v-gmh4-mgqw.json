@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-mx9v-gmh4-mgqw",
+  "aliases": [
+    "CVE-2018-19361"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind"
+  ],
+  "status": "proposed",
+  "verdict": "deny-list",
+  "gadgets": [
+    "org.jboss.util.propertyeditor.DocumentEditor",
+    "org.apache.openjpa.ee.RegistryManagedRuntime",
+    "org.apache.openjpa.ee.JNDIManagedRuntime",
+    "org.apache.axis2.transport.jms.JMSOutTransportInfo"
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/72cd4025a229fb28ec133235003dd4616f70afaa"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

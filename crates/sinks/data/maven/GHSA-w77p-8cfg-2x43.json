@@ -1,0 +1,119 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-w77p-8cfg-2x43",
+  "aliases": [
+    "CVE-2018-8088"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.slf4j:slf4j-ext"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "<init>"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "equals"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "get"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "getEntrySetIterator"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "getEventDateTime"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "getEventId"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "getEventMap"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "getEventType"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "getMessage"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "getSize"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "hashCode"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "put"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "putAll"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "setEventDateTime"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "setEventId"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "setEventType"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "setMessage"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "toString"
+    },
+    {
+      "class": "org.slf4j.ext.EventData",
+      "method": "toXML"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/qos-ch/slf4j/commit/c15d3c1dab0c3398011dec3a16ad3e45b75ae70d"
+    ],
+    "excluded": [
+      {
+        "class": "org.slf4j.ext.EventException",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.slf4j.ext.EventLogger",
+        "method": "<init>",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.slf4j.ext.EventLogger",
+        "method": "logEvent",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.slf4j.ext.MDCStrLookup",
+        "method": "lookup",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

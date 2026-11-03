@@ -1,0 +1,27 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-6phf-73q6-gh87",
+  "aliases": [
+    "CVE-2019-10086"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "commons-beanutils:commons-beanutils"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.commons.beanutils.PropertyUtilsBean",
+      "method": "resetBeanIntrospectors"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/commons-beanutils/commit/2412c90ba5584fed123fa6a33e752e6c8eaf74e9",
+      "https://github.com/apache/commons-beanutils/commit/4e410e068b8d367c53766a7da712b1b6f3fd8101",
+      "https://github.com/apache/commons-beanutils/commit/62e82ad92cf4818709d6044aaf257b73d42659a4"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

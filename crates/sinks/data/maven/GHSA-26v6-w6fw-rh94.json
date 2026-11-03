@@ -1,0 +1,139 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-26v6-w6fw-rh94",
+  "aliases": [
+    "CVE-2015-5348"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.camel:camel-ahc",
+    "org.apache.camel:camel-http",
+    "org.apache.camel:camel-http-common",
+    "org.apache.camel:camel-http4",
+    "org.apache.camel:camel-jetty",
+    "org.apache.camel:camel-servlet"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.camel.component.ahc.DefaultAhcBinding",
+      "method": "onComplete"
+    },
+    {
+      "class": "org.apache.camel.component.http.DefaultHttpBinding",
+      "method": "readRequest"
+    },
+    {
+      "class": "org.apache.camel.component.http.HttpProducer",
+      "method": "extractResponseBody"
+    },
+    {
+      "class": "org.apache.camel.component.http4.HttpProducer",
+      "method": "extractResponseBody"
+    },
+    {
+      "class": "org.apache.camel.component.jetty.DefaultJettyHttpBinding",
+      "method": "extractResponseBody"
+    },
+    {
+      "class": "org.apache.camel.http.common.DefaultHttpBinding",
+      "method": "readRequest"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/camel/commit/c703479f5880a099c38f2fd5e63c7d9f0567e5ff",
+      "https://github.com/apache/camel/commit/44e6a3036e5a11d90b60c142cf51ed74b792de31",
+      "https://github.com/apache/camel/commit/735ee02c693964b5f700af13a2adfeae56b848a4",
+      "https://github.com/apache/camel/commit/92081b203523c5ed502ed41df43cbd8655caf9b9",
+      "https://github.com/apache/camel/commit/d853853469292cd54fd9662c3605030ab5a9566b",
+      "https://github.com/apache/camel/commit/c558f30a6d3820faa3d8c4ad5e54448914ec60d0",
+      "https://github.com/apache/camel/commit/515c822148d52de9e7cdf4f6b01f7b793f2f273f",
+      "https://github.com/apache/camel/commit/9cbd5867fe73ef07ecba6f16d64689632e3f2a16",
+      "https://github.com/apache/camel/commit/190d7c81b7e3ce767514e319630b1bbaf27e6817",
+      "https://github.com/apache/camel/commit/e7fd5f049c2fd51a528f8062da91a1c75e33b0e8",
+      "https://github.com/apache/camel/commit/ec4a48d38e7335b40efcb14979fad8144eb00acf",
+      "https://github.com/apache/camel/commit/23655fe0c15189ca41a6e99c31a3c38001a7cdb0",
+      "https://github.com/apache/camel/commit/349109b0834764560f0be69eb74f43a16bd220b0",
+      "https://github.com/apache/camel/commit/13e43c1412ad72d99030b4eb4cb72c84fa57d5ff",
+      "https://github.com/apache/camel/commit/1b1ccbcd94860f6f1d8caf98fb59e6ab7b3940b4",
+      "https://github.com/apache/camel/commit/4f065fe07c1dcd7b451e6005a6dc8e96d77da43e",
+      "https://github.com/apache/camel/commit/f7f0b18f6924fe0b01f32a25ed1e38e29b1bf8e5",
+      "https://github.com/apache/camel/commit/94330f99acb6f28155793b253de9956c3798f3bb",
+      "https://github.com/apache/camel/commit/a68434c258cdcd30587ae7adc5dabbac43eadbbf",
+      "https://github.com/apache/camel/commit/0afcf721ff209eb10a24c5e4b48ca9d6727ea99a",
+      "https://github.com/apache/camel/commit/7e28d0af471ea992eb74807a4abd1626b88d678a",
+      "https://github.com/apache/camel/commit/5ea0a6f6c6a54f1cddf9691a99b0c237afc95348",
+      "https://github.com/apache/camel/commit/c47cffcadabca0c588753555a386942184a33627"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.camel.component.ahc.DefaultAhcBinding",
+        "method": "populateBody",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.camel.component.http.DefaultHttpBinding",
+        "method": "<init>",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.camel.component.http.DefaultHttpBinding",
+        "method": "doWriteDirectResponse",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.camel.component.http.HttpEndpoint",
+        "method": "getBinding",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.camel.component.http.HttpProducer",
+        "method": "createRequestEntity",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.camel.component.http4.HttpProducer",
+        "method": "createRequestEntity",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.camel.component.jetty.CamelContinuationServlet",
+        "method": "service",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.camel.component.jetty.JettyHttpEndpoint",
+        "method": "getJettyBinding",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.camel.component.jetty.JettyHttpProducer",
+        "method": "processInternal",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.camel.component.jetty9.JettyHttpEndpoint9",
+        "method": "getBinding",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.camel.http.common.DefaultHttpBinding",
+        "method": "<init>",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.camel.http.common.DefaultHttpBinding",
+        "method": "doWriteDirectResponse",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.camel.http.common.HttpCommonEndpoint",
+        "method": "getBinding",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

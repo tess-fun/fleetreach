@@ -1,0 +1,57 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-6x9x-8qw9-9pp6",
+  "aliases": [
+    "CVE-2017-7658"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.eclipse.jetty:jetty-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.eclipse.jetty.http.HttpParser",
+      "method": "handleKnownHeaders"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/eclipse/jetty.project/commit/a285deea42fcab60d9edcf994e458c238a348b55"
+    ],
+    "excluded": [
+      {
+        "class": "org.eclipse.jetty.http.HttpParser",
+        "method": "parseContent",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.eclipse.jetty.http.HttpParser",
+        "method": "parseLine",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.eclipse.jetty.http.HttpParser",
+        "method": "quickStart",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.eclipse.jetty.http.HttpParser",
+        "method": "reset",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.eclipse.jetty.http.HttpParser$BadMessageException",
+        "method": "<init>",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.eclipse.jetty.server.HttpChannel",
+        "method": "badMessage",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

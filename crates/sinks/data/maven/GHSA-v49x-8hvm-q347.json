@@ -1,0 +1,36 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-v49x-8hvm-q347",
+  "aliases": [
+    "CVE-2018-1306"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.portals.pluto:pluto-container"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.portals.samples.MultipartPortlet",
+      "method": "handleDialog"
+    },
+    {
+      "class": "org.apache.portals.samples.MultipartPortlet",
+      "method": "serveImage"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/portals-pluto/commit/89f6a59a740d0a8318640ca6015e9a381c5c6b50"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.portals.samples.MultipartPortlet",
+        "method": "render",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

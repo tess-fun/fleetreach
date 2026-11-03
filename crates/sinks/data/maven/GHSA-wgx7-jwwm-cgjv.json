@@ -1,0 +1,97 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-wgx7-jwwm-cgjv",
+  "aliases": [
+    "CVE-2020-9480"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.spark:spark-parent_2.11"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.spark.network.crypto.AuthRpcHandler",
+      "method": "receive"
+    },
+    {
+      "class": "org.apache.spark.network.sasl.SaslRpcHandler",
+      "method": "receive"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/spark/commit/9416b7c54bdf5613c1a65e6d1779a87591c6c9bd",
+      "https://github.com/apache/spark/commit/c80d5f7aa0fd9e7b37e1bf4175204750098a44a6"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.spark.network.crypto.AuthRpcHandler",
+        "method": "<init>",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.spark.network.crypto.AuthRpcHandler",
+        "method": "channelActive",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.spark.network.crypto.AuthRpcHandler",
+        "method": "channelInactive",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.spark.network.crypto.AuthRpcHandler",
+        "method": "exceptionCaught",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.spark.network.crypto.AuthRpcHandler",
+        "method": "getStreamManager",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.spark.network.crypto.AuthRpcHandler",
+        "method": "receiveStream",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.spark.network.sasl.SaslRpcHandler",
+        "method": "<init>",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.spark.network.sasl.SaslRpcHandler",
+        "method": "channelActive",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.spark.network.sasl.SaslRpcHandler",
+        "method": "channelInactive",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.spark.network.sasl.SaslRpcHandler",
+        "method": "complete",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.spark.network.sasl.SaslRpcHandler",
+        "method": "exceptionCaught",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.spark.network.sasl.SaslRpcHandler",
+        "method": "getStreamManager",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      },
+      {
+        "class": "org.apache.spark.network.sasl.SaslRpcHandler",
+        "method": "receiveStream",
+        "reason": "proposed by the pipeline, not a sink in the E2b label"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

@@ -1,0 +1,60 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-rhq2-2574-78mc",
+  "aliases": [
+    "CVE-2018-17297"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "cn.hutool:hutool-all",
+    "cn.hutool:hutool-core",
+    "cn.hutool:hutool-parent"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "cn.hutool.core.util.ZipUtil",
+      "method": "validateFiles"
+    },
+    {
+      "class": "cn.hutool.core.util.ZipUtil",
+      "method": "zip"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/looly/hutool/commit/8d7d0b7fb5ea4f7447b40131bffc1ec506a6528e",
+      "https://github.com/looly/hutool/commit/9f8a801c7b98b75ee681c0988e1a58bcfdc21756",
+      "https://github.com/looly/hutool/commit/fed1a1f747a9308e2f65f8dbbff05ce62478ecc0"
+    ],
+    "excluded": [
+      {
+        "class": "cn.hutool.core.collection.IterUtil",
+        "method": "toMap",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "cn.hutool.core.io.FileUtil",
+        "method": "file",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "cn.hutool.core.io.FileUtil",
+        "method": "getParent",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "cn.hutool.core.util.ZipUtil",
+        "method": "unzip",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "cn.hutool.poi.excel.ExcelReader",
+        "method": "read",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

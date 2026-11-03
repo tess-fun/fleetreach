@@ -1,0 +1,66 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-737w-mh58-cxjp",
+  "aliases": [
+    "CVE-2013-1966"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.struts.xwork:xwork-core",
+    "org.apache.struts:struts2-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.opensymphony.xwork2.config.providers.XWorkConfigurationProvider",
+      "method": "register"
+    },
+    {
+      "class": "com.opensymphony.xwork2.ognl.OgnlUtil",
+      "method": "compile"
+    },
+    {
+      "class": "com.opensymphony.xwork2.ognl.OgnlUtil",
+      "method": "isEvalExpression"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/struts/commit/7e6f641ebb142663cbd1653dc49bed725edf7f56"
+    ],
+    "excluded": [
+      {
+        "class": "com.opensymphony.xwork2.config.impl.DefaultConfiguration",
+        "method": "createBootstrapContainer",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "com.opensymphony.xwork2.ognl.OgnlUtil",
+        "method": "copy",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "com.opensymphony.xwork2.ognl.OgnlUtil",
+        "method": "getValue",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "com.opensymphony.xwork2.ognl.OgnlUtil",
+        "method": "setEnableExpressionCache",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "com.opensymphony.xwork2.ognl.OgnlUtil",
+        "method": "setValue",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.apache.struts2.config.BeanSelectionProvider",
+        "method": "register",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

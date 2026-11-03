@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-7fhr-2694-rg79",
+  "aliases": [
+    "CVE-2020-10714"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.wildfly.security:wildfly-elytron"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.wildfly.security.http.impl.FormAuthenticationMechanism",
+      "method": "evaluateRequest"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/wildfly-security/wildfly-elytron/commit/34e897b69b2dca907bba3357af5c20a29a9c4f9e"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

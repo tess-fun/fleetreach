@@ -1,0 +1,45 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-cfw5-v7cw-69cw",
+  "aliases": [
+    "CVE-2018-1337"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.directory.api:apache-ldap-api"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.directory.ldap.client.api.LdapNetworkConnection",
+      "method": "addSslFilter"
+    },
+    {
+      "class": "org.apache.directory.ldap.client.api.LdapNetworkConnection",
+      "method": "connect"
+    },
+    {
+      "class": "org.apache.directory.ldap.client.api.LdapNetworkConnection",
+      "method": "messageReceived"
+    },
+    {
+      "class": "org.apache.directory.ldap.client.api.LdapNetworkConnection",
+      "method": "writeRequest"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/directory-ldap-api/commit/075b70a733d7af150b3d85684149ff5f029f7fd4",
+      "https://github.com/apache/directory-ldap-api/commit/5faa6a71606a22a7503d401911875ec3a355cac9"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.directory.ldap.client.api.LdapNetworkConnection",
+        "method": "sessionCreated",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

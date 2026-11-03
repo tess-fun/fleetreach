@@ -1,0 +1,33 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-rfx6-vp9g-rh7v",
+  "aliases": [
+    "CVE-2017-17485"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.fasterxml.jackson.databind.deser.BeanDeserializerFactory",
+      "method": "<clinit>"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.BeanDeserializerFactory",
+      "method": "checkIllegalTypes"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.BeanDeserializerFactory",
+      "method": "createBeanDeserializer"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/2235894210c75f624a3d0cd60bfb0434a20a18bf"
+    ]
+  },
+  "note": "proposed by sinkpropose from the fix commits; awaiting human review"
+}

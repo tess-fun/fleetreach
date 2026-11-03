@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-w69w-jvc7-wjgv",
+  "aliases": [
+    "CVE-2019-10184"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.undertow:undertow-servlet"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.undertow.servlet.handlers.ServletInitialHandler",
+      "method": "handleRequest"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/undertow-io/undertow/commit/5fa7ac68c0e4251c93056d9982db5e794e04ebfa"
+    ],
+    "excluded": [
+      {
+        "class": "io.undertow.servlet.core.DeploymentManagerImpl",
+        "method": "deploy",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

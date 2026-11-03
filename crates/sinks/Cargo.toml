@@ -6,8 +6,8 @@ license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Vulnerable-function (sink) data for fleetreach from artifact diffs: method-level diffs of the last affected and first fixed release."
-# Not published until the E2 precision experiment (spec 16, row 13) decides its shape.
+description = "Vulnerable-function (sink) data for fleetreach: curated sink records, a proposer that reads fix commits, and method-level jar diffs."
+# Not published yet: the curated sink records are consumed by JVM reachability (1.7.0).
 publish = false
 
 [lints]

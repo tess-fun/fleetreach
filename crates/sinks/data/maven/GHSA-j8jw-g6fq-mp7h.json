@@ -1,0 +1,57 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-j8jw-g6fq-mp7h",
+  "aliases": [
+    "CVE-2020-25638"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.hibernate:hibernate-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.hibernate.dialect.Dialect",
+      "method": "prependComment"
+    },
+    {
+      "class": "org.hibernate.loader.plan.exec.query.internal.SelectStatementBuilder",
+      "method": "toStatementString"
+    },
+    {
+      "class": "org.hibernate.sql.Delete",
+      "method": "toStatementString"
+    },
+    {
+      "class": "org.hibernate.sql.Insert",
+      "method": "toStatementString"
+    },
+    {
+      "class": "org.hibernate.sql.InsertSelect",
+      "method": "toStatementString"
+    },
+    {
+      "class": "org.hibernate.sql.QuerySelect",
+      "method": "toQueryString"
+    },
+    {
+      "class": "org.hibernate.sql.Select",
+      "method": "toStatementString"
+    },
+    {
+      "class": "org.hibernate.sql.SimpleSelect",
+      "method": "toStatementString"
+    },
+    {
+      "class": "org.hibernate.sql.Update",
+      "method": "toStatementString"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/hibernate/hibernate-orm/commit/59fede7acaaa1579b561407aefa582311f7ebe78"
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}

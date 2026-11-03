@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-47qp-8v9g-39hp",
+  "aliases": [
+    "CVE-2013-2251"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.struts:struts2-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.struts2.dispatcher.mapper.DefaultActionMapper",
+      "method": "<init>"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/struts/commit/3cfe34fefedcf0fdcfcb061c0aea34a715b7de63",
+      "https://github.com/apache/struts/commit/630e1ba065a8215c4e9ac03bfb09be9d655c2b6e"
+    ]
+  },
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+}
