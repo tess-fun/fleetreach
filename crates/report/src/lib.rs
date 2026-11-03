@@ -114,6 +114,8 @@ pub fn default_source(ecosystem: Ecosystem) -> &'static str {
         Ecosystem::Hex => "mix.lock",
         Ecosystem::Maven => "pom.xml",
         Ecosystem::GitHubActions => ".github/workflows",
+        Ecosystem::Deb => "var/lib/dpkg/status",
+        Ecosystem::Apk => "lib/apk/db/installed",
     }
 }
 

@@ -801,6 +801,7 @@ dependencies = [
  "fleetreach-maven",
  "fleetreach-npm",
  "fleetreach-nuget",
+ "fleetreach-os",
  "fleetreach-packagist",
  "fleetreach-pypi",
  "fleetreach-reach",
@@ -816,6 +817,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "spdx",
+ "tempfile",
  "thiserror",
  "time",
  "toml",
@@ -922,6 +924,22 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "fleetreach-os"
+version = "1.5.0"
+dependencies = [
+ "flate2",
+ "fleetreach-core",
+ "rayon",
+ "ruzstd",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "walkdir",
+ "zip",
 ]
 
 [[package]]
@@ -3143,6 +3161,12 @@ dependencies = [
  "tempfile",
  "wait-timeout",
 ]
+
+[[package]]
+name = "ruzstd"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69e4ce4a039f42bf25920b95667e4d789e98749ab11bbb8d2c2936f788421bb5"
 
 [[package]]
 name = "same-file"

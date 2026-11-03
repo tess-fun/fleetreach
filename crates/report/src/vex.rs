@@ -475,6 +475,9 @@ fn purl_type(ecosystem: Ecosystem) -> &'static str {
         Ecosystem::Hex => "hex",
         Ecosystem::Maven => "maven",
         Ecosystem::GitHubActions => "githubactions",
+        // OS packages: the name is already `<distro>/<source>`, the purl namespace and name.
+        Ecosystem::Deb => "deb",
+        Ecosystem::Apk => "apk",
     }
 }
 

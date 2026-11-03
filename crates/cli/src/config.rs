@@ -26,6 +26,10 @@ pub enum ConfigError {
     PathMissing { repo: String, path: String },
     #[error("repo `{repo}`: path `{path}` is not a directory")]
     PathNotDir { repo: String, path: String },
+    #[error("image `{image}`: path `{path}` does not exist")]
+    ImageMissing { image: String, path: String },
+    #[error("image `{image}`: {message}")]
+    InvalidImage { image: String, message: String },
     #[error("repo id `{0}` is declared more than once")]
     DuplicateRepoId(String),
     #[error("ignore `{0}` must have a non-empty `reason`")]
@@ -71,6 +75,8 @@ struct RawConfig {
     fleet: FleetTable,
     #[serde(default)]
     repo: Vec<RawRepo>,
+    #[serde(default)]
+    image: Vec<RawImage>,
     #[serde(default)]
     source: Vec<RawSource>,
     #[serde(default)]
@@ -134,6 +140,26 @@ struct RawRepo {
     ecosystem: Option<RawEcosystem>,
     // Exposure and impact context (spec 08). Inline rather than a flattened `RawContext`,
     // because serde's `flatten` silently disables `deny_unknown_fields`.
+    exposure: Option<Exposure>,
+    mission_impact: Option<MissionImpact>,
+    safety_impact: Option<SafetyImpact>,
+    owner: Option<String>,
+    #[serde(default)]
+    tags: Vec<String>,
+}
+
+/// An `[[image]]` entry: a container image scanned for its OS and language packages.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawImage {
+    id: String,
+    /// A `docker save` or OCI-layout tarball, an OCI-layout directory, or a root filesystem
+    /// (a directory, or a tarball of one), relative to the config file.
+    path: String,
+    /// Which image of a multi-platform OCI index to scan (`linux/arm64`).
+    platform: Option<String>,
+    /// The osv.dev ecosystem to match against (`Debian:12`), instead of `/etc/os-release`.
+    distro: Option<String>,
     exposure: Option<Exposure>,
     mission_impact: Option<MissionImpact>,
     safety_impact: Option<SafetyImpact>,
@@ -377,6 +403,8 @@ pub struct Config {
     pub licenses: Option<crate::licenses::Policy>,
     /// `[settings.signals] registries`: hosts allowed besides the public registries.
     pub signal_registries: Vec<String>,
+    /// `[[image]]` entries (and `scan --image`): container images, scanned apart from repos.
+    pub images: Vec<Image>,
     /// `[[repo]] sbom`: repos scanned from an SBOM instead of their lockfiles.
     pub sboms: std::collections::BTreeMap<RepoId, PathBuf>,
     /// Per-repo exposure and impact context (spec 08), for repos that set any.
@@ -438,6 +466,17 @@ pub struct Repo {
     pub vex_product_id: Option<String>,
     /// Explicit ecosystem override; `None` = auto-detect from manifests.
     pub ecosystem: Option<Ecosystem>,
+}
+
+/// A validated `[[image]]`.
+#[derive(Debug, Clone)]
+pub struct Image {
+    /// Shares the repo id namespace: findings and outcomes carry it as their repo.
+    pub id: RepoId,
+    /// Resolved against the config file's directory; validated to exist.
+    pub path: PathBuf,
+    pub platform: Option<String>,
+    pub distro: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -613,6 +652,56 @@ impl Config {
                 glob_max_depth: r.glob_max_depth.unwrap_or(DEFAULT_GLOB_MAX_DEPTH),
                 vex_product_id: r.vex_product_id,
                 ecosystem: r.ecosystem.map(Ecosystem::from),
+            });
+        }
+
+        let mut images = Vec::with_capacity(raw.image.len());
+        for i in raw.image {
+            if !seen.insert(i.id.clone()) {
+                return Err(ConfigError::DuplicateRepoId(i.id));
+            }
+            let resolved = base_dir.join(&i.path);
+            if !resolved.exists() {
+                return Err(ConfigError::ImageMissing {
+                    image: i.id,
+                    path: resolved.display().to_string(),
+                });
+            }
+            if let Some(platform) = &i.platform {
+                if platform.split('/').count() < 2 || platform.split('/').any(str::is_empty) {
+                    return Err(ConfigError::InvalidImage {
+                        image: i.id,
+                        message: format!("platform `{platform}` is not like `linux/amd64`"),
+                    });
+                }
+            }
+            if let Some(distro) = &i.distro {
+                if !fleetreach_os::distro::known_ecosystem(distro) {
+                    return Err(ConfigError::InvalidImage {
+                        image: i.id,
+                        message: format!(
+                            "distro `{distro}` is not an osv.dev distro ecosystem fleetreach \
+                             matches (like `Debian:12`, `Ubuntu:24.04:LTS`, `Alpine:v3.20`, \
+                             `Wolfi`)"
+                        ),
+                    });
+                }
+            }
+            let fields = ContextFields::from(RawContext {
+                exposure: i.exposure,
+                mission_impact: i.mission_impact,
+                safety_impact: i.safety_impact,
+                owner: i.owner,
+                tags: i.tags,
+            });
+            if !fields.is_empty() {
+                context.insert(RepoId(i.id.clone()), fields);
+            }
+            images.push(Image {
+                id: RepoId(i.id),
+                path: resolved,
+                platform: i.platform,
+                distro: i.distro,
             });
         }
 
@@ -837,6 +926,7 @@ impl Config {
             sources,
             licenses,
             signal_registries: raw.settings.signals.registries,
+            images,
             sboms,
             context,
             context_defaults: raw.settings.context.defaults.map(ContextFields::from),

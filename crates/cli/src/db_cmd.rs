@@ -22,9 +22,14 @@ pub struct DbSyncArgs {
     /// fetch these ecosystems (comma-separated, e.g. npm,pypi,maven)
     #[arg(long, value_delimiter = ',', value_name = "ECOS")]
     ecosystems: Vec<String>,
-    /// fetch every osv.dev export fleetreach can read
+    /// fetch every language osv.dev export fleetreach can read (distro exports are fetched
+    /// only by name or for a fleet's images: some are over a gigabyte)
     #[arg(long, conflicts_with = "ecosystems")]
     all: bool,
+    /// fetch the exports for these distro releases (comma-separated, e.g. Debian:12,Wolfi):
+    /// the per-release export where osv.dev has one, else the whole distribution's
+    #[arg(long, value_delimiter = ',', value_name = "DISTROS")]
+    distros: Vec<String>,
     /// sync into this directory instead of the default cache (e.g. to copy to an air-gapped host)
     #[arg(long, value_name = "DIR")]
     osv_dir: Option<PathBuf>,
@@ -62,6 +67,15 @@ pub fn run_db_sync(args: DbSyncArgs) -> u8 {
         Ok(dir) => dir,
         Err(e) => return fail(&e),
     };
+    for name in &args.distros {
+        if !fleetreach_os::distro::known_ecosystem(name) {
+            return fail(&format!(
+                "`{name}` is not a distro ecosystem fleetreach matches (like Debian:12, \
+                 Ubuntu:24.04:LTS, Alpine:v3.20, Wolfi)"
+            ));
+        }
+    }
+    let mut distros: Vec<String> = args.distros.clone();
     let ecosystems: Vec<Ecosystem> = if args.all {
         osvdb::OSV_ECOSYSTEMS.to_vec()
     } else if !args.ecosystems.is_empty() {
@@ -78,12 +92,28 @@ pub fn run_db_sync(args: DbSyncArgs) -> u8 {
             }
         }
         out
+    } else if !distros.is_empty() {
+        Vec::new()
     } else {
         match Config::load(&args.config) {
-            Ok(config) => fleet_ecosystems(&config)
-                .into_iter()
-                .filter(|&eco| osvdb::osv_name(eco).is_some())
-                .collect(),
+            Ok(config) => {
+                // The fleet's images decide which distros to fetch, and add the language
+                // ecosystems their lockfiles and installed packages need.
+                let images = crate::images::prepare_all(&config.images);
+                for image in &images {
+                    if let Err(e) = &image.opened {
+                        eprintln!("warning: image {}: {e}", image.source);
+                    }
+                }
+                distros = crate::images::distro_ecosystems(&images);
+                let mut ecos = fleet_ecosystems(&config);
+                ecos.extend(crate::images::language_ecosystems(&images));
+                ecos.sort();
+                ecos.dedup();
+                ecos.into_iter()
+                    .filter(|&eco| osvdb::osv_name(eco).is_some())
+                    .collect()
+            }
             Err(e) => {
                 return fail(&format!(
                     "{e} (pass --all or --ecosystems to sync without a fleet.toml)"
@@ -91,7 +121,7 @@ pub fn run_db_sync(args: DbSyncArgs) -> u8 {
             }
         }
     };
-    if ecosystems.is_empty() {
+    if ecosystems.is_empty() && distros.is_empty() {
         if !args.quiet {
             eprintln!("nothing to sync: the fleet has no toolchain-free ecosystem");
         }
@@ -119,6 +149,25 @@ pub fn run_db_sync(args: DbSyncArgs) -> u8 {
             Err(e) => {
                 failed = true;
                 eprintln!("  {name}: FAILED: {e}");
+            }
+        }
+    }
+    let refresh = osvdb::DEFAULT_REFRESH;
+    for (distro, result) in osvdb::sync_distros(&dir, &distros, refresh, args.force, args.quiet) {
+        match result {
+            Ok(export) if export == distro => {
+                if !args.quiet {
+                    eprintln!("  {distro}: ok");
+                }
+            }
+            Ok(export) => {
+                if !args.quiet {
+                    eprintln!("  {distro}: ok (from the {export} export)");
+                }
+            }
+            Err(e) => {
+                failed = true;
+                eprintln!("  {distro}: FAILED: {e}");
             }
         }
     }

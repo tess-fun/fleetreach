@@ -48,6 +48,7 @@ fleetreach-swift = { path = "../swift", version = "1.5.0" }
 fleetreach-hex = { path = "../hex", version = "1.5.0" }
 fleetreach-ghactions = { path = "../ghactions", version = "1.5.0" }
 fleetreach-maven = { path = "../maven", version = "1.5.0" }
+fleetreach-os = { path = "../os", version = "1.5.0" }
 serde = { workspace = true }
 sha2 = { workspace = true }
 toml = { workspace = true }
@@ -61,6 +62,7 @@ serde_json = { workspace = true }
 # pulls rustls (vendored-C crypto), so it is optional and off by default. M-5.
 ureq = { version = "3", optional = true }
 rayon = "1"
+tempfile = "3"
 # Validate a freshly downloaded osv.dev export before installing it (spec 01). Same pure-Rust
 # inflate backend as the core loader.
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }

@@ -1,6 +1,6 @@
 ---
 title: Ecosystems
-description: The 12 ecosystems fleetreach scans, the lockfiles it reads for each, where advisories come from, and the version rules it applies.
+description: The 12 ecosystems fleetreach scans, plus container images, the lockfiles it reads for each, where advisories come from, and the version rules it applies.
 sidebar:
   order: 0
   label: Overview
@@ -20,6 +20,7 @@ sidebar:
 | [Swift](/fleetreach/docs/ecosystems/swift/) | `Package.resolved` | osv.dev | SemVer by URL |
 | [Hex](/fleetreach/docs/ecosystems/hex/) | `mix.lock` | osv.dev | SemVer |
 | [Julia](/fleetreach/docs/ecosystems/julia/) | `Manifest.toml` | osv.dev | `VersionNumber` |
+| [Container images](/fleetreach/docs/ecosystems/container-images/) | dpkg and apk databases in an image | osv.dev distro exports | dpkg, apk-tools |
 
 Every ecosystem except Go with `govulncheck` is read **without a toolchain**: no package
 manager, no install script, no build. That makes fleetreach safe to point at any repository.

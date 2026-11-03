@@ -21,6 +21,8 @@ use crate::Severity;
 /// [`Swift`]: Ecosystem::Swift
 /// [`Hex`]: Ecosystem::Hex
 /// [`GitHubActions`]: Ecosystem::GitHubActions
+/// [`Deb`]: Ecosystem::Deb
+/// [`Apk`]: Ecosystem::Apk
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
 )]
@@ -41,6 +43,10 @@ pub enum Ecosystem {
     /// GitHub Actions (`owner/repo@ref` in workflow files).
     #[serde(rename = "github-actions")]
     GitHubActions,
+    /// Debian-family OS packages (dpkg: Debian, Ubuntu, Echo) inside a container image.
+    Deb,
+    /// apk-family OS packages (Alpine, Wolfi, Chainguard, MinimOS, ...) inside an image.
+    Apk,
 }
 
 impl Ecosystem {

@@ -1,6 +1,6 @@
 ---
 title: fleet.toml
-description: "Every table and key in fleetreach's fleet.toml configuration file: repos, sources, ignores, OSV data, repo context and SSVC, SLAs, history, signals, licenses and VEX."
+description: "Every table and key in fleetreach's fleet.toml configuration file: repos, images, sources, ignores, OSV data, repo context and SSVC, SLAs, history, signals, licenses and VEX."
 sidebar:
   order: 1
 ---
@@ -44,6 +44,30 @@ tags           = ["pci", "tier-1"]
 in every repo that has `.github/workflows`, alongside its packages. A nested `pom.xml` is a
 module of the root build. Every lockfile found must be scannable: one whose ecosystem has no
 advisory data makes the repo an errored gap.
+
+## `[[image]]`
+
+A container image, scanned for its OS packages and the language packages inside it. See
+[Container images](/fleetreach/docs/ecosystems/container-images/).
+
+```toml
+[[image]]
+id       = "api"
+path     = "images/api.tar"   # docker save, OCI layout (tarball or directory), or a rootfs
+platform = "linux/arm64"      # which image of a multi-platform OCI index
+distro   = "Debian:12"        # instead of the image's /etc/os-release
+owner    = "team-api"
+```
+
+| Key | Meaning |
+|-----|---------|
+| `id` | Stable name used in reports, like a repo id (the two share one namespace). |
+| `path` | The image: a `docker save` or OCI-layout tarball (gzip or zstd layers), an OCI-layout directory, or a root filesystem directory or tarball. |
+| `platform` | `os/arch`, to pick one image from a multi-platform index. Required when an index holds several. |
+| `distro` | An osv.dev distro ecosystem (`Debian:12`, `Ubuntu:24.04:LTS`, `Alpine:v3.20`, `Wolfi`, ...), to match against instead of the detected one. |
+| `exposure`, `mission_impact`, `safety_impact`, `owner`, `tags` | As for `[[repo]]`. |
+
+`scan --image <path>` adds an image without a `fleet.toml` entry; its id is the file name.
 
 ## `[[source]]`
 

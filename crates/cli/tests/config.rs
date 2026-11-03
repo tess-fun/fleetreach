@@ -465,3 +465,53 @@ fn custom_ssvc_table_is_validated_and_fingerprinted() {
     let err = parse("[settings.ssvc]\npoc_epss = 1.5\n").unwrap_err();
     assert!(err.to_string().contains("between 0 and 1"), "{err}");
 }
+
+#[test]
+fn images_parse_and_share_the_repo_id_namespace() {
+    let cfg = parse(
+        r#"
+        [[repo]]
+        id = "svc"
+        path = "repos/repo-vuln"
+
+        [[image]]
+        id = "svc-image"
+        path = "repos/repo-vuln"
+        platform = "linux/arm64"
+        distro = "Debian:12"
+        owner = "team-a"
+        "#,
+    )
+    .expect("valid config");
+    assert_eq!(cfg.images.len(), 1);
+    assert_eq!(cfg.images[0].id.0, "svc-image");
+    assert_eq!(cfg.images[0].platform.as_deref(), Some("linux/arm64"));
+    assert_eq!(cfg.images[0].distro.as_deref(), Some("Debian:12"));
+    assert!(cfg.context.contains_key(&cfg.images[0].id));
+
+    let dup = parse(
+        r#"
+        [[repo]]
+        id = "svc"
+        path = "repos/repo-vuln"
+
+        [[image]]
+        id = "svc"
+        path = "repos/repo-vuln"
+        "#,
+    );
+    assert!(matches!(dup, Err(ConfigError::DuplicateRepoId(id)) if id == "svc"));
+}
+
+#[test]
+fn bad_images_are_rejected_up_front() {
+    let missing = parse("[[image]]\nid = \"a\"\npath = \"no/such/image.tar\"\n");
+    assert!(matches!(missing, Err(ConfigError::ImageMissing { .. })));
+    let distro = parse("[[image]]\nid = \"a\"\npath = \"repos/repo-vuln\"\ndistro = \"Gentoo\"\n");
+    assert!(matches!(distro, Err(ConfigError::InvalidImage { .. })));
+    let platform =
+        parse("[[image]]\nid = \"a\"\npath = \"repos/repo-vuln\"\nplatform = \"arm64\"\n");
+    assert!(matches!(platform, Err(ConfigError::InvalidImage { .. })));
+    let unknown = parse("[[image]]\nid = \"a\"\npath = \"repos/repo-vuln\"\ntag = \"x\"\n");
+    assert!(matches!(unknown, Err(ConfigError::Parse { .. })));
+}

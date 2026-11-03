@@ -224,6 +224,39 @@ pub fn scan_fleet(
     go: &GoScan,
     mirrors: &Mirrors,
 ) -> ScanData {
+    scan_fleet_with(
+        db,
+        config,
+        toolchain,
+        host_triple,
+        go,
+        mirrors,
+        &Images::default(),
+    )
+}
+
+/// The container images of a scan, opened, and the distro exports serving them.
+#[derive(Default)]
+pub(crate) struct Images<'a> {
+    pub(crate) prepared: &'a [crate::images::Prepared],
+    /// The resolved distro exports (`all.zip` files or record directories).
+    pub(crate) exports: Vec<PathBuf>,
+    /// Distro ecosystems with no export.
+    pub(crate) missing: BTreeSet<String>,
+    pub(crate) opts: fleetreach_os::ScanOptions,
+}
+
+/// [`scan_fleet`], plus container images: each image's OS packages against the distro
+/// exports, and its language lockfiles and installed packages with the language feeders.
+pub(crate) fn scan_fleet_with(
+    db: &AdvisoryDb,
+    config: &Config,
+    toolchain: Option<&Toolchain>,
+    host_triple: Option<&str>,
+    go: &GoScan,
+    mirrors: &Mirrors,
+    images: &Images,
+) -> ScanData {
     let mut data = ScanData::default();
 
     // Plan every repo up front: which ecosystems it holds and where. The plans decide which
@@ -236,13 +269,26 @@ pub fn scan_fleet(
             None => plan_repo(repo),
         })
         .collect();
+    let image_plans: Vec<Option<RepoPlan>> = images
+        .prepared
+        .iter()
+        .map(|p| {
+            p.opened
+                .as_ref()
+                .ok()
+                .map(|o| image_lang_plan(&o.lang_repo))
+        })
+        .collect();
+    let image_ecosystems = crate::images::language_ecosystems(images.prepared);
     let has = |eco: Ecosystem| {
-        plans
-            .iter()
-            .any(|p| p.units.iter().any(|u| u.ecosystem == eco))
+        image_ecosystems.contains(&eco)
+            || plans
+                .iter()
+                .any(|p| p.units.iter().any(|u| u.ecosystem == eco))
     };
 
     let dbs = Dbs::load(&has, go, mirrors);
+    let distro_db = load_distro_db(images);
 
     // Each repo is independent and shares only the read-only advisory DBs, so the
     // per-repo scan (dominated by lockfile parsing) fans out across cores. Results
@@ -287,6 +333,30 @@ pub fn scan_fleet(
         data.outcomes.push(result.outcome);
         data.skipped_unparseable += result.skipped_unparseable;
         data.coverage.extend(plan.unsupported.iter().cloned());
+        data.coverage.extend(result.coverage);
+    }
+
+    let per_image: Vec<(RepoResult, Vec<CoverageGap>)> = images
+        .prepared
+        .par_iter()
+        .zip(&image_plans)
+        .map(|(image, plan)| {
+            scan_image(
+                image,
+                plan.as_ref(),
+                images,
+                distro_db.as_ref(),
+                &dbs,
+                &scan_unit_with,
+            )
+        })
+        .collect();
+    for (result, unsupported) in per_image {
+        data.vulnerabilities.extend(result.vulnerabilities);
+        data.warnings.extend(result.warnings);
+        data.outcomes.push(result.outcome);
+        data.skipped_unparseable += result.skipped_unparseable;
+        data.coverage.extend(unsupported);
         data.coverage.extend(result.coverage);
     }
 
@@ -640,6 +710,252 @@ fn scan_sbom_unit(
     }
 }
 
+// ---- Container images ----
+
+/// The language units of an image's written-out lockfiles: [`plan_repo`] without the Cargo
+/// fallback (an image with no `Cargo.lock` has no Rust packages, which is not a gap) and
+/// without workflows, which an image does not run.
+pub(crate) fn image_lang_plan(repo: &Repo) -> RepoPlan {
+    let mut plan = plan_repo(repo);
+    let has_cargo = !discover_lockfiles(repo).0.is_empty();
+    plan.units.retain(|u| match u.ecosystem {
+        Ecosystem::Cargo => has_cargo,
+        Ecosystem::GitHubActions => false,
+        _ => true,
+    });
+    plan
+}
+
+/// The units [`image_lang_plan`] scans.
+pub(crate) fn image_lang_units(repo: &Repo) -> Vec<ScanUnit> {
+    image_lang_plan(repo).units
+}
+
+/// Load the advisories of every image's distro ecosystems once, kept to the source packages
+/// the images install. `None` when no image has a matchable distro or no export resolved.
+fn load_distro_db(images: &Images) -> Option<Result<fleetreach_os::db::DistroDb, String>> {
+    let mut wanted = fleetreach_os::db::Wanted::default();
+    let mut packages = BTreeSet::new();
+    for image in images.prepared {
+        let Ok(opened) = &image.opened else { continue };
+        let Ok(distro) = &opened.inspection.distro else {
+            continue;
+        };
+        for eco in distro.ecosystems() {
+            wanted.ecosystems.insert(eco, distro.family);
+        }
+        let installed = &opened.inspection.inventory.packages;
+        packages.extend(installed.iter().map(|p| p.source.clone()));
+    }
+    if wanted.ecosystems.is_empty() || images.exports.is_empty() {
+        return None;
+    }
+    wanted.packages = Some(packages);
+    Some(fleetreach_os::db::load(&images.exports, &wanted).map_err(|e| e.to_string()))
+}
+
+/// Scan one image: its OS packages, its installed PyPI and npm packages, and each of its
+/// lockfile units, folded into one result under the image's id. The second value is the
+/// image's unsupported-lockfile gaps.
+fn scan_image(
+    image: &crate::images::Prepared,
+    plan: Option<&RepoPlan>,
+    images: &Images,
+    distro_db: Option<&Result<fleetreach_os::db::DistroDb, String>>,
+    dbs: &Dbs,
+    scan_unit: &(dyn Fn(&ScanUnit) -> RepoResult + Sync),
+) -> (RepoResult, Vec<CoverageGap>) {
+    let (Ok(opened), Some(plan)) = (&image.opened, plan) else {
+        let reason = match &image.opened {
+            Err(e) => e.clone(),
+            Ok(_) => "the image was not planned".to_string(),
+        };
+        let reason = format!("image {}: {reason}", image.source);
+        return (RepoResult::errored(&image.id, reason), Vec::new());
+    };
+    let own = |ecosystem: Ecosystem| ScanUnit {
+        ecosystem,
+        repo: opened.lang_repo.clone(),
+        rel_dir: String::new(),
+        sbom: None,
+        alongside: false,
+    };
+    let os = scan_image_os(&image.id, opened, images, distro_db);
+    let mut extra = vec![(own(os.0), os.1)];
+    let graph = fleetreach_core::DepGraph::new(image.id.0.clone());
+    if !opened.pypi.is_empty() {
+        let installed: Vec<fleetreach_pypi::InstalledPackage> = opened
+            .pypi
+            .iter()
+            .map(|p| fleetreach_pypi::InstalledPackage {
+                name: p.name.clone(),
+                version: p.version.clone(),
+                direct: false,
+                dev: false,
+            })
+            .collect();
+        let result = match tier_c_db(dbs.pypi.as_ref(), &PYPI) {
+            Ok(db) => {
+                let scan = fleetreach_pypi::scan_installed(&installed, &graph, db, &image.id);
+                RepoResult::scanned(&image.id, scan.findings, Vec::new())
+                    .with_skipped(scan.skipped_unparseable)
+            }
+            Err(reason) => RepoResult::errored(
+                &image.id,
+                format!("{} installed Python packages: {reason}", installed.len()),
+            ),
+        };
+        extra.push((own(Ecosystem::Pypi), result));
+    }
+    if !opened.npm.is_empty() {
+        let installed: Vec<fleetreach_npm::InstalledPackage> = opened
+            .npm
+            .iter()
+            .map(|p| fleetreach_npm::InstalledPackage {
+                name: p.name.clone(),
+                version: p.version.clone(),
+                direct: false,
+                dev: false,
+            })
+            .collect();
+        let result = match tier_c_db(dbs.npm.as_ref(), &NPM) {
+            Ok(db) => {
+                let scan = fleetreach_npm::scan_installed(&installed, &graph, db, &image.id);
+                RepoResult::scanned(&image.id, scan.findings, Vec::new())
+                    .with_skipped(scan.skipped_unparseable)
+            }
+            Err(reason) => RepoResult::errored(
+                &image.id,
+                format!("{} installed npm packages: {reason}", installed.len()),
+            ),
+        };
+        extra.push((own(Ecosystem::Npm), result));
+    }
+    let lang: Vec<RepoResult> = plan.units.par_iter().map(scan_unit).collect();
+    let (units, results): (Vec<ScanUnit>, Vec<RepoResult>) = extra.into_iter().unzip();
+    let merged = merge_units(
+        plan,
+        units.iter().zip(results).chain(plan.units.iter().zip(lang)),
+    );
+    (merged, plan.unsupported.clone())
+}
+
+/// Match an image's OS packages. Returns the ecosystem the result is filed under (dpkg or
+/// apk) and the result: errored when the distro's export is missing, and with coverage gaps
+/// for an unknown distro or release, an incomplete package database, image files that could
+/// not be read, and language artifacts no feeder reads.
+fn scan_image_os(
+    id: &RepoId,
+    opened: &crate::images::Opened,
+    images: &Images,
+    distro_db: Option<&Result<fleetreach_os::db::DistroDb, String>>,
+) -> (Ecosystem, RepoResult) {
+    use fleetreach_os::Family;
+    let inspection = &opened.inspection;
+    let family = inspection
+        .inventory
+        .family
+        .or_else(|| inspection.distro.as_ref().ok().map(|d| d.family));
+    let ecosystem = match family {
+        Some(Family::Apk) => Ecosystem::Apk,
+        _ => Ecosystem::Deb,
+    };
+    let source = match family {
+        Some(Family::Deb) => "var/lib/dpkg/status",
+        Some(Family::Apk) => "lib/apk/db/installed",
+        None => "etc/os-release",
+    };
+    let gap = |source: &str, ecosystem: Ecosystem, reason: String| CoverageGap {
+        repo: id.clone(),
+        source: source.to_string(),
+        ecosystem,
+        level: Coverage::Partial,
+        reason,
+    };
+    let mut gaps: Vec<CoverageGap> = inspection
+        .inventory
+        .problems
+        .iter()
+        .map(|p| gap(source, ecosystem, p.clone()))
+        .collect();
+    for skipped in &opened.skipped {
+        gaps.push(gap(
+            source,
+            ecosystem,
+            format!("an image file was not read ({skipped}); what it lists was not scanned"),
+        ));
+    }
+    for (kind, n) in &opened.unread {
+        let eco = if kind.contains("jar") {
+            Ecosystem::Maven
+        } else {
+            Ecosystem::RubyGems
+        };
+        gaps.push(gap(
+            kind,
+            eco,
+            format!("{n} {kind} in the image are not read; their packages were not scanned"),
+        ));
+    }
+    let result = match &inspection.distro {
+        Err(_) if inspection.no_os => RepoResult::scanned(id, Vec::new(), Vec::new()),
+        Err(reason) => {
+            gaps.push(gap(
+                source,
+                ecosystem,
+                format!("OS packages not matched: {reason}"),
+            ));
+            RepoResult::scanned(id, Vec::new(), Vec::new())
+        }
+        Ok(distro) if images.missing.contains(&distro.ecosystem) => RepoResult::errored(
+            id,
+            format!(
+                "{}: no OSV export for {}; run `fleetreach db sync --distros {}` (network \
+                 build), or pass --osv-dir <dir> laid out as <dir>/{}/all.zip",
+                distro.name,
+                distro.ecosystem,
+                distro.ecosystem,
+                crate::osvdb::dir_name(&distro.ecosystem),
+            ),
+        ),
+        Ok(distro) => match distro_db {
+            None => {
+                RepoResult::errored(id, format!("{}: no distro advisories loaded", distro.name))
+            }
+            Some(Err(e)) => RepoResult::errored(id, format!("{} OSV DB: {e}", distro.name)),
+            Some(Ok(db)) => {
+                for eco in distro.ecosystems() {
+                    let reason = if images.missing.contains(&eco) {
+                        format!("no OSV export for {eco}; its fixes were not applied")
+                    } else if db.records(&eco) == 0 {
+                        format!(
+                            "the OSV export has no {eco} records, so {} packages were not \
+                             matched against it",
+                            distro.name
+                        )
+                    } else {
+                        continue;
+                    };
+                    gaps.push(gap(source, ecosystem, reason));
+                }
+                let scan = fleetreach_os::scan::scan(
+                    distro,
+                    &inspection.inventory.packages,
+                    db,
+                    id,
+                    images.opts,
+                );
+                RepoResult::scanned(id, scan.findings, Vec::new())
+                    .with_skipped(scan.skipped_unparseable)
+            }
+        },
+    };
+    (
+        ecosystem,
+        gaps.into_iter().fold(result, RepoResult::with_coverage),
+    )
+}
+
 /// Lockfile formats fleetreach cannot read; reported when no readable lockfile sits beside them.
 const UNSUPPORTED_LOCKFILES: &[&str] = &["bun.lockb"];
 
@@ -938,6 +1254,12 @@ fn scan_unit(
             return scan_tier_c(repo, ecosystem, dbs.ghactions.as_ref(), &GHACTIONS, |db| {
                 whole(fleetreach_ghactions::scan_offline(&repo.path, db, &repo.id))
             })
+        }
+        Ecosystem::Deb | Ecosystem::Apk => {
+            return RepoResult::errored(
+                &repo.id,
+                "OS packages are scanned from container images ([[image]]), not repos".to_string(),
+            )
         }
         Ecosystem::Cargo => {}
     }

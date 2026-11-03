@@ -1,0 +1,33 @@
+[package]
+name = "fleetreach-os"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description = "Container image and OS package feeder for fleetreach: docker-save/OCI/rootfs layer merge, dpkg and apk databases, and toolchain-free distro OSV matching (Debian, Ubuntu, Alpine, Wolfi, Chainguard and more)."
+
+[lints]
+workspace = true
+
+[dependencies]
+fleetreach-core = { path = "../core", version = "1.5.0" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+sha2 = { workspace = true }
+walkdir = { workspace = true }
+rayon = "1"
+# Read distro exports entry by entry from disk (Chainguard's is 1.1 GB). Pure-Rust inflate.
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# gzip layers, on the same pure-Rust zlib-rs backend as the rest of the workspace.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+# zstd layers: a pure-Rust decoder (the `zstd` crate binds C).
+ruzstd = { version = "0.9", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }

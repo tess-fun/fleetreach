@@ -17,6 +17,7 @@ members = [
     "crates/hex",
     "crates/ghactions",
     "crates/maven",
+    "crates/os",
     "crates/cli",
     "crates/sinks",
 ]
