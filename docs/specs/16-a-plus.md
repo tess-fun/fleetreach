@@ -1,6 +1,6 @@
 # Spec 16: A+ on every matrix row by 1.8.0
 
-Status: in progress (1.6.0: E2 jar-diff run done, gate missed) · Written 2026-11-02 after the 1.5.0 release, revised the same day
+Status: in progress (1.6.0: E2 jar-diff and commit-first runs done, both gates missed) · Written 2026-11-02 after the 1.5.0 release, revised the same day
 (three releases instead of two; a path to A+ researched for every row) · Supersedes the
 "out of scope" parts of [spec 14](14-out-of-scope.md) for containers, curated research,
 hosted triage and malware analysis (user decisions of 2026-11-02, not re-argued here)
@@ -195,7 +195,71 @@ for the rest, restricted to methods the release diff confirms. Its precision can
 measured on these labels (they come from the same commits), so the next experiment needs
 independently hand-labelled sinks. Until a commit-first E2 passes, JVM function-level
 reachability is planned as **witnesses only** in 1.7.0, and the matrix keeps row 13 at its
-measured grade.
+measured grade. The user confirmed the commit-first pivot on 2026-11-02.
+
+### E2b result: commit-first sink precision, pilot run 2026-11-02 (gate MISSED)
+
+Setup (`~/fa-testbed/e2/cf/`, scripts `commits.py`, `sheet.py`, `cfscore.py`):
+
+- **Candidates**: for each of the 100 advisories, every non-test Java method the
+  project-kb fix commit(s) touch, with its change kind (added, modified, removed) and its
+  old and new source.
+- **Labels, independent of the strategies**: a seeded pilot of 40 (seed 1602), labelled by
+  hand from the advisory text and the full fix diff before any strategy was scored. A sink
+  is a method that exists in the vulnerable version, holds the flawed behaviour, and is
+  reached only when the vulnerable feature is used. Plumbing (threading a new flag through
+  callers), refactors, logging, cosmetic edits and generic init or registration code are
+  not sinks. 6 of 40 have no such method in the fix commits: 4 Jackson deny-list updates,
+  Cassandra (the flaw is in a shell script), commons-text (the dangerous lookups are not in
+  the diff). Labels are in `cf/hand_labels.py` with the reason for each `None`.
+- **Strategies**: C0 every changed method; C1 drop methods the fix added (they do not exist
+  in the vulnerable version); C2 drop methods whose only changes are logging, comments or
+  braces; C3 narrow to classes or methods named in the advisory text when any are; C4 also
+  drop plumbing (no added or removed guard, check or security call, and no more added than
+  removed lines).
+
+| 40-advisory pilot | C0 | C1 | C2 | C3 + text | C4 − plumbing |
+|---|---|---|---|---|---|
+| Median set size | 4.5 | 2 | 2 | 2 | 1.5 |
+| Mean precision | 0.45 | 0.52 | 0.52 | 0.55 | 0.59 |
+| Mean recall (sinkable) | 1.00 | 1.00 | 1.00 | 0.96 | 0.89 |
+| **Set at least 90% precise (bar: 80%)** | **30%** | **35%** | **35%** | **38%** | **45%** |
+
+Commit-first is about three times better than jar diffs (14%), and still far from the bar.
+18 of 40 gives a 95% interval of roughly 30% to 60%, so the remaining 60 were not labelled:
+no outcome there brings it near 80%. C4 was tuned on these same 40, so 45% is optimistic.
+Recall of 1.00 for C0 to C2 is partly circular (sinks were chosen from the fix diff), but a
+sink outside the diff was marked `None`, not counted as missed.
+
+Why it misses:
+
+- **No sink in the fix** (6 of 40, 15%): this caps any diff-based method at 85%. Deny-list
+  fixes need a different model: gadget class on the classpath plus polymorphic typing
+  enabled, a rule, not a sink.
+- **Plumbing and refactoring around the fix** (most of the rest): callers that pass a new
+  argument (Beam's four `createClient`s, Tomcat's `connectToServerRecursive`), helpers moved
+  in the same commit (Spark, ActiveMQ), one commit fixing three CVEs (Jetty), and mass
+  log-guard edits (MINA: 50 methods changed, 1 sink). Text and plumbing filters help, and
+  start costing recall.
+- **Wrong or partial commits**: Infinispan's project-kb commit is a data-format refactor
+  with the vulnerable transcoders merely moved.
+
+**Decision (autonomous, for the user to confirm)**: no automatic method gets JVM sinks to
+90% precision for 80% of advisories, so automatic sinks never drive suppression. But C1 is
+an excellent candidate generator: median 2 methods, nothing the fix added, and every true
+sink inside it. A reviewer confirms a 2-method set in about a minute. So:
+
+1. Sinks become **curated data**: the pipeline proposes C1 sets with evidence (commit,
+   diff, advisory text match, plumbing flag), a person accepts or edits them, and the
+   accepted record goes into the open feed (row 12's auto-curation flow). Reviewed sinks
+   are precise by construction; the measured number becomes coverage (share of
+   high/critical Maven advisories with a reviewed sink), not precision.
+2. **Unreviewed automatic sinks are witnesses only**: they can say "reached", never "not
+   reached".
+3. **Deny-list advisories** get a rule type (gadget class present plus a polymorphic
+   typing entry point reached) instead of a sink.
+4. **E3** (CHA suppression yield on 50 services) runs on reviewed sinks only. The pilot's
+   34 sinkable labels are the first 34 reviewed records.
 
 ### Competitors, as of Nov 2026
 
@@ -606,8 +670,10 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   whether JVM suppression is worth shipping or JVM ships witnesses only. A miss is
   published with its number, as for Python's 3%.
 - **E2 outcome (2026-11-02)**: jar diffs alone MISSED (14 of 100 at 90% precision against a
-  bar of 80); see "E2 result" under Research findings. Next: a commit-first E2 on
-  independently labelled sinks; E3 waits for it.
+  bar of 80); see "E2 result" under Research findings. Commit-first (E2b, 40 hand-labelled)
+  MISSED too: 45% at best, with 15% of advisories having no sink in the fix at all. Proposed:
+  sinks become reviewed, curated records (pipeline proposes, a person accepts); unreviewed
+  sinks are witnesses only; the proof becomes coverage of reviewed sinks. See "E2b result".
 
 #### 14. Import-graph witness chains (A- to A+)
 
