@@ -32,6 +32,8 @@ use fleetreach_core::Ecosystem;
 use serde::Serialize;
 use spdx::{Expression, LicenseItem, LicenseReq, ParseMode};
 
+use crate::licensetext::{undeclared, Detected, Detector};
+
 // ---- categories ----
 
 /// Google-style license categories, from most to least restrictive.
@@ -300,6 +302,8 @@ pub struct Policy {
     pub deny: BTreeSet<String>,
     pub categories: BTreeMap<Category, Verdict>,
     pub unknown: Verdict,
+    /// What a package whose license files say more than it declares gets (`--detect`).
+    pub mismatch: Verdict,
     pub runtime_only: bool,
     /// Package name -> license ids allowed for it, with the reason.
     pub exceptions: BTreeMap<String, (BTreeSet<String>, String)>,
@@ -383,6 +387,7 @@ impl Policy {
 pub struct LicenseCache {
     cargo_roots: Vec<PathBuf>,
     nuget_root: Option<PathBuf>,
+    go_root: Option<PathBuf>,
     found: std::sync::Mutex<std::collections::HashMap<PathBuf, Option<License>>>,
 }
 
@@ -396,6 +401,14 @@ impl LicenseCache {
             nuget_root: std::env::var_os("NUGET_PACKAGES")
                 .map(PathBuf::from)
                 .or_else(|| home().map(|h| h.join(".nuget").join("packages"))),
+            go_root: std::env::var_os("GOMODCACHE")
+                .map(PathBuf::from)
+                .or_else(|| {
+                    let path = std::env::var_os("GOPATH")?;
+                    let first = std::env::split_paths(&path).next()?;
+                    Some(first.join("pkg").join("mod"))
+                })
+                .or_else(|| home().map(|h| h.join("go").join("pkg").join("mod"))),
             found: Default::default(),
         }
     }
@@ -652,6 +665,17 @@ pub(crate) fn pep503(name: &str) -> String {
 /// virtualenv in the repo root or the source directory (`.venv`, `venv`, `env`).
 fn python_dists(repo_root: &Path, dir: &Path) -> BTreeMap<(String, String), License> {
     let mut out = BTreeMap::new();
+    for_each_dist(repo_root, dir, |_, meta| {
+        if let Some((dist, version, license)) = metadata_license(meta) {
+            out.entry((pep503(&dist), version)).or_insert(license);
+        }
+    });
+    out
+}
+
+/// Calls `found` with the `.dist-info` directory and `METADATA` of every installed package in
+/// the virtualenvs of the repo root or the source directory.
+fn for_each_dist(repo_root: &Path, dir: &Path, mut found: impl FnMut(&Path, &str)) {
     let mut seen = BTreeSet::new();
     for base in [dir, repo_root] {
         for venv in [".venv", "venv", "env"] {
@@ -672,11 +696,121 @@ fn python_dists(repo_root: &Path, dir: &Path) -> BTreeMap<(String, String), Lice
                     let Ok(meta) = std::fs::read_to_string(entry.path().join("METADATA")) else {
                         continue;
                     };
-                    if let Some((dist, version, license)) = metadata_license(&meta) {
-                        out.entry((pep503(&dist), version)).or_insert(license);
-                    }
+                    found(&entry.path(), &meta);
                 }
             }
+        }
+    }
+}
+
+/// `(normalized name, version) -> .dist-info` of what [`for_each_dist`] finds.
+fn python_dist_dirs(repo_root: &Path, dir: &Path) -> BTreeMap<(String, String), PathBuf> {
+    let mut out = BTreeMap::new();
+    for_each_dist(repo_root, dir, |path, meta| {
+        let headers = meta.split("\n\n").next().unwrap_or(meta);
+        let field = |key: &str| {
+            let mut lines = headers.lines();
+            lines.find_map(|l| l.strip_prefix(key)).map(str::trim)
+        };
+        if let (Some(name), Some(version)) = (field("Name:"), field("Version:")) {
+            let key = (pep503(name), version.to_string());
+            out.entry(key).or_insert_with(|| path.to_path_buf());
+        }
+    });
+    out
+}
+
+/// A module path or version as the Go module cache spells it: `!a` for `A`.
+fn go_escaped(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+    for c in path.chars() {
+        if c.is_ascii_uppercase() {
+            out.push('!');
+            out.push(c.to_ascii_lowercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+// ---- detection ----
+
+/// What the license files of a package say, by ecosystem, name and version.
+#[derive(Debug, Default)]
+pub struct Detections {
+    pub found: BTreeMap<(Ecosystem, String, String), Detected>,
+    /// Packages whose files are not on this machine.
+    pub no_files: usize,
+}
+
+/// Where a package's own files are on this machine, if they are.
+fn package_dir(
+    ecosystem: Ecosystem,
+    p: &Package,
+    dir: &Path,
+    cache: &LicenseCache,
+    dists: &BTreeMap<(String, String), PathBuf>,
+) -> Option<PathBuf> {
+    let existing = |path: PathBuf| path.is_dir().then_some(path);
+    match ecosystem {
+        Ecosystem::Npm => {
+            let path = dir.join("node_modules").join(&p.name);
+            let manifest = read_json(&path.join("package.json"))?;
+            let version = manifest.get("version").and_then(|v| v.as_str());
+            (version == Some(p.version.as_str())).then_some(path)
+        }
+        Ecosystem::Packagist => existing(dir.join("vendor").join(&p.name)),
+        Ecosystem::Cargo => cache
+            .cargo_roots
+            .iter()
+            .find_map(|r| existing(r.join(format!("{}-{}", p.name, p.version)))),
+        Ecosystem::Pypi => dists.get(&(pep503(&p.name), p.version.clone())).cloned(),
+        Ecosystem::NuGet => existing(
+            cache
+                .nuget_root
+                .as_deref()?
+                .join(p.name.to_lowercase())
+                .join(p.version.to_lowercase()),
+        ),
+        Ecosystem::Go => {
+            let version = p.version.strip_prefix('v').unwrap_or(&p.version);
+            let name = format!("{}@v{}", go_escaped(&p.name), go_escaped(version));
+            existing(cache.go_root.as_deref()?.join(name))
+        }
+        _ => None,
+    }
+}
+
+/// Reads the license files of every package on this machine. A package no source knew takes the
+/// license its files say.
+pub fn detect(
+    inv: &mut RepoInventory,
+    repo_root: &Path,
+    cache: &LicenseCache,
+    detector: &Detector,
+) -> Detections {
+    let mut out = Detections::default();
+    for source in &mut inv.sources {
+        let dir = source_dir(repo_root, &source.source);
+        let dists = if source.ecosystem == Ecosystem::Pypi {
+            python_dist_dirs(repo_root, &dir)
+        } else {
+            BTreeMap::new()
+        };
+        for p in &mut source.packages {
+            let package = package_dir(source.ecosystem, p, &dir, cache, &dists);
+            let Some(detected) = package.and_then(|d| detector.dir(&d)) else {
+                out.no_files += 1;
+                continue;
+            };
+            // A file nothing recognized may say anything, so the rest is not the whole answer.
+            if p.license.is_none() && detected.unrecognized.is_empty() {
+                p.license = detected.expression();
+                p.license_source = p.license.as_ref().map(|_| "license file".to_string());
+            }
+            let key = (source.ecosystem, p.name.clone(), p.version.clone());
+            out.found.insert(key, detected);
         }
     }
     out
@@ -853,11 +987,21 @@ pub struct Decision {
     #[serde(skip_serializing_if = "String::is_empty")]
     pub reason: String,
     pub dev: bool,
+    /// What the package's license files say, with `--detect`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detected: Option<String>,
+    /// License ids in its files that the declared license does not account for.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub undeclared: Vec<String>,
 }
 
 /// Decide every package of every inventory. Without a policy everything is allowed (an
 /// inventory only).
-pub fn decide(inventories: &[RepoInventory], policy: Option<&Policy>) -> Vec<Decision> {
+pub fn decide(
+    inventories: &[RepoInventory],
+    policy: Option<&Policy>,
+    detections: &Detections,
+) -> Vec<Decision> {
     let mut out = Vec::new();
     for inv in inventories {
         for source in &inv.sources {
@@ -882,12 +1026,34 @@ pub fn decide(inventories: &[RepoInventory], policy: Option<&Policy>) -> Vec<Dec
                             .min()
                             .unwrap_or(Category::Unknown)
                     });
-                let (verdict, reason) = match policy {
-                    Some(policy) if !(policy.runtime_only && p.dev) => {
-                        policy.evaluate(&p.name, license.as_ref())
-                    }
-                    _ => (Verdict::Allow, String::new()),
+                let in_scope = policy.filter(|policy| !(policy.runtime_only && p.dev));
+                let (mut verdict, mut reason) = match in_scope {
+                    Some(policy) => policy.evaluate(&p.name, license.as_ref()),
+                    None => (Verdict::Allow, String::new()),
                 };
+                let key = (source.ecosystem, p.name.clone(), p.version.clone());
+                let found = detections.found.get(&key);
+                let declared = license.as_ref().and_then(|l| l.expression.as_deref());
+                let undeclared: Vec<String> = match (found, declared) {
+                    (Some(found), Some(declared)) => undeclared(found, &ids(declared))
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                if !undeclared.is_empty() {
+                    let why = format!(
+                        "declares {}, but its license files also say {}",
+                        declared.unwrap_or_default(),
+                        undeclared.join(", ")
+                    );
+                    if let Some(policy) = in_scope.filter(|p| p.mismatch >= verdict) {
+                        if policy.mismatch != Verdict::Allow {
+                            verdict = policy.mismatch;
+                            reason = why;
+                        }
+                    }
+                }
                 out.push(Decision {
                     repo: inv.repo.0.clone(),
                     ecosystem: ecosystem.clone(),
@@ -899,6 +1065,8 @@ pub fn decide(inventories: &[RepoInventory], policy: Option<&Policy>) -> Vec<Dec
                     verdict,
                     reason,
                     dev: p.dev,
+                    detected: found.and_then(Detected::expression),
+                    undeclared,
                 });
             }
         }
@@ -924,6 +1092,8 @@ pub fn decide(inventories: &[RepoInventory], policy: Option<&Policy>) -> Vec<Dec
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
+    use fleetreach_core::inventory::SourceInventory;
+    use fleetreach_core::RepoId;
 
     fn lic(s: &str) -> License {
         normalize(&[s.to_string()]).unwrap()
@@ -972,12 +1142,65 @@ mod tests {
             deny: BTreeSet::from(["SSPL-1.0".to_string()]),
             categories: Policy::default_categories(),
             unknown: Verdict::Deny,
+            mismatch: Verdict::Warn,
             runtime_only: true,
             exceptions: BTreeMap::from([(
                 "ring".to_string(),
                 (BTreeSet::from(["OpenSSL".to_string()]), "legal".to_string()),
             )]),
         }
+    }
+
+    fn with_mit_package() -> Vec<RepoInventory> {
+        let mut p = Package::new("left-pad", "1.0.0", true, false);
+        p.license = Some("MIT".to_string());
+        let mut inv = RepoInventory::new(RepoId("repo".to_string()));
+        let source = SourceInventory::new(Ecosystem::Npm, "package-lock.json", vec![p]);
+        inv.sources.push(source);
+        vec![inv]
+    }
+
+    fn detections(ids: &[&str]) -> Detections {
+        let detected = Detected {
+            ids: ids.iter().map(ToString::to_string).collect(),
+            unrecognized: Vec::new(),
+        };
+        let key = (Ecosystem::Npm, "left-pad".to_string(), "1.0.0".to_string());
+        Detections {
+            found: BTreeMap::from([(key, detected)]),
+            no_files: 0,
+        }
+    }
+
+    #[test]
+    fn files_saying_more_than_declared_take_the_mismatch_verdict() {
+        let inventories = with_mit_package();
+        let mut strict = policy();
+        strict.mismatch = Verdict::Deny;
+        let found = detections(&["MIT", "GPL-3.0-only"]);
+        let decided = &decide(&inventories, Some(&strict), &found)[0];
+        assert_eq!(decided.verdict, Verdict::Deny);
+        assert_eq!(decided.undeclared, ["GPL-3.0-only"]);
+        assert!(
+            decided.reason.contains("GPL-3.0-only"),
+            "{}",
+            decided.reason
+        );
+
+        let decided = &decide(&inventories, Some(&policy()), &detections(&["MIT"]))[0];
+        assert_eq!(decided.verdict, Verdict::Allow);
+        assert!(decided.undeclared.is_empty());
+    }
+
+    #[test]
+    fn a_mismatch_is_listed_even_when_the_policy_lets_it_pass() {
+        let inventories = with_mit_package();
+        let mut relaxed = policy();
+        relaxed.mismatch = Verdict::Allow;
+        let found = detections(&["MIT", "ISC"]);
+        let decided = &decide(&inventories, Some(&relaxed), &found)[0];
+        assert_eq!(decided.verdict, Verdict::Allow);
+        assert_eq!(decided.undeclared, ["ISC"]);
     }
 
     #[test]

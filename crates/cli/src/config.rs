@@ -406,6 +406,9 @@ struct RawLicenses {
     #[serde(default)]
     categories: std::collections::BTreeMap<String, String>,
     unknown: Option<String>,
+    /// `allow`, `warn` (default) or `deny`: a package whose license files say more than it
+    /// declares, with `licenses --detect`.
+    mismatch: Option<String>,
     /// `"runtime"` leaves dev-only packages out of the policy; `"all"` (default) includes them.
     scope: Option<String>,
     #[serde(default)]
@@ -717,6 +720,10 @@ fn license_policy(raw: RawLicenses) -> Result<crate::licenses::Policy, ConfigErr
         })?;
         categories.insert(category, verdict(v, &format!("categories.{name}"))?);
     }
+    let mismatch = match raw.mismatch.as_deref() {
+        Some(v) => verdict(v, "mismatch")?,
+        None => Verdict::Warn,
+    };
     let unknown = match raw.unknown.as_deref() {
         Some(v) => verdict(v, "unknown")?,
         None => Verdict::Deny,
@@ -746,6 +753,7 @@ fn license_policy(raw: RawLicenses) -> Result<crate::licenses::Policy, ConfigErr
         deny: ids(raw.deny, "deny")?,
         categories,
         unknown,
+        mismatch,
         runtime_only,
         exceptions,
     })

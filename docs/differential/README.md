@@ -65,3 +65,22 @@ To run it, in one directory holding these files, with the same day's data for al
 `fleetreach db sync --distros Debian:10,Debian:11` fetches osv.dev's frozen exports of the
 retired releases as `Debian_10` and `Debian_11`. Keep them in `osv/`, where the scan reads them,
 and in `stale/`, where `explain.py` reads them to show what those releases last had.
+
+## License detection
+
+`license_text.py` compares what `licenses --detect` reads with ScanCode Toolkit 32.5.0, the
+release tarball in a linux/amd64 image, on a sample of package directories:
+
+```bash
+cargo build --release -p fleetreach-cli --example license_text
+python3 -B license_text.py <work> <example binary> 2000 <dirs of packages>...
+```
+
+It keeps the sample and ScanCode's answers in `<work>`, so a rerun only compares. On 2,000
+packages from the Cargo, Go, npm and NuGet caches, 1,964 agreed exactly, none disagreed, 30 had a
+subset of ScanCode's ids (mostly the LLVM exception and notes in compound files), 3 overlapped, 2
+were unrecognized and 1 was a superset.
+
+`license_cargo.py <fleetreach> <repo>...` compares every crate of a Cargo repo with
+`cargo deny list`: 2,013 of 2,015 crates over fleetreach, Deno and Meilisearch had the same ids.
+The two others are `LGPL-2.0` read as `LGPL-2.0-only`, and a crate cargo-deny left empty.

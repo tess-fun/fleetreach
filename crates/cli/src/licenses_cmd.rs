@@ -19,7 +19,8 @@ use crate::config::Config;
 use crate::inventory::repo_inventory_with;
 use rayon::prelude::*;
 
-use crate::licenses::{annotate, decide, Category, Decision, Verdict};
+use crate::licenses::{annotate, decide, detect, Category, Decision, Detections, Verdict};
+use crate::licensetext::Detector;
 use crate::sources;
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -42,6 +43,10 @@ pub struct LicensesArgs {
     /// ecosystem, name and version to deps.dev (Google); answers are cached locally
     #[arg(long)]
     fetch: bool,
+    /// Read the license files of packages on this machine: fills in what no source declares,
+    /// and names a package whose files say more than it declares
+    #[arg(long)]
+    detect: bool,
     #[command(flatten)]
     maven: crate::maven_repo::FetchArgs,
 }
@@ -60,6 +65,7 @@ struct Output<'a> {
     licenses: Vec<Rollup>,
     violations: Vec<&'a Decision>,
     warnings: Vec<&'a Decision>,
+    mismatches: Vec<&'a Decision>,
     packages: &'a [Decision],
     unread: Vec<String>,
 }
@@ -119,7 +125,20 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
             Err(e) => return fail(&e),
         }
     }
-    let decisions = decide(&inventories, config.licenses.as_ref());
+    let mut detections = Detections::default();
+    if args.detect {
+        let detector = Detector::new();
+        let per_repo: Vec<Detections> = inventories
+            .par_iter_mut()
+            .zip(&config.repos)
+            .map(|(inv, repo)| detect(inv, &repo.path, &cache, &detector))
+            .collect();
+        for found in per_repo {
+            detections.found.extend(found.found);
+            detections.no_files += found.no_files;
+        }
+    }
+    let decisions = decide(&inventories, config.licenses.as_ref(), &detections);
 
     // Rollup: one row per license (unknown grouped), packages and repos counted once.
     let mut rows: BTreeMap<String, RollupRow> = BTreeMap::new();
@@ -154,6 +173,11 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
         .filter(|d| d.verdict == Verdict::Warn)
         .collect();
 
+    let mismatches: Vec<&Decision> = decisions
+        .iter()
+        .filter(|d| !d.undeclared.is_empty())
+        .collect();
+
     match args.format {
         LicenseFormat::Json => {
             let out = Output {
@@ -161,6 +185,7 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
                 licenses,
                 violations: violations.clone(),
                 warnings: warnings.clone(),
+                mismatches: mismatches.clone(),
                 packages: &decisions,
                 unread: unread.clone(),
             };
@@ -182,6 +207,17 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
                 ]);
             }
             println!("{table}");
+            for d in &mismatches {
+                println!(
+                    "mismatch: {} {} {}@{}: declares {}, license files say {}",
+                    sanitize_cell(&d.repo),
+                    d.ecosystem,
+                    sanitize_cell(&d.package),
+                    sanitize_cell(&d.version),
+                    sanitize_cell(d.license.as_deref().unwrap_or_default()),
+                    sanitize_cell(d.detected.as_deref().unwrap_or_default())
+                );
+            }
             for (label, list) in [("violation", &violations), ("warning", &warnings)] {
                 for d in list.iter() {
                     println!(
@@ -209,6 +245,15 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
             " (no [settings.licenses] policy: inventory only)"
         }
     );
+    if args.detect {
+        eprintln!(
+            "license files: read for {} package(s), {} mismatch(es); {} package(s) have none on \
+             this machine",
+            detections.found.len(),
+            mismatches.len(),
+            detections.no_files
+        );
+    }
     for u in &unread {
         eprintln!("error: {}", sanitize_cell(u));
     }

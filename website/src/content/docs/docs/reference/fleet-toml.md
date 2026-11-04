@@ -238,6 +238,7 @@ allow      = ["MIT", "Apache-2.0", "BSD-3-Clause", "ISC"]
 deny       = ["SSPL-1.0"]
 categories = { restricted = "deny", reciprocal = "warn" }
 unknown    = "deny"
+mismatch   = "warn"     # license files say more than declared, with --detect
 scope      = "runtime"
 
 [[settings.licenses.exception]]

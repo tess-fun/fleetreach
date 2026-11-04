@@ -331,8 +331,8 @@ sink inside it. A reviewer confirms a 2-method set in about a minute. So:
   maintenance; `ruff_python_parser` is not published on crates.io).
 - **`serve`**: `axum` on `hyper`/`tokio`, no vendored C, plain HTTP behind a reverse proxy,
   in its own `serve` cargo feature.
-- **License text**: `askalono` is pure Rust apart from an optional zstd cache feature; build
-  without it.
+- **License text**: the `spdx` crate's own `detection` and `text` features, which are pure Rust
+  (only `detection-cache` pulls zstd). `askalono` is out: it needs `zstd` on every native target.
 
 ## Release split
 

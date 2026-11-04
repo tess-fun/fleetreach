@@ -30,6 +30,7 @@ pub mod images;
 pub mod inventory;
 pub mod licenses;
 pub mod licenses_cmd;
+pub mod licensetext;
 mod lockhash;
 pub(crate) mod lockline;
 pub mod maven_repo;
