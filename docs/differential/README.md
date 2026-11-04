@@ -77,9 +77,15 @@ python3 -B license_text.py <work> <example binary> 2000 <dirs of packages>...
 ```
 
 It keeps the sample and ScanCode's answers in `<work>`, so a rerun only compares. On 2,000
-packages from the Cargo, Go, npm and NuGet caches, 1,964 agreed exactly, none disagreed, 30 had a
-subset of ScanCode's ids (mostly the LLVM exception and notes in compound files), 3 overlapped, 2
-were unrecognized and 1 was a superset.
+packages from the Cargo, Go, npm and NuGet caches, 1,964 agreed exactly and none disagreed. On
+1,500 packages from the download cache, with PyPI, RubyGems and Hex among them, 1,435 agreed and
+2 disagreed: ScanCode's own id for the protobuf BSD text, and a compound Python file. The rest
+are subsets, nearly all ScanCode reading a sentence that mentions a license, which is not read
+here, or the LLVM exception.
+
+`license_download.py <local.json> <downloaded.json>` compares `licenses --detect` from local
+files with the same run from `--download`: 4,149 packages over Cargo, npm and Go read both ways
+and all said the same.
 
 `license_cargo.py <fleetreach> <repo>...` compares every crate of a Cargo repo with
 `cargo deny list`: 2,013 of 2,015 crates over fleetreach, Deno and Meilisearch had the same ids.

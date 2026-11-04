@@ -16,7 +16,7 @@
 //! for what is said of one version, so `[[settings.ignore]]` can take one package out.
 //!
 //! Only packages from the public registry are sent: git, path and other-registry sources are
-//! not. Answers are cached per package under the user cache for [`FRESH_SECS`]. A package with
+//! not, nor a Go module under `GOPRIVATE` or `GONOPROXY`. Answers are cached per package under the user cache for [`FRESH_SECS`]. A package with
 //! no answer, offline or after a failure, is a coverage gap and never clean, and `--offline`
 //! reads the cache however old it is. Julia's registry records none of this.
 
@@ -845,22 +845,30 @@ pub struct Options {
     pub now: i64,
 }
 
+/// Whether `p` can be asked about in public: a private package's name goes nowhere. Swift
+/// packages are all git repos, and a Go module the toolchain keeps off the proxy stays off it.
+pub(crate) fn is_public(ecosystem: Ecosystem, p: &fleetreach_core::inventory::Package) -> bool {
+    !p.version.contains(':')
+        && !(ecosystem == Ecosystem::Go && crate::licensefetch::go_private(&p.name))
+        && (ecosystem == Ecosystem::Swift
+            || !matches!(
+                p.source,
+                DepSource::Git { .. } | DepSource::Path | DepSource::OtherRegistry { .. }
+            ))
+}
+
+/// A client for package archives, in a build with the `network` feature.
+pub(crate) fn archive_client() -> Option<Box<dyn Fetch>> {
+    client::Http::for_archives().map(|http| Box::new(http) as Box<dyn Fetch>)
+}
+
 fn used_packages(repos: &[Repo], maven: Option<&crate::maven_repo::Remote>) -> Vec<Used> {
     let read = |repo: &Repo| {
         let inv = crate::inventory::repo_inventory_with(repo, maven);
         let mut out = Vec::new();
         for source in inv.sources {
             for p in source.packages {
-                // A private package's name goes nowhere. Swift packages are all git repos.
-                let public = !p.version.contains(':')
-                    && (source.ecosystem == Ecosystem::Swift
-                        || !matches!(
-                            p.source,
-                            DepSource::Git { .. }
-                                | DepSource::Path
-                                | DepSource::OtherRegistry { .. }
-                        ));
-                if public {
+                if is_public(source.ecosystem, &p) {
                     out.push(Used {
                         repo: inv.repo.clone(),
                         ecosystem: source.ecosystem,
@@ -1171,12 +1179,15 @@ mod client {
     use super::Fetch;
 
     const MAX_BODY: u64 = 64 << 20;
+    /// Go's own limit on a module zip.
+    const MAX_ARCHIVE: u64 = 500 << 20;
     const MAX_TRIES: u32 = 6;
     const MAX_WAIT_SECONDS: u64 = 60;
 
     pub struct Http {
         agent: ureq::Agent,
         github_token: Option<String>,
+        max_body: u64,
     }
 
     impl Http {
@@ -1193,6 +1204,16 @@ mod client {
             Some(Http {
                 agent,
                 github_token: token,
+                max_body: MAX_BODY,
+            })
+        }
+
+        /// For package archives, which are larger than any registry answer.
+        pub fn for_archives() -> Option<Http> {
+            let http = Http::new()?;
+            Some(Http {
+                max_body: MAX_ARCHIVE,
+                ..http
             })
         }
 
@@ -1212,7 +1233,7 @@ mod client {
                         let body = response
                             .body_mut()
                             .with_config()
-                            .limit(MAX_BODY)
+                            .limit(self.max_body)
                             .read_to_vec();
                         return body.map(Some).map_err(|e| e.to_string());
                     }
@@ -1256,6 +1277,10 @@ mod client {
 
     impl Http {
         pub fn new() -> Option<Http> {
+            None
+        }
+
+        pub fn for_archives() -> Option<Http> {
             None
         }
     }

@@ -13,6 +13,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the license its files say, unless one of them could not be recognized. A package whose files
   name a license its declaration does not account for is a mismatch, with its verdict in
   `[settings.licenses] mismatch`.
+- **`licenses --detect --download` reads packages that are not on this machine.** It fetches each
+  public package's archive for npm, Cargo, PyPI, RubyGems, Hex and Go, checks it against the
+  lockfile's hash (the tree hash in `go.sum` for Go), and keeps only its license files in a cache
+  keyed by that hash, which `--detect` then reads offline.
 - **SBOM input takes CycloneDX XML, SPDX tag-value and GitHub's dependency graph export**, and
   finds SBOMs by itself. `[settings.sbom] discover` scans the SBOMs in a repo with nothing else
   to read, `[[repo]] sbom_discover` sets that per repo, and `[[source]] sbom_assets` fetches

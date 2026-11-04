@@ -86,7 +86,39 @@ It does two things:
 `[settings.licenses] mismatch` sets the verdict for a mismatch: `allow`, `warn` (the default) or
 `deny`. Every mismatch stays listed under `mismatches` in `-f json` whatever the verdict.
 
-The matcher reads whole license files and short notices, not license headers in source files,
-and one file that strings several licenses together can come back with only some of them.
+The matcher reads whole license files and the standard short notices. It does not read source
+file headers or a sentence that names a license in passing, and one file that strings several
+licenses together can come back with only some of them.
 Detection runs on this machine and sends nothing. A package whose files are not here is counted
 on stderr and keeps its declared license.
+
+### Download what is not here
+
+A fresh CI runner has no `node_modules` and no Cargo cache. `--download` fetches those packages:
+
+```bash
+fleetreach licenses --detect --download
+```
+
+Each archive comes from the public registry and must match the hash in the lockfile, or it is
+dropped with a warning. Only the license files are kept, under the user cache, keyed by that hash
+and shared by every repo. After that `--detect` alone reads them with no network, so a CI job can
+restore that directory and run offline. The archive itself is never unpacked to disk and none of
+its code runs.
+
+| Ecosystem | Fetched | Checked against |
+|-----------|---------|-----------------|
+| npm, pnpm, yarn classic, bun | registry tarball | `integrity` |
+| Cargo | crate | `checksum` in `Cargo.lock` |
+| PyPI | source distribution | the hash in `uv.lock`, `poetry.lock` or `pylock.toml` |
+| RubyGems | gem | `CHECKSUMS` in `Gemfile.lock` |
+| Hex | tarball | the outer checksum in `mix.lock` |
+| Go | module zip | the tree hash in `go.sum` |
+
+`--download` sends each such package's name and version to its registry, and never a git, path or
+private-registry package, nor a Go module under `GOPRIVATE` or `GONOPROXY`. A package with no hash
+in its lockfile is not fetched, since nothing would say the file is the one in use. That covers
+NuGet, whose `contentHash` skips the signature, and a Python package published as wheels only.
+
+A mismatch needs a declaration to compare with. On a fresh machine, Cargo and Go packages have
+none until `--fetch` asks deps.dev for it, so add that flag to compare them as well.

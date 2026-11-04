@@ -32,7 +32,9 @@ use fleetreach_core::Ecosystem;
 use serde::Serialize;
 use spdx::{Expression, LicenseItem, LicenseReq, ParseMode};
 
+use crate::licensefetch::{file_pin, go_sums, Pin, Wanted};
 use crate::licensetext::{undeclared, Detected, Detector};
+use crate::scope::cache_escaped;
 
 // ---- categories ----
 
@@ -720,20 +722,6 @@ fn python_dist_dirs(repo_root: &Path, dir: &Path) -> BTreeMap<(String, String), 
     out
 }
 
-/// A module path or version as the Go module cache spells it: `!a` for `A`.
-fn go_escaped(path: &str) -> String {
-    let mut out = String::with_capacity(path.len());
-    for c in path.chars() {
-        if c.is_ascii_uppercase() {
-            out.push('!');
-            out.push(c.to_ascii_lowercase());
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
 // ---- detection ----
 
 /// What the license files of a package say, by ecosystem, name and version.
@@ -744,13 +732,58 @@ pub struct Detections {
     pub no_files: usize,
 }
 
+/// What one source's directory says about where its packages are.
+#[derive(Default)]
+struct Local {
+    dists: BTreeMap<(String, String), PathBuf>,
+    go_sums: BTreeMap<(String, String), String>,
+}
+
+impl Local {
+    fn read(ecosystem: Ecosystem, repo_root: &Path, dir: &Path) -> Local {
+        let mut local = Local::default();
+        match ecosystem {
+            Ecosystem::Pypi => local.dists = python_dist_dirs(repo_root, dir),
+            Ecosystem::Go => {
+                let text = std::fs::read_to_string(dir.join("go.sum")).unwrap_or_default();
+                local.go_sums = go_sums(&text);
+            }
+            _ => {}
+        }
+        local
+    }
+
+    /// What pins the archive of `p`.
+    fn pin(&self, ecosystem: Ecosystem, p: &Package) -> Option<Pin> {
+        if ecosystem == Ecosystem::Go {
+            let key = (p.name.clone(), go_version(&p.version));
+            return self.go_sums.get(&key).cloned().map(Pin::GoTree);
+        }
+        let fetched = [
+            Ecosystem::Npm,
+            Ecosystem::Cargo,
+            Ecosystem::Pypi,
+            Ecosystem::RubyGems,
+            Ecosystem::Hex,
+        ];
+        fetched
+            .contains(&ecosystem)
+            .then(|| file_pin(&p.checksums))
+            .flatten()
+    }
+}
+
+fn go_version(version: &str) -> String {
+    format!("v{}", version.strip_prefix('v').unwrap_or(version))
+}
+
 /// Where a package's own files are on this machine, if they are.
 fn package_dir(
     ecosystem: Ecosystem,
     p: &Package,
     dir: &Path,
     cache: &LicenseCache,
-    dists: &BTreeMap<(String, String), PathBuf>,
+    local: &Local,
 ) -> Option<PathBuf> {
     let existing = |path: PathBuf| path.is_dir().then_some(path);
     match ecosystem {
@@ -765,7 +798,10 @@ fn package_dir(
             .cargo_roots
             .iter()
             .find_map(|r| existing(r.join(format!("{}-{}", p.name, p.version)))),
-        Ecosystem::Pypi => dists.get(&(pep503(&p.name), p.version.clone())).cloned(),
+        Ecosystem::Pypi => local
+            .dists
+            .get(&(pep503(&p.name), p.version.clone()))
+            .cloned(),
         Ecosystem::NuGet => existing(
             cache
                 .nuget_root
@@ -775,15 +811,47 @@ fn package_dir(
         ),
         Ecosystem::Go => {
             let version = p.version.strip_prefix('v').unwrap_or(&p.version);
-            let name = format!("{}@v{}", go_escaped(&p.name), go_escaped(version));
+            let name = format!("{}@v{}", cache_escaped(&p.name), cache_escaped(version));
             existing(cache.go_root.as_deref()?.join(name))
         }
         _ => None,
     }
 }
 
-/// Reads the license files of every package on this machine. A package no source knew takes the
-/// license its files say.
+/// The archives of public packages whose files are neither here nor in `cached`.
+pub fn wanted_archives(
+    inv: &RepoInventory,
+    repo_root: &Path,
+    cache: &LicenseCache,
+) -> BTreeSet<Wanted> {
+    let mut out = BTreeSet::new();
+    for source in &inv.sources {
+        let dir = source_dir(repo_root, &source.source);
+        let local = Local::read(source.ecosystem, repo_root, &dir);
+        for p in &source.packages {
+            let here = package_dir(source.ecosystem, p, &dir, cache, &local).is_some();
+            if here || !crate::health::is_public(source.ecosystem, p) {
+                continue;
+            }
+            if let Some(pin) = local.pin(source.ecosystem, p) {
+                let version = match source.ecosystem {
+                    Ecosystem::Go => go_version(&p.version),
+                    _ => p.version.clone(),
+                };
+                out.insert(Wanted {
+                    ecosystem: source.ecosystem,
+                    name: p.name.clone(),
+                    version,
+                    pin,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Reads the license files of every package on this machine or in the download cache. A
+/// package no source knew takes the license its files say.
 pub fn detect(
     inv: &mut RepoInventory,
     repo_root: &Path,
@@ -791,15 +859,16 @@ pub fn detect(
     detector: &Detector,
 ) -> Detections {
     let mut out = Detections::default();
+    let downloads = crate::licensefetch::cache_root();
     for source in &mut inv.sources {
         let dir = source_dir(repo_root, &source.source);
-        let dists = if source.ecosystem == Ecosystem::Pypi {
-            python_dist_dirs(repo_root, &dir)
-        } else {
-            BTreeMap::new()
-        };
+        let local = Local::read(source.ecosystem, repo_root, &dir);
         for p in &mut source.packages {
-            let package = package_dir(source.ecosystem, p, &dir, cache, &dists);
+            let package = package_dir(source.ecosystem, p, &dir, cache, &local).or_else(|| {
+                let key = local.pin(source.ecosystem, p)?.key()?;
+                let path = downloads.as_deref()?.join(key);
+                path.is_dir().then_some(path)
+            });
             let Some(detected) = package.and_then(|d| detector.dir(&d)) else {
                 out.no_files += 1;
                 continue;
@@ -1092,8 +1161,8 @@ pub fn decide(
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
-    use fleetreach_core::inventory::SourceInventory;
-    use fleetreach_core::RepoId;
+    use fleetreach_core::inventory::{Checksum, SourceInventory};
+    use fleetreach_core::{DepSource, RepoId};
 
     fn lic(s: &str) -> License {
         normalize(&[s.to_string()]).unwrap()
@@ -1201,6 +1270,37 @@ mod tests {
         let decided = &decide(&inventories, Some(&relaxed), &found)[0];
         assert_eq!(decided.verdict, Verdict::Allow);
         assert_eq!(decided.undeclared, ["ISC"]);
+    }
+
+    #[test]
+    fn only_pinned_public_packages_are_wanted_from_a_registry() {
+        let sum = Checksum::new("SHA-512", &"a".repeat(128)).unwrap();
+        let pinned = |name: &str, source: DepSource| {
+            let mut p = Package::new(name, "1.0.0", true, false).with_source(source);
+            p.checksums = vec![sum.clone()];
+            p
+        };
+        let packages = vec![
+            pinned("public", DepSource::CratesIo),
+            pinned(
+                "private",
+                DepSource::OtherRegistry {
+                    url: "https://npm.corp.example".to_string(),
+                },
+            ),
+            pinned("local", DepSource::Path),
+            Package::new("unpinned", "1.0.0", true, false),
+        ];
+        let mut inv = RepoInventory::new(RepoId("repo".to_string()));
+        inv.sources.push(SourceInventory::new(
+            Ecosystem::Npm,
+            "package-lock.json",
+            packages,
+        ));
+        let root = tempfile::tempdir().unwrap();
+        let wanted = wanted_archives(&inv, root.path(), &LicenseCache::new());
+        let names: Vec<&str> = wanted.iter().map(|w| w.name.as_str()).collect();
+        assert_eq!(names, ["public"]);
     }
 
     #[test]

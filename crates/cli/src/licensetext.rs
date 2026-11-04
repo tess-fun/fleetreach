@@ -25,13 +25,44 @@ const MAX_FILE: u64 = 1 << 20;
 const WHOLE: f32 = 0.98;
 /// Lines a top-down scan moves at a time.
 const STEP: usize = 5;
+/// Top-down windows over one text.
+const MAX_WINDOWS: usize = 100;
 /// Passes over a text holding several licenses.
 const MAX_PASSES: u16 = 6;
 
 /// Where the operative part of the Apache and GNU licenses ends.
 const END_OF_TERMS: &str = "END OF TERMS AND CONDITIONS";
 
-const APACHE_NOTICE: &str = "Licensed under the Apache License, Version 2.0";
+/// The part of an SPDX text that packages ship alone, as `(id, from, up to)`, an empty end being
+/// the end of the text. The notices the Apache and Mozilla licenses ask projects to use, by id
+/// because FSL-1.1-ALv2 quotes the same words, and the LGPL, whose SPDX text goes on to hold all
+/// of the GPL it adds to.
+const PARTS: &[(&str, &str, &str)] = &[
+    (
+        "Apache-2.0",
+        "Licensed under the Apache License, Version 2.0",
+        "",
+    ),
+    (
+        "MPL-2.0",
+        "This Source Code Form is subject",
+        "If it is not possible",
+    ),
+    (
+        "LGPL-3.0",
+        "GNU LESSER",
+        "GNU GENERAL PUBLIC LICENSE\nVersion 3",
+    ),
+];
+
+fn part_of<'a>(text: &'a str, from: &str, to: &str) -> Option<&'a str> {
+    let start = text.find(from)?;
+    let rest = &text[start..];
+    match to {
+        "" => Some(rest),
+        _ => rest.find(to).map(|end| &rest[..end]),
+    }
+}
 
 /// What a package's license files say.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -121,11 +152,12 @@ impl Detector {
                     if let Some((terms, _)) = text.split_once(END_OF_TERMS) {
                         entry.alternates.push(TextData::new(terms).without_text());
                     }
-                    // The notice the Apache license tells projects to use, and many ship alone.
-                    // Only its own: FSL-1.1-ALv2 quotes the same words.
-                    if let Some(at) = text.find(APACHE_NOTICE).filter(|_| name == "Apache-2.0") {
-                        let notice = TextData::new(&text[at..]).without_text();
-                        entry.alternates.push(notice);
+                    for (id, from, to) in PARTS {
+                        if family(&name) == *id {
+                            if let Some(part) = part_of(text, from, to) {
+                                entry.alternates.push(TextData::new(part).without_text());
+                            }
+                        }
                     }
                     entry.aliases = ids
                         .iter()
@@ -170,7 +202,10 @@ impl Detector {
         // Not one license throughout: elimination stops at the first it cannot see past, and
         // a second license missed is the one that could matter.
         if result.score < WHOLE {
-            let mode = ScanMode::TopDown { step_size: STEP };
+            // A window at every line of a bundler's notice file would take minutes.
+            let lines = text.lines().count();
+            let step_size = STEP.max(lines / MAX_WINDOWS);
+            let mode = ScanMode::TopDown { step_size };
             let top_down = Scanner::with_scan_mode(store, mode).confidence_threshold(CONFIDENCE);
             let parts = top_down.scan(&data);
             ids.extend(parts.containing.iter().map(|c| c.license.name.to_string()));
@@ -340,6 +375,13 @@ mod tests {
         assert_eq!(
             detector.text(notice),
             BTreeSet::from(["Apache-2.0".to_string()])
+        );
+        let mozilla = "This Source Code Form is subject to the terms of the Mozilla Public\n\
+            License, v. 2.0. If a copy of the MPL was not distributed with this\n\
+            file, You can obtain one at https://mozilla.org/MPL/2.0/.\n";
+        assert_eq!(
+            detector.text(mozilla),
+            BTreeSet::from(["MPL-2.0".to_string()])
         );
         let both = BTreeSet::from(["Apache-2.0".to_string(), "MIT".to_string()]);
         assert_eq!(detector.text("MIT OR Apache-2.0\n"), both);

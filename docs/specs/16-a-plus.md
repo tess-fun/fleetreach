@@ -1104,6 +1104,17 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: detected licenses vs ScanCode Toolkit on 2,000 packages; Cargo vs cargo-deny;
   NOTICE files vs `cargo about` and `license-checker`.
 
+  **Status: 1.6.0 part implemented 2026-11-04, unreleased** (`crates/cli/src/licensetext.rs`,
+  `licensefetch.rs`, `licenses --detect --download`, `[settings.licenses] mismatch`). Against
+  ScanCode 32.5.0: 1,964 of 2,000 packages from local caches and 1,435 of 1,500 from downloads
+  agreed exactly, 2 disagreed, neither a real difference. Against cargo-deny 2,013 of 2,015
+  crates. Fetched with local caches hidden, 4,149 packages read the same as from local files,
+  and 9,164 archives matched their lockfile hashes, Go's tree hash included. Differences from
+  the plan: only license files are kept, not tarballs, which is about 7 KB a package; NuGet,
+  Packagist, Maven and wheel-only Python are not fetched, having no hash of the served file;
+  a sentence naming a license in prose and source headers are not read. NOTICE files and
+  conflicts stay 1.7.0.
+
 #### 21. Unmaintained / unsound (A to A+)
 
 - **Gap**: RustSec only.

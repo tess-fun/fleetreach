@@ -19,7 +19,9 @@ use crate::config::Config;
 use crate::inventory::repo_inventory_with;
 use rayon::prelude::*;
 
-use crate::licenses::{annotate, decide, detect, Category, Decision, Detections, Verdict};
+use crate::licenses::{
+    annotate, decide, detect, wanted_archives, Category, Decision, Detections, Verdict,
+};
 use crate::licensetext::Detector;
 use crate::sources;
 
@@ -47,6 +49,11 @@ pub struct LicensesArgs {
     /// and names a package whose files say more than it declares
     #[arg(long)]
     detect: bool,
+    /// With --detect, fetch the archive of each public package whose files are not on this
+    /// machine, check it against the lockfile's hash and keep its license files in a shared
+    /// cache. Sends each such package's name and version to its registry
+    #[arg(long, requires = "detect")]
+    download: bool,
     #[command(flatten)]
     maven: crate::maven_repo::FetchArgs,
 }
@@ -126,6 +133,35 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
         }
     }
     let mut detections = Detections::default();
+    if args.detect {
+        for (inv, repo) in inventories.iter_mut().zip(&config.repos) {
+            crate::lockhash::annotate(inv, &repo.path);
+        }
+    }
+    if args.download {
+        let wanted: BTreeSet<_> = inventories
+            .par_iter()
+            .zip(&config.repos)
+            .flat_map_iter(|(inv, repo)| wanted_archives(inv, &repo.path, &cache))
+            .collect();
+        let outcome = match crate::licensefetch::download(wanted) {
+            Ok(outcome) => outcome,
+            Err(e) => return fail(&e),
+        };
+        eprintln!(
+            "archives: {} fetched, {} not on the registry, {} failed",
+            outcome.fetched,
+            outcome.missing,
+            outcome.failed.len()
+        );
+        for line in &outcome.failed {
+            eprintln!("warning: {}", sanitize_cell(line));
+        }
+        for package in &outcome.tampered {
+            let package = sanitize_cell(package);
+            eprintln!("warning: {package}: the registry's file does not match the lockfile");
+        }
+    }
     if args.detect {
         let detector = Detector::new();
         let per_repo: Vec<Detections> = inventories
