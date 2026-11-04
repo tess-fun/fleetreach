@@ -19,6 +19,9 @@ use std::time::{Duration, SystemTime};
 use fleetreach_core::{Ecosystem, OsvProvenance};
 use serde::{Deserialize, Serialize};
 
+/// How long a distribution's export may go unchanged before a scan warns of it.
+const ABANDONED_AFTER: Duration = Duration::from_secs(365 * 24 * 3600);
+
 /// The osv.dev bucket every export is fetched from (fixed host; never taken from data).
 pub const OSV_BUCKET: &str = "https://osv-vulnerabilities.storage.googleapis.com";
 
@@ -978,9 +981,8 @@ fn export_fresh(root: &Path, export: &str, refresh: Duration) -> bool {
             .is_some_and(|age| age < refresh)
 }
 
-/// Fetch the smallest export serving `ecosystem` into `root`: the per-release one where
-/// osv.dev publishes it, else the whole distribution, or for a distribution osv.dev lacks,
-/// its converted vendor feed. Returns the export name now cached.
+/// Fetch the export serving `ecosystem` into `root`: the whole distribution's, or for a
+/// distribution osv.dev lacks, its converted vendor feed. Returns the export name now cached.
 #[cfg(feature = "network")]
 fn sync_distro(
     root: &Path,
@@ -989,10 +991,11 @@ fn sync_distro(
     force: bool,
 ) -> Result<String, String> {
     let candidates = fleetreach_os::distro::export_candidates(ecosystem);
+    // Only the first: a recent copy of a release's frozen export is not fresh data.
     if !force {
         if let Some(fresh) = candidates
-            .iter()
-            .find(|c| export_fresh(root, c, opts.refresh))
+            .first()
+            .filter(|c| export_fresh(root, c, opts.refresh))
         {
             return Ok(fresh.clone());
         }
@@ -1023,16 +1026,38 @@ fn sync_distro(
     force: bool,
 ) -> Result<String, String> {
     let candidates = fleetreach_os::distro::export_candidates(ecosystem);
+    // Only the first: a recent copy of a release's frozen export is not fresh data.
     if !force {
         if let Some(fresh) = candidates
-            .iter()
-            .find(|c| export_fresh(root, c, opts.refresh))
+            .first()
+            .filter(|c| export_fresh(root, c, opts.refresh))
         {
             return Ok(fresh.clone());
         }
     }
     let _ = root;
     Err("this build has no network support (install with `--features network`)".to_string())
+}
+
+/// A warning when osv.dev has not touched the export serving `ecosystem` for a year: a live
+/// distribution's export changes daily, so it has been abandoned, and the data is old however
+/// recently it was downloaded. A vendor feed of a finished release may rightly stand still.
+fn abandoned(ecosystem: &str, export: &str, path: &Path) -> Option<String> {
+    if fleetreach_os::feeds::feed_for(ecosystem).is_some()
+        || fleetreach_os::distro::is_vex(ecosystem)
+    {
+        return None;
+    }
+    let date = read_meta(path)?.last_modified?;
+    let age = SystemTime::now()
+        .duration_since(parse_http_date(&date)?)
+        .ok()?;
+    (age > ABANDONED_AFTER).then(|| {
+        format!(
+            "the OSV {export} export last changed on {date}: it looks abandoned, so its \
+             advisories are out of date"
+        )
+    })
 }
 
 /// Resolve the exports serving each distro ecosystem (`Debian:12`, `Root:Debian:12`, ...):
@@ -1086,6 +1111,9 @@ pub fn resolve_distros(
         });
         match resolved {
             Some((export, path, kind)) => {
+                if let Some(warning) = abandoned(eco, &export, &path) {
+                    warnings.push(warning);
+                }
                 found.entry(export.clone()).or_insert_with(|| DistroSource {
                     meta: read_meta(&path),
                     export,

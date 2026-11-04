@@ -335,8 +335,9 @@ Base images
 ## Advisory data
 
 Distro exports are fetched one distribution at a time, never all at once: Chainguard's is
-over a gigabyte. Where osv.dev publishes a per-release export (`Debian:12`, `Alpine:v3.20`,
-`Ubuntu:24.04:LTS`), only that is fetched; otherwise the whole distribution's.
+over a gigabyte. The whole distribution's export is fetched (Ubuntu's is about 800 MB). osv.dev
+also serves per-release exports (`Debian:12`, `Alpine:v3.20`, `Ubuntu:24.04:LTS`), but those
+stopped changing in October 2024 and miss every later CVE, so fleetreach does not use them.
 
 ```console
 $ fleetreach db sync                          # what fleet.toml's repos and images need
@@ -344,7 +345,8 @@ $ fleetreach db sync --distros Debian:12,Wolfi
 ```
 
 In network builds a scan keeps the exports it needs fresh in `~/.cache/fleetreach/osv/`.
-Offline, lay them out in `--osv-dir` as `<dir>/Debian_12/all.zip` (or `<dir>/Debian:12/`).
+Offline, lay them out in `--osv-dir` as `<dir>/Debian/all.zip`. A scan warns when an export it
+reads has not changed for a year.
 
 ## Fail-closed
 

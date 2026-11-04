@@ -28,7 +28,7 @@ pub struct DbSyncArgs {
     #[arg(long, conflicts_with = "ecosystems")]
     all: bool,
     /// fetch the exports for these distro releases (comma-separated, e.g. Debian:12,Wolfi):
-    /// the per-release export where osv.dev has one, else the whole distribution's
+    /// the whole distribution's export, which is what osv.dev maintains
     #[arg(long, value_delimiter = ',', value_name = "DISTROS")]
     distros: Vec<String>,
     /// sync into this directory instead of the default cache (e.g. to copy to an air-gapped host)

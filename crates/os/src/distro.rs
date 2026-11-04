@@ -214,17 +214,18 @@ fn sles_optional(sp: &str) -> Vec<String> {
         .collect()
 }
 
-/// The osv.dev export directories that can serve `ecosystem`, smallest first: the
-/// per-release export where osv.dev publishes one (`Debian:12/all.zip`, 43 MB), then the
-/// whole distribution (`Debian/all.zip`, 80 MB; Ubuntu's is 806 MB against 142 MB for one
-/// LTS release).
+/// The osv.dev export directories that can serve `ecosystem`, in order: the whole
+/// distribution (`Debian/all.zip`), which is what osv.dev maintains, then the release's own,
+/// for a copy laid out by hand. osv.dev's per-release exports (`Debian:12/all.zip`,
+/// `Ubuntu:22.04:LTS/all.zip`, `Alpine:v3.20/all.zip`) still download but stopped changing in
+/// October 2024, and are not in its `ecosystems.txt`: reading one misses every later CVE.
 pub fn export_candidates(ecosystem: &str) -> Vec<String> {
     let base = ecosystem.split(':').next().unwrap_or(ecosystem).to_string();
     // A vendor feed, or a vendor's VEX, is an export of its own release only.
     if base == ecosystem || crate::feeds::feed_for(ecosystem).is_some() || is_vex(ecosystem) {
         vec![ecosystem.to_string()]
     } else {
-        vec![ecosystem.to_string(), base]
+        vec![base, ecosystem.to_string()]
     }
 }
 
@@ -1050,7 +1051,7 @@ mod tests {
         assert_eq!((d.namespace.as_str(), d.binary_names), ("redhat", true));
         assert_eq!(
             export_candidates("Rocky Linux:9"),
-            vec!["Rocky Linux:9", "Rocky Linux"]
+            vec!["Rocky Linux", "Rocky Linux:9"]
         );
     }
 
@@ -1088,12 +1089,12 @@ mod tests {
     }
 
     #[test]
-    fn export_candidates_prefer_the_release() {
-        assert_eq!(export_candidates("Debian:12"), vec!["Debian:12", "Debian"]);
+    fn export_candidates_prefer_the_maintained_export() {
+        assert_eq!(export_candidates("Debian:12"), vec!["Debian", "Debian:12"]);
         assert_eq!(export_candidates("Wolfi"), vec!["Wolfi"]);
         assert_eq!(
             export_candidates("Ubuntu:Pro:24.04:LTS"),
-            vec!["Ubuntu:Pro:24.04:LTS", "Ubuntu"]
+            vec!["Ubuntu", "Ubuntu:Pro:24.04:LTS"]
         );
     }
 }

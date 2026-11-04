@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Debian, Ubuntu and Alpine advisories were two years old.** Sync preferred osv.dev's
+  per-release exports (`Debian:12/all.zip`), which still download but stopped changing in
+  October 2024, so every later CVE was missed. Sync now fetches the whole distribution's
+  export, and a scan warns when an export has not changed for a year. Found by the Trivy and
+  Grype differential.
+- A registry that rate limits a pull (429) is now waited for and tried again.
+
 ### Added
 
 - `fleetreach scan` without a `fleet.toml` scans the git work tree around the current

@@ -38,6 +38,11 @@ const MAX_BLOB_BYTES: u64 = 16 << 30;
 const DEFAULT_PLATFORM: &str = "linux/amd64";
 /// The most attachments read per image, as cosign caps them.
 const MAX_ATTACHMENTS: usize = 100;
+/// How many times a rate-limited request is tried again, and the longest wait.
+#[cfg(feature = "network")]
+const MAX_WAITS: u32 = 7;
+#[cfg(feature = "network")]
+const MAX_WAIT_SECONDS: u64 = 60;
 /// The largest attachment read: real attestations are far smaller.
 const MAX_ATTACHMENT_BYTES: u64 = 20 << 20;
 const ACCEPT: &str = "application/vnd.oci.image.index.v1+json, \
@@ -924,7 +929,7 @@ fn realm_trusted(realm: &str, registry: &str) -> bool {
 mod client {
     use super::{
         allowed_url, challenge, credentials, host_of, is_local, realm_trusted, Credentials, Failed,
-        Fetch, Reference, ACCEPT,
+        Fetch, Reference, ACCEPT, MAX_WAITS, MAX_WAIT_SECONDS,
     };
     use std::io::{Read, Write};
     use std::time::Duration;
@@ -1061,6 +1066,7 @@ mod client {
             let origin = host_of(&url).unwrap_or_default().to_string();
             let mut challenged = false;
             let mut hops = 0;
+            let mut waits = 0;
             loop {
                 let mut request = self.agent.get(&url).header("Accept", ACCEPT);
                 // Only the registry itself sees the token, never where it redirects.
@@ -1133,6 +1139,18 @@ mod client {
                             message: format!("{path}: not found in {}", self.repository),
                             absent: true,
                         })
+                    }
+                    429 if waits < MAX_WAITS => {
+                        // Public registries limit anonymous pulls per second, and a fleet's
+                        // images pull in parallel.
+                        let retry_after = response
+                            .headers()
+                            .get("retry-after")
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(|v| v.parse::<u64>().ok());
+                        let seconds = retry_after.unwrap_or(1 << waits).min(MAX_WAIT_SECONDS);
+                        waits += 1;
+                        std::thread::sleep(Duration::from_secs(seconds));
                     }
                     429 => {
                         return Err(format!("{path}: the registry is rate limiting (429)").into())
@@ -1250,6 +1268,21 @@ mod client {
             registry_saw.recv().unwrap();
             let second = registry_saw.recv().unwrap();
             assert!(second.contains("uthorization: Bearer t"), "{second}");
+        }
+
+        #[test]
+        fn a_rate_limited_request_is_tried_again() {
+            let (seen, _asked) = mpsc::channel();
+            let port = serve(
+                vec![
+                    answer("429 Too Many Requests", "Retry-After: 0\r\n", ""),
+                    answer("200 OK", "", "blob"),
+                ],
+                seen,
+            );
+            let mut out = Vec::new();
+            client(port).get("blobs/x", 100, &mut out).unwrap();
+            assert_eq!(out, b"blob");
         }
 
         #[test]
