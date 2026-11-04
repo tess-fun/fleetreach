@@ -42,7 +42,7 @@
 
 use std::collections::BTreeMap;
 
-use fleetreach_core::{Occurrence, VulnFinding, WarnFinding, WarnKind};
+use fleetreach_core::{Ecosystem, Occurrence, VulnFinding, WarnFinding, WarnKind};
 
 /// Fleet-wide findings after cross-repo deduplication.
 #[derive(Debug, Clone, Default)]
@@ -61,12 +61,20 @@ pub fn correlate(vulnerabilities: Vec<VulnFinding>, warnings: Vec<WarnFinding>) 
 }
 
 fn correlate_vulns(input: Vec<VulnFinding>) -> Vec<VulnFinding> {
-    let mut groups: BTreeMap<String, VulnFinding> = BTreeMap::new();
+    // One GitHub record can name a package in several ecosystems: each is its own finding,
+    // since an occurrence takes its ecosystem from the finding. A title can say what one OS
+    // release's record says about the advisory, which is no word about another release.
+    let mut groups: BTreeMap<(String, Ecosystem, String), VulnFinding> = BTreeMap::new();
     for finding in input {
-        match groups.get_mut(&finding.advisory_id) {
+        let key = (
+            finding.advisory_id.clone(),
+            finding.ecosystem,
+            finding.title.clone(),
+        );
+        match groups.get_mut(&key) {
             Some(group) => merge_vuln(group, finding),
             None => {
-                groups.insert(finding.advisory_id.clone(), finding);
+                groups.insert(key, finding);
             }
         }
     }
@@ -81,12 +89,14 @@ fn correlate_vulns(input: Vec<VulnFinding>) -> Vec<VulnFinding> {
         finding.aliases.sort();
         finding.aliases.dedup();
     }
-    // Severity descending (Critical first), then advisory id ascending. Group ids
-    // are unique, so this comparator is a strict total order — total and stable.
+    // Severity descending (Critical first), then advisory id, ecosystem and title ascending.
+    // Those are unique, so this comparator is a strict total order — total and stable.
     out.sort_by(|a, b| {
         b.severity
             .cmp(&a.severity)
             .then_with(|| a.advisory_id.cmp(&b.advisory_id))
+            .then_with(|| a.ecosystem.cmp(&b.ecosystem))
+            .then_with(|| a.title.cmp(&b.title))
     });
     out
 }

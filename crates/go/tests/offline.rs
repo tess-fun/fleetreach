@@ -149,8 +149,7 @@ fn missing_db_is_an_honest_error_with_a_source_chain() {
 }
 
 /// The osv.dev `Go` export (a folder of OSV records, or its `all.zip`) gives exactly what
-/// the vuln.go.dev mirror gives: GHSA copies, withdrawn records and other ecosystems'
-/// entries are ignored.
+/// the vuln.go.dev mirror gives: withdrawn records and other ecosystems' entries are ignored.
 #[test]
 fn the_osv_dev_export_matches_like_the_vuln_go_dev_mirror() {
     let export = std::env::temp_dir().join(format!("fleetreach-go-export-{}", std::process::id()));
@@ -172,10 +171,6 @@ fn the_osv_dev_export_matches_like_the_vuln_go_dev_mirror() {
             "ranges":[{{"type":"SEMVER","events":[{{"introduced":"0"}}]}}]}}]}}"#
         )
     };
-    records.push((
-        "GHSA-test-0001.json".into(),
-        ignored("GHSA-test-0001", "", "Go"),
-    ));
     records.push((
         "GO-TEST-0009.json".into(),
         ignored(
@@ -233,7 +228,45 @@ fn the_osv_dev_export_matches_like_the_vuln_go_dev_mirror() {
     assert!(GoDb::load(&dir).is_err());
 }
 
-/// An export folder with no `GO-` record is a wrong path or a failed download: an error,
+/// GitHub's records count: one with no `GO-` twin is reported, and twins are one finding under
+/// the `GO-` id. Found against Trivy and Grype: `GHSA-4w3g-jfj2-cw2q` has no twin.
+#[test]
+fn github_records_in_the_export_are_matched_once() {
+    let root = std::env::temp_dir().join(format!("fleetreach-go-ghsa-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let db_dir = root.join("Go");
+    let repo = root.join("repo");
+    std::fs::create_dir_all(&db_dir).unwrap();
+    std::fs::create_dir_all(&repo).unwrap();
+    let record = |id: &str, aliases: &str| {
+        format!(
+            r#"{{"id":"{id}","aliases":[{aliases}],"affected":[{{"package":{{"name":"example.com/jose","ecosystem":"Go"}},
+            "ranges":[{{"type":"SEMVER","events":[{{"introduced":"0"}},{{"fixed":"4.1.5"}}]}}]}}]}}"#
+        )
+    };
+    for (id, aliases) in [
+        ("GHSA-only-0001", r#""CVE-2026-0001""#),
+        ("GHSA-twin-0002", r#""GO-TEST-0200""#),
+        ("GO-TEST-0200", r#""GHSA-twin-0002""#),
+    ] {
+        std::fs::write(db_dir.join(format!("{id}.json")), record(id, aliases)).unwrap();
+    }
+    std::fs::write(
+        repo.join("go.mod"),
+        "module example.com/app\n\ngo 1.21\n\nrequire example.com/jose v4.0.4\n",
+    )
+    .unwrap();
+    let db = GoDb::load(&db_dir).unwrap();
+    let found: Vec<String> = scan_offline(&repo, &db, &RepoId("app".into()))
+        .unwrap()
+        .into_iter()
+        .map(|f| f.advisory_id)
+        .collect();
+    assert_eq!(found, ["GHSA-only-0001", "GO-TEST-0200"]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// An export folder with no readable record is a wrong path or a failed download: an error,
 /// never an empty database that scans clean.
 #[test]
 fn an_empty_osv_export_is_an_error_not_a_clean_db() {

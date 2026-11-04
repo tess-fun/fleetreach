@@ -113,10 +113,10 @@ pub fn parse_dpkg_status(text: &str, require_status: bool) -> Vec<OsPackage> {
     out
 }
 
-/// Packages and owned files from an apk installed database.
-pub fn parse_apk_installed(text: &str) -> (Vec<OsPackage>, BTreeSet<String>) {
+/// Packages from an apk installed database, and each owned file with the package owning it.
+pub fn parse_apk_installed(text: &str) -> (Vec<OsPackage>, BTreeMap<String, String>) {
     let mut out = Vec::new();
-    let mut owned = BTreeSet::new();
+    let mut owned = BTreeMap::new();
     let mut name: Option<String> = None;
     let mut version: Option<String> = None;
     let mut origin: Option<String> = None;
@@ -154,11 +154,12 @@ pub fn parse_apk_installed(text: &str) -> (Vec<OsPackage>, BTreeSet<String>) {
             "o" => origin = Some(value.to_string()),
             "A" => arch = Some(value.to_string()),
             "F" => dir = value.trim_matches('/').to_string(),
-            "R" if dir.is_empty() => {
-                owned.insert(value.to_string());
-            }
             "R" => {
-                owned.insert(format!("{dir}/{value}"));
+                let path = match dir.as_str() {
+                    "" => value.to_string(),
+                    dir => format!("{dir}/{value}"),
+                };
+                owned.insert(path, name.clone().unwrap_or_default());
             }
             _ => {}
         }
@@ -310,6 +311,8 @@ pub(crate) fn wanted(path: &str) -> bool {
             "etc/os-release"
                 | "usr/lib/os-release"
                 | "etc/debian_version"
+                | "etc/centos-release"
+                | "etc/redhat-release"
                 | "var/lib/dpkg/status"
                 | "lib/apk/db/installed"
                 | "usr/lib/apk/db/installed"
@@ -427,6 +430,8 @@ pub struct Inventory {
     pub packages: Vec<OsPackage>,
     /// Paths owned by an OS package, relative to `/`.
     pub owned: BTreeSet<String>,
+    /// The OS package owning each language artifact the image holds, by path.
+    pub owners: BTreeMap<String, String>,
     /// Problems that make the inventory incomplete (an unreadable database, two formats).
     pub problems: Vec<String>,
     /// The module streams dnf has enabled (`php` -> `7.4`), from `/etc/dnf/modules.d`.
@@ -436,6 +441,15 @@ pub struct Inventory {
 /// Read the image's package database.
 pub fn inventory(fs: &ImageFs) -> Inventory {
     let mut inv = Inventory::default();
+    let scanned: BTreeSet<&str> = fs
+        .go_binaries()
+        .map(|(path, _)| path)
+        .chain(
+            fs.files()
+                .filter(|(path, data)| data.is_some() || crate::jar::is_archive(path))
+                .map(|(path, _)| path),
+        )
+        .collect();
     let text = |path: &str| {
         fs.read(path)
             .map(|b| String::from_utf8_lossy(b).into_owned())
@@ -500,6 +514,14 @@ pub fn inventory(fs: &ImageFs) -> Inventory {
                             .map(|l| l.trim().trim_start_matches('/').to_string())
                             .filter(|l| !l.is_empty()),
                     );
+                    let package = name.trim_end_matches(".list");
+                    let package = package.split(':').next().unwrap_or(package);
+                    for line in t.lines() {
+                        let path = line.trim().trim_start_matches('/');
+                        if scanned.contains(path) {
+                            inv.owners.insert(path.to_string(), package.to_string());
+                        }
+                    }
                 }
             }
         }
@@ -509,7 +531,11 @@ pub fn inventory(fs: &ImageFs) -> Inventory {
             Some(t) => {
                 let (pkgs, owned) = parse_apk_installed(&t);
                 inv.packages = pkgs;
-                inv.owned = owned;
+                inv.owned = owned.keys().cloned().collect();
+                inv.owners = owned
+                    .into_iter()
+                    .filter(|(path, _)| scanned.contains(path.as_str()))
+                    .collect();
             }
             None => inv.problems.push(format!("{db} could not be read")),
         }
@@ -545,6 +571,12 @@ pub fn inventory(fs: &ImageFs) -> Inventory {
                         .iter()
                         .map(|f| f.trim_start_matches('/').to_string()),
                 );
+                for file in &p.files {
+                    let path = file.trim_start_matches('/');
+                    if scanned.contains(path) {
+                        inv.owners.insert(path.to_string(), p.name.clone());
+                    }
+                }
             }
             inv.packages = pkgs.iter().filter_map(from_rpm).collect();
             share_source_epoch(&mut inv.packages);
@@ -728,8 +760,8 @@ R:package-lock.json
             pkgs[1].source, "busybox",
             "no origin: the package is its own source"
         );
-        assert!(owned.contains("usr/lib/libcrypto.so.3"));
-        assert!(owned.contains("app/package-lock.json"));
+        assert_eq!(owned["usr/lib/libcrypto.so.3"], "libcrypto3");
+        assert_eq!(owned["app/package-lock.json"], "busybox");
     }
 
     fn rpm(name: &str, epoch: Option<u32>, src: Option<&str>) -> RpmPackage {

@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use fleetreach_core::osv::{self, Event, ParsedRange, Range};
+use fleetreach_core::osv::{self, Event, ParsedBound, ParsedRange, Range};
 use fleetreach_core::Severity;
 use rayon::prelude::*;
 use serde::Deserialize;
@@ -98,6 +98,17 @@ impl DistroDb {
             .map_or(&[], Vec::as_slice)
     }
 
+    /// Whether any distribution's advisories name `package`, for telling what a distribution
+    /// builds and patches from what a vendor's own package carries.
+    pub fn mentions(&self, package: &str) -> bool {
+        self.records.keys().any(|ecosystem| {
+            let key = (ecosystem.clone(), package.to_string());
+            self.deb.contains_key(&key)
+                || self.apk.contains_key(&key)
+                || self.rpm.contains_key(&key)
+        })
+    }
+
     /// How many affected entries the exports hold for `ecosystem`.
     pub fn records(&self, ecosystem: &str) -> usize {
         self.records.get(ecosystem).copied().unwrap_or(0)
@@ -107,6 +118,15 @@ impl DistroDb {
     pub(crate) fn insert_apk(&mut self, ecosystem: &str, package: &str, adv: Advisory<ApkVersion>) {
         *self.records.entry(ecosystem.to_string()).or_default() += 1;
         self.apk
+            .entry((ecosystem.to_string(), package.to_string()))
+            .or_default()
+            .push(adv);
+    }
+
+    #[cfg(test)]
+    #[cfg(test)]
+    pub(crate) fn insert_deb(&mut self, ecosystem: &str, package: &str, adv: Advisory<DebVersion>) {
+        self.deb
             .entry((ecosystem.to_string(), package.to_string()))
             .or_default()
             .push(adv);
@@ -248,7 +268,31 @@ fn band_from_urgency(u: &str) -> Severity {
     }
 }
 
-fn ranges_of<V>(a: &Affected, parse: fn(&str) -> Option<V>) -> Vec<ParsedRange<V>> {
+/// Drop a lower bound above the fix it opens: osv.dev's Alpine records take `introduced` from
+/// upstream and `fixed` from the branch's backport (`introduced 3.4.0, fixed 3.3.7-r2` for
+/// OpenSSL in `Alpine:v3.21`), which read literally match no version at all, when the
+/// distribution has said the versions below the fix are affected.
+fn open_inverted_range<V: Ord>(range: &mut ParsedRange<V>) {
+    let mut opened: Option<usize> = None;
+    for at in 0..range.events.len() {
+        let inverted = match (opened, range.events.get(at).and_then(|e| e.fixed.as_ref())) {
+            (Some(i), Some(fixed)) => {
+                matches!(range.events.get(i).and_then(|e| e.introduced.as_ref()),
+                    Some(ParsedBound::Version(introduced)) if introduced > fixed)
+            }
+            _ => false,
+        };
+        if let (true, Some(event)) = (inverted, opened.and_then(|i| range.events.get_mut(i))) {
+            // An unreadable bound is what the matcher already treats as open.
+            event.introduced = Some(ParsedBound::Unparseable);
+        }
+        if range.events.get(at).is_some_and(|e| e.introduced.is_some()) {
+            opened = Some(at);
+        }
+    }
+}
+
+fn ranges_of<V: Ord>(a: &Affected, parse: fn(&str) -> Option<V>) -> Vec<ParsedRange<V>> {
     a.ranges
         .iter()
         .map(|r| {
@@ -264,7 +308,9 @@ fn ranges_of<V>(a: &Affected, parse: fn(&str) -> Option<V>) -> Vec<ParsedRange<V
                     })
                     .collect(),
             };
-            osv::parse_range(&range, parse)
+            let mut parsed = osv::parse_range(&range, parse);
+            open_inverted_range(&mut parsed);
+            parsed
         })
         .collect()
 }
@@ -654,5 +700,28 @@ mod tests {
             unreachable!("one Alpine entry")
         };
         assert_eq!(adv.aliases, vec!["CVE-2024-1", "GHSA-1"]);
+    }
+
+    /// `ALPINE-CVE-2026-54875`: a lower bound above the fix must not hide the versions below it.
+    #[test]
+    fn a_lower_bound_above_its_fix_is_dropped() {
+        let matched = |introduced: &str, installed: &str| {
+            let record = format!(
+                r#"{{"id":"ALPINE-CVE-1","affected":[{{"package":{{"name":"openssl","ecosystem":"Alpine:v3.20"}},
+                "ranges":[{{"type":"ECOSYSTEM","events":[{{"introduced":"{introduced}"}},{{"fixed":"3.3.7-r2"}}]}}]}}]}}"#
+            );
+            let (entries, _) = parse_record(record.as_bytes(), &wanted(), Path::new("x")).unwrap();
+            let [Entry::Apk(_, adv)] = entries.as_slice() else {
+                unreachable!("one Alpine entry")
+            };
+            let installed = ApkVersion::parse(installed).unwrap();
+            let matched = osv::affected_fixed_parsed(&installed, &adv.ranges, |v, b| v >= b);
+            matches!(matched, osv::Match::Affected { .. })
+        };
+        assert!(matched("3.4.0", "3.3.3-r0"));
+        assert!(!matched("3.4.0", "3.3.7-r2"));
+        // A bound below its fix still means what it says.
+        assert!(!matched("3.3.0", "3.2.0-r0"));
+        assert!(matched("3.3.0", "3.3.3-r0"));
     }
 }

@@ -905,15 +905,17 @@ pub fn collapse_alias_duplicates(out: &mut Vec<VulnFinding>) {
     });
 }
 
-/// Which id of an alias cluster is reported (lowest wins): a GHSA (the curated record with a
-/// severity band and summary) over any other id, and anything over a GitHub "Duplicate
-/// Advisory" record; ties go to the smaller id, so the choice is deterministic.
+/// Which id of an alias cluster is reported (lowest wins): a `GO-` record, then a GHSA (the
+/// curated record with a severity band and summary) over any other id, and anything over a
+/// GitHub "Duplicate Advisory" record; ties go to the smaller id, so the choice is deterministic.
 fn representative_rank(v: &VulnFinding) -> (u8, &str) {
     let duplicate = v.title.starts_with("Duplicate Advisory");
-    let rank = match (duplicate, v.advisory_id.starts_with("GHSA-")) {
-        (true, _) => 2,
-        (false, true) => 0,
-        (false, false) => 1,
+    // A `GO-` record names the affected symbols, which its GitHub twin does not.
+    let rank = match (duplicate, v.advisory_id.split('-').next()) {
+        (true, _) => 3,
+        (false, Some("GO")) => 0,
+        (false, Some("GHSA")) => 1,
+        (false, _) => 2,
     };
     (rank, v.advisory_id.as_str())
 }

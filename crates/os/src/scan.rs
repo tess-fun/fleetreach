@@ -115,6 +115,8 @@ struct Source<'a> {
     other_versions: BTreeMap<&'a str, &'a str>,
     /// The module stream the packages came from, if any.
     module: Option<&'a str>,
+    /// Whether this build is the source package's own, so a fix in the source's terms applies.
+    of_source: bool,
 }
 
 /// A binary at a version of its own, with that version (see [`Source::other_versions`]).
@@ -125,8 +127,9 @@ type OwnVersion<'a> = Option<(&'a str, &'a str)>;
 fn sources(packages: &[OsPackage], binary_names: bool) -> Vec<Source<'_>> {
     /// Name, version and module stream.
     type Key<'a> = (&'a str, &'a str, Option<&'a str>);
-    /// The source name, the binaries, and those at a version of their own.
-    type Group<'a> = (&'a str, Vec<&'a str>, BTreeMap<&'a str, &'a str>);
+    /// The source name, the binaries, those at a version of their own, and whether the key's
+    /// version is the source's.
+    type Group<'a> = (&'a str, Vec<&'a str>, BTreeMap<&'a str, &'a str>, bool);
     let mut by: BTreeMap<Key<'_>, Group<'_>> = BTreeMap::new();
     for p in packages {
         let module = p.module.as_deref();
@@ -135,9 +138,12 @@ fn sources(packages: &[OsPackage], binary_names: bool) -> Vec<Source<'_>> {
         } else {
             (p.source.as_str(), p.source_version.as_str(), module)
         };
-        let entry = by
-            .entry(key)
-            .or_insert((p.source.as_str(), Vec::new(), BTreeMap::new()));
+        let entry = by.entry(key).or_insert((
+            p.source.as_str(),
+            Vec::new(),
+            BTreeMap::new(),
+            p.version == p.source_version,
+        ));
         entry.1.push(p.name.as_str());
         if p.version != key.1 {
             entry.2.insert(p.name.as_str(), p.version.as_str());
@@ -145,7 +151,7 @@ fn sources(packages: &[OsPackage], binary_names: bool) -> Vec<Source<'_>> {
     }
     by.into_iter()
         .map(
-            |((name, version, module), (source, mut binaries, other_versions))| {
+            |((name, version, module), (source, mut binaries, other_versions, of_source))| {
                 binaries.sort_unstable();
                 binaries.dedup();
                 Source {
@@ -155,6 +161,7 @@ fn sources(packages: &[OsPackage], binary_names: bool) -> Vec<Source<'_>> {
                     binaries,
                     other_versions,
                     module,
+                    of_source,
                 }
             },
         )
@@ -353,9 +360,24 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
             superseded.extend(adv.keys().filter(|k| k.starts_with("CVE-")));
         }
     }
-    let base = std::iter::once(&ctx.distro.ecosystem)
-        .chain(&ctx.distro.also)
-        .flat_map(|e| lookup(e).iter());
+    let release = std::iter::once(&ctx.distro.ecosystem).chain(&ctx.distro.also);
+    // A release record can name the source package and not each binary (Red Hat's
+    // RHSA-2026:22717 lists `vim`, and vim-minimal and vim-filesystem are its builds), so a
+    // source's fix counts for a binary whose own records do not mention the CVE.
+    let own: BTreeSet<&str> = release
+        .clone()
+        .chain(&ctx.distro.supplements)
+        .flat_map(|e| lookup(e).iter())
+        .filter(|a| reach(a))
+        .flat_map(Advisory::keys)
+        .collect();
+    let of_source = |eco: &'_ String| {
+        let named = src.of_source && src.source != src.name;
+        by_name(eco, if named { src.source } else { "" })
+            .iter()
+            .filter(|a| reach(a) && has_fix(&a.ranges) && !a.keys().any(|k| own.contains(k)))
+    };
+    let base = release.flat_map(|e| lookup(e).iter().chain(of_source(e)));
     // A fallback speaks only about CVEs the release's own records do not mention for this
     // package (fixed there or not), and names the binary or its source package.
     let known: BTreeSet<&str> = base
@@ -387,14 +409,30 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
         .filter(|k| k.starts_with("CVE-"))
         .collect();
     let is_open = |a: &Advisory<V>| !a.ranges.is_empty() && !has_fix(&a.ranges);
-    let mut spoken: BTreeSet<&str> = known.clone();
-    let mut spoken_open: BTreeSet<&str> = hit;
+    let supplemented = ctx
+        .distro
+        .supplements
+        .iter()
+        .flat_map(|e| lookup(e).iter().chain(of_source(e)))
+        .flat_map(Advisory::keys)
+        .filter(|k| k.starts_with("CVE-"))
+        .collect::<Vec<_>>();
+    let mut spoken: BTreeSet<&str> = known
+        .iter()
+        .copied()
+        .chain(supplemented.iter().copied())
+        .collect();
+    let mut spoken_open: BTreeSet<&str> = hit.into_iter().chain(supplemented).collect();
     // Each with whether it is borrowed (its fix is not the release's) and the binary it names
     // when that binary's version is not the source's: its entry is in that version's terms.
     let mut fallbacks: Vec<(&Advisory<V>, bool, OwnVersion<'_>)> = Vec::new();
     for eco in &ctx.distro.fallbacks {
         let borrowed = ctx.distro.borrowed.contains(eco);
-        let opens_only = ctx.distro.borrowed_opens.contains(eco);
+        // CentOS has stopped: a later fix of Red Hat's reaches no CentOS build, so it says the
+        // package stays affected, where a live rebuild ships a fix of its own.
+        let stopped = ctx.distro.final_builds.is_some();
+        let opens_only = !stopped && ctx.distro.borrowed_opens.contains(eco);
+        let borrowed = borrowed || (stopped && ctx.distro.borrowed_opens.contains(eco));
         let mut by_binary: BTreeSet<&str> = BTreeSet::new();
         let mut here: Vec<(&Advisory<V>, OwnVersion<'_>)> = Vec::new();
         for bin in &src.binaries {
@@ -425,7 +463,7 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
                 };
                 !a.keys().any(|k| before.contains(k))
             })
-            .filter(|(a, _)| !borrowed || has_fix(&a.ranges))
+            .filter(|(a, _)| !borrowed || stopped || has_fix(&a.ranges))
             // From the distribution a release rebuilds, the reverse: its open statuses and
             // "not affected" hold for the same sources, its fix versions are its own builds.
             .filter(|(a, _)| !opens_only || !has_fix(&a.ranges))
@@ -438,9 +476,29 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
     }
     let wanted =
         |adv: &Advisory<V>| !(ctx.opts.ignore_unimportant && adv.unimportant()) && reach(adv);
+    let supplements = ctx
+        .distro
+        .supplements
+        .iter()
+        .flat_map(|e| lookup(e).iter().chain(of_source(e)))
+        .filter(|a| !a.keys().any(|k| known.contains(k)));
+    // A notice covering CVEs (Ubuntu's USN, Debian's DSA) says less than the record of each:
+    // matched as well, it joins them into one finding with the status of the first.
+    let separate: BTreeSet<&str> = base
+        .clone()
+        .filter(|a| a.id.contains("CVE-"))
+        .flat_map(Advisory::keys)
+        .collect();
+    let notice = |a: &Advisory<V>| {
+        let mut cves = a.keys().filter(|k| k.starts_with("CVE-")).peekable();
+        !a.id.contains("CVE-") && cves.peek().is_some() && cves.all(|k| separate.contains(k))
+    };
     let candidates = base
+        .clone()
+        .filter(|a| !notice(a))
         .filter(|a| !a.keys().any(|k| superseded.contains(k)))
-        .chain(overlays.iter().flat_map(|e| lookup(e).iter()));
+        .chain(overlays.iter().flat_map(|e| lookup(e).iter()))
+        .chain(supplements);
     for adv in candidates.filter(|a| wanted(a)) {
         if let Some(fixed) = affected(v, adv) {
             let fixed = fixed.filter(|f| ctx.distro.shipped(src.name, adv, f));
@@ -1198,6 +1256,176 @@ mod tests {
             got[0].1.ends_with("no fix yet; status will not fix]"),
             "{}",
             got[0].1
+        );
+    }
+
+    #[test]
+    fn a_notice_does_not_join_the_cves_it_covers() {
+        let distro = crate::distro::explicit("Ubuntu:22.04:LTS", Family::Deb);
+        let pkgs = vec![OsPackage {
+            name: "libexpat1".into(),
+            version: "2.4.7-1ubuntu0.6".into(),
+            source: "expat".into(),
+            source_version: "2.4.7-1ubuntu0.6".into(),
+            arch: None,
+            module: None,
+        }];
+        let record = |id: &str, cves: &[&str], fixed: Option<&str>| {
+            let mut events = vec![("introduced", "0")];
+            events.extend(fixed.map(|f| ("fixed", f)));
+            let mut a = adv(id, &events, DebVersion::parse);
+            a.aliases = cves.iter().map(ToString::to_string).collect();
+            a
+        };
+        let mut db = DistroDb::default();
+        let eco = "Ubuntu:22.04:LTS";
+        let fix = Some("2.4.7-1ubuntu0.7");
+        db.insert_deb(eco, "expat", record("UBUNTU-CVE-1", &["CVE-1"], None));
+        db.insert_deb(eco, "expat", record("UBUNTU-CVE-2", &["CVE-2"], fix));
+        db.insert_deb(eco, "expat", record("USN-1", &["CVE-1", "CVE-2"], fix));
+        // Nothing else speaks about CVE-4, so the notice stands.
+        db.insert_deb(eco, "expat", record("USN-2", &["CVE-3", "CVE-4"], fix));
+        let s = scan(
+            &distro,
+            &pkgs,
+            &db,
+            &RepoId("img".into()),
+            ScanOptions::default(),
+        );
+        let got: Vec<(&str, bool)> = s
+            .findings
+            .iter()
+            .map(|f| (f.advisory_id.as_str(), f.title.contains("fixed in")))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("UBUNTU-CVE-1", false),
+                ("UBUNTU-CVE-2", true),
+                ("USN-2", true)
+            ]
+        );
+    }
+
+    #[test]
+    fn a_source_fix_counts_for_a_binary_its_record_does_not_name() {
+        let pkg = |name: &str, version: &str| OsPackage {
+            name: name.into(),
+            version: "2:8.2-23.el9".into(),
+            source: "vim".into(),
+            source_version: version.into(),
+            arch: None,
+            module: None,
+        };
+        let eco = "Red Hat:enterprise_linux:9::baseos";
+        let rhel = crate::distro::explicit(eco, Family::Rpm);
+        let fix = |id: &str, cve: &str, fixed: &str| {
+            let mut a = adv(
+                id,
+                &[("introduced", "0"), ("fixed", fixed)],
+                RpmVersion::parse,
+            );
+            a.aliases = vec![cve.into()];
+            a
+        };
+        let mut db = DistroDb::default();
+        db.insert_rpm(eco, "vim", fix("RHSA-1", "CVE-2026-1", "2:8.2-26.el9"));
+        // A binary's own record speaks first: this one says the installed build has the fix.
+        db.insert_rpm(eco, "vim", fix("RHSA-2", "CVE-2026-2", "2:8.2-26.el9"));
+        db.insert_rpm(
+            eco,
+            "vim-minimal",
+            fix("RHSA-3", "CVE-2026-2", "2:8.2-20.el9"),
+        );
+        let ids = |pkgs: &[OsPackage]| -> Vec<String> {
+            scan(
+                &rhel,
+                pkgs,
+                &db,
+                &RepoId("img".into()),
+                ScanOptions::default(),
+            )
+            .findings
+            .into_iter()
+            .map(|f| f.advisory_id)
+            .collect()
+        };
+        assert_eq!(ids(&[pkg("vim-minimal", "2:8.2-23.el9")]), ["RHSA-1"]);
+        // A binary at a version of its own: a fix in the source's terms says nothing about it.
+        assert!(ids(&[pkg("vim-minimal", "2:9.1-1.el9")]).is_empty());
+    }
+
+    #[test]
+    fn red_hat_extended_support_speaks_where_the_release_stopped() {
+        let pkg = OsPackage {
+            name: "bind-libs".into(),
+            version: "32:9.11.4-26.el7".into(),
+            source: "bind".into(),
+            source_version: "32:9.11.4-26.el7".into(),
+            arch: None,
+            module: None,
+        };
+        let os = crate::distro::parse_os_release("ID=rhel\nVERSION_ID=7.9\n");
+        let rhel = crate::distro::detect(&os, None, Default::default()).unwrap();
+        let (els, vex) = ("Red Hat:rhel_els:7", "Red Hat:enterprise_linux:7::vex");
+        assert_eq!(rhel.supplements, [els]);
+        let mut fix = adv(
+            "RHSA-1",
+            &[("introduced", "0"), ("fixed", "32:9.11.4-26.el7_9.21")],
+            RpmVersion::parse,
+        );
+        fix.aliases = vec!["CVE-2026-1".into()];
+        let mut open = adv("CVE-2026-1", &[("introduced", "0")], RpmVersion::parse);
+        open.urgency = Some("out of support scope".into());
+        let mut db = DistroDb::default();
+        db.insert_rpm(els, "bind", fix);
+        // The status Red Hat keeps for those without extended support: the fix speaks first.
+        db.insert_rpm(vex, "bind", open);
+        let s = scan(
+            &rhel,
+            &[pkg],
+            &db,
+            &RepoId("img".into()),
+            ScanOptions::default(),
+        );
+        let got: Vec<&str> = s.findings.iter().map(|f| f.advisory_id.as_str()).collect();
+        assert_eq!(got, ["RHSA-1"]);
+    }
+
+    #[test]
+    fn centos_stays_affected_by_a_fix_red_hat_made_after_it_stopped() {
+        let pkg = OsPackage {
+            name: "glib2".into(),
+            version: "2.56.1-9.el7_9".into(),
+            source: "glib2".into(),
+            source_version: "2.56.1-9.el7_9".into(),
+            arch: None,
+            module: None,
+        };
+        let os = crate::distro::parse_os_release("ID=centos\nVERSION_ID=7\n");
+        let centos = crate::distro::detect(&os, None, Default::default()).unwrap();
+        let mut db = DistroDb::default();
+        db.insert_rpm(
+            "Red Hat:enterprise_linux:7::vex",
+            "glib2",
+            adv(
+                "CVE-2026-1",
+                &[("introduced", "0"), ("fixed", "2.56.1-12.el7_9")],
+                RpmVersion::parse,
+            ),
+        );
+        let s = scan(
+            &centos,
+            &[pkg],
+            &db,
+            &RepoId("img".into()),
+            ScanOptions::default(),
+        );
+        assert_eq!(s.findings.len(), 1);
+        assert!(
+            s.findings[0].title.ends_with("fixed only in another line]"),
+            "{}",
+            s.findings[0].title
         );
     }
 

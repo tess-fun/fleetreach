@@ -26,6 +26,8 @@ pub(crate) struct Entry {
     pub(crate) path: String,
     pub(crate) kind: Kind,
     pub(crate) size: u64,
+    /// The permission bits; 0 where unreadable.
+    pub(crate) mode: u32,
 }
 
 /// Something a tar can be read from, with a way to skip data cheaply (a seek for files).
@@ -272,7 +274,13 @@ impl<S: Source> Reader<S> {
             };
             self.remaining = data;
             self.padding = (512 - data % 512) % 512;
-            return Ok(Some(Entry { path, kind, size }));
+            let mode = u32::try_from(number(&block, 100, 8).unwrap_or(0)).unwrap_or(0);
+            return Ok(Some(Entry {
+                path,
+                kind,
+                size,
+                mode,
+            }));
         }
     }
 

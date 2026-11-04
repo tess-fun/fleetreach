@@ -42,10 +42,26 @@ pub(crate) struct Opened {
     /// Installed PyPI and npm packages with no lockfile beside them.
     pub(crate) pypi: Vec<Installed>,
     pub(crate) npm: Vec<Installed>,
+    /// Installed Composer packages.
+    pub(crate) composer: Vec<Installed>,
+    /// The NuGet packages of built .NET applications.
+    pub(crate) nuget: Vec<Installed>,
     /// Installed gems.
     pub(crate) gems: Vec<Installed>,
     /// What the image's Java archives hold.
     pub(crate) java: Vec<fleetreach_os::jar::Found>,
+    /// What the Java archives an OS package owns hold.
+    pub(crate) packaged_java: Vec<Packaged<fleetreach_os::jar::Found>>,
+    /// The image's Go binaries no OS package owns, by path.
+    pub(crate) go: Vec<(String, fleetreach_os::gobin::GoBuild)>,
+    /// Those an OS package owns.
+    pub(crate) packaged_go: Vec<Packaged<(String, fleetreach_os::gobin::GoBuild)>>,
+    /// Installed language packages OS packages own, by ecosystem.
+    pub(crate) packaged_pypi: Vec<Packaged<Installed>>,
+    pub(crate) packaged_npm: Vec<Packaged<Installed>>,
+    pub(crate) packaged_composer: Vec<Packaged<Installed>>,
+    pub(crate) packaged_nuget: Vec<Packaged<Installed>>,
+    pub(crate) packaged_gems: Vec<Packaged<Installed>>,
     /// Language artifacts present but read by nothing, with a count.
     pub(crate) unread: BTreeMap<&'static str, usize>,
     /// Wanted files the image reader could not keep (too large, unreadable).
@@ -55,6 +71,34 @@ pub(crate) struct Opened {
     /// The image's lockfiles, written out for the language feeders; `lang_repo` points here.
     pub(crate) _files: tempfile::TempDir,
     pub(crate) lang_repo: Repo,
+}
+
+/// Something an OS package owns, with the names advisories could know the package by. One from
+/// a package the distribution's advisories never name is a vendor's, which they do not cover,
+/// so it is scanned like any other.
+pub(crate) struct Packaged<T> {
+    pub(crate) names: [String; 2],
+    pub(crate) item: T,
+}
+
+/// Tag `item` with the package that owns `path`, if there is one.
+fn packaged<T>(inventory: &fleetreach_os::Inventory, path: &str, item: T) -> Option<Packaged<T>> {
+    let owner = inventory.owners.get(path)?;
+    let package = inventory.packages.iter().find(|p| p.name == *owner)?;
+    Some(Packaged {
+        names: [owner.clone(), package.source.clone()],
+        item,
+    })
+}
+
+/// The file in the image a Java archive entry came from.
+fn archive_of(found: &Found) -> Option<&str> {
+    match found {
+        Found::Coordinates { path, .. }
+        | Found::FileName { path, .. }
+        | Found::Bundle { path, .. } => path.split('!').next(),
+        Found::Unknown { .. } | Found::Unreadable { .. } => None,
+    }
 }
 
 /// Which layer of an image each thing a finding can name came from. A package installed at
@@ -246,6 +290,28 @@ fn open(image: &Image, pulled: Option<&crate::registry::Pulled>) -> Result<Opene
         .map_err(|e| e.to_string())?;
     let inspection = fleetreach_os::inspect(&fs, image.distro.as_deref());
     let lang = fleetreach_os::lang::collect(&fs, &inspection.inventory.owned);
+    let inventory = &inspection.inventory;
+    let packaged_go: Vec<_> = fs
+        .go_binaries()
+        .filter_map(|(path, build)| packaged(inventory, path, (path.to_string(), build.clone())))
+        .collect();
+    let packaged_java: Vec<_> = lang
+        .owned
+        .java
+        .iter()
+        .filter_map(|found| packaged(inventory, archive_of(found)?, found.clone()))
+        .collect();
+    let owned_by = |installed: &[Installed]| -> Vec<Packaged<Installed>> {
+        installed
+            .iter()
+            .filter_map(|i| packaged(inventory, &i.path, i.clone()))
+            .collect()
+    };
+    let packaged_pypi = owned_by(&lang.owned.pypi);
+    let packaged_npm = owned_by(&lang.owned.npm);
+    let packaged_composer = owned_by(&lang.owned.composer);
+    let packaged_nuget = owned_by(&lang.owned.nuget);
+    let packaged_gems = owned_by(&lang.owned.gems);
     let files = tempfile::Builder::new()
         .prefix("fleetreach-image-")
         .tempdir()
@@ -253,19 +319,38 @@ fn open(image: &Image, pulled: Option<&crate::registry::Pulled>) -> Result<Opene
     for (path, data) in &lang.files {
         write_file(files.path(), path, data)?;
     }
-    let installed = lang.pypi.iter().chain(&lang.npm).chain(&lang.gems);
-    let archives = lang.java.iter().filter_map(|f| match f {
-        Found::Coordinates { path, .. }
-        | Found::FileName { path, .. }
-        | Found::Bundle { path, .. } => path.split('!').next(),
-        Found::Unknown { .. } | Found::Unreadable { .. } => None,
-    });
+    let installed = lang
+        .pypi
+        .iter()
+        .chain(&lang.npm)
+        .chain(&lang.composer)
+        .chain(&lang.nuget)
+        .chain(&lang.gems)
+        .chain(
+            [
+                &packaged_pypi,
+                &packaged_npm,
+                &packaged_composer,
+                &packaged_nuget,
+                &packaged_gems,
+            ]
+            .into_iter()
+            .flatten()
+            .map(|p| &p.item),
+        );
+    let archives = lang
+        .java
+        .iter()
+        .chain(packaged_java.iter().map(|p| &p.item))
+        .filter_map(archive_of);
     let paths = lang
         .files
         .keys()
         .map(String::as_str)
         .chain(installed.map(|i| i.path.as_str()))
         .chain(archives)
+        .chain(lang.go.iter().map(|(path, _)| path.as_str()))
+        .chain(packaged_go.iter().map(|go| go.item.0.as_str()))
         .collect();
     let layers = Layers::new(&fs, &inspection, paths);
     let lang_repo = Repo {
@@ -280,8 +365,18 @@ fn open(image: &Image, pulled: Option<&crate::registry::Pulled>) -> Result<Opene
         inspection,
         pypi: lang.pypi,
         npm: lang.npm,
+        composer: lang.composer,
+        nuget: lang.nuget,
         gems: lang.gems,
         java: lang.java,
+        packaged_java,
+        go: lang.go,
+        packaged_go,
+        packaged_pypi,
+        packaged_npm,
+        packaged_composer,
+        packaged_nuget,
+        packaged_gems,
         unread: lang.unread,
         skipped: fs.skipped().to_vec(),
         layers,
@@ -312,17 +407,26 @@ pub(crate) fn language_ecosystems(images: &[Prepared]) -> BTreeSet<Ecosystem> {
         for unit in crate::orchestrate::image_lang_units(&o.lang_repo) {
             out.insert(unit.ecosystem);
         }
-        if !o.pypi.is_empty() {
+        if !o.pypi.is_empty() || !o.packaged_pypi.is_empty() {
             out.insert(Ecosystem::Pypi);
         }
-        if !o.npm.is_empty() {
+        if !o.npm.is_empty() || !o.packaged_npm.is_empty() {
             out.insert(Ecosystem::Npm);
         }
-        if !o.gems.is_empty() {
+        if !o.gems.is_empty() || !o.packaged_gems.is_empty() {
             out.insert(Ecosystem::RubyGems);
         }
-        if !o.java.is_empty() {
+        if !o.composer.is_empty() || !o.packaged_composer.is_empty() {
+            out.insert(Ecosystem::Packagist);
+        }
+        if !o.nuget.is_empty() || !o.packaged_nuget.is_empty() {
+            out.insert(Ecosystem::NuGet);
+        }
+        if !o.java.is_empty() || !o.packaged_java.is_empty() {
             out.insert(Ecosystem::Maven);
+        }
+        if !o.go.is_empty() || !o.packaged_go.is_empty() {
+            out.insert(Ecosystem::Go);
         }
     }
     out

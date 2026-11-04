@@ -109,6 +109,20 @@ impl Release {
     }
 }
 
+/// Why a matched release is missing advisories, for one whose records its vendor withdraws at
+/// end of life: Debian drops the release from its security tracker, so what stays open is no
+/// longer published and only what was fixed earlier remains.
+pub fn withdrawn(os: &OsRelease, today: &str) -> Option<String> {
+    let release = lookup(os)?;
+    (release.product == "debian" && release.ended(today)).then(|| {
+        format!(
+            "Debian {} has left the Debian security tracker, so CVEs it left open are no longer \
+             published and were not reported; what is shown is only what was recorded before",
+            release.cycle
+        )
+    })
+}
+
 /// The warning for an image whose release's free security support ended before `today` (an
 /// ISO date), correlated across the fleet by `EOL-<product>-<cycle>`.
 pub fn warning(os: &OsRelease, repo: &RepoId, today: &str) -> Option<WarnFinding> {

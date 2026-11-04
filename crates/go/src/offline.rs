@@ -97,9 +97,10 @@ impl GoDb {
 }
 
 impl GoDb {
-    /// Load the osv.dev `Go` export: its `all.zip`, or the directory it unzips to. Only `GO-`
-    /// records are kept, which is exactly what vuln.go.dev serves: the export also carries
-    /// GHSA copies of the same advisories, which would otherwise double-count. Withdrawn
+    /// Load the osv.dev `Go` export: its `all.zip`, or the directory it unzips to. Beside what
+    /// vuln.go.dev serves it holds GitHub's records, which reach further: some have no `GO-`
+    /// twin, and some of a twin's ranges stop short (GHSA-4vq8-7jfc-9cvp for
+    /// `github.com/docker/docker`). Twins that both match collapse into one finding. Withdrawn
     /// records never match.
     ///
     /// # Errors
@@ -113,11 +114,6 @@ impl GoDb {
                 .map_err(|e| GoError::db(root, e))?
                 .filter_map(|e| e.ok().map(|e| e.path()))
                 .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
-                .filter(|p| {
-                    p.file_name()
-                        .and_then(|n| n.to_str())
-                        .is_some_and(|n| n.starts_with("GO-"))
-                })
                 .collect();
             paths.sort();
             for path in paths {
@@ -130,7 +126,7 @@ impl GoDb {
             for i in 0..archive.len() {
                 let mut entry = archive.by_index(i).map_err(|e| GoError::db(root, e))?;
                 let name = entry.name().map_err(|e| GoError::db(root, e))?;
-                if !(name.starts_with("GO-") && name.ends_with(".json")) {
+                if !name.ends_with(".json") {
                     continue;
                 }
                 let mut body = String::new();
@@ -150,7 +146,7 @@ impl GoDb {
         let mut advisories: BTreeMap<String, Osv> = BTreeMap::new();
         for body in bodies {
             let osv: Osv = serde_json::from_str(&body).map_err(|e| GoError::db(root, e))?;
-            if osv.withdrawn.is_some() || !osv.id.starts_with("GO-") {
+            if osv.withdrawn.is_some() {
                 continue;
             }
             for affected in &osv.affected {
@@ -239,6 +235,45 @@ pub fn scan_offline(
     Ok(out)
 }
 
+/// Match the modules linked into built binaries: `(binary path, module, version)`. There is
+/// no manifest to read, so every module is transitive, and the path says which binary holds it.
+/// Returns the findings and how many versions could not be read.
+#[must_use]
+pub fn scan_built(
+    modules: &[(String, String, String)],
+    db: &GoDb,
+    repo: &RepoId,
+) -> (Vec<VulnFinding>, u32) {
+    let direct = std::collections::BTreeSet::new();
+    let mut out: Vec<VulnFinding> = Vec::new();
+    let mut unreadable = 0;
+    for (binary, module, version) in modules {
+        let Some(installed) = parse_go_version(version) else {
+            unreadable += 1;
+            continue;
+        };
+        for id in db.index.get(module).into_iter().flatten() {
+            let Some(osv) = db.advisories.get(id) else {
+                continue;
+            };
+            if let Some(mut finding) = match_module(osv, module, &installed, module, &direct, repo)
+            {
+                for occurrence in &mut finding.occurrences {
+                    if let Occurrence::InRepo {
+                        dependency_path, ..
+                    } = occurrence
+                    {
+                        *dependency_path = vec![binary.clone()];
+                    }
+                }
+                out.push(finding);
+            }
+        }
+    }
+    osv::sort_dedup_findings(&mut out);
+    (out, unreadable)
+}
+
 /// Build a finding if `osv` lists `module` (the *effective* module path after any
 /// `replace`) as affected at `installed`. `declared_path` is the original require path,
 /// used only to classify direct vs. transitive.
@@ -265,7 +300,8 @@ fn match_module(
     }
     let ranges: Vec<osv::Range> = entries.iter().flat_map(|a| osv_ranges(&a.ranges)).collect();
 
-    let Match::Affected { .. } = affected_fixed(installed, &ranges) else {
+    let bare = compatible(installed.clone());
+    let Match::Affected { .. } = affected_fixed(&bare, &ranges) else {
         return None;
     };
     // Every safe interval above the installed version, so a fix that a later release branch
@@ -274,10 +310,8 @@ fn match_module(
         .iter()
         .map(|r| osv::parse_range(r, parse_bound))
         .collect();
-    let patched: Vec<VersionReq> = osv::patched_reqs(
-        &osv::safe_intervals(installed, &parsed),
-        ToString::to_string,
-    );
+    let patched: Vec<VersionReq> =
+        osv::patched_reqs(&osv::safe_intervals(&bare, &parsed), ToString::to_string);
 
     let dependency_kind = dep_kind(direct, declared_path);
 
@@ -375,7 +409,17 @@ fn parse_bound(raw: &str) -> Option<Version> {
     if raw == "0" {
         return Some(Version::new(0, 0, 0));
     }
-    parse_go_version(raw)
+    parse_go_version(raw).map(compatible)
+}
+
+/// `version` without `+incompatible`, which marks a module with no `go.mod` and not a different
+/// release: `v2.8.3+incompatible` is the `2.8.3` a `last_affected` bound names. Other build
+/// metadata stays, because Grafana's `11.2.2+security-01` is a later release than `11.2.2`.
+fn compatible(mut version: Version) -> Version {
+    if version.build.as_str() == "incompatible" {
+        version.build = fleetreach_core::semver::BuildMetadata::EMPTY;
+    }
+    version
 }
 
 /// Whether `version` is at or after an `introduced` lower bound.

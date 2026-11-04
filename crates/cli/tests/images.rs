@@ -124,6 +124,17 @@ impl Fixture {
                 "unimportant",
             ),
         );
+        // Debian's records know python3-requests, so its files are the distribution's to cover.
+        write(
+            &osv,
+            "CVE-2026-0004.json",
+            &record(
+                "CVE-2026-0004",
+                "requests",
+                r#"{"introduced":"0"},{"fixed":"2.0.0-1"}"#,
+                "medium",
+            ),
+        );
         std::fs::create_dir_all(dir.join("cache")).unwrap();
         Fixture { dir }
     }
@@ -454,6 +465,8 @@ fn unknown_distribution_is_a_coverage_gap() {
         "etc/os-release",
         "ID=mydistro\nVERSION_ID=1\n",
     );
+    // No distribution's advisories cover an unknown distribution's files.
+    std::fs::remove_dir_all(fx.dir.join("rootfs/usr/lib/python3")).unwrap();
     let rootfs = fx.path("rootfs");
     let (code, report, stderr) = fx.scan(&["--image", &rootfs]);
     assert_eq!(code, 0, "{stderr}");

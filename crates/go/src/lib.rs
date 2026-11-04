@@ -33,7 +33,7 @@ pub use error::{DbError, GoError};
 /// Re-exported so callers can drive [`scan_module`]'s build confinement without a
 /// direct dependency on `fleetreach-reach`.
 pub use fleetreach_reach::SandboxPolicy;
-pub use offline::{offline_db_path, scan_offline, GoDb};
+pub use offline::{offline_db_path, scan_built, scan_offline, GoDb};
 pub use run::{scan_module, GoScanOptions};
 
 /// Parse a `govulncheck -format json` stream into Go-tagged [`VulnFinding`]s,
@@ -494,7 +494,11 @@ pub(crate) fn dep_kind(direct: &BTreeSet<String>, module: &str) -> DependencyKin
 
 /// The canonical advisory URL on pkg.go.dev.
 pub(crate) fn go_vuln_url(id: &str) -> String {
-    format!("https://pkg.go.dev/vuln/{id}")
+    if id.starts_with("GO-") {
+        format!("https://pkg.go.dev/vuln/{id}")
+    } else {
+        format!("https://osv.dev/vulnerability/{id}")
+    }
 }
 
 /// Render `(import-path, symbols)` pairs into sorted, deduped `path.Symbol` strings

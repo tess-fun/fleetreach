@@ -23,6 +23,10 @@ use sha2::{Digest, Sha256};
 use crate::error::OsError;
 use crate::tar::{self, Kind, Source};
 
+/// Executables outside this range are not opened: a Go binary is never under a megabyte.
+const MIN_BINARY_BYTES: u64 = 1 << 20;
+const MAX_BINARY_BYTES: u64 = 2 << 30;
+
 /// The largest single file kept in memory; a bigger wanted file is noted and skipped.
 pub const MAX_FILE_BYTES: u64 = 64 << 20;
 
@@ -72,6 +76,8 @@ pub struct ImageFs {
     layers: usize,
     /// Wanted files that could not be kept (too large, unreadable), as `path: reason`.
     skipped: Vec<String>,
+    /// Go binaries read from executables, with the layer that wrote each.
+    go: BTreeMap<String, (usize, crate::gobin::GoBuild)>,
     /// How the image was built, for an image with layers.
     build: Build,
     /// The layer each installed package, by name and version, has been there since.
@@ -472,6 +478,16 @@ impl ImageFs {
                         Node::File(Some(Arc::new(kept(&path, data))))
                     }
                 }
+                Kind::File if entry.mode & 0o111 != 0 && entry.size >= MIN_BINARY_BYTES => {
+                    if entry.size > MAX_BINARY_BYTES {
+                        self.skipped
+                            .push(format!("{path}: larger than {MAX_BINARY_BYTES} bytes"));
+                    } else {
+                        let data = reader.read_data(MAX_BINARY_BYTES)?;
+                        self.note_binary(layer, &path, &data);
+                    }
+                    Node::File(None)
+                }
                 Kind::File => Node::File(None),
                 Kind::Hardlink(target) => {
                     // A hard link shares its target's content (an earlier entry).
@@ -497,6 +513,21 @@ impl ImageFs {
         }
         self.note_packages(layer);
         Ok(())
+    }
+
+    /// Remember what `data`, an executable, was built from, if it says.
+    fn note_binary(&mut self, layer: usize, path: &str, data: &[u8]) {
+        if let Some(build) = crate::gobin::read(data) {
+            self.go.insert(path.to_string(), (layer, build));
+        }
+    }
+
+    /// The Go binaries still in the image, by path.
+    pub fn go_binaries(&self) -> impl Iterator<Item = (&str, &crate::gobin::GoBuild)> {
+        self.go
+            .iter()
+            .filter(|(path, (layer, _))| self.entries.get(*path).is_some_and(|e| e.layer == *layer))
+            .map(|(path, (_, build))| (path.as_str(), build))
     }
 
     /// After a layer that changed a package database: a package at a version the layer below
@@ -1064,6 +1095,21 @@ fn open_layers(
 }
 
 /// A root filesystem directory: walked without following symlinks.
+/// Whether a file in a root filesystem may be a binary worth opening.
+#[cfg(unix)]
+fn is_executable(entry: &walkdir::DirEntry) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    entry.metadata().is_ok_and(|md| {
+        md.permissions().mode() & 0o111 != 0
+            && (MIN_BINARY_BYTES..=MAX_BINARY_BYTES).contains(&md.len())
+    })
+}
+
+#[cfg(not(unix))]
+fn is_executable(_: &walkdir::DirEntry) -> bool {
+    false
+}
+
 fn open_rootfs(root: &Path, want: &dyn Fn(&str) -> bool) -> Result<ImageFs, OsError> {
     let mut fs = ImageFs {
         layers: 1,
@@ -1129,6 +1175,12 @@ fn open_rootfs(root: &Path, want: &dyn Fn(&str) -> bool) -> Result<ImageFs, OsEr
                     },
                 }
             } else {
+                if is_executable(&entry) {
+                    match std::fs::read(entry.path()) {
+                        Ok(data) => fs.note_binary(0, &rel, &data),
+                        Err(e) => fs.skipped.push(format!("{rel}: {e}")),
+                    }
+                }
                 Node::File(None)
             }
         } else {

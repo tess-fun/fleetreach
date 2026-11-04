@@ -69,6 +69,7 @@ mod dpkgver;
 pub mod eol;
 mod error;
 pub mod feeds;
+pub mod gobin;
 pub mod image;
 pub mod jar;
 pub mod lang;
@@ -124,7 +125,12 @@ pub fn inspect(fs: &ImageFs, explicit: Option<&str>) -> Inspection {
     let text = |p: &str| fs.read(p).map(|b| String::from_utf8_lossy(b).into_owned());
     let os_release = text("etc/os-release")
         .or_else(|| text("usr/lib/os-release"))
-        .map(|t| distro::parse_os_release(&t));
+        .map(|t| distro::parse_os_release(&t))
+        .or_else(|| {
+            ["etc/centos-release", "etc/redhat-release"]
+                .iter()
+                .find_map(|p| distro::legacy_release(&text(p)?))
+        });
     let no_os = os_release.is_none() && inventory.family.is_none();
     let hints = distro::Hints::from_versions(inventory.packages.iter().map(|p| p.version.as_str()));
     let detected = match (explicit, &os_release) {

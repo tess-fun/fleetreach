@@ -823,9 +823,15 @@ fn scan_image(
     });
     let mut extra = vec![(own(os.0), os.1)];
     let graph = fleetreach_core::DepGraph::new(image.id.0.clone());
-    if !opened.pypi.is_empty() {
-        let installed: Vec<fleetreach_pypi::InstalledPackage> = opened
-            .pypi
+    let pypi = with_vendors(&opened.pypi, &opened.packaged_pypi, distro_db);
+    let npm = with_vendors(&opened.npm, &opened.packaged_npm, distro_db);
+    let composer = with_vendors(&opened.composer, &opened.packaged_composer, distro_db);
+    let nuget = with_vendors(&opened.nuget, &opened.packaged_nuget, distro_db);
+    let gems = with_vendors(&opened.gems, &opened.packaged_gems, distro_db);
+    let java = with_vendors(&opened.java, &opened.packaged_java, distro_db);
+    let go = with_vendors(&opened.go, &opened.packaged_go, distro_db);
+    if !pypi.is_empty() {
+        let installed: Vec<fleetreach_pypi::InstalledPackage> = pypi
             .iter()
             .map(|p| fleetreach_pypi::InstalledPackage {
                 name: p.name.clone(),
@@ -846,12 +852,11 @@ fn scan_image(
             ),
         };
         let mut result = result;
-        attribute_installed(&mut result, layers, &opened.pypi);
+        attribute_installed(&mut result, layers, &pypi);
         extra.push((own(Ecosystem::Pypi), result));
     }
-    if !opened.npm.is_empty() {
-        let installed: Vec<fleetreach_npm::InstalledPackage> = opened
-            .npm
+    if !npm.is_empty() {
+        let installed: Vec<fleetreach_npm::InstalledPackage> = npm
             .iter()
             .map(|p| fleetreach_npm::InstalledPackage {
                 name: p.name.clone(),
@@ -872,12 +877,11 @@ fn scan_image(
             ),
         };
         let mut result = result;
-        attribute_installed(&mut result, layers, &opened.npm);
+        attribute_installed(&mut result, layers, &npm);
         extra.push((own(Ecosystem::Npm), result));
     }
-    if !opened.gems.is_empty() {
-        let installed: Vec<fleetreach_rubygems::InstalledGem> = opened
-            .gems
+    if !gems.is_empty() {
+        let installed: Vec<fleetreach_rubygems::InstalledGem> = gems
             .iter()
             .map(|p| fleetreach_rubygems::InstalledGem {
                 name: p.name.clone(),
@@ -897,20 +901,86 @@ fn scan_image(
             ),
         };
         let mut result = result;
-        attribute_installed(&mut result, layers, &opened.gems);
+        attribute_installed(&mut result, layers, &gems);
         extra.push((own(Ecosystem::RubyGems), result));
     }
-    if !opened.java.is_empty() {
-        let result = match tier_c_db(dbs.maven.as_ref(), &MAVEN) {
-            Ok(db) => scan_image_java(&image.id, &opened.java, db),
+    if !nuget.is_empty() {
+        let installed: Vec<fleetreach_nuget::InstalledPackage> = nuget
+            .iter()
+            .map(|p| fleetreach_nuget::InstalledPackage {
+                name: p.name.clone(),
+                version: p.version.clone(),
+                direct: false,
+            })
+            .collect();
+        let result = match tier_c_db(dbs.nuget.as_ref(), &NUGET) {
+            Ok(db) => {
+                let scan = fleetreach_nuget::scan_installed(&installed, &graph, db, &image.id);
+                RepoResult::scanned(&image.id, scan.findings, Vec::new())
+                    .with_skipped(scan.skipped_unparseable)
+            }
             Err(reason) => RepoResult::errored(
                 &image.id,
-                format!("{} Java archive entries: {reason}", opened.java.len()),
+                format!("{} .NET packages: {reason}", installed.len()),
+            ),
+        };
+        let mut result = result;
+        attribute_installed(&mut result, layers, &nuget);
+        extra.push((own(Ecosystem::NuGet), result));
+    }
+    if !composer.is_empty() {
+        let installed: Vec<fleetreach_packagist::InstalledPackage> = composer
+            .iter()
+            .map(|p| fleetreach_packagist::InstalledPackage {
+                name: p.name.clone(),
+                version: p.version.clone(),
+                direct: false,
+                dev: false,
+            })
+            .collect();
+        let result = match tier_c_db(dbs.packagist.as_ref(), &PACKAGIST) {
+            Ok(db) => {
+                let scan = fleetreach_packagist::scan_installed(&installed, &graph, db, &image.id);
+                RepoResult::scanned(&image.id, scan.findings, Vec::new())
+                    .with_skipped(scan.skipped_unparseable)
+            }
+            Err(reason) => RepoResult::errored(
+                &image.id,
+                format!("{} installed Composer packages: {reason}", installed.len()),
+            ),
+        };
+        let mut result = result;
+        attribute_installed(&mut result, layers, &composer);
+        extra.push((own(Ecosystem::Packagist), result));
+    }
+    if !java.is_empty() {
+        let result = match tier_c_db(dbs.maven.as_ref(), &MAVEN) {
+            Ok(db) => scan_image_java(&image.id, &java, db),
+            Err(reason) => RepoResult::errored(
+                &image.id,
+                format!("{} Java archive entries: {reason}", java.len()),
             ),
         };
         let mut result = result;
         attribute(&mut result, layers, |_, path| layers.of_file(path.first()?));
         extra.push((own(Ecosystem::Maven), result));
+    }
+    if !go.is_empty() {
+        let mut result = match dbs.go.as_ref() {
+            Some(Ok(db)) => scan_image_go(&image.id, &go, db),
+            Some(Err(e)) => {
+                RepoResult::errored(&image.id, format!("{} Go binaries: {e}", go.len()))
+            }
+            None => RepoResult::errored(
+                &image.id,
+                format!(
+                    "{} Go binaries, and no Go advisories: pass --go-vuln-db or sync the Go export",
+                    go.len()
+                ),
+            ),
+        };
+        attribute(&mut result, layers, |_, path| layers.of_file(path.first()?));
+        extra.push((own(Ecosystem::Go), result));
     }
     let lang: Vec<RepoResult> = plan
         .units
@@ -967,6 +1037,42 @@ fn attribute_installed(
             .map(|i| layers.of_file(&i.path))
             .try_fold(None, |top: Option<usize>, l| Some(top.max(Some(l?))))?
     });
+}
+
+/// What an image holds outside OS packages, and what OS packages hold that no distribution
+/// advisory could cover: a package they never name is a vendor's, not the distribution's.
+fn with_vendors<T: Clone>(
+    own: &[T],
+    packaged: &[crate::images::Packaged<T>],
+    distro_db: Option<&Result<fleetreach_os::db::DistroDb, String>>,
+) -> Vec<T> {
+    let known = |names: &[String; 2]| matches!(distro_db, Some(Ok(db)) if names.iter().any(|name| db.mentions(name)));
+    let vendors = packaged.iter().filter(|p| !known(&p.names));
+    own.iter()
+        .cloned()
+        .chain(vendors.map(|p| p.item.clone()))
+        .collect()
+}
+
+/// Match the modules and standard library linked into an image's Go binaries.
+fn scan_image_go(
+    id: &RepoId,
+    binaries: &[(String, fleetreach_os::gobin::GoBuild)],
+    db: &GoDb,
+) -> RepoResult {
+    let mut modules: Vec<(String, String, String)> = Vec::new();
+    for (path, build) in binaries {
+        let stdlib = build
+            .toolchain
+            .iter()
+            .map(|version| (fleetreach_os::gobin::STDLIB, version));
+        let linked = build.modules.iter().map(|(m, v)| (m.as_str(), v));
+        for (module, version) in stdlib.chain(linked) {
+            modules.push((path.clone(), module.to_string(), version.clone()));
+        }
+    }
+    let (findings, unreadable) = fleetreach_go::scan_built(&modules, db, id);
+    RepoResult::scanned(id, findings, Vec::new()).with_skipped(unreadable)
 }
 
 /// Match what an image's Java archives hold. A jar known only by its file name is placed by
@@ -1199,9 +1305,16 @@ fn scan_image_os(
             }
         },
     };
-    let mut result = gaps.into_iter().fold(result, RepoResult::with_coverage);
     // A release past its end of life gets no new advisories, so its findings only shrink.
     let today = crate::history::now().date().to_string();
+    gaps.extend(
+        inspection
+            .os_release
+            .as_ref()
+            .and_then(|os| fleetreach_os::eol::withdrawn(os, &today))
+            .map(|reason| gap(source, ecosystem, reason)),
+    );
+    let mut result = gaps.into_iter().fold(result, RepoResult::with_coverage);
     if let Some(warning) = inspection
         .os_release
         .as_ref()

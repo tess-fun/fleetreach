@@ -93,6 +93,11 @@ pub struct Distro {
     /// Ecosystems that take precedence for the same package and CVE: Ubuntu Pro (ESM) and
     /// Root's patched packages, when the installed versions show them.
     pub overlays: Vec<String>,
+    /// Ecosystems that speak only about CVEs the release and its overlays never mention:
+    /// Canonical stops publishing a release's records when standard support ends and never
+    /// publishes universe's outside Ubuntu Pro, and Red Hat's after maintenance are its
+    /// Extended Life Support's, so there they are the only word.
+    pub supplements: Vec<String>,
     /// The module streams enabled in the image (`php` -> `7.4`), for gating advisories
     /// about module builds whose packages carry no modularity label.
     pub modules: BTreeMap<String, String>,
@@ -126,6 +131,7 @@ impl Distro {
         let mut out = vec![self.ecosystem.clone()];
         out.extend(self.also.iter().cloned());
         out.extend(self.overlays.iter().cloned());
+        out.extend(self.supplements.iter().cloned());
         out.extend(self.fallbacks.iter().cloned());
         out
     }
@@ -214,6 +220,24 @@ fn sles_optional(sp: &str) -> Vec<String> {
         .collect()
 }
 
+/// What `/etc/centos-release` or `/etc/redhat-release` says, for a release older than
+/// os-release: `CentOS release 6.10 (Final)`, `Red Hat Enterprise Linux Server release 6.10`.
+pub fn legacy_release(text: &str) -> Option<OsRelease> {
+    let line = text.lines().next()?.trim();
+    let id = if line.starts_with("CentOS") {
+        "centos"
+    } else if line.starts_with("Red Hat Enterprise Linux") {
+        "rhel"
+    } else {
+        return None;
+    };
+    let (_, after) = line.split_once(" release ")?;
+    let version = after.split_whitespace().next()?;
+    Some(parse_os_release(&format!(
+        "ID={id}\nVERSION_ID={version}\nPRETTY_NAME=\"{line}\"\n"
+    )))
+}
+
 /// The osv.dev export directories that can serve `ecosystem`, in order: the whole
 /// distribution (`Debian/all.zip`), which is what osv.dev maintains, then the release's own,
 /// for a copy laid out by hand. osv.dev's per-release exports (`Debian:12/all.zip`,
@@ -255,6 +279,12 @@ fn major(v: &str) -> Option<&str> {
     (!m.is_empty() && m.bytes().all(|b| b.is_ascii_digit())).then_some(m)
 }
 
+/// Red Hat's fixes after a release's maintenance ended, sold as Extended Life Support: a build
+/// without them stays affected, and the release's own records say nothing about it.
+fn red_hat_els(release: &str) -> Option<String> {
+    matches!(release, "6" | "7").then(|| format!("Red Hat:rhel_els:{release}"))
+}
+
 /// A rebuild of Red Hat Enterprise Linux `release` takes Red Hat's open statuses for it
 /// (see [`Distro::borrowed_opens`]).
 fn rebuild_of_rhel(mut d: Distro, release: &str) -> Distro {
@@ -285,6 +315,7 @@ pub fn detect(
         also: Vec::new(),
         binary_names: false,
         overlays: Vec::new(),
+        supplements: Vec::new(),
         modules: BTreeMap::new(),
         fallbacks: Vec::new(),
         optional: Vec::new(),
@@ -346,8 +377,13 @@ pub fn detect(
                 format!("Ubuntu:{yy}.{mm}")
             };
             let mut d = distro(Family::Deb, format!("Ubuntu {v}"), "ubuntu", eco);
-            if hints.esm && lts {
-                d.overlays.push(format!("Ubuntu:Pro:{yy}.{mm}:LTS"));
+            if lts {
+                let pro = format!("Ubuntu:Pro:{yy}.{mm}:LTS");
+                if hints.esm {
+                    d.overlays.push(pro);
+                } else {
+                    d.supplements.push(pro);
+                }
             }
             d
         }
@@ -402,17 +438,30 @@ pub fn detect(
             } else {
                 &["baseos", "appstream", "crb"]
             };
+            // Since RHEL 10 Red Hat's records go by minor release, with no repository. An image
+            // takes later minors' fixes too: they reach it as updates.
+            let ecosystems: Vec<String> = if r.parse::<u32>().is_ok_and(|major| major >= 10) {
+                (0..10)
+                    .map(|minor| format!("Red Hat:enterprise_linux:{r}.{minor}"))
+                    .collect()
+            } else {
+                repos
+                    .iter()
+                    .map(|repo| format!("Red Hat:enterprise_linux:{r}::{repo}"))
+                    .collect()
+            };
             let mut d = rpm(
                 format!("Red Hat Enterprise Linux {r}"),
                 "redhat",
-                format!("Red Hat:enterprise_linux:{r}::{}", repos[0]),
+                ecosystems[0].clone(),
             );
-            d.also = repos[1..]
-                .iter()
-                .map(|repo| format!("Red Hat:enterprise_linux:{r}::{repo}"))
-                .collect();
+            d.also = ecosystems[1..].to_vec();
+            if ecosystems[0].ends_with(".0") {
+                d.optional = d.also.clone();
+            }
             d.fallbacks = vec![red_hat_vex(r)];
             d.binary_names = true;
+            d.supplements.extend(red_hat_els(r));
             d
         }
         "almalinux" => {
@@ -641,6 +690,7 @@ pub fn detect(
                 .collect();
             d.binary_names = true;
             d.final_builds = Some(r.to_string());
+            d.supplements.extend(red_hat_els(r));
             rebuild_of_rhel(d, r)
         }
         "" => return Err("no os-release ID".to_string()),
@@ -725,6 +775,7 @@ pub fn explicit(ecosystem: &str, family: Family) -> Distro {
                 | "Fedora"
         ),
         overlays: Vec::new(),
+        supplements: Vec::new(),
         modules: BTreeMap::new(),
         // `Red Hat:enterprise_linux:9::baseos` takes RHEL 9's VEX too, and a SUSE product its own.
         fallbacks: match ecosystem.split(':').collect::<Vec<_>>().as_slice() {
@@ -848,9 +899,13 @@ mod tests {
             eco("ID=\"rhel\"\nVERSION_ID=\"7.9\"\n").0,
             vec![
                 "Red Hat:enterprise_linux:7::server",
+                "Red Hat:rhel_els:7",
                 "Red Hat:enterprise_linux:7::vex"
             ]
         );
+        let rhel10 = eco("ID=\"rhel\"\nVERSION_ID=\"10.1\"\n").0;
+        assert_eq!(rhel10[0], "Red Hat:enterprise_linux:10.0");
+        assert_eq!(rhel10[2], "Red Hat:enterprise_linux:10.2");
         assert!(is_red_hat_vex("Red Hat:enterprise_linux:7::vex"));
         assert!(is_suse_vex("openSUSE:Leap 15.6::vex") && !is_suse_vex("openSUSE:Leap 15.6"));
         assert_eq!(
@@ -1073,6 +1128,21 @@ mod tests {
     }
 
     #[test]
+    fn releases_older_than_os_release_are_read() {
+        let centos = legacy_release("CentOS release 6.10 (Final)\n").unwrap();
+        let d = detect(&centos, None, Hints::default()).unwrap();
+        assert_eq!(d.ecosystem, "Red Hat:enterprise_linux:6::server");
+        assert_eq!(
+            legacy_release("Red Hat Enterprise Linux Server release 6.10 (Santiago)\n")
+                .unwrap()
+                .version_id
+                .as_deref(),
+            Some("6.10")
+        );
+        assert!(legacy_release("Fedora release 20 (Heisenbug)\n").is_none());
+    }
+
+    #[test]
     fn overlays_from_installed_versions() {
         let ubuntu = os("ID=ubuntu\nVERSION_ID=\"18.04\"\n");
         let h = Hints::from_versions(["1.2-3ubuntu0.1+esm2"]);
@@ -1080,6 +1150,10 @@ mod tests {
             detect(&ubuntu, None, h).unwrap().overlays,
             vec!["Ubuntu:Pro:18.04:LTS"]
         );
+        // Without Pro its records still say what the release's own no longer do.
+        let plain = detect(&ubuntu, None, Hints::default()).unwrap();
+        assert!(plain.overlays.is_empty());
+        assert_eq!(plain.supplements, vec!["Ubuntu:Pro:18.04:LTS"]);
         let deb = os("ID=debian\nVERSION_ID=\"12\"\n");
         let h = Hints::from_versions(["3.0.11-1~deb12u2.root.io.1"]);
         assert_eq!(
