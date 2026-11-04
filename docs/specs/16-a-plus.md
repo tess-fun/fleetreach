@@ -526,6 +526,15 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   Infinity`, `yarn info --all --json`, `bun pm ls --all`.
 - **Effort**: S. **Release**: 1.6.0.
 - **Proof**: identical package sets to each tool on 100 real lockfiles from `~/fa-testbed`.
+- **Result (1.6.0)**: `~/fa-testbed` holds 39 such lockfiles, not 100. 37 were compared with the
+  tools, plus pnpm 5.3 and 5.4 lockfiles generated for the test, and 35 of the 39 comparisons are
+  identical. The four others: entries a stale `yarn.lock` still holds (we list them, yarn does
+  not install them); a repo with two lockfiles, both read; a tarball dependency, which is no
+  registry package; and one workspace where `pnpm list` shows only the root, where our 196
+  packages equal the lockfile's own `packages` keys. Two could not be compared: a `bun.lock`
+  that fails bun's frozen check, and a real pnpm v5 lockfile out of step with its manifest, whose
+  110 packages equal its keys. `bun.lockb` stays a labelled gap: Bun has replaced it with
+  `bun.lock`, and the binary layout changes between versions.
 
 #### 9. Manifest-only resolution (B+ to A+)
 

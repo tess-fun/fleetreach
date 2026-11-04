@@ -61,6 +61,11 @@ impl Resolved {
                     .filter_map(|d| self.nodes.get(d))
                     .map(|n| n.name.clone()),
             );
+            // A `file:` or tarball instance is not a registry package, though what it pulls
+            // in is.
+            if node.version.contains(':') {
+                continue;
+            }
             let direct = self.prod_roots.contains(id) || self.dev_roots.contains(id);
             let dev = !no_roots && !prod_reach.contains(id.as_str());
             let entry = found

@@ -1,3 +1,11 @@
+# Package manager oracle
+
+`pm_oracle.py` asks pnpm, yarn and bun what each lockfile holds, in a container with scripts
+off; `pm_compare.py` compares that with the package set in fleetreach's SBOMs. `targets.json`
+lists each lockfile's id, directory and tool (`pnpm`, `pnpm5`, `pnpm6`, `yarn1`, `berry`, `bun`).
+pnpm 9 lockfiles are read with `pnpm list --lockfile-only`; older ones and the other managers
+list what they installed.
+
 # Image differential
 
 fleetreach against Trivy 0.73.0 and Grype v0.121.1 on 217 public images pinned by digest, with

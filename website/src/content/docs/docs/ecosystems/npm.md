@@ -7,7 +7,7 @@ sidebar:
 
 | | |
 |---|---|
-| Reads | `package-lock.json`, `pnpm-lock.yaml` (v6, v9), `yarn.lock` (v1 and Berry), `bun.lock` |
+| Reads | `package-lock.json`, `pnpm-lock.yaml` (v5, v6, v9), `yarn.lock` (v1 and Berry), `bun.lock` |
 | Advisory data | osv.dev `npm` export |
 | Version rules | SemVer |
 | Fix apply | `npm update <pkg> --package-lock-only --ignore-scripts` |

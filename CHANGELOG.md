@@ -17,6 +17,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   someone else pushed to. `--close-obsolete` closes requests the plan no longer wants, only
   in repos it scanned.
 - `fix apply --max-prs`, `--canary` and `--stop-after-failures` limit a rollout.
+- `pnpm-lock.yaml` version 5 is read, and a `catalog:` dependency is proven to use the version
+  its importer records. Across 39 real lockfiles, the package sets match `pnpm list`, `yarn list`,
+  `yarn info` and `bun pm ls` on 35; the other four are explained in
+  `docs/specs/16-a-plus.md`.
 - SBOM components carry hashes from the lockfile: Cargo, npm, pnpm, yarn v1, bun, Bundler, mix,
   uv, Poetry, pylock and Composer. Sampled against registry downloads: 442 hashes across ten
   lockfile formats, all matching. NuGet's `contentHash` is left out, since it skips the package
@@ -45,6 +49,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A pnpm `file:` or tarball dependency no longer appears as a package with a path for a version.
 - **`fix apply` could destroy a verified branch.** A re-run that failed its baseline scan
   deleted the branch. Branches now move only after a commit, and an unverified result goes
   on `fleetreach-unverified/*`, never over a verified branch.

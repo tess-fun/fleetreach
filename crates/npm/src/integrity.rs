@@ -7,6 +7,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
+use crate::pnpm::{instance_id, strip_peers, Format};
 use crate::resolved::split_name_version;
 use crate::yaml::{self, Node as Y};
 
@@ -78,11 +79,21 @@ fn pnpm(text: &str, out: &mut Integrity) {
     let Ok(docs) = yaml::parse(text) else {
         return;
     };
-    let packages = docs.last().and_then(|d| d.get("packages"));
-    for (key, entry) in packages.map(Y::entries).unwrap_or_default() {
-        let id = crate::pnpm::strip_peers(key.strip_prefix('/').unwrap_or(key));
+    let Some(doc) = docs.last() else {
+        return;
+    };
+    let v5 = doc
+        .str_at("lockfileVersion")
+        .is_some_and(|v| v.trim_matches('\'').starts_with("5."));
+    let format = if v5 { Format::V5 } else { Format::V6 };
+    for (key, entry) in doc.get("packages").map(Y::entries).unwrap_or_default() {
+        let Some(id) = instance_id(key, format) else {
+            continue;
+        };
         let integrity = entry.get("resolution").and_then(|r| r.str_at("integrity"));
-        if let (Some((name, version)), Some(integrity)) = (split_name_version(id), integrity) {
+        if let (Some((name, version)), Some(integrity)) =
+            (split_name_version(strip_peers(&id)), integrity)
+        {
             add(out, name, version, integrity);
         }
     }
@@ -181,6 +192,13 @@ mod tests {
             &mut out,
         );
         assert_eq!(out[&key("a", "1.0.0")], "sha512-a");
+
+        let mut out = Integrity::new();
+        pnpm(
+            "lockfileVersion: 5.4\npackages:\n  /@s/a/1.0.0_b@2.0.0:\n    resolution: {integrity: sha512-a}\n",
+            &mut out,
+        );
+        assert_eq!(out[&key("@s/a", "1.0.0")], "sha512-a");
     }
 
     #[test]
