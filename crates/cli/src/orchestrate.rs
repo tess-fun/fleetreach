@@ -36,6 +36,7 @@ use walkdir::WalkDir;
 
 use crate::config::{Config, Repo};
 use crate::resolve;
+use crate::scancache::{Inputs, Session};
 
 /// The aggregated, pre-correlation result of scanning a fleet.
 #[derive(Debug, Default, Clone)]
@@ -55,6 +56,8 @@ pub struct ScanData {
     pub images: Vec<fleetreach_core::ImageBase>,
     /// The images pulled from registries.
     pub pulled: Vec<fleetreach_core::ImagePull>,
+    /// Repos whose results were reused, with `--incremental`.
+    pub reused: usize,
 }
 
 /// An installed toolchain to additionally scan against `Collection::Rust`.
@@ -96,6 +99,8 @@ pub struct Mirrors<'a> {
     /// Where to fetch POMs missing locally (`--maven-fetch`): the `settings.xml` mirror of
     /// Maven Central, or Central.
     pub maven_remote: Option<&'a crate::maven_repo::Remote>,
+    /// Where results are kept between runs (`--incremental`).
+    pub cache: Option<&'a crate::scancache::Store>,
 }
 
 /// The OSV DBs a fleet needs, each loaded ONCE and shared read-only by every repo (re-reading
@@ -300,11 +305,26 @@ pub(crate) fn scan_fleet_with(
         })
         .collect();
     let image_ecosystems = crate::images::language_ecosystems(images.prepared);
+    let session = cache_session(db, go, mirrors, config, &plans);
+    let keys: Vec<Option<String>> = plans
+        .par_iter()
+        .zip(&config.repos)
+        .map(|(plan, repo)| cache_key(session.as_ref()?, plan, repo, go, host_triple))
+        .collect();
+    let mut reused: Vec<Option<RepoResult>> = keys
+        .par_iter()
+        .zip(&config.repos)
+        .map(|(key, repo)| session.as_ref()?.store.get(repo, key.as_deref()?))
+        .collect();
+    data.reused = reused.iter().flatten().count();
+    // What was reused needs no advisory database.
     let has = |eco: Ecosystem| {
         image_ecosystems.contains(&eco)
             || plans
                 .iter()
-                .any(|p| p.units.iter().any(|u| u.ecosystem == eco))
+                .zip(&reused)
+                .filter(|(_, hit)| hit.is_none())
+                .any(|(p, _)| p.units.iter().any(|u| u.ecosystem == eco))
     };
 
     let dbs = Dbs::load(&has, go, mirrors, config.osv.advisories.as_deref(), db);
@@ -344,7 +364,20 @@ pub(crate) fn scan_fleet_with(
     };
     let per_repo: Vec<RepoResult> = plans
         .par_iter()
-        .map(|plan| merge_units(plan, plan.units.iter().map(|u| (u, scan_unit_with(u)))))
+        .zip(reused.par_iter_mut())
+        .zip(keys.par_iter().zip(&config.repos))
+        .map(|((plan, hit), (key, repo))| {
+            if let Some(result) = hit.take() {
+                return result;
+            }
+            let result = merge_units(plan, plan.units.iter().map(|u| (u, scan_unit_with(u))));
+            if let (Some(session), Some(key)) = (&session, key) {
+                if matches!(result.outcome.status, ScanStatus::Scanned { .. }) {
+                    session.store.put(repo, key, &result);
+                }
+            }
+            result
+        })
         .collect();
 
     for (plan, result) in plans.iter().zip(per_repo) {
@@ -405,6 +438,96 @@ pub(crate) fn scan_fleet_with(
     data
 }
 
+/// The identity of the advisory data of every ecosystem the fleet plans to scan.
+fn cache_session<'a>(
+    db: &AdvisoryDb,
+    go: &GoScan,
+    mirrors: &Mirrors<'a>,
+    config: &Config,
+    plans: &[RepoPlan],
+) -> Option<Session<'a>> {
+    let store = mirrors.cache?;
+    let ecosystems: BTreeSet<Ecosystem> = plans
+        .iter()
+        .flat_map(|p| p.units.iter().map(|u| u.ecosystem))
+        .collect();
+    let advisories = ecosystems
+        .into_par_iter()
+        .map(|eco| {
+            let mirror = match eco {
+                Ecosystem::Npm => mirrors.npm,
+                Ecosystem::Pypi => mirrors.pypi,
+                Ecosystem::RubyGems => mirrors.rubygems,
+                Ecosystem::Packagist => mirrors.packagist,
+                Ecosystem::NuGet => mirrors.nuget,
+                Ecosystem::Julia => mirrors.julia,
+                Ecosystem::Swift => mirrors.swift,
+                Ecosystem::Hex => mirrors.hex,
+                Ecosystem::GitHubActions => mirrors.ghactions,
+                Ecosystem::Go => go.vuln_db,
+                Ecosystem::Cargo => mirrors.crates,
+                Ecosystem::Maven | Ecosystem::Deb | Ecosystem::Apk | Ecosystem::Rpm => {
+                    return (eco, None)
+                }
+            };
+            let identity = crate::scancache::mirror_identity(mirror);
+            let identity = if eco == Ecosystem::Cargo {
+                identity.map(|id| format!("{id}:{}", db.fingerprint()))
+            } else {
+                identity
+            };
+            (eco, identity)
+        })
+        .collect();
+    Session::open(store, config.osv.advisories.as_deref(), advisories)
+}
+
+/// What a repo's results are stored under, or `None` when they depend on more than its files
+/// and the advisory data.
+fn cache_key(
+    session: &Session,
+    plan: &RepoPlan,
+    repo: &Repo,
+    go: &GoScan,
+    host_triple: Option<&str>,
+) -> Option<String> {
+    let depends_on_more = |unit: &ScanUnit| {
+        unit.sbom.is_some()
+            || (unit.ecosystem == Ecosystem::Go && go.govulncheck.is_some())
+            || (unit.ecosystem == Ecosystem::Cargo && host_triple.is_some())
+    };
+    if !plan.walk_errors.is_empty() || plan.units.iter().any(depends_on_more) {
+        return None;
+    }
+    let units: Vec<(Ecosystem, String, bool)> = plan
+        .units
+        .iter()
+        .map(|u| (u.ecosystem, u.rel_dir.clone(), u.alongside))
+        .collect();
+    let mut inputs = Inputs::default();
+    for unit in &plan.units {
+        match unit.ecosystem {
+            Ecosystem::Cargo => {
+                let (lockfiles, walk_errors) = discover_lockfiles(repo);
+                if !walk_errors.is_empty() {
+                    return None;
+                }
+                inputs.files.extend(lockfiles);
+            }
+            Ecosystem::GitHubActions => {
+                let dir = &unit.repo.path;
+                inputs.trees.insert(dir.join(".github"));
+                inputs.files.insert(dir.join("action.yml"));
+                inputs.files.insert(dir.join("action.yaml"));
+            }
+            _ => {
+                inputs.trees.insert(unit.repo.path.clone());
+            }
+        }
+    }
+    session.key(repo, &units, &inputs)
+}
+
 /// The ecosystems present anywhere in the fleet, sorted. Planning only walks directories, so
 /// this is cheap; it decides which OSV exports a run needs before any is loaded or fetched.
 pub fn fleet_ecosystems(config: &Config) -> Vec<Ecosystem> {
@@ -421,6 +544,7 @@ pub fn fleet_ecosystems(config: &Config) -> Vec<Ecosystem> {
 
 /// The findings and outcome for a single repo, returned by the parallel map so
 /// the caller can merge them in deterministic (config) order.
+#[derive(serde::Serialize, serde::Deserialize)]
 struct RepoResult {
     vulnerabilities: Vec<VulnFinding>,
     warnings: Vec<WarnFinding>,
@@ -1413,7 +1537,7 @@ const UNSUPPORTED_LOCKFILES: &[&str] = &["bun.lockb"];
 
 /// Directories never searched for lockfiles: installed third-party packages and VCS metadata
 /// are not the project's own dependency set.
-const SKIPPED_DIRS: &[&str] = &["node_modules", ".git"];
+pub(crate) const SKIPPED_DIRS: &[&str] = &["node_modules", ".git"];
 
 /// Decide what to scan in `repo`.
 ///

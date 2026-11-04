@@ -83,6 +83,7 @@ fn assess_flags_source_presence_per_repo() {
     let scan = ScanData {
         images: Vec::new(),
         pulled: Vec::new(),
+        reused: 0,
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![finding("R-USES", "uses"), finding("R-CLEAN", "clean")],
@@ -217,6 +218,7 @@ fn hex_and_github_actions_reachability() {
     let scan = ScanData {
         images: Vec::new(),
         pulled: Vec::new(),
+        reused: 0,
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![
@@ -271,6 +273,7 @@ fn name_mapping_ecosystems_detect_imports_securely() {
     let scan = ScanData {
         images: Vec::new(),
         pulled: Vec::new(),
+        reused: 0,
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![
@@ -347,6 +350,7 @@ fn tier_c_import_presence_is_secure() {
     let scan = ScanData {
         images: Vec::new(),
         pulled: Vec::new(),
+        reused: 0,
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![

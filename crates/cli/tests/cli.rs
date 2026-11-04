@@ -4465,3 +4465,75 @@ fn a_bundle_carries_a_scan_across_and_a_snapshot_pins_it() {
     let _ = std::fs::remove_dir_all(&work);
     let _ = std::fs::remove_dir_all(&source);
 }
+
+#[test]
+fn an_incremental_scan_reuses_a_repo_until_its_lockfile_changes() {
+    let osv = osv_dir_with_npm("incremental");
+    let work = std::env::temp_dir().join(format!("fleetreach-incr-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&work);
+    let repo = work.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    let source = manifest().join("tests/fixtures/repos/npm-demo");
+    for entry in std::fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        std::fs::copy(entry.path(), repo.join(entry.file_name())).unwrap();
+    }
+    let fleet = work.join("fleet.toml");
+    std::fs::write(&fleet, "[[repo]]\nid = \"r\"\npath = \"repo\"\n").unwrap();
+    let cache = work.join("cache");
+    std::fs::create_dir(&cache).unwrap();
+    let (fleet, osv_dir) = (fleet.to_string_lossy(), osv.to_string_lossy());
+    let scan = |extra: &[&str]| {
+        let mut args = vec![
+            "scan",
+            "-c",
+            &fleet,
+            "--db",
+            &db(),
+            "--offline",
+            "--osv-dir",
+            &osv_dir,
+            "-f",
+            "json",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+        args.extend(extra.iter().map(ToString::to_string));
+        let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        let epoch = std::ffi::OsStr::new("1700000000");
+        run_env(
+            &refs,
+            &[
+                ("XDG_CACHE_HOME", cache.as_os_str()),
+                ("SOURCE_DATE_EPOCH", epoch),
+            ],
+        )
+    };
+    let incremental = ["--incremental"];
+    let plain = scan(&[]);
+    let first = scan(&incremental);
+    let warm = scan(&incremental);
+    assert_eq!(plain.stdout, first.stdout);
+    assert_eq!(plain.stdout, warm.stdout);
+    assert!(stderr(&first).contains("reused the findings of 0 of 1"));
+    assert!(stderr(&warm).contains("reused the findings of 1 of 1"));
+
+    // A source file is not an input; the lockfile is.
+    std::fs::write(repo.join("index.js"), "x").unwrap();
+    assert!(stderr(&scan(&incremental)).contains("of 1 of 1"));
+    let lockfile = repo.join("package-lock.json");
+    let text = std::fs::read_to_string(&lockfile).unwrap();
+    assert!(text.contains("4.17.20"));
+    std::fs::write(&lockfile, text.replace("4.17.20", "4.17.21")).unwrap();
+    let changed = scan(&incremental);
+    assert!(
+        stderr(&changed).contains("of 0 of 1"),
+        "{}",
+        stderr(&changed)
+    );
+    assert_ne!(changed.stdout, plain.stdout);
+    assert_eq!(changed.stdout, scan(&[]).stdout);
+    let _ = std::fs::remove_dir_all(&work);
+    let _ = std::fs::remove_dir_all(&osv);
+}

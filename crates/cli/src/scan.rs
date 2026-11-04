@@ -48,6 +48,12 @@ pub(crate) struct ScanArgs {
     offline: bool,
     #[arg(
         long,
+        help = "reuse a repo's findings when its files and advisory data are unchanged since \
+                the last --incremental run"
+    )]
+    incremental: bool,
+    #[arg(
+        long,
         value_name = "MANIFEST",
         conflicts_with_all = ["db", "db_rev"],
         help = "run on exactly the data a `db snapshot` manifest lists, offline; exit 2 if it \
@@ -617,13 +623,25 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         }
     }
     let feeds = Feeds::resolve(args, &config, &images)?;
+    let store = args
+        .incremental
+        .then(|| osvdb::private_subdir("scan"))
+        .flatten()
+        .map(crate::scancache::Store::new);
+    if args.incremental && store.is_none() {
+        eprintln!("warning: no usable cache directory, so nothing is reused");
+    }
+    let mirrors = Mirrors {
+        cache: store.as_ref(),
+        ..feeds.mirrors()
+    };
     let mut scan = scan_fleet_with(
         &db,
         &config,
         feeds.toolchain.as_ref(),
         feeds.host.as_deref(),
         &feeds.go(args),
-        &feeds.mirrors(),
+        &mirrors,
         &feeds.images(args, &images),
     );
     let attested: Vec<crate::oci_vex::Attested> = images
@@ -1028,6 +1046,7 @@ impl Feeds {
             crates: url(Ecosystem::Cargo),
             maven: url(Ecosystem::Maven),
             maven_remote: self.maven_remote.as_ref(),
+            cache: None,
         }
     }
 }
@@ -1088,6 +1107,13 @@ fn add_fleet_signals(
 
 /// What the scan could not do in full, on stderr.
 fn note_scan(args: &ScanArgs, scan: &crate::orchestrate::ScanData) {
+    if args.incremental && !args.quiet {
+        eprintln!(
+            "note: reused the findings of {} of {} repo(s)",
+            scan.reused,
+            scan.outcomes.len()
+        );
+    }
     if args.verbose {
         for outcome in &scan.outcomes {
             eprintln!("  {} — {:?}", outcome.repo, outcome.status);

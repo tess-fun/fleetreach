@@ -60,6 +60,7 @@ fn report_with(ids: &[&str]) -> fleetreach_core::FleetReport {
     let scan = ScanData {
         images: Vec::new(),
         pulled: Vec::new(),
+        reused: 0,
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: ids.iter().map(|id| vuln(id)).collect(),
@@ -131,6 +132,7 @@ fn drop_phantom_removes_unbuilt_keeps_built_and_unknown() {
     let scan = ScanData {
         images: Vec::new(),
         pulled: Vec::new(),
+        reused: 0,
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![

@@ -85,6 +85,7 @@ fn assessed(findings: Vec<VulnFinding>) -> fleetreach_core::FleetReport {
     let scan = ScanData {
         images: Vec::new(),
         pulled: Vec::new(),
+        reused: 0,
         vulnerabilities: findings,
         warnings: vec![],
         outcomes: vec![],

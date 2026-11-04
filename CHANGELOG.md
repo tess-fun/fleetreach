@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`scan --incremental` reuses a repo's findings** while the binary, the advisory data for its
+  ecosystems and the files a scan reads are unchanged, and skips loading the advisory data of any
+  ecosystem with nothing to re-scan. On 10,471 repos a warm run took about half the time and a
+  third of the memory, with byte-identical output. A fleet of a few large monorepos gains
+  nothing; see the new scale benchmark page. Maven, Gradle, SBOM inputs and govulncheck are
+  never reused.
 - **`db sync` updates an export record by record.** It reads the ecosystem's `modified_id.csv`,
   fetches only the changed records and rewrites `all.zip`, instead of downloading the whole zip
   again. A cache five days old took 8 seconds, against 300 MB before. Every one of 329,822

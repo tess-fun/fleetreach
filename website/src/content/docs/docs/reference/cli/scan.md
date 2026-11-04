@@ -46,6 +46,9 @@ Options:
       --offline
           never fetch; require cache/--db
 
+      --incremental
+          reuse a repo's findings when its files and advisory data are unchanged since the last --incremental run
+
       --db-snapshot <MANIFEST>
           run on exactly the data a `db snapshot` manifest lists, offline; exit 2 if it differs (the data is beside the manifest, or in --osv-dir)
 

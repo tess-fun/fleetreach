@@ -138,6 +138,18 @@ impl AdvisoryDb {
         Self::open(&path)
     }
 
+    /// A hash of every advisory, equal across runs of one binary: what a stored result was
+    /// matched against.
+    #[must_use]
+    pub fn fingerprint(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        for advisory in self.inner.iter() {
+            format!("{advisory:?}").hash(&mut hasher);
+        }
+        hasher.finish()
+    }
+
     /// Where a fetched database lives, for copying it elsewhere.
     #[cfg(feature = "network")]
     #[must_use]

@@ -3,6 +3,10 @@
 `osv_sync_compare.py` compares exports updated by `db sync` with whole downloads, record by
 record, for the daily sync check in spec 16 row 11.
 
+`scan_inputs.py` traces a scan's file reads with strace and checks that every file read is one
+`scan --incremental` hashes for its key. `scripts/benchmark.py` produces the numbers on the scale
+benchmark page.
+
 `pm_oracle.py` asks pnpm, yarn and bun what each lockfile holds, in a container with scripts
 off; `pm_compare.py` compares that with the package set in fleetreach's SBOMs. `targets.json`
 lists each lockfile's id, directory and tool (`pnpm`, `pnpm5`, `pnpm6`, `yarn1`, `berry`, `bun`).

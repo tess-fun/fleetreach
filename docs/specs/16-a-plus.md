@@ -423,6 +423,18 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: warm run byte-identical to cold run on both testbeds (refactor-verification
   harness); benchmark reproducible from a script in the repo.
 
+    **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/scancache.rs`,
+    `scripts/benchmark.py`, opt-in `scan --incremental`). Differs from the work above in two
+    ways. It caches a repo's matched results only, not parsed sources: reparsing is not where
+    the time goes once advisory data is reused. And the key is the binary, the advisory data per
+    ecosystem and the bytes of every file a feeder can read. Stating every file instead cost as
+    much as the scan (760,000 files, 3.3 s). The input list is checked under strace by
+    `docs/differential/scan_inputs.py`: 186 reads across the demo fleets, the test fixtures and
+    118 real repos, none outside it. Warm output byte-identical on both testbeds. See the scale
+    benchmark page: the 10k fleet halves, but the 13 monorepos gain nothing, since one Maven repo
+    keeps the advisory data loading; reuse per unit rather than per repo would fix that.
+    Images are not reused.
+
 #### 2. Rank by fleet blast radius (A+, keep)
 
 - **Beyond the bar**: what-if over the remediation queue ("if these 3 bumps land, what

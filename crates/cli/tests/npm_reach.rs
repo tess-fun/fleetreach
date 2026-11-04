@@ -96,6 +96,7 @@ fn import_graph_resolves_direct_transitive_and_prune() {
     let scan = ScanData {
         images: Vec::new(),
         pulled: Vec::new(),
+        reused: 0,
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![
@@ -153,6 +154,7 @@ fn script_run_tools_are_entry_points() {
     let scan = ScanData {
         images: Vec::new(),
         pulled: Vec::new(),
+        reused: 0,
         skipped_unparseable: 0,
         coverage: Vec::new(),
         vulnerabilities: vec![
