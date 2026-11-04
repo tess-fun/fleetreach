@@ -38,6 +38,29 @@ org  = "acme/platform"
 something could not be read (exit 2). A cache can be evicted; for long-lived SLA history,
 commit `history/` to a repo instead.
 
+## One repo, on every pipeline
+
+To scan a single project, include the template. It installs the release binary, scans the repo
+and keeps `fleetreach.sarif` as an artifact, whether the scan passes or not:
+
+```yaml title=".gitlab-ci.yml"
+include:
+  - remote: https://raw.githubusercontent.com/tess-fun/fleetreach/main/ci/fleetreach.gitlab-ci.yml
+
+variables:
+  FLEETREACH_ARGS: "--enrich"     # extra `fleetreach scan` flags
+```
+
+`FLEETREACH_VERSION` pins a release and `FLEETREACH_CONFIG` names a `fleet.toml`. The job fails
+on findings at the gate and when something could not be read. To keep a pipeline going on
+findings alone, add this to the job:
+
+```yaml
+fleetreach:
+  allow_failure:
+    exit_codes: [1]
+```
+
 ## Merge requests
 
 ```sh

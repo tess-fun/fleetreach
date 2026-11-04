@@ -1,0 +1,33 @@
+# fleetreach for GitLab CI. Include it from a pipeline:
+#
+#   include:
+#     - remote: https://raw.githubusercontent.com/tess-fun/fleetreach/main/ci/fleetreach.gitlab-ci.yml
+#
+# It scans this repo, or the fleet in FLEETREACH_CONFIG, and keeps the SARIF as an artifact. The
+# job fails on findings at the gate (exit 1) and when something could not be read (exit 2). To
+# keep a pipeline going on findings alone, add `allow_failure: { exit_codes: [1] }` to the job.
+
+variables:
+  FLEETREACH_VERSION: latest   # or a release, such as 1.6.0
+  FLEETREACH_CONFIG: ""        # a fleet.toml; empty scans this repo
+  FLEETREACH_ARGS: ""          # extra `fleetreach scan` flags
+  FLEETREACH_SARIF: fleetreach.sarif
+
+fleetreach:
+  stage: test
+  image: debian:12-slim
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates curl >/dev/null
+    - curl -fsSL https://raw.githubusercontent.com/tess-fun/fleetreach/main/scripts/install.sh | FLEETREACH_INSTALL_DIR=/usr/local/bin sh
+  script:
+    - |
+      config="$FLEETREACH_CONFIG"
+      if [ -z "$config" ]; then
+        config=fleetreach-ci.toml
+        printf '[[repo]]\nid = "%s"\npath = "."\nglob = true\n' "$CI_PROJECT_NAME" > "$config"
+      fi
+      fleetreach scan -c "$config" --sync -f sarif $FLEETREACH_ARGS > "$FLEETREACH_SARIF"
+  artifacts:
+    when: always
+    paths:
+      - $FLEETREACH_SARIF

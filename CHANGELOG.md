@@ -17,6 +17,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   someone else pushed to. `--close-obsolete` closes requests the plan no longer wants, only
   in repos it scanned.
 - `fix apply --max-prs`, `--canary` and `--stop-after-failures` limit a rollout.
+- `ci/fleetreach.gitlab-ci.yml`, a template a GitLab pipeline can include to scan a repo and keep
+  the SARIF.
 - SARIF results point at the package's line in its lockfile, and carry the dependency chain as
   `codeFlows`. A package whose line cannot be found keeps a file-level location. Checked on 30
   repos and 600 real lockfiles: the output passes the SARIF 2.1.0 schema, and every line named
