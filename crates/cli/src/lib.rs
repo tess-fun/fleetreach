@@ -35,6 +35,7 @@ pub mod npm_reach;
 pub(crate) mod oci_vex;
 pub mod orchestrate;
 pub mod osvdb;
+mod osvdelta;
 pub mod osvrecords;
 pub mod overlay;
 pub mod py_reach;

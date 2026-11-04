@@ -498,6 +498,7 @@ mod net {
     use sha2::{Digest, Sha256};
 
     use super::{create_private_dir, meta_path, osv_name, read_meta, Meta, OSV_BUCKET};
+    use crate::osvdelta;
 
     /// Hard cap on one export's size, far above any osv.dev export today.
     const MAX_BYTES: u64 = 8 * 1024 * 1024 * 1024;
@@ -520,11 +521,13 @@ mod net {
     }
 
     fn url_for(name: &str) -> String {
+        object_url(name, "all.zip")
+    }
+
+    fn object_url(name: &str, object: &str) -> String {
         // Object names contain spaces (`GitHub Actions`) and colons (`Debian:12`).
-        format!(
-            "{OSV_BUCKET}/{}/all.zip",
-            name.replace(' ', "%20").replace(':', "%3A")
-        )
+        let escape = |part: &str| part.replace(' ', "%20").replace(':', "%3A");
+        format!("{OSV_BUCKET}/{}/{}", escape(name), escape(object))
     }
 
     pub(super) fn download(
@@ -554,6 +557,17 @@ mod net {
         } else {
             None
         };
+        if let Some(meta) = &previous {
+            match update_incrementally(&zip, name, meta, quiet) {
+                Ok(true) => return Ok(()),
+                Ok(false) => {}
+                Err(e) if quiet => drop(e),
+                Err(e) => eprintln!("note: {name}: {e}; fetching the whole export"),
+            }
+        }
+        // An updated export has no validators of the zip, and must not send the listing's
+        // date as if it had: this download is the fallback for a change it knows of.
+        let previous = previous.filter(|meta| meta.etag.is_some());
 
         let mut request = agent().get(&url);
         if let Some(meta) = &previous {
@@ -648,6 +662,97 @@ mod net {
         };
         std::fs::rename(&tmp, &zip).map_err(|e| format!("installing {}: {e}", zip.display()))?;
         write_meta(&zip, &meta)
+    }
+
+    /// Bring `zip` up to date record by record ([`crate::osvdelta`]). `Ok(false)` when only
+    /// the whole export will do: osv.dev has no listing for it (a release like `Debian:12`),
+    /// the local copy is not the one `meta` describes, or too much changed.
+    fn update_incrementally(
+        zip: &Path,
+        name: &str,
+        meta: &Meta,
+        quiet: bool,
+    ) -> Result<bool, String> {
+        use rayon::prelude::*;
+
+        if std::fs::metadata(zip).map(|md| md.len()).ok() != Some(meta.size) {
+            return Ok(false);
+        }
+        let index = osvdelta::read_index(zip, &meta.sha256);
+        let base = object_url(name, "modified_id.csv");
+        let conditional = Meta {
+            url: base.clone(),
+            etag: index.as_ref().and_then(|i| i.listing_etag.clone()),
+            last_modified: None,
+            ..meta.clone()
+        };
+        let touched = || Meta {
+            fetched_at: super::now_rfc3339(),
+            fetched_unix: super::now_unix(),
+            ..meta.clone()
+        };
+        let (listing, etag, last_modified) = match get_bytes(&base, Some(&conditional)) {
+            Ok(Some(fetched)) => fetched,
+            Ok(None) => {
+                write_meta(zip, &touched())?;
+                return Ok(true);
+            }
+            Err(e) if e.contains("HTTP 404") => return Ok(false),
+            Err(e) => return Err(e),
+        };
+        let listing = String::from_utf8(listing).map_err(|e| format!("listing: {e}"))?;
+        let want = osvdelta::parse_listing(&listing)?;
+        let have = match index {
+            Some(index) => index.modified,
+            None => osvdelta::read_export(zip)?,
+        };
+        let Some((changed, removed)) = osvdelta::plan(&have, &want) else {
+            return Ok(false);
+        };
+        let mut modified = have;
+        modified.retain(|id, _| want.contains_key(id));
+        let mut updated = touched();
+        updated.last_modified = last_modified.or(updated.last_modified);
+        if !changed.is_empty() || removed > 0 {
+            if !quiet {
+                eprintln!(
+                    "updating OSV {name} export: {} changed, {removed} removed...",
+                    changed.len()
+                );
+            }
+            let records: Vec<(String, Vec<u8>)> = changed
+                .par_iter()
+                .map(|id| {
+                    let url = object_url(name, &format!("{id}.json"));
+                    let (json, _, _) = get_bytes(&url, None)?
+                        .ok_or_else(|| format!("GET {url}: not modified on a plain request"))?;
+                    Ok((id.clone(), json))
+                })
+                .collect::<Result<_, String>>()?;
+            for (id, json) in &records {
+                modified.insert(id.clone(), osvdelta::record_modified(id, json)?);
+            }
+            let fetched = records.into_iter().collect();
+            let tmp = zip.with_extension("zip.partial");
+            let result = osvdelta::rewrite(zip, &tmp, modified.keys(), &fetched);
+            let (sha256, size) = result.inspect_err(|_| {
+                let _ = std::fs::remove_file(&tmp);
+            })?;
+            std::fs::rename(&tmp, zip).map_err(|e| format!("installing {}: {e}", zip.display()))?;
+            updated.etag = None;
+            updated.sha256 = sha256;
+            updated.size = size;
+        }
+        write_meta(zip, &updated)?;
+        osvdelta::write_index(
+            zip,
+            &osvdelta::Index {
+                zip_sha256: updated.sha256,
+                listing_etag: etag,
+                modified,
+            },
+        )?;
+        Ok(true)
     }
 
     /// A fetched body with its `ETag` and `Last-Modified`.
