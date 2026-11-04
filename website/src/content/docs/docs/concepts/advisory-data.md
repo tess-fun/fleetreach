@@ -24,10 +24,14 @@ scrapes web pages.
 
 **Caching.** osv.dev exports live in `~/.cache/fleetreach/osv/` and are re-checked every 6
 hours in network builds. `fleetreach db sync` fetches them ahead of time and `db status`
-shows their age. `--max-db-age 7d` refuses stale data.
+shows their age. `--max-db-age 7d` refuses stale data. An update fetches only the records
+that changed, by way of the ecosystem's `modified_id.csv`. osv.dev has no listing for a single
+release's export, like `Debian:12`, so those are whole downloads, and so is any update that
+looks wrong or touches over a quarter of the records. `--force` always downloads the whole export.
 
-**Pinning.** `--db <path> --db-rev <commit>` pins RustSec to one commit; a copied
-`--osv-dir` pins the rest. The report's `provenance` records what was used.
+**Pinning.** `db snapshot` hashes every source and `--db-snapshot` refuses to run on anything
+else; see [Run offline or air-gapped](/docs/guides/run-offline-or-air-gapped/). `--db <path>
+--db-rev <commit>` pins RustSec alone. The report's `provenance` records what was used.
 
 **Withdrawn advisories** are skipped, and an advisory published under several ids (a
 `PYSEC-` and a `GHSA-`) counts once.

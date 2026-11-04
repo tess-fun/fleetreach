@@ -13,6 +13,7 @@ use crate::config::Config;
 use crate::curated;
 use crate::orchestrate::fleet_ecosystems;
 use crate::osvdb;
+use crate::snapshot;
 use crate::sources;
 
 #[derive(Args)]
@@ -34,8 +35,9 @@ pub struct DbSyncArgs {
     /// sync into this directory instead of the default cache (e.g. to copy to an air-gapped host)
     #[arg(long, value_name = "DIR")]
     osv_dir: Option<PathBuf>,
-    /// what to fetch: `osv` (the exports), `cve` (cvelistV5) and `csaf:<provider>`
-    /// (vendor CSAF VEX; `csaf:redhat`, `csaf:suse`)
+    /// what to fetch: `osv` (the exports), `cve` (cvelistV5), `csaf:<provider>` (vendor CSAF
+    /// VEX; `csaf:redhat`, `csaf:suse`), `rustsec`, `kev` and `epss`; `nvd` and `vulnrichment`
+    /// copy what scans have cached. All of them land in one directory for `db bundle`
     #[arg(
         long,
         value_delimiter = ',',
@@ -52,8 +54,18 @@ pub struct DbSyncArgs {
 
 #[derive(Args)]
 pub struct DbImportArgs {
+    /// a `db bundle` tar: every file is checked against its manifest before any is installed
+    #[arg(long, value_name = "PATH")]
+    bundle: Option<PathBuf>,
+    /// refuse a bundle whose sha256 is not this (the one `db bundle` printed)
+    #[arg(long, value_name = "HEX", requires = "bundle")]
+    sha256: Option<String>,
     /// a cvelistV5 checkout, its `cves.zip`, or a release's `*_all_CVEs_at_midnight.zip.zip`
-    #[arg(long, value_name = "PATH", required_unless_present = "csaf")]
+    #[arg(
+        long,
+        value_name = "PATH",
+        required_unless_present_any = ["bundle", "csaf", "rustsec", "kev", "epss"]
+    )]
     cve: Option<PathBuf>,
     /// a directory of CSAF documents, or a `.tar.zst` or `.tar.bz2` archive (Red Hat's
     /// `csaf_vex_<date>.tar.zst`, SUSE's `csaf-vex.tar.bz2`)
@@ -62,9 +74,42 @@ pub struct DbImportArgs {
     /// the provider name the CSAF index is filed under (`redhat`, `suse`)
     #[arg(long, default_value = "redhat", requires = "csaf")]
     provider: String,
+    /// a RustSec advisory-db clone
+    #[arg(long, value_name = "DIR")]
+    rustsec: Option<PathBuf>,
+    /// a KEV catalog JSON file
+    #[arg(long, value_name = "PATH")]
+    kev: Option<PathBuf>,
+    /// an EPSS CSV file
+    #[arg(long, value_name = "PATH")]
+    epss: Option<PathBuf>,
     /// index into this directory instead of the default cache
     #[arg(long, value_name = "DIR")]
     osv_dir: Option<PathBuf>,
+    #[arg(short, long, help = "no progress output")]
+    quiet: bool,
+}
+
+#[derive(Args)]
+pub struct DbSnapshotArgs {
+    /// snapshot this directory instead of the default cache
+    #[arg(long, value_name = "DIR")]
+    osv_dir: Option<PathBuf>,
+    /// write here instead of `snapshot-<date>.json` in the directory
+    #[arg(short, long, value_name = "FILE")]
+    out: Option<PathBuf>,
+    #[arg(short, long, help = "no progress output")]
+    quiet: bool,
+}
+
+#[derive(Args)]
+pub struct DbBundleArgs {
+    /// pack this directory instead of the default cache
+    #[arg(long, value_name = "DIR")]
+    osv_dir: Option<PathBuf>,
+    /// the tar to write
+    #[arg(short, long, value_name = "FILE")]
+    out: PathBuf,
     #[arg(short, long, help = "no progress output")]
     quiet: bool,
 }
@@ -131,16 +176,19 @@ pub fn run_db_sync(args: DbSyncArgs) -> u8 {
     let mut osv = false;
     let mut cve = false;
     let mut providers: Vec<&str> = Vec::new();
+    let mut others: Vec<&str> = Vec::new();
     for source in &args.source {
         match source.trim() {
             "osv" => osv = true,
             "cve" => cve = true,
+            other @ ("rustsec" | "kev" | "epss" | "nvd" | "vulnrichment") => others.push(other),
             other => match other.strip_prefix("csaf:") {
                 Some(provider) if !providers.contains(&provider) => providers.push(provider),
                 Some(_) => {}
                 None => {
                     return fail(&format!(
-                        "`{other}` is not a source (osv, cve, csaf:<provider>)"
+                        "`{other}` is not a source (osv, cve, csaf:<provider>, rustsec, kev, \
+                         epss, nvd, vulnrichment)"
                     ))
                 }
             },
@@ -153,7 +201,7 @@ pub fn run_db_sync(args: DbSyncArgs) -> u8 {
             Err(code) => return code,
         }
     }
-    if cve || !providers.is_empty() {
+    if cve || !providers.is_empty() || !others.is_empty() {
         if let Err(e) = osvdb::create_private_dir(&dir) {
             return fail(&format!("creating {}: {e}", dir.display()));
         }
@@ -181,11 +229,156 @@ pub fn run_db_sync(args: DbSyncArgs) -> u8 {
         let result = curated::sync_csaf(&dir, provider, refresh, args.force, args.quiet);
         report(&format!("csaf:{provider}"), result);
     }
+    for source in others {
+        match sync_other(source, &dir) {
+            Ok(()) if !args.quiet => eprintln!("  {source}: ok"),
+            Ok(()) => {}
+            Err(e) => {
+                failed = true;
+                eprintln!("  {source}: FAILED: {e}");
+            }
+        }
+    }
     // A partial sync is not a usable mirror: fail closed so a scripted refresh notices.
     u8::from(failed) * 2
 }
 
-/// `db import`: index a local CVE or CSAF copy, for hosts that cannot fetch them.
+/// Bring `rustsec`, `kev`, `epss`, `nvd` or `vulnrichment` into the data directory.
+fn sync_other(source: &str, dir: &Path) -> Result<(), String> {
+    // A cache is a scan's, so there is nothing to fetch: the copy is what a bundle carries.
+    let copy_cache = |name: &str, target: &str| {
+        let cache = osvdb::private_subdir(name)
+            .filter(|cache| cache.is_dir())
+            .ok_or_else(|| format!("no {name} cache yet: a scan with --enrich fills it"))?;
+        snapshot::install_tree(dir, target, &cache).map(|_| ())
+    };
+    match source {
+        "nvd" => copy_cache("nvd", snapshot::NVD_DIR),
+        "vulnrichment" => copy_cache("vulnrichment", snapshot::VULNRICHMENT_DIR),
+        _ => fetch_other(source, dir),
+    }
+}
+
+#[cfg(feature = "network")]
+fn fetch_other(source: &str, dir: &Path) -> Result<(), String> {
+    match source {
+        "kev" => crate::enrich::sync_kev(dir),
+        "epss" => crate::enrich::sync_epss(dir),
+        _ => {
+            fleetreach_scan::AdvisoryDb::fetch().map_err(|e| e.to_string())?;
+            let clone = fleetreach_scan::AdvisoryDb::default_path();
+            snapshot::install_tree(dir, snapshot::RUSTSEC_DIR, &clone).map(|_| ())
+        }
+    }
+}
+
+#[cfg(not(feature = "network"))]
+fn fetch_other(_: &str, _: &Path) -> Result<(), String> {
+    Err("this build has no network support (use `db import`)".to_string())
+}
+
+/// `db snapshot`: a dated, hashed manifest of every source in the directory.
+pub fn run_db_snapshot(args: DbSnapshotArgs) -> u8 {
+    let dir = match target_dir(args.osv_dir.as_deref()) {
+        Ok(dir) => dir,
+        Err(e) => return fail(&e),
+    };
+    let manifest = match snapshot::build(&dir) {
+        Ok(manifest) => manifest,
+        Err(e) => return fail(&e),
+    };
+    let out = args
+        .out
+        .unwrap_or_else(|| dir.join(snapshot::default_name(&manifest)));
+    if let Err(e) = snapshot::write(&manifest, &out) {
+        return fail(&e);
+    }
+    if !args.quiet {
+        let files: usize = manifest.sources.iter().map(|s| s.files.len()).sum();
+        eprintln!(
+            "{}: {} source(s), {files} file(s)",
+            out.display(),
+            manifest.sources.len()
+        );
+    }
+    0
+}
+
+/// `db bundle`: every source in the directory, in one tar.
+pub fn run_db_bundle(args: DbBundleArgs) -> u8 {
+    let dir = match target_dir(args.osv_dir.as_deref()) {
+        Ok(dir) => dir,
+        Err(e) => return fail(&e),
+    };
+    match snapshot::bundle(&dir, &args.out) {
+        Ok((manifest, sha256)) => {
+            if !args.quiet {
+                eprintln!(
+                    "{}: {} source(s)",
+                    args.out.display(),
+                    manifest.sources.len()
+                );
+            }
+            println!("{sha256}");
+            0
+        }
+        Err(e) => fail(&e),
+    }
+}
+
+/// Install a bundle, reporting what is left beside it.
+fn import_bundle(
+    input: &Path,
+    dir: &Path,
+    sha256: Option<&str>,
+    quiet: bool,
+) -> Result<(), String> {
+    let imported = snapshot::import(input, dir, sha256)?;
+    if !quiet {
+        eprintln!(
+            "  bundle: {} source(s) from {}",
+            imported.manifest.sources.len(),
+            imported.manifest.created
+        );
+    }
+    if !imported.left_over.is_empty() {
+        eprintln!(
+            "warning: not in the bundle, so `--db-snapshot` will refuse this directory: {}",
+            imported.left_over.join(", ")
+        );
+    }
+    Ok(())
+}
+
+/// A local KEV or EPSS file, checked to parse, or a RustSec clone.
+fn import_other(args: &DbImportArgs, dir: &Path) -> Vec<(String, Result<(), String>)> {
+    let file = |path: &Path, target: &str| {
+        let bytes = std::fs::read(path).map_err(|e| format!("reading {}: {e}", path.display()))?;
+        let url = format!("file://{}", path.display());
+        snapshot::install_file(dir, target, &bytes, &url, None)
+    };
+    let mut jobs = Vec::new();
+    if let Some(path) = &args.rustsec {
+        let opened = fleetreach_scan::AdvisoryDb::open(path).map_err(|e| e.to_string());
+        let copied = opened
+            .and_then(|_| snapshot::install_tree(dir, snapshot::RUSTSEC_DIR, path))
+            .map(|_| ());
+        jobs.push(("rustsec".to_string(), copied));
+    }
+    if let Some(path) = &args.kev {
+        let result = crate::enrich::Enrichment::from_files(Some(path), None)
+            .and_then(|_| file(path, snapshot::KEV_FILE));
+        jobs.push(("kev".to_string(), result));
+    }
+    if let Some(path) = &args.epss {
+        let result = crate::enrich::Enrichment::from_files(None, Some(path))
+            .and_then(|_| file(path, snapshot::EPSS_FILE));
+        jobs.push(("epss".to_string(), result));
+    }
+    jobs
+}
+
+/// `db import`: bring in a bundle or a local copy of one source, for hosts that cannot fetch.
 pub fn run_db_import(args: DbImportArgs) -> u8 {
     let dir = match target_dir(args.osv_dir.as_deref()) {
         Ok(dir) => dir,
@@ -193,6 +386,23 @@ pub fn run_db_import(args: DbImportArgs) -> u8 {
     };
     if let Err(e) = osvdb::create_private_dir(&dir) {
         return fail(&format!("creating {}: {e}", dir.display()));
+    }
+    let mut failed = false;
+    if let Some(input) = &args.bundle {
+        if let Err(e) = import_bundle(input, &dir, args.sha256.as_deref(), args.quiet) {
+            failed = true;
+            eprintln!("  bundle: FAILED: {e}");
+        }
+    }
+    for (name, result) in import_other(&args, &dir) {
+        match result {
+            Ok(()) if !args.quiet => eprintln!("  {name}: ok"),
+            Ok(()) => {}
+            Err(e) => {
+                failed = true;
+                eprintln!("  {name}: FAILED: {e}");
+            }
+        }
     }
     let mut jobs: Vec<(String, Result<curated::Indexed, String>)> = Vec::new();
     if let Some(input) = &args.cve {
@@ -205,7 +415,6 @@ pub fn run_db_import(args: DbImportArgs) -> u8 {
         let result = curated::import_csaf(&dir, &args.provider, input, None);
         jobs.push((format!("csaf:{}", args.provider), result));
     }
-    let mut failed = false;
     for (name, result) in jobs {
         match result {
             Ok(indexed) => {
@@ -361,6 +570,7 @@ pub fn run_db_status(args: DbStatusArgs) -> u8 {
     for [name, status, age, size, sha] in osvdb::status_rows(&dir, now)
         .into_iter()
         .chain(curated::status_rows(&dir, now))
+        .chain(snapshot::status_rows(&dir))
     {
         println!("{name:<16} {status:<8} {age:<16} {size:>8}  {sha}");
     }

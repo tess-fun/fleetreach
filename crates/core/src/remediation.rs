@@ -681,6 +681,7 @@ mod tests {
                 rustsec_crate_version: "t".into(),
                 db_commit: None,
                 db_timestamp: None,
+                db_snapshot: None,
                 host_os: "t".into(),
                 host_arch: "t".into(),
                 generated_at: "t".into(),

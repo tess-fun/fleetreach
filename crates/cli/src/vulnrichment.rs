@@ -93,6 +93,23 @@ pub fn from_dir(dir: &Path, cves: &[String]) -> Vulnrichment {
         .collect()
 }
 
+/// The answers for `cves` in a copy of the Vulnrichment cache, however old: a copy is what
+/// was carried across.
+#[must_use]
+pub fn from_saved(dir: &Path, cves: &[String]) -> Vulnrichment {
+    #[derive(serde::Deserialize)]
+    struct Saved {
+        assessed: Option<CisaSsvc>,
+    }
+    cves.iter()
+        .filter_map(|cve| {
+            let text = std::fs::read(dir.join(format!("{cve}.json"))).ok()?;
+            let saved: Saved = serde_json::from_slice(&text).ok()?;
+            Some((cve.clone(), saved.assessed?))
+        })
+        .collect()
+}
+
 /// Fetch the records for `cves` from GitHub, best-effort: a CVE CISA has not assessed (a
 /// 404) is cached as such, a failed request is skipped and retried next run.
 #[cfg(feature = "network")]

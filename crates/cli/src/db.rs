@@ -155,6 +155,7 @@ pub(crate) fn build_provenance(meta: &DatabaseMeta) -> Provenance {
         rustsec_crate_version: RUSTSEC_VERSION.to_string(),
         db_commit: meta.commit.clone(),
         db_timestamp: meta.timestamp.clone(),
+        db_snapshot: None,
         host_os: std::env::consts::OS.to_string(),
         host_arch: std::env::consts::ARCH.to_string(),
         // SOURCE_DATE_EPOCH when set, like every other timestamp fleetreach writes, so a

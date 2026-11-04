@@ -46,6 +46,17 @@ pub(crate) struct ScanArgs {
     db_rev: Option<String>,
     #[arg(long, help = "never fetch; require cache/--db")]
     offline: bool,
+    #[arg(
+        long,
+        value_name = "MANIFEST",
+        conflicts_with_all = ["db", "db_rev"],
+        help = "run on exactly the data a `db snapshot` manifest lists, offline; exit 2 if it \
+                differs (the data is beside the manifest, or in --osv-dir)"
+    )]
+    db_snapshot: Option<PathBuf>,
+    /// The manifest's hash once `--db-snapshot` has checked out, for the report.
+    #[arg(skip)]
+    pinned_snapshot: Option<String>,
     #[arg(long, help = "exit 2 if the usable DB is older than DUR, e.g. 7d")]
     max_db_age: Option<String>,
 
@@ -467,8 +478,25 @@ fn sarif_source(repo: Option<&Path>, ecosystem: Ecosystem, package: &str) -> Str
         .map_or_else(fallback, |c| (*c).to_string())
 }
 
-fn load_db(args: &ScanArgs) -> Result<AdvisoryDb, String> {
-    load_db_from(args.db.as_deref(), args.db_rev.as_deref(), args.offline)
+fn load_db(args: &ScanArgs, config: Option<&Config>) -> Result<AdvisoryDb, String> {
+    // A clone carried in the data directory serves an offline run.
+    let carried = args
+        .offline
+        .then(|| data_dir(args, config))
+        .flatten()
+        .map(|dir| dir.join(crate::snapshot::RUSTSEC_DIR))
+        .filter(|dir| args.db.is_none() && dir.is_dir());
+    let db = args.db.as_deref().or(carried.as_deref());
+    load_db_from(db, args.db_rev.as_deref(), args.offline)
+}
+
+/// The directory holding the advisory data, as OSV resolution finds it.
+fn data_dir(args: &ScanArgs, config: Option<&Config>) -> Option<PathBuf> {
+    args.osv_dir
+        .clone()
+        .or_else(|| std::env::var_os(osvdb::DIR_ENV).map(PathBuf::from))
+        .or_else(|| config.and_then(|c| c.osv.dir.clone()))
+        .or_else(osvdb::default_cache_dir)
 }
 
 /// The per-ecosystem OSV values given explicitly: the `--<eco>-vuln-db` flag, else its env
@@ -530,7 +558,20 @@ fn locate_govulncheck(explicit: Option<&Path>) -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
-pub(crate) fn run_scan(args: ScanArgs) -> u8 {
+pub(crate) fn run_scan(mut args: ScanArgs) -> u8 {
+    if let Some(manifest) = &args.db_snapshot {
+        match crate::snapshot::pin(manifest, args.osv_dir.as_deref()) {
+            Ok(pinned) => {
+                args.offline = true;
+                args.db = pinned
+                    .has_rustsec
+                    .then(|| pinned.root.join(crate::snapshot::RUSTSEC_DIR));
+                args.osv_dir = Some(pinned.root);
+                args.pinned_snapshot = Some(pinned.sha256);
+            }
+            Err(e) => return fail(&e),
+        }
+    }
     match scan_and_report(&args) {
         Ok(code) | Err(code) => code,
     }
@@ -556,7 +597,7 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         return Ok(crate::why::run_versions(&config, package, json));
     }
     let triage = crate::triage::load_or_fail(&config, args.triage_dir.as_deref())?;
-    let db = advisory_db(args)?;
+    let db = advisory_db(args, &config)?;
     let vex_policy = oci_vex_policy(args, &config).map_err(|e| fail(&e))?;
     let mut images = crate::images::prepare_all(&config.images, args.offline, vex_policy.as_ref());
     for image in &images {
@@ -609,7 +650,7 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
             triage: &triage.suppressions,
         },
     );
-    let exploitation_known = enrich_report(args, &mut fleet_report);
+    let exploitation_known = enrich_report(args, &config, &mut fleet_report);
     assess_reachability(args, &config, &mut fleet_report)?;
     let baseline_new = apply_baseline(args, &mut fleet_report)?;
     // 5b2. Fleet evidence for upgrades (spec 13): the versions of each vulnerable package
@@ -667,7 +708,7 @@ fn refuse_narrowed_history(args: &ScanArgs) -> Result<(), u8> {
 
 /// `--explain`: one advisory from the DB, sanitized for the terminal.
 fn explain(args: &ScanArgs, id: &str) -> Result<u8, u8> {
-    let db = load_db(args).map_err(|e| fail(&e))?;
+    let db = load_db(args, None).map_err(|e| fail(&e))?;
     Ok(match db.explain(id) {
         Ok(Some(detail)) => {
             // The advisory detail is untrusted DB markdown; neutralize terminal
@@ -766,9 +807,9 @@ fn load_fleet(args: &ScanArgs) -> Result<(Config, sources::Materialized), u8> {
 }
 
 /// The RustSec DB, held to `--max-db-age`.
-fn advisory_db(args: &ScanArgs) -> Result<AdvisoryDb, u8> {
+fn advisory_db(args: &ScanArgs, config: &Config) -> Result<AdvisoryDb, u8> {
     // 2. Advisory DB (§10.3): network failure / unusable -> 2, loud, never clean.
-    let db = load_db(args).map_err(|e| fail(&e))?;
+    let db = load_db(args, Some(config)).map_err(|e| fail(&e))?;
 
     // 3. Freshness gate (§3): cannot prove freshness -> 2.
     if let Some(spec) = &args.max_db_age {
@@ -1140,6 +1181,7 @@ fn assemble_report(
         .collect();
     provenance.sources = materialized.provenance.clone();
     provenance.images.clone_from(&scan.pulled);
+    provenance.db_snapshot.clone_from(&args.pinned_snapshot);
     let mut suppressions: Vec<Suppression> = crate::triage::live_ignores(config)
         .map(Suppression::from_ignore)
         .collect();
@@ -1189,7 +1231,7 @@ fn assemble_report(
 }
 
 /// Exploit-risk enrichment (KEV and EPSS). Returns whether SSVC Exploitation is known.
-fn enrich_report(args: &ScanArgs, fleet_report: &mut FleetReport) -> bool {
+fn enrich_report(args: &ScanArgs, config: &Config, fleet_report: &mut FleetReport) -> bool {
     // 5a2. Exploit-risk enrichment (KEV + EPSS), opt-in. Annotate, optionally
     //      filter by EPSS, then re-rank by exploit risk (the action queue).
     let enrich_requested = args.enrich
@@ -1208,11 +1250,15 @@ fn enrich_report(args: &ScanArgs, fleet_report: &mut FleetReport) -> bool {
         } else if args.offline {
             // `--offline` must mean no network: do not silently fetch KEV/EPSS/NVD
             // (which would also leak the fleet's CVE list to a third party).
-            Err(
-                "enrichment needs the network; with --offline supply --kev-file / \
-                 --epss-file (NVD CVSS backfill is unavailable offline)"
-                    .to_string(),
-            )
+            data_dir(args, Some(config))
+                .and_then(|dir| Enrichment::from_data_dir(&dir))
+                .unwrap_or_else(|| {
+                    Err(
+                        "enrichment needs the network; with --offline supply --kev-file / \
+                         --epss-file, or `db sync --source kev,epss` into the data directory"
+                            .to_string(),
+                    )
+                })
         } else {
             fetch_enrichment(fleet_report)
         };
@@ -1381,6 +1427,11 @@ fn decide_ssvc(
             .collect();
         match &args.vulnrichment_dir {
             Some(dir) => crate::vulnrichment::from_dir(dir, &cves),
+            None if args.offline => data_dir(args, Some(config))
+                .map(|dir| dir.join(crate::snapshot::VULNRICHMENT_DIR))
+                .map_or_else(Default::default, |dir| {
+                    crate::vulnrichment::from_saved(&dir, &cves)
+                }),
             None => vulnrichment_fetch(&cves, args.kev_file.is_some() || args.epss_file.is_some()),
         }
     } else {

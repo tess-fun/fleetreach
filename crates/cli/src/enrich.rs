@@ -53,6 +53,18 @@ impl Enrichment {
         })
     }
 
+    /// Load what `db sync` or `db import` left under `root`: the KEV catalog, EPSS scores and
+    /// the copy of the NVD cache. `None` without both files, which is not enrichment.
+    pub fn from_data_dir(root: &Path) -> Option<Result<Self, String>> {
+        let kev = root.join(crate::snapshot::KEV_FILE);
+        let epss = root.join(crate::snapshot::EPSS_FILE);
+        if !kev.is_file() || !epss.is_file() {
+            return None;
+        }
+        let cvss = saved_scores(&root.join(crate::snapshot::NVD_DIR));
+        Some(Self::from_files(Some(&kev), Some(&epss)).map(|loaded| Self { cvss, ..loaded }))
+    }
+
     /// Load from local files (offline): KEV catalog JSON and/or EPSS CSV
     /// (`cve,epss,…`). A `None` path contributes no data. The NVD CVSS
     /// backfill is network-only, so it is empty here.
@@ -201,6 +213,62 @@ fn parse_epss_csv(body: &str) -> (BTreeMap<String, f32>, BTreeMap<String, f32>) 
     (out, percentiles)
 }
 
+/// The scores in a copy of the NVD cache, however old: a copy is what was carried across.
+fn saved_scores(dir: &Path) -> BTreeMap<String, f32> {
+    #[derive(serde::Deserialize)]
+    struct Saved {
+        score: Option<f32>,
+    }
+    let mut out = BTreeMap::new();
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        let cve = path.file_stem().and_then(|s| s.to_str());
+        let text = std::fs::read(&path).ok();
+        let saved = text.and_then(|t| serde_json::from_slice::<Saved>(&t).ok());
+        if let (Some(cve), Some(Saved { score: Some(score) })) = (cve, saved) {
+            out.insert(cve.to_string(), score);
+        }
+    }
+    out
+}
+
+/// Fetch the KEV catalog into the data directory, checked to parse.
+#[cfg(feature = "network")]
+pub(crate) fn sync_kev(root: &Path) -> Result<(), String> {
+    let body = net::http_get(net::KEV_URL)?;
+    if parse_kev(&body)?.is_empty() {
+        return Err("the KEV catalog is empty".to_string());
+    }
+    crate::snapshot::install_file(
+        root,
+        crate::snapshot::KEV_FILE,
+        body.as_bytes(),
+        net::KEV_URL,
+        None,
+    )
+}
+
+/// Fetch every EPSS score into the data directory, checked to parse.
+#[cfg(feature = "network")]
+pub(crate) fn sync_epss(root: &Path) -> Result<(), String> {
+    use std::io::Read as _;
+    let packed = net::http_get_bytes(net::EPSS_CSV_URL)?;
+    let mut body = String::new();
+    flate2::read::MultiGzDecoder::new(packed.as_slice())
+        .read_to_string(&mut body)
+        .map_err(|e| format!("{}: {e}", net::EPSS_CSV_URL))?;
+    if parse_epss_csv(&body).0.is_empty() {
+        return Err(format!("{}: no scores", net::EPSS_CSV_URL));
+    }
+    crate::snapshot::install_file(
+        root,
+        crate::snapshot::EPSS_FILE,
+        body.as_bytes(),
+        net::EPSS_CSV_URL,
+        None,
+    )
+}
+
 fn read(path: &Path) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| format!("reading {}: {e}", path.display()))
 }
@@ -217,6 +285,8 @@ mod net {
     pub(super) const KEV_URL: &str =
         "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json";
     const EPSS_API: &str = "https://api.first.org/data/v1/epss";
+    pub(super) const EPSS_CSV_URL: &str =
+        "https://epss.empiricalsecurity.com/epss_scores-current.csv.gz";
     const NVD_API: &str = "https://services.nvd.nist.gov/rest/json/cves/2.0";
 
     /// A shared HTTP agent with explicit connect/read/write/overall timeouts, so a
@@ -243,6 +313,18 @@ mod net {
             .map_err(|e| format!("GET {url}: {e}"))?
             .body_mut()
             .read_to_string()
+            .map_err(|e| format!("reading {url}: {e}"))
+    }
+
+    pub(super) fn http_get_bytes(url: &str) -> Result<Vec<u8>, String> {
+        agent()
+            .get(url)
+            .call()
+            .map_err(|e| format!("GET {url}: {e}"))?
+            .body_mut()
+            .with_config()
+            .limit(256 * 1024 * 1024)
+            .read_to_vec()
             .map_err(|e| format!("reading {url}: {e}"))
     }
 

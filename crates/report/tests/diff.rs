@@ -16,6 +16,7 @@ fn provenance() -> Provenance {
         rustsec_crate_version: "0".into(),
         db_commit: None,
         db_timestamp: None,
+        db_snapshot: None,
         host_os: "linux".into(),
         host_arch: "x86_64".into(),
         generated_at: "t".into(),

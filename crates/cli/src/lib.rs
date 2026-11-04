@@ -48,6 +48,7 @@ pub mod sbom;
 pub mod sbom_input;
 pub mod scan;
 pub mod signals;
+pub mod snapshot;
 pub mod sources;
 pub mod ssvc;
 pub mod static_reach;

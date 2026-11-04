@@ -231,6 +231,9 @@ pub struct Provenance {
     /// tag's result can be reproduced. Empty (and omitted) with no pulls.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<ImagePull>,
+    /// The sha256 of the `--db-snapshot` manifest this run was pinned to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub db_snapshot: Option<String>,
 }
 
 /// One image pulled from a registry.

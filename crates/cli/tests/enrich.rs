@@ -201,6 +201,7 @@ fn summary_max_severity_is_refreshed_after_enrichment_backfill() {
             rustsec_crate_version: String::new(),
             db_commit: None,
             db_timestamp: None,
+            db_snapshot: None,
             host_os: String::new(),
             host_arch: String::new(),
             generated_at: String::new(),

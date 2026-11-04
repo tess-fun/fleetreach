@@ -113,6 +113,11 @@ impl AdvisoryDb {
     /// Open a local advisory-db directory (offline). The directory must hold the
     /// RustSec layout: `<collection>/<crate>/RUSTSEC-*.md`.
     pub fn open(path: &Path) -> Result<Self, ScanError> {
+        // A clone also knows its commit, which is the DB's provenance and its age.
+        #[cfg(feature = "network")]
+        if let Ok(inner) = Repository::open(path).and_then(|r| Database::load_from_repo(&r)) {
+            return Ok(Self { inner });
+        }
         Database::open(path)
             .map(|inner| Self { inner })
             .map_err(|e| ScanError::DatabaseLoad(e.to_string()))
@@ -131,6 +136,13 @@ impl AdvisoryDb {
             });
         }
         Self::open(&path)
+    }
+
+    /// Where a fetched database lives, for copying it elsewhere.
+    #[cfg(feature = "network")]
+    #[must_use]
+    pub fn default_path() -> std::path::PathBuf {
+        Repository::default_path()
     }
 
     /// Age of the DB in whole seconds (now − last commit), or `None` if the DB

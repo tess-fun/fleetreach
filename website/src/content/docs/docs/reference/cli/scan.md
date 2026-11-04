@@ -46,6 +46,9 @@ Options:
       --offline
           never fetch; require cache/--db
 
+      --db-snapshot <MANIFEST>
+          run on exactly the data a `db snapshot` manifest lists, offline; exit 2 if it differs (the data is beside the manifest, or in --osv-dir)
+
       --max-db-age <MAX_DB_AGE>
           exit 2 if the usable DB is older than DUR, e.g. 7d
 

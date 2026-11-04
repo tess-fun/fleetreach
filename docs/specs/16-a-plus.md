@@ -872,6 +872,21 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: a week of daily incremental syncs byte-identical to full downloads; bundle
   import plus `--offline` scan identical to the online scan.
 
+    **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/osvdelta.rs`, `snapshot.rs`).
+    Measured on the bucket: all 14 exports' listings match their zips on ids and `modified`,
+    and a `<id>.json` is byte-identical to its zip entry. The local state is read from the zip,
+    not saved from a listing, because a listing newer than the zip would hide a change for good.
+    A cache five days old updated in 8 seconds (339 changed records in 8 exports) and all
+    329,822 records then matched whole downloads byte for byte, in the same order; a 121-repo
+    scan was identical. **Not yet proven: the spec's week of daily syncs.** That needs a real
+    week; `docs/differential/osv_sync_compare.py` is the daily check. Per-release exports
+    (`Debian:12`, `Ubuntu:22.04:LTS`) have no listing and stay whole downloads.
+    Bundle: online `scan --enrich` against import into an empty home with
+    `sandbox-exec` denying network: every report section identical on 1,182 findings (3 KEV,
+    1,105 EPSS). 44 images on 80 sources: 19,286 findings identical. Live CSAF and CVE indexes
+    were not in those runs; the bundle treats them as files like the rest, and a unit test
+    covers them.
+
 #### 12. Curated vuln research (C to A+)
 
 - **A+**: Snyk and Sonatype are the bar: advisories early, accurate ranges, function-level

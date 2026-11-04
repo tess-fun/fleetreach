@@ -4367,3 +4367,101 @@ fn no_config_scans_the_git_work_tree_around_the_working_directory() {
         "my-svc"
     );
 }
+
+#[test]
+fn a_bundle_carries_a_scan_across_and_a_snapshot_pins_it() {
+    let source = osv_dir_with_npm("bundle");
+    let work = std::env::temp_dir().join(format!("fleetreach-bundle-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).unwrap();
+    let path = |p: &std::path::Path| p.to_string_lossy().into_owned();
+    let (kev, epss) = (work.join("kev.json"), work.join("epss.csv"));
+    std::fs::write(&kev, r#"{"vulnerabilities":[{"cveID":"CVE-2020-8203"}]}"#).unwrap();
+    std::fs::write(&epss, "cve,epss,percentile\nCVE-2020-8203,0.5,0.9\n").unwrap();
+    let out = run(&[
+        "db",
+        "import",
+        "--rustsec",
+        &db(),
+        "--kev",
+        &path(&kev),
+        "--epss",
+        &path(&epss),
+        "--osv-dir",
+        &path(&source),
+    ]);
+    assert_eq!(code(&out), 0, "import: {}", stderr(&out));
+    let direct = run(&[
+        "scan",
+        "-c",
+        &cfg("fleet-npm.toml"),
+        "--offline",
+        "--enrich",
+        "--osv-dir",
+        &path(&source),
+        "-f",
+        "json",
+        "-q",
+    ]);
+    assert_eq!(code(&direct), 1, "direct: {}", stderr(&direct));
+
+    let tar = work.join("data.tar");
+    let out = run(&[
+        "db",
+        "bundle",
+        "--osv-dir",
+        &path(&source),
+        "-o",
+        &path(&tar),
+    ]);
+    assert_eq!(code(&out), 0, "bundle: {}", stderr(&out));
+    let sha256 = String::from_utf8(out.stdout).unwrap();
+    let target = work.join("imported");
+    let out = run(&[
+        "db",
+        "import",
+        "--bundle",
+        &path(&tar),
+        "--sha256",
+        sha256.trim(),
+        "--osv-dir",
+        &path(&target),
+    ]);
+    assert_eq!(code(&out), 0, "import: {}", stderr(&out));
+
+    let manifest = target.join("manifest.json");
+    let pinned_args = [
+        "scan",
+        "-c",
+        &cfg("fleet-npm.toml"),
+        "--enrich",
+        "--db-snapshot",
+        &path(&manifest),
+        "-f",
+        "json",
+        "-q",
+    ];
+    let pinned = run(&pinned_args);
+    assert_eq!(code(&pinned), 1, "pinned: {}", stderr(&pinned));
+    let report =
+        |out: &Output| -> serde_json::Value { serde_json::from_slice(&out.stdout).unwrap() };
+    let (direct, pinned) = (report(&direct), report(&pinned));
+    assert_eq!(direct["vulnerabilities"], pinned["vulnerabilities"]);
+    assert!(pinned["provenance"]["db_snapshot"].is_string());
+    let enriched = pinned["vulnerabilities"].as_array().unwrap();
+    assert!(enriched.iter().any(|v| v["kev"] == true), "{enriched:?}");
+
+    std::fs::write(target.join("enrich/epss.csv"), "cve,epss\n").unwrap();
+    let out = run(&pinned_args);
+    assert_eq!(code(&out), 2);
+    assert!(
+        stderr(&out).contains("enrich/epss.csv: changed"),
+        "{}",
+        stderr(&out)
+    );
+
+    let out = run(&["scan", "--db", &db(), "--db-snapshot", &path(&manifest)]);
+    assert_ne!(code(&out), 0);
+    let _ = std::fs::remove_dir_all(&work);
+    let _ = std::fs::remove_dir_all(&source);
+}

@@ -14,6 +14,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   records then matched a fresh download byte for byte, and a 121-repo scan came out identical.
   Anything doubtful falls back to the whole export; `--force` always downloads it. Releases
   like `Debian:12` have no listing on osv.dev and stay whole downloads.
+- **`db snapshot` and `--db-snapshot` pin a run.** The manifest hashes every source; a pinned
+  scan is offline and exits 2 unless the directory holds exactly those files.
+- **`db bundle` and `db import --bundle` carry all the advisory data in one tar**: OSV and
+  distro exports, RustSec, KEV, EPSS, CVE and CSAF indexes, and the NVD and Vulnrichment caches.
+  `db sync --source` gains `rustsec`, `kev`, `epss`, `nvd` and `vulnrichment`. An imported
+  scan with `--enrich` matched the online one on 1,182 findings, run with network access denied,
+  and 44 images matched on 19,286 findings.
+- `scan --offline --enrich` reads KEV, EPSS, NVD scores and Vulnrichment from the data directory.
+- `--db` on a RustSec clone reports its commit, so `--max-db-age` works there. It used to be
+  unknown.
 - **`fix apply` handles pnpm, yarn, Composer, Bundler, NuGet and Maven.** Lockfile managers
   update with scripts and plugins off; NuGet and Maven change the declared version, or the
   property it reads. Checked on 30 throwaway repos across all twelve update paths: 28 edits

@@ -8,8 +8,8 @@ use fleetreach_core::Severity;
 use fleetreach_report as report;
 
 use crate::db_cmd::{
-    DbCrosscheckArgs, DbImportArgs, DbQualityArgs, DbStatusArgs, DbSyncArgs, FleetListArgs,
-    FleetSyncArgs,
+    DbBundleArgs, DbCrosscheckArgs, DbImportArgs, DbQualityArgs, DbSnapshotArgs, DbStatusArgs,
+    DbSyncArgs, FleetListArgs, FleetSyncArgs,
 };
 use crate::diff::DiffArgs;
 use crate::scan::ScanArgs;
@@ -76,8 +76,12 @@ enum FleetCommand {
 enum DbCommand {
     /// Fetch or refresh the exports the fleet needs (or --all / --ecosystems).
     Sync(DbSyncArgs),
-    /// Index a local cvelistV5 or vendor CSAF copy (for hosts that cannot fetch them).
+    /// Bring in local data for hosts that cannot fetch it: a bundle, or one source's copy.
     Import(DbImportArgs),
+    /// Write a dated, hashed manifest of every source, for `scan --db-snapshot`.
+    Snapshot(DbSnapshotArgs),
+    /// Pack every source into one tar for `db import --bundle`.
+    Bundle(DbBundleArgs),
     /// Show which exports are present and how old they are.
     Status(DbStatusArgs),
     /// Report data-quality issues in the local advisory data and overlay.
@@ -103,6 +107,8 @@ pub fn dispatch(cli: Cli) -> u8 {
         Commands::Vex(VexCommand::Verify(args)) => crate::vex::run_vex_verify(args),
         Commands::Db(DbCommand::Sync(args)) => crate::db_cmd::run_db_sync(args),
         Commands::Db(DbCommand::Import(args)) => crate::db_cmd::run_db_import(args),
+        Commands::Db(DbCommand::Snapshot(args)) => crate::db_cmd::run_db_snapshot(args),
+        Commands::Db(DbCommand::Bundle(args)) => crate::db_cmd::run_db_bundle(args),
         Commands::Db(DbCommand::Status(args)) => crate::db_cmd::run_db_status(args),
         Commands::Db(DbCommand::Quality(args)) => crate::db_cmd::run_db_quality(args),
         Commands::Db(DbCommand::Crosscheck(args)) => crate::db_cmd::run_db_crosscheck(args),

@@ -652,6 +652,7 @@ mod tests {
                 rustsec_crate_version: "0.33.0".to_string(),
                 db_commit: Some("abc123".to_string()),
                 db_timestamp: Some("2026-06-25T00:00:00Z".to_string()),
+                db_snapshot: None,
                 host_os: "linux".to_string(),
                 host_arch: "x86_64".to_string(),
                 generated_at: "2026-06-25T12:00:00Z".to_string(),
