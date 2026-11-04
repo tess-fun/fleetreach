@@ -17,6 +17,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   someone else pushed to. `--close-obsolete` closes requests the plan no longer wants, only
   in repos it scanned.
 - `fix apply --max-prs`, `--canary` and `--stop-after-failures` limit a rollout.
+- CI runs the whole test suite in a network namespace with no route out, so a test or feature
+  that needs the network fails the build.
 - `ci/fleetreach.gitlab-ci.yml`, a template a GitLab pipeline can include to scan a repo and keep
   the SARIF.
 - SARIF results point at the package's line in its lockfile, and carry the dependency chain as

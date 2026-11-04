@@ -80,6 +80,27 @@ jobs:
           npm run check
           npm run build
 
+  no-network:
+    name: tests with no network
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - name: build the tests
+        run: cargo test --workspace --locked --no-run
+      # A new network namespace has no route out; loopback stays up for the local fakes.
+      - name: run them in a namespace with no route
+        run: |
+          sudo env "PATH=$PATH" "HOME=$HOME" "RUN_AS=$USER" unshare -n bash -c '
+            ip link set lo up
+            if getent hosts github.com; then
+              echo "::error::this namespace can reach a network"
+              exit 1
+            fi
+            exec sudo -u "$RUN_AS" env "PATH=$PATH" "HOME=$HOME" \
+              cargo test --workspace --locked --offline
+          '
+
   msrv:
     name: MSRV (1.89)
     runs-on: ubuntu-latest
