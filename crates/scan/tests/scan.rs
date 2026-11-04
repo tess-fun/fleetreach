@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use fleetreach_core::semver::Version;
 use fleetreach_core::{DependencyKind, Occurrence, RepoId, Severity, WarnKind};
-use fleetreach_scan::{scan_lockfile, scan_toolchain, AdvisoryDb};
+use fleetreach_scan::{scan_crates, scan_lockfile, scan_toolchain, AdvisoryDb};
 
 fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
@@ -172,4 +172,28 @@ fn explain_renders_known_advisory_and_misses_unknown() {
     assert!(db.explain("RUSTSEC-2098-0001").expect("valid id").is_none());
     // A bogus id must never falsely resolve to an advisory.
     assert!(!matches!(db.explain("not-an-id"), Ok(Some(_))));
+}
+
+#[test]
+fn crates_of_a_binary_match_as_a_lockfile_would_and_name_the_binary() {
+    let db = AdvisoryDb::open(&fixtures().join("advisory-db")).expect("open fixture db");
+    let repo = RepoId("image".into());
+    let locked = run();
+    let Occurrence::InRepo { installed, .. } = &locked.vulnerabilities[0].occurrences[0] else {
+        panic!("not in a repo");
+    };
+    let crates = [
+        ("fixturevuln".to_string(), installed.to_string()),
+        ("other".to_string(), "not a version".to_string()),
+    ];
+    let (scan, skipped) = scan_crates(&db, &repo, "usr/bin/app", &crates);
+    assert_eq!(skipped, 1);
+    assert_eq!(scan.vulnerabilities[0].advisory_id, "RUSTSEC-2099-0001");
+    let Occurrence::InRepo {
+        dependency_path, ..
+    } = &scan.vulnerabilities[0].occurrences[0]
+    else {
+        panic!("not in a repo");
+    };
+    assert_eq!(dependency_path, &["usr/bin/app"]);
 }

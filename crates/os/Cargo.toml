@@ -22,6 +22,7 @@ thiserror = { workspace = true }
 sha2 = { workspace = true }
 walkdir = { workspace = true }
 rayon = "1"
+memchr = "2"
 # Read distro exports entry by entry from disk (Chainguard's is 1.1 GB). Pure-Rust inflate.
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 # gzip layers, on the same pure-Rust zlib-rs backend as the rest of the workspace.

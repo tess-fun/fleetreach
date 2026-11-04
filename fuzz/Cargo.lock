@@ -895,6 +895,7 @@ dependencies = [
 name = "fleetreach-fuzz"
 version = "0.0.0"
 dependencies = [
+ "flate2",
  "fleetreach-cli",
  "fleetreach-go",
  "fleetreach-os",
@@ -988,6 +989,7 @@ dependencies = [
  "bzip2-rs",
  "flate2",
  "fleetreach-core",
+ "memchr",
  "rayon",
  "roxmltree",
  "ruzstd",

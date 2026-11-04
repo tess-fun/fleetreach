@@ -76,6 +76,7 @@ pub mod lang;
 pub mod packages;
 pub mod rpmdb;
 mod rpmver;
+pub mod rustbin;
 pub mod scan;
 mod tar;
 

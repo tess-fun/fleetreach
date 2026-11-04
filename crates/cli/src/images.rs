@@ -56,6 +56,9 @@ pub(crate) struct Opened {
     pub(crate) go: Vec<(String, fleetreach_os::gobin::GoBuild)>,
     /// Those an OS package owns.
     pub(crate) packaged_go: Vec<Packaged<(String, fleetreach_os::gobin::GoBuild)>>,
+    /// The image's Rust binaries with a crate list no OS package owns, by path.
+    pub(crate) rust: Vec<(String, fleetreach_os::rustbin::RustBuild)>,
+    pub(crate) packaged_rust: Vec<Packaged<(String, fleetreach_os::rustbin::RustBuild)>>,
     /// Installed language packages OS packages own, by ecosystem.
     pub(crate) packaged_pypi: Vec<Packaged<Installed>>,
     pub(crate) packaged_npm: Vec<Packaged<Installed>>,
@@ -295,6 +298,11 @@ fn open(image: &Image, pulled: Option<&crate::registry::Pulled>) -> Result<Opene
         .go_binaries()
         .filter_map(|(path, build)| packaged(inventory, path, (path.to_string(), build.clone())))
         .collect();
+    let packaged_rust: Vec<_> = fs
+        .rust_binaries()
+        .filter(|(_, build)| build.audited)
+        .filter_map(|(path, build)| packaged(inventory, path, (path.to_string(), build.clone())))
+        .collect();
     let packaged_java: Vec<_> = lang
         .owned
         .java
@@ -351,6 +359,8 @@ fn open(image: &Image, pulled: Option<&crate::registry::Pulled>) -> Result<Opene
         .chain(archives)
         .chain(lang.go.iter().map(|(path, _)| path.as_str()))
         .chain(packaged_go.iter().map(|go| go.item.0.as_str()))
+        .chain(lang.rust.iter().map(|(path, _)| path.as_str()))
+        .chain(packaged_rust.iter().map(|rust| rust.item.0.as_str()))
         .collect();
     let layers = Layers::new(&fs, &inspection, paths);
     let lang_repo = Repo {
@@ -372,6 +382,8 @@ fn open(image: &Image, pulled: Option<&crate::registry::Pulled>) -> Result<Opene
         packaged_java,
         go: lang.go,
         packaged_go,
+        rust: lang.rust,
+        packaged_rust,
         packaged_pypi,
         packaged_npm,
         packaged_composer,

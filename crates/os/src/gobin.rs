@@ -85,7 +85,7 @@ fn inline_string(data: &[u8], at: usize) -> Option<(&[u8], usize)> {
     None
 }
 
-fn uint(bytes: &[u8], size: usize, big: bool) -> Option<u64> {
+pub(crate) fn uint(bytes: &[u8], size: usize, big: bool) -> Option<u64> {
     let bytes = bytes.get(..size)?;
     let fold = |n: u64, b: &u8| (n << 8) | u64::from(*b);
     Some(if big {

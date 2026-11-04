@@ -12,6 +12,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 fleetreach-cli = { path = "../crates/cli" }
 fleetreach-go = { path = "../crates/go" }
 fleetreach-os = { path = "../crates/os" }
@@ -67,6 +68,12 @@ doc = false
 bench = false
 
 [workspace]
+
+[[bin]]
+name = "rust_binary"
+path = "fuzz_targets/rust_binary.rs"
+test = false
+doc = false
 
 [[bin]]
 name = "go_binary"

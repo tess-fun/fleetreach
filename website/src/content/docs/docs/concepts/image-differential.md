@@ -137,7 +137,9 @@ version.
   That recovered 5,691 of Trivy's rows and 3,261 of Grype's. What remains is mostly CVEs from
   2025 on, which no export osv.dev publishes has for these releases. Debian 10's frozen export
   holds almost no open CVEs at all. Each such image carries a coverage gap saying so.
-- **Rust binaries** are not read, and neither are Perl modules.
+- **Rust binaries** are read when built with `cargo auditable`, and a coverage gap reports those
+  that are not. None of the 217 images holds one with a crate list, so this was checked apart,
+  on real binaries. **Perl modules** are not read.
 - **Go main modules built as `(devel)`** with no version in the build info, such as Vault and
   Grafana, are matched by their dependencies only.
 - **Debian testing** has no release to match, and **Azure Linux distroless** images have no

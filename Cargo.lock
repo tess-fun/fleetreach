@@ -1055,6 +1055,7 @@ dependencies = [
  "bzip2-rs",
  "flate2",
  "fleetreach-core",
+ "memchr",
  "rayon",
  "roxmltree",
  "ruzstd",

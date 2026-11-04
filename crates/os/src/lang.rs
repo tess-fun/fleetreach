@@ -205,6 +205,9 @@ fn dotnet_packages(data: &[u8]) -> Option<Vec<(String, String)>> {
 }
 
 /// The coverage-gap kind for Java archives nothing identifies.
+/// The kind of artifact a Rust binary with no crate list is.
+pub const RUST_UNREAD: &str = "Rust binaries with no cargo-auditable crate list";
+
 pub const JAVA_UNREAD: &str = "Java archives (*.jar, *.war, *.ear) with no coordinates";
 
 /// An installed language package read from its metadata.
@@ -238,6 +241,8 @@ pub struct LangFiles {
     pub owned: OwnedFiles,
     /// Go binaries no OS package owns, by path.
     pub go: Vec<(String, crate::gobin::GoBuild)>,
+    /// Rust binaries no OS package owns whose crates are known, by path.
+    pub rust: Vec<(String, crate::rustbin::RustBuild)>,
     /// Kinds of language artifact present but not read, with a count (`"*.jar": 12`).
     pub unread: BTreeMap<&'static str, usize>,
     /// How many candidates were skipped because an OS package owns them.
@@ -416,6 +421,13 @@ pub fn collect(fs: &ImageFs, owned: &BTreeSet<String>) -> LangFiles {
         .filter(|(path, _)| !owned.contains(*path))
         .map(|(path, build)| (path.to_string(), build.clone()))
         .collect();
+    for (path, build) in fs.rust_binaries().filter(|(p, _)| !owned.contains(*p)) {
+        if build.audited {
+            out.rust.push((path.to_string(), build.clone()));
+        } else {
+            *out.unread.entry(RUST_UNREAD).or_default() += 1;
+        }
+    }
     // Packages under a project whose lockfile was kept are scanned from that lockfile.
     let locked: Vec<String> = out
         .files

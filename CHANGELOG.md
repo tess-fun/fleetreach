@@ -47,6 +47,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Rust binaries in images are read: the crates `cargo auditable` lists in the binary are matched
+  against RustSec, as Go binaries are against the Go database. A Rust binary with no such list
+  is a coverage gap.
 - `fleetreach scan` without a `fleet.toml` scans the git work tree around the current
   directory as a one-repo fleet (a note on stderr says so); `scan --repo <DIR>` does the same
   for any directory. An explicit `-c` that does not exist is still an error.

@@ -24,7 +24,7 @@ use crate::error::OsError;
 use crate::tar::{self, Kind, Source};
 
 /// Executables outside this range are not opened: a Go binary is never under a megabyte.
-const MIN_BINARY_BYTES: u64 = 1 << 20;
+const MIN_BINARY_BYTES: u64 = 1 << 16;
 const MAX_BINARY_BYTES: u64 = 2 << 30;
 
 /// The largest single file kept in memory; a bigger wanted file is noted and skipped.
@@ -78,6 +78,8 @@ pub struct ImageFs {
     skipped: Vec<String>,
     /// Go binaries read from executables, with the layer that wrote each.
     go: BTreeMap<String, (usize, crate::gobin::GoBuild)>,
+    /// Rust binaries, with the layer that wrote each.
+    rust: BTreeMap<String, (usize, crate::rustbin::RustBuild)>,
     /// How the image was built, for an image with layers.
     build: Build,
     /// The layer each installed package, by name and version, has been there since.
@@ -519,7 +521,17 @@ impl ImageFs {
     fn note_binary(&mut self, layer: usize, path: &str, data: &[u8]) {
         if let Some(build) = crate::gobin::read(data) {
             self.go.insert(path.to_string(), (layer, build));
+        } else if let Some(build) = crate::rustbin::read(data) {
+            self.rust.insert(path.to_string(), (layer, build));
         }
+    }
+
+    /// The Rust binaries still in the image, by path.
+    pub fn rust_binaries(&self) -> impl Iterator<Item = (&str, &crate::rustbin::RustBuild)> {
+        self.rust
+            .iter()
+            .filter(|(path, (layer, _))| self.entries.get(*path).is_some_and(|e| e.layer == *layer))
+            .map(|(path, (_, build))| (path.as_str(), build))
     }
 
     /// The Go binaries still in the image, by path.

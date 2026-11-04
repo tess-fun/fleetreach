@@ -45,7 +45,7 @@ use rustsec::advisory::Informational;
 use rustsec::cargo_lock::dependency::graph::{EdgeDirection, NodeIndex};
 use rustsec::cargo_lock::dependency::tree::Tree;
 use rustsec::cargo_lock::dependency::Dependency;
-use rustsec::cargo_lock::Package;
+use rustsec::cargo_lock::{Metadata, Package, Patch, ResolveVersion, SourceId};
 use rustsec::database::Query;
 use rustsec::report::{Report, Settings};
 // `DatabaseInfo` exposes the DB's git commit/timestamp, so it lives behind the git
@@ -183,6 +183,17 @@ pub struct RepoScan {
     pub warnings: Vec<WarnFinding>,
 }
 
+fn settings() -> Settings {
+    Settings {
+        informational_warnings: vec![
+            Informational::Notice,
+            Informational::Unmaintained,
+            Informational::Unsound,
+        ],
+        ..Settings::default()
+    }
+}
+
 /// Scan one `Cargo.lock` against the advisory database, returning both the
 /// vulnerability and warning streams mapped to `core` types.
 pub fn scan_lockfile(
@@ -198,16 +209,7 @@ pub fn scan_lockfile(
     // We do NOT pass `ignore` here — ignore handling (with stale-ignore hygiene)
     // is applied downstream so we can report suppressions that matched nothing.
     // Warnings are opt-in: an empty `informational_warnings` yields zero warnings.
-    let settings = Settings {
-        informational_warnings: vec![
-            Informational::Notice,
-            Informational::Unmaintained,
-            Informational::Unsound,
-        ],
-        ..Settings::default()
-    };
-
-    let report = Report::generate(&db.inner, &lockfile, &settings);
+    let report = Report::generate(&db.inner, &lockfile, &settings());
 
     // Best-effort dependency graph for provenance (who pulls each package in).
     // If it cannot be built, findings simply carry no path.
@@ -231,6 +233,75 @@ pub fn scan_lockfile(
         vulnerabilities,
         warnings,
     })
+}
+
+/// Match the crates linked into `binary` (`name`, `version`), as a lockfile's would
+/// be. Returns the findings, each with the binary as its path, and how many crates had a
+/// name or version that could not be read.
+pub fn scan_crates(
+    db: &AdvisoryDb,
+    repo: &RepoId,
+    binary: &str,
+    crates: &[(String, String)],
+) -> (RepoScan, u32) {
+    let mut skipped = 0;
+    let packages: Vec<Package> = crates
+        .iter()
+        .filter_map(|(name, version)| {
+            let parsed = name.parse().ok().zip(version.parse().ok());
+            skipped += u32::from(parsed.is_none());
+            let (name, version) = parsed?;
+            Some(Package {
+                name,
+                version,
+                source: Some(SourceId::default()),
+                checksum: None,
+                dependencies: Vec::new(),
+                replace: None,
+            })
+        })
+        .collect();
+    let lockfile = Lockfile {
+        version: ResolveVersion::V3,
+        packages,
+        root: None,
+        metadata: Metadata::default(),
+        patch: Patch::default(),
+    };
+    let report = Report::generate(&db.inner, &lockfile, &settings());
+    let at = |occurrence: &mut Occurrence| {
+        if let Occurrence::InRepo {
+            dependency_path, ..
+        } = occurrence
+        {
+            *dependency_path = vec![binary.to_string()];
+        }
+    };
+    let mut vulnerabilities: Vec<VulnFinding> = report
+        .vulnerabilities
+        .list
+        .iter()
+        .map(|v| map_vulnerability(repo, v, None))
+        .collect();
+    let mut warnings: Vec<WarnFinding> = report
+        .warnings
+        .values()
+        .flatten()
+        .map(|w| map_warning(repo, w, None))
+        .collect();
+    vulnerabilities
+        .iter_mut()
+        .flat_map(|v| v.occurrences.iter_mut())
+        .for_each(at);
+    warnings
+        .iter_mut()
+        .flat_map(|w| w.occurrences.iter_mut())
+        .for_each(at);
+    let scan = RepoScan {
+        vulnerabilities,
+        warnings,
+    };
+    (scan, skipped)
 }
 
 /// Every package in a `Cargo.lock`, for SBOM output. Workspace members and other path crates

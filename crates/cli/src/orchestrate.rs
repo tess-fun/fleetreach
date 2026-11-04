@@ -355,6 +355,7 @@ pub(crate) fn scan_fleet_with(
                 plan.as_ref(),
                 images,
                 distro_db.as_ref(),
+                db,
                 &dbs,
                 &scan_unit_with,
             )
@@ -805,6 +806,7 @@ fn scan_image(
     plan: Option<&RepoPlan>,
     images: &Images,
     distro_db: Option<&Result<fleetreach_os::db::DistroDb, String>>,
+    db: &AdvisoryDb,
     dbs: &Dbs,
     scan_unit: &(dyn Fn(&ScanUnit) -> RepoResult + Sync),
 ) -> (RepoResult, Vec<CoverageGap>) {
@@ -838,6 +840,7 @@ fn scan_image(
     let gems = with_vendors(&opened.gems, &opened.packaged_gems, distro_db);
     let java = with_vendors(&opened.java, &opened.packaged_java, distro_db);
     let go = with_vendors(&opened.go, &opened.packaged_go, distro_db);
+    let rust = with_vendors(&opened.rust, &opened.packaged_rust, distro_db);
     if !pypi.is_empty() {
         let installed: Vec<fleetreach_pypi::InstalledPackage> = pypi
             .iter()
@@ -990,6 +993,11 @@ fn scan_image(
         attribute(&mut result, layers, |_, path| layers.of_file(path.first()?));
         extra.push((own(Ecosystem::Go), result));
     }
+    if !rust.is_empty() {
+        let mut result = scan_image_rust(&image.id, &rust, db);
+        attribute(&mut result, layers, |_, path| layers.of_file(path.first()?));
+        extra.push((own(Ecosystem::Cargo), result));
+    }
     let lang: Vec<RepoResult> = plan
         .units
         .par_iter()
@@ -1081,6 +1089,24 @@ fn scan_image_go(
     }
     let (findings, unreadable) = fleetreach_go::scan_built(&modules, db, id);
     RepoResult::scanned(id, findings, Vec::new()).with_skipped(unreadable)
+}
+
+/// Match the crates linked into an image's Rust binaries.
+fn scan_image_rust(
+    id: &RepoId,
+    binaries: &[(String, fleetreach_os::rustbin::RustBuild)],
+    db: &AdvisoryDb,
+) -> RepoResult {
+    let mut vulnerabilities = Vec::new();
+    let mut warnings = Vec::new();
+    let mut unreadable = 0;
+    for (path, build) in binaries {
+        let (scan, skipped) = fleetreach_scan::scan_crates(db, id, path, &build.crates);
+        vulnerabilities.extend(scan.vulnerabilities);
+        warnings.extend(scan.warnings);
+        unreadable += skipped;
+    }
+    RepoResult::scanned(id, vulnerabilities, warnings).with_skipped(unreadable)
 }
 
 /// Match what an image's Java archives hold. A jar known only by its file name is placed by
@@ -1224,6 +1250,8 @@ fn scan_image_os(
     for (kind, n) in &opened.unread {
         let eco = if kind.contains("jar") {
             Ecosystem::Maven
+        } else if *kind == fleetreach_os::lang::RUST_UNREAD {
+            Ecosystem::Cargo
         } else {
             Ecosystem::RubyGems
         };
