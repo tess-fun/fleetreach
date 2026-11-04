@@ -111,15 +111,32 @@ impl Release {
 
 /// Why a matched release is missing advisories, for one whose records its vendor withdraws at
 /// end of life: Debian drops the release from its security tracker, so what stays open is no
-/// longer published and only what was fixed earlier remains.
-pub fn withdrawn(os: &OsRelease, today: &str) -> Option<String> {
+/// longer published and only what was fixed earlier remains. `frozen` says whether osv.dev's
+/// [`frozen`](crate::distro::frozen) export of the release was read.
+pub fn withdrawn(os: &OsRelease, today: &str, frozen: bool) -> Option<String> {
     let release = lookup(os)?;
     (release.product == "debian" && release.ended(today)).then(|| {
-        format!(
-            "Debian {} has left the Debian security tracker, so CVEs it left open are no longer \
-             published and were not reported; what is shown is only what was recorded before",
-            release.cycle
-        )
+        let cycle = &release.cycle;
+        let eco = format!("Debian:{cycle}");
+        if frozen {
+            format!(
+                "Debian {cycle} has left the Debian security tracker: the CVEs shown as open \
+                 come from osv.dev's last export of it, from October 2024, so later CVEs were \
+                 not reported and some shown may have been fixed since"
+            )
+        } else if crate::distro::frozen(&eco).is_some() {
+            format!(
+                "Debian {cycle} has left the Debian security tracker, so CVEs it left open were \
+                 not reported; `fleetreach db sync --distros {eco}` fetches osv.dev's last \
+                 export of them, from October 2024"
+            )
+        } else {
+            format!(
+                "Debian {cycle} has left the Debian security tracker, so CVEs it left open are \
+                 no longer published and were not reported; what is shown is only what was \
+                 recorded before"
+            )
+        }
     })
 }
 
@@ -207,6 +224,17 @@ mod tests {
         assert_eq!(cycle("opensuse-tumbleweed", "20261101", "Tumbleweed"), None);
         assert_eq!(cycle("wolfi", "20230201", "Wolfi"), None);
         assert_eq!(cycle("debian", "99", "Debian 99"), None);
+    }
+
+    #[test]
+    fn withdrawn_says_what_the_frozen_export_covers() {
+        let debian = |v: &str| os("debian", v, "Debian");
+        let read = withdrawn(&debian("11"), "2026-11-03", true).unwrap();
+        assert!(read.contains("October 2024"), "{read}");
+        assert!(read.contains("later CVEs were not reported"), "{read}");
+        let unread = withdrawn(&debian("11"), "2026-11-03", false).unwrap();
+        assert!(unread.contains("db sync --distros Debian:11"), "{unread}");
+        assert!(withdrawn(&debian("12"), "2026-11-03", false).is_none());
     }
 
     #[test]

@@ -1356,6 +1356,42 @@ mod tests {
     }
 
     #[test]
+    fn retired_debian_hears_its_frozen_export_only_where_the_maintained_one_is_silent() {
+        let pkg = OsPackage {
+            name: "zlib1g".into(),
+            version: "1:1.2.11-1".into(),
+            source: "zlib".into(),
+            source_version: "1:1.2.11-1".into(),
+            arch: None,
+            module: None,
+        };
+        let os = crate::distro::parse_os_release("ID=debian\nVERSION_ID=11\n");
+        let debian = crate::distro::detect(&os, None, Default::default()).unwrap();
+        let (live, frozen) = ("Debian:11", "Debian:11::frozen");
+        let cve = |id: &str, cve: &str, events: &[(&str, &str)]| {
+            let mut a = adv(id, events, DebVersion::parse);
+            a.aliases = vec![cve.into()];
+            a
+        };
+        let open = [("introduced", "0")];
+        let mut db = DistroDb::default();
+        // Fixed since the freeze, in a build older than the installed one.
+        let fixed = [("introduced", "0"), ("fixed", "1:1.2.11-0")];
+        db.insert_deb(live, "zlib", cve("DLA-1", "CVE-2024-1", &fixed));
+        db.insert_deb(frozen, "zlib", cve("CVE-2024-1", "CVE-2024-1", &open));
+        db.insert_deb(frozen, "zlib", cve("CVE-2024-2", "CVE-2024-2", &open));
+        let s = scan(
+            &debian,
+            &[pkg],
+            &db,
+            &RepoId("img".into()),
+            ScanOptions::default(),
+        );
+        let got: Vec<&str> = s.findings.iter().map(|f| f.advisory_id.as_str()).collect();
+        assert_eq!(got, ["CVE-2024-2"]);
+    }
+
+    #[test]
     fn red_hat_extended_support_speaks_where_the_release_stopped() {
         let pkg = OsPackage {
             name: "bind-libs".into(),

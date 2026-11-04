@@ -826,8 +826,9 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     unsigned. The published differential is done: 217 public images against Trivy 0.73.0 and
     Grype v0.121.1, 0 unexplained differences, in `docs/differential` and on the website's
     image differential page. It added Go binaries, .NET, Composer, the vendor package rule,
-    Ubuntu Pro as a supplement, CentOS 6, RHEL ELS and RHEL 10's records. Known limits: Debian 10
-    and 11 (a coverage gap, since their data left the tracker) and Rust binaries.
+    Ubuntu Pro as a supplement, CentOS 6, RHEL ELS and RHEL 10's records. Debian 7 to 11 read
+    osv.dev's frozen export as a supplement. Known limits: CVEs after that October 2024 freeze
+    on Debian 10 and 11 (a coverage gap) and Rust binaries.
     A base with no declared name shows its distribution and fingerprint, as a config does not
     say which tag it came from.
 - **Effort**: XL. **Release**: 1.6.0, 1.7.0, 1.8.0. **Depends on**: per-distro sync (row 11),

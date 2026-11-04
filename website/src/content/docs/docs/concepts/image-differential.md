@@ -17,11 +17,11 @@ Tumbleweed, CBL-Mariner, and 4 with no OS at all.
 
 | | Rows |
 |---|---:|
-| fleetreach | 331,230 |
+| fleetreach | 337,686 |
 | Trivy | 348,708 |
 | Grype | 177,303 |
-| fleetreach and Trivy both report | 304,421 |
-| fleetreach and Grype both report | 158,166 |
+| fleetreach and Trivy both report | 310,112 |
+| fleetreach and Grype both report | 161,427 |
 
 **No difference is unexplained.** A script gives every differing row a reason from upstream
 data: the OSV record, the Debian tracker, the tool's own match, the image's package database.
@@ -33,11 +33,12 @@ images and the counts are in
 
 | Reason | Trivy | Grype |
 |---|---:|---:|
-| Debian 10 and 11 left the tracker: a [coverage gap](#known-limits) is reported | 39,895 | 13,349 |
+| Debian 10 and 11 left the tracker and the CVE is not in their frozen export: a [coverage gap](#known-limits) is reported | 33,804 | 9,733 |
 | Debian placeholder ids (`TEMP-`) and advisories with no CVE, absent from the OSV export | 2,770 | |
 | Debian testing, which has no release to match | | 1,863 |
 | Grype's binary classifiers guess a version from file contents | | 1,930 |
 | Grype matched NVD CPEs, which no distribution record backs | | 875 |
+| Debian 11's frozen export marks the record withdrawn; the tools keep the CVE | 400 | 355 |
 | Red Hat fixed it at or below the installed build; Trivy keeps the open status | 866 | |
 | Grype compares Oracle's FIPS builds (epoch 10) with ordinary ones | | 315 |
 | The file belongs to an OS package, whose advisories cover it | | 308 |
@@ -49,13 +50,13 @@ images and the counts are in
 | Main module built as `(devel)`: the tool takes a version from outside the build info | 8 | 19 |
 | Vendored copy Trivy reads from an embedded SBOM | 16 | |
 | Rows of other kinds: Perl modules, a resolved Debian entry, a Grype mock record, a private project matched to an npm malware record, a SUSE advisory with no record | 21 | 31 |
-| **Total** | **43,954** | **19,030** |
+| **Total** | **38,263** | **15,769** |
 
 ## What fleetreach reports and the other tools do not
 
 | Reason | Not in Trivy | Not in Grype |
 |---|---:|---:|
-| Grype's default ignore rule drops kernel headers | | 161,070 |
+| Grype's default ignore rule drops kernel headers | | 164,115 |
 | Ubuntu's open and Ubuntu Pro records: Grype lists them, Trivy leaves them out | 10,645 | |
 | Red Hat's open statuses for its rebuilds and itself: one tool lists them | 4,344 | 212 |
 | OSV's Debian record has no entry in the tracker, which both tools read | 3,731 | 3,598 |
@@ -70,19 +71,21 @@ images and the counts are in
 | Third-party `.deb` packages Debian also names (nginx.org, MariaDB) | 208 | |
 | Records only OSV carries for this package | 150 | 150 |
 | Chainguard's open statuses: both tools read fixes only | 121 | 120 |
-| Debian ids or statuses Grype's data leaves out | | 179 |
+| Open in a retired Debian release's frozen export, which may be out of date | 765 | 163 |
+| Debian ids or statuses Grype's data leaves out | | 166 |
 | Grype has no Julia data | | 182 |
 | The distribution's OSV record, with the tool's feed lacking it | 228 | 74 |
 | An openSUSE GA-media record with a wrong fix version (an upstream data error) | 16 | 16 |
 | The other tool reports the package row; this tool's data lacks it | 58 | 9 |
-| **Total** | **25,265** | **172,182** |
+| **Total** | **26,030** | **175,377** |
 
 ## Where the status differs
 
-Both tools and fleetreach report the row, and one names a fix where the other does not: 160
-rows against Trivy and 1,309 against Grype. Most are fixes Grype does not count: Ubuntu Pro
-(907), Red Hat's Extended Life Support (206), and Debian LTS (56 against Grype, 45 against
-Trivy). On 80 rows the fix is in the finding's title but stays out of its `patched` range,
+Both tools and fleetreach report the row, and one names a fix where the other does not: 213
+rows against Trivy and 1,338 against Grype. Most are fixes Grype does not count: Ubuntu Pro
+(907), Red Hat's Extended Life Support (206), and Debian LTS (57 against Grype, 46 against
+Trivy). On 52 rows against Trivy and 28 against Grype, Debian 11's frozen export says open and
+the tool knows a later fix. On 80 rows the fix is in the finding's title but stays out of its `patched` range,
 because the version cannot be rendered in the report's SemVer form without reading the
 installed build as fixed (Oracle's `2.56.1-9.0.5.el7_9`), or it is in a line the image cannot
 reach. A `GO-` record with no fix can also stand for a GitHub twin that names one (31 rows).
@@ -124,12 +127,16 @@ All fixed before these numbers were taken:
 The reasons above are not all equally strong. A row one tool reports and fleetreach does not has
 been traced to evidence. A row only fleetreach reports has a record behind it by construction,
 and its classes were checked by sample, not row by row. Some of those records are stale
-upstream: 294 Debian rows are open in OSV and resolved in the tracker, and 16 Tumbleweed rows
-come from a wrong fix version.
+upstream: 294 Debian rows are open in OSV and resolved in the tracker, 763 rows open in Debian
+11's frozen export are listed by neither tool, and 16 Tumbleweed rows come from a wrong fix
+version.
 
 - **Debian 10 and 11** are the largest class. They left the security tracker, and osv.dev's
-  current export holds few of their CVEs, so what they left open is not reported. Each such image
-  carries a coverage gap saying so.
+  current export holds few of their CVEs. fleetreach also reads osv.dev's frozen export of each
+  release, which stopped in October 2024, wherever the current export says nothing about a CVE.
+  That recovered 5,691 of Trivy's rows and 3,261 of Grype's. What remains is mostly CVEs from
+  2025 on, which no export osv.dev publishes has for these releases. Debian 10's frozen export
+  holds almost no open CVEs at all. Each such image carries a coverage gap saying so.
 - **Rust binaries** are not read, and neither are Perl modules.
 - **Go main modules built as `(devel)`** with no version in the build info, such as Vault and
   Grafana, are matched by their dependencies only.

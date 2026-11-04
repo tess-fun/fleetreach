@@ -2,7 +2,7 @@
 """Give every row one tool reports and another does not a reason, from upstream data.
 Every rule below reads evidence (an OSV record, the Debian tracker, the tool's own match, the
 image's package database). A row no rule claims is printed as UNEXPLAINED.
-usage: explain.py [rows.json]  (writes results.json)"""
+usage: explain.py [rows.json]  (writes explained.json)"""
 import collections, json, os, re, sys, zipfile
 from compare_load import osv_index
 sys_argv, sys.argv = sys.argv, sys.argv[:1]
@@ -15,6 +15,19 @@ OSV = {d: osv_index(f"osv/{d}/all.zip") for d in
        ("Debian", "Ubuntu", "Alpine", "Go", "Maven", "npm", "PyPI", "RubyGems", "NuGet", "Packagist")
        if os.path.exists(f"osv/{d}/all.zip")}
 FROZEN = {r: osv_index(f"stale/Debian_{r}/all.zip") for r in ("10", "11")}
+
+
+def withdrawn_ids(path):
+    z = zipfile.ZipFile(path)
+    out = set()
+    for n in z.namelist():
+        d = json.loads(z.read(n))
+        if d.get("withdrawn"):
+            out.update({d["id"], *(d.get("aliases") or [])})
+    return out
+
+
+WITHDRAWN = {r: withdrawn_ids(f"stale/Debian_{r}/all.zip") for r in ("10", "11")}
 tracker = collections.defaultdict(dict)
 for src, cves in json.load(open("tracker.json")).items():
     for c, d in cves.items():
@@ -159,7 +172,11 @@ def os_only_other(tool, r, k, gm):
         if vid.startswith(("DLA-", "DSA-")):
             return "Debian advisory with no CVE, absent from the OSV export"
         if major in ("10", "11"):
-            return "Debian release left the tracker: retired data (coverage gap reported)"
+            if vid in WITHDRAWN[major]:
+                return "Frozen export marks the record withdrawn; the tools keep the CVE"
+            if vid in FROZEN[major]:
+                return "Frozen export says nothing about this package for this CVE"
+            return "Retired Debian release: not in its frozen export, which ends in October 2024 (coverage gap reported)"
         ecos = OSV["Debian"].get(vid, {})
         if f"Debian:{major}" not in ecos:
             return "No OSV record for this release"
@@ -184,6 +201,10 @@ def ours_os(tool, r, k, rec, other, open_, fam):
     if tool == "grype" and re.match(r"(linux-libc-dev|kernel-headers|linux-headers)", pkg):
         return "Grype's default ignore rule drops kernel headers"
     if fam == "debian":
+        if major in ("10", "11") and vid in FROZEN[major]:
+            if other:
+                return "Frozen export's open status: the other tool lists it too"
+            return "Frozen export's open status: neither tool lists it now (coverage gap reported)"
         if other and tool == "trivy":
             return "Third-party .deb (nginx.org, MariaDB) Debian also names: Grype matches it, Trivy does not"
         if other:
@@ -299,6 +320,8 @@ def status_why(direction, r, k):
         return "The distribution's fix: the tool's feed says not fixed"
     if title_fix or "another line" in (rec.extra or ""):
         return "Fix named in the title: its version cannot be rendered in the report's semver form, so it stays open (fail closed), or it is in a line the image cannot reach"
+    if fam == "debian" and ((r["os"] or {}).get("Name") or "").split(".")[0] in ("10", "11"):
+        return "Frozen export's open status where the tool's feed names a later fix"
     if fam in ("centos", "oracle", "redhat", "rocky"):
         return "Vendor's open status where the tool's feed names a fix from another line"
     return "Distribution record open where the tool's feed names a fix"
@@ -335,4 +358,4 @@ for d, c in resid.items():
     print("RESIDUAL", d, c.most_common(20))
 for k, v in sorted(residk.items(), key=lambda x: -len(x[1]))[:24]:
     print(k, len(v), collections.Counter(x[0] for x in v).most_common(3), collections.Counter(x[1] for x in v).most_common(4), v[:2])
-json.dump({d: dict(c) for d, c in results.items()}, open("results.json", "w"), indent=1)
+json.dump({d: dict(c) for d, c in results.items()}, open("explained.json", "w"), indent=1)

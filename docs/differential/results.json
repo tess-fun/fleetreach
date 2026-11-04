@@ -2,7 +2,8 @@
  "only_grype": {
   "Grype matched NVD CPEs, which no distro record backs": 875,
   "No OSV record for this release": 29,
-  "Debian release left the tracker: retired data (coverage gap reported)": 13349,
+  "Retired Debian release: not in its frozen export, which ends in October 2024 (coverage gap reported)": 9733,
+  "Frozen export marks the record withdrawn; the tools keep the CVE": 355,
   "No Ubuntu record for this package and release in OSV": 51,
   "Ubuntu release left OSV (coverage gap reported)": 47,
   "Grype's data holds a mock record (ALAS2MOCK2)": 4,
@@ -22,8 +23,9 @@
  },
  "only_trivy": {
   "No OSV record for this release": 134,
-  "Debian release left the tracker: retired data (coverage gap reported)": 39895,
+  "Retired Debian release: not in its frozen export, which ends in October 2024 (coverage gap reported)": 33804,
   "Debian placeholder id, published only in the tracker": 2537,
+  "Frozen export marks the record withdrawn; the tools keep the CVE": 400,
   "Debian advisory with no CVE, absent from the OSV export": 233,
   "Ubuntu release left OSV (coverage gap reported)": 1,
   "Rocky's later erratum is in the tool's feed, not in its OSV export": 4,
@@ -40,17 +42,19 @@
   "Main module built as (devel): the tool takes a version from outside the build info": 8
  },
  "status_g": {
-  "Debian retired release: the LTS fix against the tool's will not fix": 56,
+  "Debian retired release: the LTS fix against the tool's will not fix": 57,
   "Ubuntu Pro fix: the tool says not fixed, or will not fix": 907,
   "Fix named in the title: its version cannot be rendered in the report's semver form, so it stays open (fail closed), or it is in a line the image cannot reach": 39,
   "Red Hat's extended-support fix: the tool keeps will not fix": 206,
   "Vendor's open status where the tool's feed names a fix from another line": 3,
   "The vendor's fix: the tool's feed says not fixed": 66,
+  "Frozen export's open status where the tool's feed names a later fix": 28,
   "The tool's record names no fix where OSV does": 14,
   "Distribution record open where the tool's feed names a fix": 9,
   "GO- or GHSA record with no fix where its twin names one": 9
  },
  "ours_not_trivy": {
+  "Frozen export's open status: neither tool lists it now (coverage gap reported)": 763,
   "Debian status undetermined: we keep it open, both tools drop it": 527,
   "OSV's Debian record is open where the tracker resolved it (unimportant): stale upstream record": 294,
   "Ubuntu's open and Pro records: Grype lists them, Trivy leaves them out": 10645,
@@ -72,12 +76,15 @@
   "The other tool reports it: trivy's data for this package lacks it": 58,
   "A package only we read: lockfile or module list neither tool reads in images": 2259,
   "Record only OSV carries for this package: neither tool's database has it": 150,
+  "Frozen export's open status: the other tool lists it too": 2,
   "Third-party .deb (nginx.org, MariaDB) Debian also names: Grype matches it, Trivy does not": 208,
   "alpine: the distribution's OSV record; the tool's feed lacks it": 14
  },
  "ours_not_grype": {
+  "Frozen export's open status: neither tool lists it now (coverage gap reported)": 140,
+  "Frozen export's open status: the other tool lists it too": 23,
   "Debian status undetermined: we keep it open, both tools drop it": 492,
-  "Debian id or status Grype's data leaves out; Trivy and the tracker list it": 179,
+  "Debian id or status Grype's data leaves out; Trivy and the tracker list it": 166,
   "OSV's Debian record is open where the tracker resolved it (unimportant): stale upstream record": 259,
   "Ubuntu notice with no CVE, which neither tool lists under that id": 217,
   "Ubuntu record neither tool's feed carries for this release": 9,
@@ -90,7 +97,7 @@
   "openSUSE GA-media record with a wrong fix version: upstream data error": 16,
   "Red Hat's open status: the other tool lists it": 179,
   "Red Hat's open status names no module stream: we keep it, both tools drop it": 209,
-  "Grype's default ignore rule drops kernel headers": 161070,
+  "Grype's default ignore rule drops kernel headers": 164115,
   "cbl-mariner: the distribution's OSV record; the tool's feed lacks it": 1,
   "azurelinux: the distribution's OSV record; the tool's feed lacks it": 2,
   "Chainguard's open status: both tools read fixes only": 120,
@@ -105,7 +112,8 @@
  "status": {
   "Fix named in the title: its version cannot be rendered in the report's semver form, so it stays open (fail closed), or it is in a line the image cannot reach": 41,
   "Vendor's open status where the tool's feed names a fix from another line": 27,
-  "Debian retired release: the LTS fix against the tool's will not fix": 45,
+  "Debian retired release: the LTS fix against the tool's will not fix": 46,
+  "Frozen export's open status where the tool's feed names a later fix": 52,
   "Ubuntu Pro fix: the tool says not fixed, or will not fix": 16,
   "Distribution record open where the tool's feed names a fix": 9,
   "GO- or GHSA record with no fix where its twin names one": 22

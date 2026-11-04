@@ -22,5 +22,6 @@ To run it, in one directory holding these files, with the same day's data for al
 4. `python3 compare.py report3.json rows.json`
 5. `python3 explain.py rows.json`
 
-`explain.py` also reads `stale/Debian_10` and `stale/Debian_11`, osv.dev's frozen per-release
-exports, which show what the retired Debian releases last had.
+`fleetreach db sync --distros Debian:10,Debian:11` fetches osv.dev's frozen exports of the
+retired releases as `Debian_10` and `Debian_11`. Keep them in `osv/`, where the scan reads them,
+and in `stale/`, where `explain.py` reads them to show what those releases last had.

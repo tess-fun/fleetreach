@@ -105,8 +105,10 @@ pub struct Distro {
     /// say nothing about that CVE for it, matched by binary or source name: the vendors'
     /// CSAF VEX ([`red_hat_vex`], [`suse_vex`]).
     pub fallbacks: Vec<String>,
-    /// Ecosystems among `also` and `fallbacks` that may be absent or empty without a gap:
-    /// a SUSE module the image may not use, or an LTSS stream a release has not reached.
+    /// Ecosystems among `also`, `supplements` and `fallbacks` that may be absent or empty
+    /// without a gap: a SUSE module the image may not use, an LTSS stream a release has not
+    /// reached, or the [`frozen`] copy of a release, whose absence [`crate::eol::withdrawn`]
+    /// reports.
     pub optional: Vec<String>,
     /// Fallbacks that speak about the codestream the release is built from rather than the
     /// release itself (SLE 15 SP6 for openSUSE Leap 15.6). Only their fixes count: an older
@@ -238,12 +240,39 @@ pub fn legacy_release(text: &str) -> Option<OsRelease> {
     )))
 }
 
+/// Debian releases gone from the security tracker that osv.dev's frozen exports still cover.
+const FROZEN_DEBIAN: [&str; 5] = ["7", "8", "9", "10", "11"];
+
+/// What marks a release's frozen export as an ecosystem of its own.
+const FROZEN: &str = "::frozen";
+
+/// The ecosystem holding what osv.dev's frozen export of `ecosystem` says, for a Debian
+/// release that has left the security tracker. Debian's maintained export keeps little of
+/// such a release (about 2,900 entries for Debian 11 against 60,000 for 12), while the frozen
+/// one stopped in October 2024 with what the tracker said then, CVEs left open included. It
+/// is a supplement, so anything the maintained export says about a CVE comes first.
+pub fn frozen(ecosystem: &str) -> Option<String> {
+    let release = ecosystem.strip_prefix("Debian:")?;
+    FROZEN_DEBIAN
+        .contains(&release)
+        .then(|| format!("{ecosystem}{FROZEN}"))
+}
+
+/// The export behind a [`frozen`] ecosystem (`Debian:11` for `Debian:11::frozen`), whose
+/// records name the plain release.
+pub fn frozen_export(ecosystem: &str) -> Option<&str> {
+    ecosystem.strip_suffix(FROZEN)
+}
+
 /// The osv.dev export directories that can serve `ecosystem`, in order: the whole
 /// distribution (`Debian/all.zip`), which is what osv.dev maintains, then the release's own,
 /// for a copy laid out by hand. osv.dev's per-release exports (`Debian:12/all.zip`,
 /// `Ubuntu:22.04:LTS/all.zip`, `Alpine:v3.20/all.zip`) still download but stopped changing in
 /// October 2024, and are not in its `ecosystems.txt`: reading one misses every later CVE.
 pub fn export_candidates(ecosystem: &str) -> Vec<String> {
+    if let Some(export) = frozen_export(ecosystem) {
+        return vec![export.to_string()];
+    }
     let base = ecosystem.split(':').next().unwrap_or(ecosystem).to_string();
     // A vendor feed, or a vendor's VEX, is an export of its own release only.
     if base == ecosystem || crate::feeds::feed_for(ecosystem).is_some() || is_vex(ecosystem) {
@@ -357,12 +386,17 @@ pub fn detect(
                          unstable) has no OSV release to match against"
                     )
                 })?;
-            distro(
+            let mut d = distro(
                 Family::Deb,
                 format!("Debian {release}"),
                 "debian",
                 format!("Debian:{release}"),
-            )
+            );
+            if let Some(frozen) = frozen(&d.ecosystem) {
+                d.supplements.push(frozen.clone());
+                d.optional.push(frozen);
+            }
+            d
         }
         "ubuntu" => {
             let v = version.ok_or_else(|| format!("{pretty}: no VERSION_ID"))?;
@@ -1170,5 +1204,17 @@ mod tests {
             export_candidates("Ubuntu:Pro:24.04:LTS"),
             vec!["Ubuntu", "Ubuntu:Pro:24.04:LTS"]
         );
+        assert_eq!(export_candidates("Debian:11::frozen"), vec!["Debian:11"]);
+    }
+
+    #[test]
+    fn retired_debian_is_supplemented_by_its_frozen_export() {
+        let os = |v: &str| parse_os_release(&format!("ID=debian\nVERSION_ID={v}\n"));
+        let old = detect(&os("11"), None, Hints::default()).unwrap();
+        assert_eq!(old.supplements, ["Debian:11::frozen"]);
+        assert_eq!(old.optional, ["Debian:11::frozen"]);
+        assert_eq!(family_of("Debian:11::frozen"), Some(Family::Deb));
+        let live = detect(&os("12"), None, Hints::default()).unwrap();
+        assert!(live.supplements.is_empty());
     }
 }

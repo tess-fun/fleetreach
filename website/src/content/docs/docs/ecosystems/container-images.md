@@ -354,7 +354,10 @@ Base images
 Distro exports are fetched one distribution at a time, never all at once: Chainguard's is
 over a gigabyte. The whole distribution's export is fetched (Ubuntu's is about 800 MB). osv.dev
 also serves per-release exports (`Debian:12`, `Alpine:v3.20`, `Ubuntu:24.04:LTS`), but those
-stopped changing in October 2024 and miss every later CVE, so fleetreach does not use them.
+stopped changing in October 2024 and miss every later CVE, so fleetreach does not use them. The
+exception is Debian 7 to 11, which have left the security tracker: their frozen export is fetched
+as well and speaks about CVEs the whole-distribution export never mentions. A coverage gap on the
+image says the data stops there, and `--max-db-age` does not apply to it.
 
 ```console
 $ fleetreach db sync                          # what fleet.toml's repos and images need

@@ -12,7 +12,7 @@
 //! upstream `Last-Modified` recorded at download, else the file's mtime) so `--max-db-age`
 //! covers OSV data the same way it covers RustSec.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -945,6 +945,8 @@ pub struct DistroSource {
     pub kind: SourceKind,
     pub path: PathBuf,
     pub meta: Option<Meta>,
+    /// The frozen ecosystem this export is read as, when that is all it serves.
+    pub frozen: Option<String>,
 }
 
 impl DistroSource {
@@ -1045,6 +1047,7 @@ fn sync_distro(
 fn abandoned(ecosystem: &str, export: &str, path: &Path) -> Option<String> {
     if fleetreach_os::feeds::feed_for(ecosystem).is_some()
         || fleetreach_os::distro::is_vex(ecosystem)
+        || fleetreach_os::distro::frozen_export(ecosystem).is_some()
     {
         return None;
     }
@@ -1070,6 +1073,7 @@ pub fn resolve_distros(
     opts: &Options,
 ) -> (Vec<DistroSource>, Vec<String>, Vec<String>) {
     let mut found: BTreeMap<String, DistroSource> = BTreeMap::new();
+    let mut plain: BTreeSet<String> = BTreeSet::new();
     let mut warnings = Vec::new();
     let mut missing = Vec::new();
     // The vendors' VEX exports come from their CSAF indexes, not from osv.dev: derive them
@@ -1114,26 +1118,39 @@ pub fn resolve_distros(
                 if let Some(warning) = abandoned(eco, &export, &path) {
                     warnings.push(warning);
                 }
+                let frozen = fleetreach_os::distro::frozen_export(eco).map(|_| eco.clone());
+                if frozen.is_none() {
+                    plain.insert(export.clone());
+                }
                 found.entry(export.clone()).or_insert_with(|| DistroSource {
                     meta: read_meta(&path),
                     export,
                     kind,
                     path,
+                    frozen,
                 });
             }
             None => missing.push(eco.clone()),
         }
     }
+    // A hand-laid release export with no whole-distribution one is the release's only data,
+    // so it stays the release's.
+    for (export, source) in &mut found {
+        if plain.contains(export) {
+            source.frozen = None;
+        }
+    }
     (found.into_values().collect(), warnings, missing)
 }
 
-/// `--max-db-age` for distro exports; unknown age refuses.
+/// `--max-db-age` for distro exports; unknown age refuses. A frozen export is old by nature
+/// and no sync can change that: the coverage gap of its release says how old.
 pub fn check_distro_ages(
     sources: &[DistroSource],
     limit: i64,
     now: SystemTime,
 ) -> Result<(), String> {
-    for src in sources {
+    for src in sources.iter().filter(|s| s.frozen.is_none()) {
         match src.age_seconds(now) {
             Some((age, basis)) if i64::try_from(age).unwrap_or(i64::MAX) > limit => {
                 return Err(format!(
@@ -1172,9 +1189,21 @@ pub fn sync_distros(
         refresh,
         quiet,
     };
-    ecosystems
-        .iter()
-        .map(|e| (e.clone(), sync_distro(root, e, &opts, force)))
+    let mut wanted: Vec<String> = Vec::new();
+    for eco in ecosystems {
+        let frozen = fleetreach_os::distro::frozen(eco);
+        for e in std::iter::once(eco.clone()).chain(frozen) {
+            if !wanted.contains(&e) {
+                wanted.push(e);
+            }
+        }
+    }
+    wanted
+        .into_iter()
+        .map(|e| {
+            let result = sync_distro(root, &e, &opts, force);
+            (e, result)
+        })
         .collect()
 }
 
@@ -1241,6 +1270,7 @@ fn distro_status_rows(root: &Path, now: SystemTime) -> Vec<[String; 5]> {
                 kind: SourceKind::Cache,
                 meta: read_meta(&path),
                 path,
+                frozen: None,
             };
             let age = src
                 .age_seconds(now)
@@ -1297,6 +1327,58 @@ mod tests {
         }
         assert_eq!(osv_name(Ecosystem::Go), Some("Go"));
         assert!(osv_name(Ecosystem::Cargo).is_none());
+    }
+
+    #[test]
+    fn a_release_export_is_frozen_only_beside_the_maintained_one() {
+        let root = std::env::temp_dir().join(format!("fr-frozen-osv-{}", std::process::id()));
+        std::fs::create_dir_all(root.join(dir_name("Debian:11"))).unwrap();
+        std::fs::write(root.join(dir_name("Debian:11")).join("all.zip"), b"x").unwrap();
+        let resolve = || {
+            let opts = Options {
+                dir: Some(root.clone()),
+                cache: None,
+                sync: false,
+                refresh: DEFAULT_REFRESH,
+                quiet: true,
+            };
+            let ecos = ["Debian:11".to_string(), "Debian:11::frozen".to_string()];
+            let (sources, warnings, missing) = resolve_distros(&ecos, &opts);
+            assert!(warnings.is_empty() && missing.is_empty());
+            sources
+                .into_iter()
+                .map(|s| (s.export, s.frozen))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(resolve(), [("Debian:11".to_string(), None)]);
+        std::fs::create_dir_all(root.join("Debian")).unwrap();
+        std::fs::write(root.join("Debian/all.zip"), b"x").unwrap();
+        let both = resolve();
+        std::fs::remove_dir_all(&root).unwrap();
+        assert_eq!(
+            both,
+            [
+                ("Debian".to_string(), None),
+                (
+                    "Debian:11".to_string(),
+                    Some("Debian:11::frozen".to_string())
+                )
+            ]
+        );
+    }
+
+    #[test]
+    fn a_frozen_export_passes_the_age_limit() {
+        let source = |frozen: Option<&str>| DistroSource {
+            export: "Debian:11".into(),
+            kind: SourceKind::Cache,
+            path: PathBuf::from("/nonexistent"),
+            meta: None,
+            frozen: frozen.map(str::to_string),
+        };
+        let now = SystemTime::now();
+        assert!(check_distro_ages(&[source(None)], 60, now).is_err());
+        assert!(check_distro_ages(&[source(Some("Debian:11::frozen"))], 60, now).is_ok());
     }
 
     #[test]

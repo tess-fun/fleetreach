@@ -13,6 +13,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   October 2024, so every later CVE was missed. Sync now fetches the whole distribution's
   export, and a scan warns when an export has not changed for a year. Found by the Trivy and
   Grype differential.
+- Debian 7 to 11 lost the CVEs they left open when they left the security tracker. Their
+  frozen osv.dev exports are now read too, wherever the maintained export says nothing about a
+  CVE; `db sync --distros Debian:11` fetches both, `--max-db-age` does not apply to a frozen
+  export, and the image's coverage gap says the data stops in October 2024.
 - A registry that rate limits a pull (429) is now waited for and tried again.
 - Files of third-party OS packages in images (`docker-ce-cli`, `mongodb-database-tools`) were
   skipped as if a distribution's advisories covered them. They are skipped now only when a

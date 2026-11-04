@@ -904,6 +904,11 @@ impl Feeds {
         crate::orchestrate::Images {
             prepared,
             exports: self.distro_sources.iter().map(|s| s.path.clone()).collect(),
+            frozen: self
+                .distro_sources
+                .iter()
+                .filter_map(|s| Some((s.path.clone(), s.frozen.clone()?)))
+                .collect(),
             missing: self.distro_missing.clone(),
             opts: fleetreach_os::ScanOptions {
                 ignore_unimportant: args.distro_ignore_unimportant,

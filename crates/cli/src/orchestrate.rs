@@ -8,7 +8,7 @@
 //! Output here is **pre-correlation**: every finding carries a single
 //! occurrence. Grouping across the fleet happens in `correlate` (M4).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use fleetreach_core::osv::TierCScan;
@@ -248,6 +248,8 @@ pub(crate) struct Images<'a> {
     pub(crate) prepared: &'a [crate::images::Prepared],
     /// The resolved distro exports (`all.zip` files or record directories).
     pub(crate) exports: Vec<PathBuf>,
+    /// Those read as a frozen ecosystem, and which.
+    pub(crate) frozen: BTreeMap<PathBuf, String>,
     /// Distro ecosystems with no export.
     pub(crate) missing: BTreeSet<String>,
     pub(crate) opts: fleetreach_os::ScanOptions,
@@ -786,6 +788,7 @@ fn load_distro_db(images: &Images) -> Option<Result<fleetreach_os::db::DistroDb,
         return None;
     }
     wanted.packages = Some(packages);
+    wanted.frozen = images.frozen.clone();
     Some(fleetreach_os::db::load(&images.exports, &wanted).map_err(|e| e.to_string()))
 }
 
@@ -1307,11 +1310,18 @@ fn scan_image_os(
     };
     // A release past its end of life gets no new advisories, so its findings only shrink.
     let today = crate::history::now().date().to_string();
+    let frozen = match (&inspection.distro, distro_db) {
+        (Ok(distro), Some(Ok(db))) => distro
+            .supplements
+            .iter()
+            .any(|e| fleetreach_os::distro::frozen_export(e).is_some() && db.records(e) > 0),
+        _ => false,
+    };
     gaps.extend(
         inspection
             .os_release
             .as_ref()
-            .and_then(|os| fleetreach_os::eol::withdrawn(os, &today))
+            .and_then(|os| fleetreach_os::eol::withdrawn(os, &today, frozen))
             .map(|reason| gap(source, ecosystem, reason)),
     );
     let mut result = gaps.into_iter().fold(result, RepoResult::with_coverage);

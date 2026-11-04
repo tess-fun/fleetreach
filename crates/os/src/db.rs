@@ -9,6 +9,7 @@
 //! Unfixed records are kept: a Debian or Ubuntu entry with no `fixed` event is "affected,
 //! no fix yet" and becomes a finding, with its urgency (Debian) or priority (Ubuntu).
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -214,6 +215,31 @@ pub struct Wanted {
     pub ecosystems: BTreeMap<String, Family>,
     /// Source package names to keep; `None` keeps every package.
     pub packages: Option<BTreeSet<String>>,
+    /// Exports read as a [`frozen`](crate::distro::frozen) ecosystem, by path. Their records
+    /// name the plain release and, in Debian's, other releases too: only the release's own
+    /// count, under the frozen name, so they stay apart from what the maintained export says.
+    pub frozen: BTreeMap<PathBuf, String>,
+    /// The frozen ecosystem the records being read are filed under.
+    relabel: Option<String>,
+}
+
+impl Wanted {
+    /// What to keep from the export at `path`.
+    fn at(&self, path: &Path) -> Cow<'_, Wanted> {
+        let frozen = self.frozen.get(path).and_then(|eco| {
+            let export = crate::distro::frozen_export(eco)?;
+            Some((eco, export, *self.ecosystems.get(eco)?))
+        });
+        let Some((eco, export, family)) = frozen else {
+            return Cow::Borrowed(self);
+        };
+        Cow::Owned(Wanted {
+            ecosystems: BTreeMap::from([(export.to_string(), family)]),
+            packages: self.packages.clone(),
+            frozen: BTreeMap::new(),
+            relabel: Some(eco.clone()),
+        })
+    }
 }
 
 fn title(r: &Record) -> String {
@@ -362,6 +388,7 @@ fn entries_of(mut r: Record, wanted: &Wanted) -> (Vec<Entry>, BTreeMap<String, u
         let Some(&family) = wanted.ecosystems.get(eco) else {
             continue;
         };
+        let eco = wanted.relabel.as_deref().unwrap_or(eco);
         *counts.entry(eco.to_string()).or_default() += 1;
         if wanted.packages.as_ref().is_some_and(|p| !p.contains(name)) {
             continue;
@@ -478,10 +505,11 @@ pub fn load(paths: &[PathBuf], wanted: &Wanted) -> Result<DistroDb, OsError> {
         db.records.insert(eco.clone(), 0);
     }
     for path in paths {
+        let here = wanted.at(path);
         let per_record = if path.is_dir() {
-            load_dir(path, wanted)?
+            load_dir(path, &here)?
         } else {
-            load_zip(path, wanted)?
+            load_zip(path, &here)?
         };
         for (entries, counts) in per_record {
             for (eco, n) in counts {
@@ -579,6 +607,52 @@ mod tests {
         w.ecosystems.insert("Debian:12".into(), Family::Deb);
         w.ecosystems.insert("Alpine:v3.20".into(), Family::Apk);
         w
+    }
+
+    #[test]
+    fn a_frozen_export_files_only_its_own_release_under_the_frozen_name() {
+        let tmp = std::env::temp_dir().join(format!("fr-frozen-{}", std::process::id()));
+        let (live, frozen) = (tmp.join("Debian"), tmp.join("Debian_11"));
+        let record = |id: &str, ecos: &[&str]| {
+            let affected: Vec<String> = ecos
+                .iter()
+                .map(|e| {
+                    format!(
+                        r#"{{"package":{{"name":"zlib","ecosystem":"{e}"}},
+                        "ranges":[{{"type":"ECOSYSTEM","events":[{{"introduced":"0"}}]}}]}}"#
+                    )
+                })
+                .collect();
+            format!(r#"{{"id":"{id}","affected":[{}]}}"#, affected.join(","))
+        };
+        for dir in [&live, &frozen] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        std::fs::write(
+            live.join("a.json"),
+            record("DEBIAN-CVE-2026-1", &["Debian:11", "Debian:12"]),
+        )
+        .unwrap();
+        std::fs::write(
+            frozen.join("b.json"),
+            record("CVE-2024-1", &["Debian:11", "Debian:12"]),
+        )
+        .unwrap();
+        let mut w = Wanted::default();
+        for eco in ["Debian:11", "Debian:11::frozen", "Debian:12"] {
+            w.ecosystems.insert(eco.into(), Family::Deb);
+        }
+        w.frozen
+            .insert(frozen.clone(), "Debian:11::frozen".to_string());
+        let db = load(&[live, frozen], &w).unwrap();
+        std::fs::remove_dir_all(&tmp).unwrap();
+        let ids = |eco: &str| -> Vec<String> {
+            db.deb(eco, "zlib").iter().map(|a| a.id.clone()).collect()
+        };
+        assert_eq!(ids("Debian:11"), ["DEBIAN-CVE-2026-1"]);
+        assert_eq!(ids("Debian:12"), ["DEBIAN-CVE-2026-1"]);
+        assert_eq!(ids("Debian:11::frozen"), ["CVE-2024-1"]);
+        assert_eq!(db.records("Debian:11::frozen"), 1);
     }
 
     #[test]
