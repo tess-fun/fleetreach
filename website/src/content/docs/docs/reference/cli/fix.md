@@ -68,6 +68,18 @@ Options:
           
           [default: 20]
 
+      --max-prs <N>
+          Open at most this many new pull requests this run; open ones are still updated
+
+      --canary <REPOS>
+          Repos to try first; the rest of the run waits on every edit in them being verified
+
+      --stop-after-failures <N>
+          Stop the run after this many edits that did not verify
+
+      --close-obsolete
+          Close the open fleetreach requests this plan no longer wants, in repos it scanned
+
   -q, --quiet
           no progress output
 

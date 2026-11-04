@@ -20,6 +20,7 @@ pub mod diff;
 pub mod enrich;
 pub mod evidence;
 pub mod fix;
+pub(crate) mod fix_managers;
 pub mod history;
 pub mod history_cmd;
 pub mod images;

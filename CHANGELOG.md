@@ -6,8 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`fix apply` handles pnpm, yarn, Composer, Bundler, NuGet and Maven.** Lockfile managers
+  update with scripts and plugins off; NuGet and Maven change the declared version, or the
+  property it reads. Checked on 30 throwaway repos across all twelve update paths: 28 edits
+  verified, and every changed lockfile passed the package manager's frozen install.
+- **`fix apply` keeps its pull requests current.** A re-run leaves a branch verified on the
+  current base alone, rebuilds a stale one, and skips closed or merged requests and branches
+  someone else pushed to. `--close-obsolete` closes requests the plan no longer wants, only
+  in repos it scanned.
+- `fix apply --max-prs`, `--canary` and `--stop-after-failures` limit a rollout.
+
 ### Fixed
 
+- **`fix apply` could destroy a verified branch.** A re-run that failed its baseline scan
+  deleted the branch. Branches now move only after a commit, and an unverified result goes
+  on `fleetreach-unverified/*`, never over a verified branch.
 - Human VEX statements (`[[settings.ignore]]`, `[[settings.vex_assertion]]`) named every package
   as `pkg:cargo`, so a statement on an npm or PyPI package matched nothing in other tools.
 - **Rust scans missed the advisories only GitHub carries.** RustSec has no record of about 650

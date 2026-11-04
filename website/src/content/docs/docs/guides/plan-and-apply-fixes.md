@@ -86,21 +86,32 @@ runs, so one fix rolled out to ten repos is one campaign.
 
 ## 2. Apply
 
-`fix apply` never touches your work tree. For each lock bump it creates a git worktree on
-`fleetreach/<campaign>/<package>-<version>` from the repo's `HEAD` and runs an update that
-executes no package code:
+`fix apply` never touches your work tree. For each lock bump it creates a git worktree from
+the repo's `HEAD`, or from the remote's default branch with `--push` or `--open-pr`, and runs
+an update that executes no package code:
 
 | Ecosystem | Update |
 |-----------|--------|
 | Cargo | `cargo update -p <pkg>@<from> --precise <to>` |
 | npm | `npm update <pkg> --package-lock-only --ignore-scripts` |
+| pnpm | `pnpm update <pkg> --lockfile-only --ignore-scripts --depth Infinity`, with `--recursive` in a workspace |
+| yarn 2+ | `yarn up -R <pkg> --mode=update-lockfile` with scripts off |
+| yarn 1 | the package's `yarn.lock` entries dropped, then `yarn install --ignore-scripts` into a folder outside the tree |
+| Composer | `composer update <pkg> --with-dependencies --no-install --no-scripts --no-plugins` |
+| Bundler | `bundle lock --update <gem> --conservative` |
+| NuGet | the `Version` in the project or `Directory.Packages.props` edited, then `dotnet restore --force-evaluate` where a `packages.lock.json` exists |
+| Maven | the version in each `pom.xml` edited, or the property it reads |
 | Go | `go get <module>@v<to>`, then `go list -deps -test ./...`, with `GOTOOLCHAIN=local` and `GOWORK=off` |
 | PyPI (`uv.lock`) | `uv lock --upgrade-package <pkg>==<to> --no-build` |
 | GitHub Actions | the `uses:` tag rewritten to the fixed release |
 
 Poetry, Pipenv and requirements files are not updated, because their tools may build source
-distributions (which runs package code). pnpm, yarn, Composer, Bundler, Maven and NuGet are
-not handled yet.
+distributions (which runs package code).
+
+The lockfile updates stay inside the ranges your manifests declare. A version pinned exactly
+in `package.json` does not move, and the edit reports `the update changed nothing`. A range
+that excludes the fix ends as unverified. Maven and NuGet change a declared version, so a
+transitive dependency with no declaration in the repo is reported as blocked.
 
 ## 3. Verify
 
@@ -111,9 +122,10 @@ Before and after the update, `fix apply` scans the work tree with the flags you 
 - no new finding appeared;
 - the repo scans with no new errors or coverage gaps.
 
-The commit stays on its branch either way, with a message that says whether it was
-verified. `fix apply` prints a JSON summary and exits `0` only when everything planned was
-verified.
+A verified commit goes on `fleetreach/<campaign>/<package>-<version>`. One that did not verify
+goes on `fleetreach-unverified/<campaign>/<package>-<version>` with a message that says so, and
+never replaces a verified branch. A failed baseline scan moves no branch at all. `fix apply`
+prints a JSON summary and exits `0` only when everything planned was verified.
 
 ## 4. Open pull requests
 
@@ -125,13 +137,33 @@ fleetreach fix status
 `--push` pushes each verified branch, and `--open-pr` opens a pull request with `gh` (or a
 merge request with `glab` on GitLab), or updates the open one so re-running never
 duplicates it. Unverified branches are never pushed, and only `fleetreach/*` branches are
-ever pushed. The description lists the advisories, flags a breaking jump, states the
+ever pushed. A push leases on the commit fleetreach last saw, so it does not overwrite work
+someone else pushed. The description lists the advisories, flags a breaking jump, states the
 verification and names the other repos in the campaign. Nothing is merged for you.
 
 `fix status` lists every repo's `fleetreach/*` requests with their state.
 
+## 5. Re-run
+
+Run `fix apply` on a fresh plan as often as you like:
+
+- A branch already verified on the current base is left alone.
+- A branch behind the base is rebuilt on it and verified again.
+- A branch someone else has pushed to is skipped, and so is a closed or merged request.
+- `--close-obsolete` closes the open `fleetreach/*` requests the plan no longer wants, in the
+  repos the plan's report scanned. A repo that failed to scan keeps its requests.
+
 ## Limits
 
-`--repos a,b` limits a run to some repos and `--max-repos` (default 20) caps it. See
+`--repos a,b` limits a run to some repos and `--max-repos` (default 20) caps it. Three more
+flags keep a large rollout small:
+
+| Flag | Effect |
+|------|--------|
+| `--max-prs <n>` | Opens at most `n` new requests; open ones are still updated. |
+| `--canary a,b` | Runs these repos first; the rest wait on every edit in them being verified. |
+| `--stop-after-failures <n>` | Stops the run after `n` edits that did not verify. |
+
+See
 [Renovate and Dependabot](/fleetreach/docs/integrations/renovate-and-dependabot/) for how
 this sits next to a dependency bot.

@@ -8,11 +8,19 @@
 //! - `fix apply` performs each `lock-bump` in a git worktree on a `fleetreach/<campaign>/...`
 //!   branch, never in the user's own work tree, with a lock-only command that runs no package
 //!   code (`cargo update --precise`, `npm update --package-lock-only --ignore-scripts`, a
-//!   text edit of a workflow `uses:` tag, `go get`, `uv lock --no-build`). It then **verifies** the change by running
+//!   text edit of a workflow `uses:` tag, `go get`, `uv lock --no-build`, and the updates in
+//!   [`crate::fix_managers`]). It then **verifies** the change by running
 //!   fleetreach's own scan on the work tree before and after: every targeted advisory must be
 //!   gone, nothing new may appear, and the repo must still scan without errors or new
 //!   coverage gaps. The commit stays on its branch either way, marked verified or not;
 //!   nothing is pushed.
+//!
+//! A branch only ever moves to a verified commit. Work happens on a detached work tree, so a
+//! failed rerun leaves the earlier verified branch as it was, an unverified result lands on a
+//! `fleetreach-unverified/*` branch that is never pushed, and a branch already on the current
+//! base is left alone, keeping its CI and reviews. With `--push` or `--open-pr` the base is the
+//! remote's default branch, which is what rebases a stale request. `--close-obsolete` closes the
+//! requests a newer plan no longer wants, and a branch someone else has pushed to is not touched.
 //!
 //! The scan runs as a subprocess of the same binary with the flags given after `--`, so a
 //! verification sees exactly what `fleetreach scan` reports.
@@ -30,7 +38,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cli::fail;
 use crate::config::{Config, Repo};
-use crate::sources;
+use crate::{fix_managers, sources};
 
 /// The plan file format.
 const PLAN_SCHEMA: &str = "fleetreach-fix-plan/1";
@@ -135,6 +143,18 @@ pub struct FixApplyArgs {
     /// At most this many repos per run
     #[arg(long, default_value_t = 20)]
     max_repos: usize,
+    /// Open at most this many new pull requests this run; open ones are still updated
+    #[arg(long, value_name = "N")]
+    max_prs: Option<usize>,
+    /// Repos to try first; the rest of the run waits on every edit in them being verified
+    #[arg(long, value_delimiter = ',', value_name = "REPOS")]
+    canary: Vec<String>,
+    /// Stop the run after this many edits that did not verify
+    #[arg(long, value_name = "N")]
+    stop_after_failures: Option<usize>,
+    /// Close the open fleetreach requests this plan no longer wants, in repos it scanned
+    #[arg(long)]
+    close_obsolete: bool,
     #[arg(short, long, help = "no progress output")]
     quiet: bool,
     /// Push each verified branch to the repo's `origin` (only `fleetreach/*` branches;
@@ -201,6 +221,10 @@ pub struct Edit {
 pub struct Plan {
     pub schema: String,
     pub edits: Vec<Edit>,
+    /// The repos the report read in full. Only here can a request be called obsolete: a repo
+    /// that errored says nothing about what it still needs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scanned: Vec<String>,
 }
 
 /// Ecosystems `fix apply` can bump without running package code.
@@ -212,6 +236,10 @@ fn applicable(ecosystem: Ecosystem) -> bool {
             | Ecosystem::GitHubActions
             | Ecosystem::Go
             | Ecosystem::Pypi
+            | Ecosystem::Packagist
+            | Ecosystem::RubyGems
+            | Ecosystem::NuGet
+            | Ecosystem::Maven
     )
 }
 
@@ -357,9 +385,16 @@ pub fn build_plan(report: &FleetReport, allow_breaking: bool) -> Plan {
         }
     }
     edits.sort_by(|a, b| (&a.repo, &a.campaign).cmp(&(&b.repo, &b.campaign)));
+    let scanned = report
+        .outcomes
+        .iter()
+        .filter(|o| matches!(o.status, fleetreach_core::ScanStatus::Scanned { .. }))
+        .map(|o| o.repo.0.clone())
+        .collect();
     Plan {
         schema: PLAN_SCHEMA.to_string(),
         edits,
+        scanned,
     }
 }
 
@@ -429,6 +464,8 @@ enum Outcome {
     Blocked,
     /// Left out by the plan or the filters.
     Skipped,
+    /// A request this plan no longer wants, closed by `--close-obsolete`.
+    Closed,
 }
 
 #[derive(Debug, Serialize)]
@@ -447,6 +484,68 @@ struct Applied {
     /// What the update ran and changed, for the pull request.
     #[serde(skip)]
     ran: String,
+    /// A new request was opened, which `--max-prs` counts.
+    #[serde(skip)]
+    opened: bool,
+}
+
+impl Applied {
+    fn new(edit: &Edit, outcome: Outcome, detail: &str) -> Applied {
+        Applied {
+            repo: edit.repo.clone(),
+            package: edit.package.clone(),
+            to: edit.to.clone(),
+            campaign: edit.campaign.clone(),
+            outcome,
+            branch: None,
+            detail: detail.to_string(),
+            pull_request: None,
+            ran: String::new(),
+            opened: false,
+        }
+    }
+
+    /// The edit landed nowhere it was meant to.
+    fn failed(&self) -> bool {
+        matches!(self.outcome, Outcome::Unverified | Outcome::Blocked)
+    }
+}
+
+/// The fleetreach requests of each repo seen so far, by branch, as `(state, url)`.
+/// A repo's requests by branch, as (state, url).
+type RepoRequests = BTreeMap<String, (String, String)>;
+
+#[derive(Default)]
+struct Requests {
+    by_repo: BTreeMap<String, Result<RepoRequests, String>>,
+}
+
+impl Requests {
+    fn of(&mut self, repo: &Repo, forge: ForgeArg) -> &Result<RepoRequests, String> {
+        self.by_repo.entry(repo.id.0.clone()).or_insert_with(|| {
+            let listed = list_requests(forge.resolve(&repo.path), &repo.path)?;
+            let text = |v: &serde_json::Value| v.as_str().unwrap_or_default().to_string();
+            let mut out = RepoRequests::new();
+            for request in listed {
+                let state = text(&request["state"]);
+                let branch = text(&request["branch"]);
+                // A branch may have an old closed request and a newer open one.
+                if state == "OPEN" || !out.contains_key(&branch) {
+                    out.insert(branch, (state, text(&request["url"])));
+                }
+            }
+            Ok(out)
+        })
+    }
+}
+
+/// Why an edit should not go ahead given the requests its branch already has.
+fn settled(state: &str) -> Option<&'static str> {
+    match state {
+        "CLOSED" => Some("a person closed this request, so it is not opened again"),
+        "MERGED" => Some("this request is already merged; the plan is older than the merge"),
+        _ => None,
+    }
 }
 
 fn run_apply(args: &FixApplyArgs) -> u8 {
@@ -476,20 +575,22 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
         return fail("no usable cache directory for fix work trees");
     };
 
-    let mut results = Vec::new();
+    for canary in &args.canary {
+        if !config.repos.iter().any(|r| &r.id.0 == canary) {
+            return fail(&format!("--canary repo `{canary}` is not in fleet.toml"));
+        }
+    }
+    // Canaries go first; sorting is stable, so the plan's order holds within each group.
+    let is_canary = |edit: &Edit| args.canary.contains(&edit.repo);
+    let mut edits: Vec<&Edit> = plan.edits.iter().collect();
+    edits.sort_by_key(|e| !is_canary(e));
+
+    let mut results: Vec<Applied> = Vec::new();
+    let mut requests = Requests::default();
     let mut repos_touched: BTreeSet<String> = BTreeSet::new();
-    for edit in &plan.edits {
-        let skip = |why: &str| Applied {
-            repo: edit.repo.clone(),
-            package: edit.package.clone(),
-            to: edit.to.clone(),
-            campaign: edit.campaign.clone(),
-            outcome: Outcome::Skipped,
-            branch: None,
-            detail: why.to_string(),
-            pull_request: None,
-            ran: String::new(),
-        };
+    let mut stopped: Option<String> = None;
+    for edit in edits {
+        let skip = |why: &str| Applied::new(edit, Outcome::Skipped, why);
         if edit.strategy != Strategy::LockBump {
             results.push(skip(
                 edit.reason.as_deref().unwrap_or("blocked in the plan"),
@@ -497,6 +598,20 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
             continue;
         }
         if !args.repos.is_empty() && !args.repos.contains(&edit.repo) {
+            continue;
+        }
+        let failures = results.iter().filter(|r| r.failed()).count();
+        if stopped.is_none() && args.stop_after_failures.is_some_and(|n| failures >= n) {
+            stopped = Some(format!("stopped after {failures} failed edit(s)"));
+        }
+        let canary_failed = results
+            .iter()
+            .any(|r| r.failed() && args.canary.contains(&r.repo));
+        if stopped.is_none() && canary_failed && !is_canary(edit) {
+            stopped = Some("stopped: a canary repo did not verify".to_string());
+        }
+        if let Some(why) = &stopped {
+            results.push(skip(why));
             continue;
         }
         if !repos_touched.contains(&edit.repo) && repos_touched.len() >= args.max_repos {
@@ -507,18 +622,47 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
             results.push(skip("repo not in fleet.toml"));
             continue;
         };
+        let branch = branch_name(edit);
+        let mut has_open = false;
+        if args.open_pr {
+            match requests.of(repo, args.forge) {
+                Ok(known) => {
+                    let state = known.get(&branch).map(|(state, _)| state.as_str());
+                    if let Some(why) = state.and_then(settled) {
+                        results.push(skip(why));
+                        continue;
+                    }
+                    has_open = state == Some("OPEN");
+                }
+                // Unknown requests cannot be counted or respected.
+                Err(e) => {
+                    let detail = format!("could not list requests: {e}");
+                    results.push(Applied::new(edit, Outcome::Blocked, &detail));
+                    continue;
+                }
+            }
+        }
+        let opened = results.iter().filter(|r| r.opened).count();
+        if !has_open && args.open_pr && args.max_prs.is_some_and(|n| opened >= n) {
+            results.push(skip("over --max-prs for this run"));
+            continue;
+        }
         repos_touched.insert(edit.repo.clone());
         if !args.quiet {
             eprintln!("{}: {} -> {} ...", edit.repo, edit.package, edit.to);
         }
-        let mut result = apply_one(edit, repo, &work_root, &args.scan_args);
-        if result.outcome == Outcome::Verified && (args.push || args.open_pr) {
+        let publishing = args.push || args.open_pr;
+        let mut result = apply_one(edit, repo, &work_root, &args.scan_args, publishing);
+        if result.outcome == Outcome::Verified && publishing {
             publish(&mut result, edit, repo, &plan, args);
         }
         if !args.quiet {
             eprintln!("  {:?}: {}", result.outcome, result.detail);
         }
         results.push(result);
+    }
+    if args.close_obsolete {
+        close_obsolete(&plan, &config, args, &mut requests, &mut results);
     }
 
     match serde_json::to_string_pretty(&results) {
@@ -527,11 +671,12 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
     }
     let count = |o: Outcome| results.iter().filter(|r| r.outcome == o).count();
     eprintln!(
-        "{} verified, {} unverified, {} blocked, {} skipped{}",
+        "{} verified, {} unverified, {} blocked, {} skipped, {} closed{}",
         count(Outcome::Verified),
         count(Outcome::Unverified),
         count(Outcome::Blocked),
         count(Outcome::Skipped),
+        count(Outcome::Closed),
         if args.push || args.open_pr {
             ""
         } else {
@@ -542,18 +687,63 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
     u8::from(count(Outcome::Unverified) + count(Outcome::Blocked) > 0)
 }
 
-fn apply_one(edit: &Edit, repo: &Repo, work_root: &Path, scan_args: &[String]) -> Applied {
-    let mut out = Applied {
-        repo: edit.repo.clone(),
-        package: edit.package.clone(),
-        to: edit.to.clone(),
-        campaign: edit.campaign.clone(),
-        outcome: Outcome::Blocked,
-        branch: None,
-        detail: String::new(),
-        pull_request: None,
-        ran: String::new(),
+/// The commit a run builds on, and the branch's own head on the remote if it has one. When
+/// publishing that is the remote's default branch, so a rerun rebases what went stale, and a
+/// remote with no default branch yet falls back to `HEAD`.
+fn base_and_remote(
+    top: &Path,
+    branch: &str,
+    publishing: bool,
+) -> Result<(String, Option<String>), String> {
+    let head = git(top, &["rev-parse", "HEAD"])?;
+    if !publishing {
+        return Ok((head, None));
+    }
+    let tracking = |name: &str| format!("refs/remotes/origin/{name}");
+    let fetch = |name: &str| {
+        let spec = format!("+refs/heads/{name}:{}", tracking(name));
+        git(top, &["fetch", "--quiet", "origin", &spec])
     };
+    let symref = git(top, &["ls-remote", "--symref", "origin", "HEAD"])?;
+    let default = symref
+        .lines()
+        .find_map(|l| l.strip_prefix("ref: refs/heads/"))
+        .and_then(|l| l.split_whitespace().next())
+        .map(str::to_string);
+    let base = match default {
+        Some(name) if fetch(&name).is_ok() => git(top, &["rev-parse", &tracking(&name)])?,
+        _ => head,
+    };
+    let listed = git(
+        top,
+        &["ls-remote", "origin", &format!("refs/heads/{branch}")],
+    )?;
+    let remote = match listed.split_whitespace().next() {
+        Some(sha) => {
+            fetch(branch)?;
+            Some(sha.to_string())
+        }
+        None => None,
+    };
+    Ok((base, remote))
+}
+
+/// Whether fleetreach made this commit for this campaign, and verified it.
+fn ours(top: &Path, commit: &str, edit: &Edit) -> bool {
+    git(top, &["log", "-1", "--format=%B", commit])
+        .is_ok_and(|m| m.contains(&format!("campaign {}", edit.campaign)) && m.contains(VERIFIED))
+}
+
+const VERIFIED: &str = "Verified by a fleetreach re-scan";
+
+fn apply_one(
+    edit: &Edit,
+    repo: &Repo,
+    work_root: &Path,
+    scan_args: &[String],
+    publishing: bool,
+) -> Applied {
+    let mut out = Applied::new(edit, Outcome::Blocked, "");
     let top = match git(&repo.path, &["rev-parse", "--show-toplevel"]) {
         Ok(t) => PathBuf::from(t),
         Err(e) => {
@@ -573,9 +763,41 @@ fn apply_one(edit: &Edit, repo: &Repo, work_root: &Path, scan_args: &[String]) -
         .unwrap_or_default();
     let branch = branch_name(edit);
     let tree = work_root.join(format!("{}-{}", safe(&edit.repo), safe(&branch)));
+    let (base, remote) = match base_and_remote(&top, &branch, publishing) {
+        Ok(found) => found,
+        Err(e) => {
+            out.detail = format!("could not read the remote: {e}");
+            return out;
+        }
+    };
+    if let Some(sha) = &remote {
+        if !ours(&top, sha, edit) {
+            out.outcome = Outcome::Skipped;
+            out.detail = "someone else has pushed to this branch; left alone".to_string();
+            return out;
+        }
+    }
+    let current = remote
+        .clone()
+        .or_else(|| git(&top, &["rev-parse", "--verify", "--quiet", &branch]).ok());
+    if let Some(sha) = current {
+        let parent = git(&top, &["rev-parse", &format!("{sha}^")]);
+        if parent.as_deref() == Ok(base.as_str()) && ours(&top, &sha, edit) {
+            // Nothing moved under it: a rewrite would only reset its CI and reviews.
+            if let Err(e) = git(&top, &["branch", "--force", &branch, &sha]) {
+                out.detail = format!("could not update {branch}: {e}");
+                return out;
+            }
+            out.outcome = Outcome::Verified;
+            out.branch = Some(branch);
+            out.detail = "already verified on the current base".to_string();
+            return out;
+        }
+    }
     let _ = git(&top, &["worktree", "remove", "--force", path_str(&tree)]);
     let _ = std::fs::remove_dir_all(&tree);
     let _ = git(&top, &["worktree", "prune"]);
+    // Detached: no branch moves until there is a commit worth moving it to.
     if let Err(e) = git(
         &top,
         &[
@@ -583,27 +805,23 @@ fn apply_one(edit: &Edit, repo: &Repo, work_root: &Path, scan_args: &[String]) -
             "add",
             "--quiet",
             "--force",
-            "-B",
-            &branch,
+            "--detach",
             path_str(&tree),
-            "HEAD",
+            &base,
         ],
     ) {
         out.detail = format!("could not create a work tree: {e}");
         return out;
     }
-    let cleanup = |keep_branch: bool| {
+    let cleanup = || {
         let _ = git(&top, &["worktree", "remove", "--force", path_str(&tree)]);
-        if !keep_branch {
-            let _ = git(&top, &["branch", "-D", &branch]);
-        }
     };
     let work = tree.join(&rel);
 
     let before = match scan(&work, repo, scan_args) {
         Ok(s) => s,
         Err(e) => {
-            cleanup(false);
+            cleanup();
             out.detail = format!("baseline scan failed: {e}");
             return out;
         }
@@ -611,13 +829,13 @@ fn apply_one(edit: &Edit, repo: &Repo, work_root: &Path, scan_args: &[String]) -
     let changed = match apply_edit(&work, edit) {
         Ok(c) => c,
         Err(e) => {
-            cleanup(false);
+            cleanup();
             out.detail = e;
             return out;
         }
     };
     if git(&tree, &["status", "--porcelain"]).is_ok_and(|s| s.is_empty()) {
-        cleanup(false);
+        cleanup();
         out.detail = "the update changed nothing".to_string();
         return out;
     }
@@ -650,21 +868,34 @@ fn apply_one(edit: &Edit, repo: &Repo, work_root: &Path, scan_args: &[String]) -
         ecosystem_name(edit.ecosystem),
         edit.campaign,
         if outcome == Outcome::Verified {
-            "Verified by a fleetreach re-scan: the advisories are gone and nothing new appeared."
+            format!("{VERIFIED}: the advisories are gone and nothing new appeared.")
         } else {
-            "Not verified by the fleetreach re-scan; review before using."
+            "Not verified by the fleetreach re-scan; review before using.".to_string()
         }
     );
     let committed =
         git(&tree, &["add", "-A"]).and_then(|_| git(&tree, &["commit", "--quiet", "-m", &message]));
     if let Err(e) = committed {
-        cleanup(false);
+        cleanup();
         out.detail = format!("could not commit: {e}");
         return out;
     }
-    cleanup(true);
+    let commit = git(&tree, &["rev-parse", "HEAD"]);
+    cleanup();
+    // An unverified commit takes a branch of its own, which is never pushed and never replaces
+    // a verified one.
+    let target = if outcome == Outcome::Verified {
+        branch
+    } else {
+        branch.replacen("fleetreach/", "fleetreach-unverified/", 1)
+    };
+    let moved = commit.and_then(|sha| git(&top, &["branch", "--force", &target, &sha]));
+    if let Err(e) = moved {
+        out.detail = format!("could not update {target}: {e}");
+        return out;
+    }
     out.outcome = outcome;
-    out.branch = Some(branch);
+    out.branch = Some(target);
     out.detail = detail;
     out.ran = changed;
     out
@@ -687,14 +918,26 @@ fn publish(result: &mut Applied, edit: &Edit, repo: &Repo, plan: &Plan, args: &F
             return;
         }
     };
-    // The branch is fleetreach's own, rebuilt from HEAD on every run, so a lease-protected
-    // force push is what keeps it current without touching anyone else's work.
+    // The branch is fleetreach's own, rebuilt on every run, so a force push pinned to the head
+    // just read from the remote is what keeps it current without touching anyone else's work.
+    let lease = match git(
+        &top,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/remotes/origin/{branch}"),
+        ],
+    ) {
+        Ok(sha) => format!("--force-with-lease={branch}:{sha}"),
+        Err(_) => format!("--force-with-lease={branch}:"),
+    };
     if let Err(e) = git(
         &top,
         &[
             "push",
             "--quiet",
-            "--force-with-lease",
+            &lease,
             "origin",
             &format!("{branch}:{branch}"),
         ],
@@ -723,9 +966,118 @@ fn publish(result: &mut Applied, edit: &Edit, repo: &Repo, plan: &Plan, args: &F
             let verb = if updated { "updated" } else { "opened" };
             result.detail.push_str(&format!("; {noun} {verb}"));
             result.pull_request = Some(url);
+            result.opened = !updated;
         }
         Err(e) => result.detail.push_str(&format!("; {noun} failed: {e}")),
     }
+}
+
+/// Close each open fleetreach request the plan does not want, in repos the report read in
+/// full, and delete its branch. What the plan blocks is still wanted, and a branch someone else
+/// has pushed to stays open for them.
+fn close_obsolete(
+    plan: &Plan,
+    config: &Config,
+    args: &FixApplyArgs,
+    requests: &mut Requests,
+    results: &mut Vec<Applied>,
+) {
+    let wanted: BTreeSet<(&str, String)> = plan
+        .edits
+        .iter()
+        .map(|e| (e.repo.as_str(), branch_name(e)))
+        .collect();
+    let in_scope = |id: &String| args.repos.is_empty() || args.repos.contains(id);
+    for id in plan.scanned.iter().filter(|id| in_scope(id)) {
+        let Some(repo) = config.repos.iter().find(|r| &r.id.0 == id) else {
+            continue;
+        };
+        let open: Vec<(String, String)> = match requests.of(repo, args.forge) {
+            Ok(known) => known
+                .iter()
+                .filter(|(branch, (state, _))| {
+                    state == "OPEN" && !wanted.contains(&(id.as_str(), (*branch).clone()))
+                })
+                .map(|(branch, (_, url))| (branch.clone(), url.clone()))
+                .collect(),
+            Err(e) => {
+                eprintln!("error: {id}: could not list requests: {e}");
+                continue;
+            }
+        };
+        for (branch, url) in open {
+            results.push(close_one(repo, &branch, url, args.forge));
+        }
+    }
+}
+
+fn close_one(repo: &Repo, branch: &str, url: String, forge: ForgeArg) -> Applied {
+    let mut out = Applied {
+        repo: repo.id.0.clone(),
+        package: String::new(),
+        to: String::new(),
+        campaign: branch.split('/').nth(1).unwrap_or_default().to_string(),
+        outcome: Outcome::Blocked,
+        branch: Some(branch.to_string()),
+        detail: String::new(),
+        pull_request: Some(url.clone()),
+        ran: String::new(),
+        opened: false,
+    };
+    let note = "The newest fleetreach plan no longer needs this change.";
+    let closed = fetch_head(&repo.path, branch).and_then(|head| {
+        let message = git(&repo.path, &["log", "-1", "--format=%B", &head])?;
+        if !message.contains(VERIFIED) {
+            return Err("someone else has pushed to this branch; left open".to_string());
+        }
+        match forge.resolve(&repo.path) {
+            Forge::GitHub => run(Command::new("gh").current_dir(&repo.path).args([
+                "pr",
+                "close",
+                &url,
+                "--comment",
+                note,
+            ])),
+            Forge::GitLab => {
+                let iid = url.rsplit('/').next().unwrap_or_default();
+                run(Command::new("glab").current_dir(&repo.path).args([
+                    "mr",
+                    "note",
+                    iid,
+                    "--message",
+                    note,
+                ]))?;
+                run(Command::new("glab")
+                    .current_dir(&repo.path)
+                    .args(["mr", "close", iid]))
+            }
+        }?;
+        git(
+            &repo.path,
+            &["push", "--quiet", "origin", "--delete", branch],
+        )
+    });
+    match closed {
+        Ok(_) => {
+            out.outcome = Outcome::Closed;
+            out.detail = "no longer in the plan: closed and its branch deleted".to_string();
+        }
+        Err(e) => out.detail = format!("not closed: {e}"),
+    }
+    out
+}
+
+/// The head of `branch` on the remote, fetched so it can be read.
+fn fetch_head(dir: &Path, branch: &str) -> Result<String, String> {
+    if !branch.starts_with("fleetreach/") {
+        return Err("not a fleetreach branch".to_string());
+    }
+    let spec = format!("+refs/heads/{branch}:refs/remotes/origin/{branch}");
+    git(dir, &["fetch", "--quiet", "origin", &spec])?;
+    git(
+        dir,
+        &["rev-parse", &format!("refs/remotes/origin/{branch}")],
+    )
 }
 
 /// Open the pull request for `branch`, or update the open one. The URL, and whether it
@@ -1025,10 +1377,14 @@ pub(crate) fn run(cmd: &mut Command) -> Result<String, String> {
 fn apply_edit(work: &Path, edit: &Edit) -> Result<String, String> {
     match edit.ecosystem {
         Ecosystem::Cargo => cargo_bump(work, edit),
-        Ecosystem::Npm => npm_bump(work, edit),
+        Ecosystem::Npm => node_bump(work, edit),
         Ecosystem::GitHubActions => actions_bump(work, edit),
         Ecosystem::Go => go_bump(work, edit),
         Ecosystem::Pypi => uv_bump(work, edit),
+        Ecosystem::Packagist => fix_managers::composer_bump(work, edit),
+        Ecosystem::RubyGems => fix_managers::bundler_bump(work, edit),
+        Ecosystem::NuGet => fix_managers::nuget_bump(work, edit),
+        Ecosystem::Maven => fix_managers::maven_bump(work, edit),
         other => Err(format!(
             "fix apply does not handle {} yet",
             ecosystem_name(other)
@@ -1036,8 +1392,23 @@ fn apply_edit(work: &Path, edit: &Edit) -> Result<String, String> {
     }
 }
 
+/// The update for each lockfile a Node project may keep the package in.
+fn node_bump(work: &Path, edit: &Edit) -> Result<String, String> {
+    let mut ran: Vec<String> = Vec::new();
+    ran.extend(npm_bump(work, edit)?);
+    ran.extend(fix_managers::pnpm_bump(work, edit)?);
+    ran.extend(fix_managers::yarn_bump(work, edit)?);
+    if ran.is_empty() {
+        return Err(format!(
+            "no package-lock.json, pnpm-lock.yaml or yarn.lock holds {}",
+            edit.package
+        ));
+    }
+    Ok(ran.join("; "))
+}
+
 /// Directories under `root` (skipping VCS and dependency directories) holding `file`.
-fn dirs_with(root: &Path, file: &str) -> Vec<PathBuf> {
+pub(crate) fn dirs_with(root: &Path, file: &str) -> Vec<PathBuf> {
     let mut found: Vec<PathBuf> = walkdir::WalkDir::new(root)
         .max_depth(6)
         .into_iter()
@@ -1092,7 +1463,7 @@ fn cargo_bump(work: &Path, edit: &Edit) -> Result<String, String> {
 
 /// `npm update <pkg> --package-lock-only --ignore-scripts` where `package-lock.json` holds
 /// the package: the newest version every declared range allows, with no install scripts.
-fn npm_bump(work: &Path, edit: &Edit) -> Result<String, String> {
+fn npm_bump(work: &Path, edit: &Edit) -> Result<Option<String>, String> {
     let needle = format!("\"node_modules/{}\"", edit.package);
     let dirs: Vec<PathBuf> = dirs_with(work, "package-lock.json")
         .into_iter()
@@ -1100,12 +1471,6 @@ fn npm_bump(work: &Path, edit: &Edit) -> Result<String, String> {
             std::fs::read_to_string(d.join("package-lock.json")).is_ok_and(|t| t.contains(&needle))
         })
         .collect();
-    if dirs.is_empty() {
-        return Err(format!(
-            "no package-lock.json holds {} (pnpm and yarn lockfiles are not handled yet)",
-            edit.package
-        ));
-    }
     for dir in &dirs {
         run(Command::new("npm").current_dir(dir).args([
             "update",
@@ -1117,11 +1482,13 @@ fn npm_bump(work: &Path, edit: &Edit) -> Result<String, String> {
         ]))
         .map_err(|e| format!("npm update {}: {e}", edit.package))?;
     }
-    Ok(format!(
-        "npm update {} --package-lock-only in {} dir(s)",
-        edit.package,
-        dirs.len()
-    ))
+    Ok((!dirs.is_empty()).then(|| {
+        format!(
+            "npm update {} --package-lock-only in {} dir(s)",
+            edit.package,
+            dirs.len()
+        )
+    }))
 }
 
 /// `go get <module>@v<to>` in every module whose `go.mod` requires the module, then
@@ -1588,6 +1955,7 @@ mod tests {
             &Plan {
                 schema: PLAN_SCHEMA.into(),
                 edits: vec![],
+                scanned: vec![],
             },
             "",
         );
@@ -1602,6 +1970,7 @@ mod tests {
             &Plan {
                 schema: PLAN_SCHEMA.into(),
                 edits: vec![],
+                scanned: vec![],
             },
             "",
         );

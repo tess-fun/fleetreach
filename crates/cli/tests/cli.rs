@@ -982,6 +982,374 @@ fn workflows_are_scanned_alongside_a_lockfile() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// Repos with a vulnerable workflow, each pushed to a bare `origin`, a fake `gh` that keeps one
+/// request per repo, and the plan to fix them.
+struct FixFleet {
+    root: PathBuf,
+    fleet: String,
+    plan: String,
+    path: String,
+}
+
+impl FixFleet {
+    fn new(tag: &str, repos: &[&str]) -> FixFleet {
+        let root =
+            std::env::temp_dir().join(format!("fleetreach-life-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let bin = root.join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let gh = bin.join("gh");
+        std::fs::write(
+            &gh,
+            r#"#!/bin/sh
+state="$PWD.pr"
+case "$1 $2" in
+  "pr list")
+    case "$*" in
+      *--head*) [ -f "$state" ] && grep -q '"OPEN"' "$state" && echo "https://forge.test/pr/1" ;;
+      *) cat "$state" 2>/dev/null || echo '[]' ;;
+    esac ;;
+  "pr create")
+    while [ $# -gt 0 ]; do [ "$1" = "--head" ] && b="$2"; shift; done
+    printf '[{"headRefName":"%s","state":"OPEN","url":"https://forge.test/pr/1","title":"t"}]' "$b" > "$state"
+    echo "https://forge.test/pr/1" ;;
+  "pr close") sed 's/"OPEN"/"CLOSED"/' "$state" > "$state.new" && mv "$state.new" "$state" ;;
+esac
+"#,
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let mut body = String::new();
+        for id in repos {
+            let repo = root.join(id);
+            let workflows = repo.join(".github/workflows");
+            std::fs::create_dir_all(&workflows).unwrap();
+            let workflow = "on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: \
+                            tj-actions/changed-files@v44\n";
+            std::fs::write(workflows.join("ci.yml"), workflow).unwrap();
+            git_in(&repo, &["init", "-q", "-b", "main"]);
+            git_in(&repo, &["add", "-A"]);
+            git_in(&repo, &["commit", "-q", "-m", "init"]);
+            let origin = root.join(format!("{id}.git"));
+            let bare = origin.to_str().unwrap();
+            git_in(&root, &["init", "-q", "--bare", "-b", "main", bare]);
+            git_in(&repo, &["remote", "add", "origin", bare]);
+            git_in(&repo, &["push", "-q", "origin", "main"]);
+            body.push_str(&format!("[[repo]]\nid = \"{id}\"\npath = {repo:?}\n"));
+        }
+        let fleet = root.join("fleet.toml");
+        std::fs::write(&fleet, body).unwrap();
+        let path = format!(
+            "{}:{}",
+            bin.display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        let mut me = FixFleet {
+            fleet: fleet.to_str().unwrap().to_string(),
+            plan: root.join("plan.json").to_str().unwrap().to_string(),
+            root,
+            path,
+        };
+        me.write_plan();
+        me
+    }
+
+    fn env(&self) -> Vec<(&str, &std::ffi::OsStr)> {
+        vec![
+            ("GIT_CONFIG_GLOBAL", std::ffi::OsStr::new("/dev/null")),
+            ("GIT_AUTHOR_NAME", std::ffi::OsStr::new("t")),
+            ("GIT_AUTHOR_EMAIL", std::ffi::OsStr::new("t@example.com")),
+            ("GIT_COMMITTER_NAME", std::ffi::OsStr::new("t")),
+            ("GIT_COMMITTER_EMAIL", std::ffi::OsStr::new("t@example.com")),
+            ("XDG_CACHE_HOME", self.root.as_os_str()),
+            ("PATH", std::ffi::OsStr::new(&self.path)),
+        ]
+    }
+
+    fn write_plan(&mut self) {
+        let database = db();
+        let osv = file_url("ghactions-osv");
+        let out = run_env(
+            &[
+                "scan",
+                "-q",
+                "-c",
+                &self.fleet,
+                "--db",
+                &database,
+                "--ghactions-vuln-db",
+                &osv,
+                "-f",
+                "json",
+            ],
+            &self.env(),
+        );
+        let report = self.root.join("report.json");
+        std::fs::write(&report, stdout(&out)).unwrap();
+        let argv = [
+            "fix",
+            "plan",
+            "-c",
+            &self.fleet,
+            "--report",
+            report.to_str().unwrap(),
+            "--allow-breaking",
+        ];
+        let out = run_env(&argv, &self.env());
+        std::fs::write(&self.plan, stdout(&out)).unwrap();
+    }
+
+    /// `fix apply --open-pr` with `extra`, and the scan's database as `db`.
+    fn apply(&self, extra: &[&str], database: &str) -> (i32, serde_json::Value) {
+        let osv = file_url("ghactions-osv");
+        let mut argv = vec!["fix", "apply", "-q", "-c", &self.fleet, &self.plan];
+        argv.extend_from_slice(extra);
+        argv.extend_from_slice(&["--", "--db", database, "--ghactions-vuln-db", &osv]);
+        let out = run_env(&argv, &self.env());
+        let results =
+            serde_json::from_str(&stdout(&out)).unwrap_or_else(|e| panic!("{e}: {}", stderr(&out)));
+        (code(&out), results)
+    }
+
+    fn repo(&self, id: &str) -> PathBuf {
+        self.root.join(id)
+    }
+
+    /// A commit on the remote's default branch that this checkout has not seen.
+    fn advance_origin(&self, id: &str) {
+        let repo = self.repo(id);
+        git_in(&repo, &["fetch", "-q", "origin", "main"]);
+        git_in(&repo, &["reset", "-q", "--hard", "FETCH_HEAD"]);
+        git_in(
+            &repo,
+            &["commit", "-q", "--allow-empty", "-m", "later work"],
+        );
+        git_in(&repo, &["push", "-q", "origin", "main"]);
+        git_in(&repo, &["reset", "-q", "--hard", "HEAD~1"]);
+    }
+}
+
+#[test]
+fn a_rerun_keeps_verified_branches_and_rebases_stale_ones() {
+    let fleet = FixFleet::new("rerun", &["a"]);
+    let database = db();
+    let repo = fleet.repo("a");
+    let origin = fleet.root.join("a.git");
+
+    let (status, results) = fleet.apply(&["--open-pr"], &database);
+    assert_eq!(status, 0, "{results}");
+    assert_eq!(results[0]["outcome"], "verified", "{results}");
+    let branch = results[0]["branch"].as_str().unwrap().to_string();
+    let head = git_in(&origin, &["rev-parse", &branch]);
+
+    // Nothing moved: the same commit, so its CI and reviews survive.
+    let (_, results) = fleet.apply(&["--open-pr"], &database);
+    assert!(
+        results[0]["detail"]
+            .as_str()
+            .unwrap()
+            .contains("already verified"),
+        "{results}"
+    );
+    assert_eq!(git_in(&origin, &["rev-parse", &branch]), head);
+
+    // The base moved and this run cannot scan: the verified branch stays, here and on the remote.
+    fleet.advance_origin("a");
+    let (status, results) = fleet.apply(&["--open-pr"], "/nonexistent");
+    assert_eq!(status, 1);
+    assert_eq!(results[0]["outcome"], "blocked", "{results}");
+    assert_eq!(git_in(&repo, &["rev-parse", &branch]), head);
+    assert_eq!(git_in(&origin, &["rev-parse", &branch]), head);
+
+    // It can scan again: the branch is rebuilt on the remote's default branch.
+    let (_, results) = fleet.apply(&["--open-pr"], &database);
+    assert_eq!(results[0]["outcome"], "verified", "{results}");
+    let main = git_in(&origin, &["rev-parse", "main"]);
+    assert_eq!(git_in(&origin, &["rev-parse", &format!("{branch}^")]), main);
+
+    // Someone else's commit on the branch is theirs: nothing is overwritten.
+    git_in(&repo, &["checkout", "-q", &branch]);
+    git_in(
+        &repo,
+        &["commit", "-q", "--allow-empty", "-m", "a person's fix"],
+    );
+    git_in(&repo, &["push", "-q", "origin", &branch]);
+    git_in(&repo, &["checkout", "-q", "main"]);
+    let theirs = git_in(&origin, &["rev-parse", &branch]);
+    fleet.advance_origin("a");
+    let (_, results) = fleet.apply(&["--open-pr"], &database);
+    assert_eq!(results[0]["outcome"], "skipped", "{results}");
+    assert_eq!(git_in(&origin, &["rev-parse", &branch]), theirs);
+
+    // A request a person closed is not opened again.
+    let state = format!("{}.pr", repo.display());
+    let closed = std::fs::read_to_string(&state)
+        .unwrap()
+        .replace("OPEN", "CLOSED");
+    std::fs::write(&state, closed).unwrap();
+    let (_, results) = fleet.apply(&["--open-pr"], &database);
+    assert_eq!(results[0]["outcome"], "skipped", "{results}");
+    assert!(
+        results[0]["detail"].as_str().unwrap().contains("closed"),
+        "{results}"
+    );
+    let _ = std::fs::remove_dir_all(&fleet.root);
+}
+
+#[test]
+fn fix_runs_are_capped_and_canaries_go_first() {
+    let fleet = FixFleet::new("caps", &["a", "b", "c"]);
+    let database = db();
+    let outcomes = |results: &serde_json::Value| -> Vec<(String, String)> {
+        results
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| {
+                let text = |k: &str| r[k].as_str().unwrap_or_default().to_string();
+                (text("repo"), text("outcome"))
+            })
+            .collect()
+    };
+
+    // A failing canary stops everything behind it; it runs first though it sorts last.
+    let plain = std::fs::read_to_string(&fleet.plan).unwrap();
+    let broken = fleet.repo("c").join(".github/workflows/ci.yml");
+    let workflow = std::fs::read_to_string(&broken).unwrap();
+    std::fs::write(
+        &broken,
+        workflow.replace("changed-files@v44", "changed-files@v46"),
+    )
+    .unwrap();
+    git_in(&fleet.repo("c"), &["commit", "-q", "-am", "already moved"]);
+    git_in(&fleet.repo("c"), &["push", "-q", "origin", "main"]);
+    let (status, results) = fleet.apply(&["--open-pr", "--canary", "c"], &database);
+    assert_eq!(status, 1, "{results}");
+    assert_eq!(
+        outcomes(&results),
+        [
+            ("c".to_string(), "blocked".to_string()),
+            ("a".to_string(), "skipped".to_string()),
+            ("b".to_string(), "skipped".to_string())
+        ],
+        "{results}"
+    );
+    assert!(
+        results[1]["detail"].as_str().unwrap().contains("canary"),
+        "{results}"
+    );
+
+    // Failures stop a run with no canary too.
+    let args = ["--open-pr", "--repos", "c,a", "--stop-after-failures", "1"];
+    let edits: serde_json::Value = serde_json::from_str(&plain).unwrap();
+    let mut reversed = edits.clone();
+    reversed["edits"].as_array_mut().unwrap().reverse();
+    std::fs::write(&fleet.plan, reversed.to_string()).unwrap();
+    let (_, results) = fleet.apply(&args, &database);
+    let seen = outcomes(&results);
+    assert_eq!(
+        seen[0],
+        ("c".to_string(), "blocked".to_string()),
+        "{results}"
+    );
+    assert_eq!(
+        seen[1],
+        ("a".to_string(), "skipped".to_string()),
+        "{results}"
+    );
+    std::fs::write(&fleet.plan, &plain).unwrap();
+
+    // New requests are capped; an open one is still updated.
+    let (_, results) = fleet.apply(
+        &["--open-pr", "--max-prs", "1", "--repos", "a,b"],
+        &database,
+    );
+    assert_eq!(
+        outcomes(&results),
+        [
+            ("a".to_string(), "verified".to_string()),
+            ("b".to_string(), "skipped".to_string())
+        ],
+        "{results}"
+    );
+    let (_, results) = fleet.apply(
+        &["--open-pr", "--max-prs", "1", "--repos", "a,b"],
+        &database,
+    );
+    assert_eq!(
+        outcomes(&results),
+        [
+            ("a".to_string(), "verified".to_string()),
+            ("b".to_string(), "verified".to_string())
+        ],
+        "{results}"
+    );
+
+    let (status, _) = (fleet.apply(&["--repos", "a"], &database).0, ());
+    assert_eq!(status, 0);
+    let out = run_env(
+        &[
+            "fix",
+            "apply",
+            "-c",
+            &fleet.fleet,
+            &fleet.plan,
+            "--canary",
+            "nope",
+        ],
+        &fleet.env(),
+    );
+    assert_eq!(code(&out), 2, "{}", stderr(&out));
+    let _ = std::fs::remove_dir_all(&fleet.root);
+}
+
+#[test]
+fn close_obsolete_closes_only_what_a_full_scan_no_longer_wants() {
+    let mut fleet = FixFleet::new("close", &["a"]);
+    let database = db();
+    let repo = fleet.repo("a");
+    let origin = fleet.root.join("a.git");
+    let (_, results) = fleet.apply(&["--open-pr"], &database);
+    let branch = results[0]["branch"].as_str().unwrap().to_string();
+
+    // Still wanted: nothing closes.
+    let (_, results) = fleet.apply(&["--open-pr", "--close-obsolete"], &database);
+    assert_eq!(results.as_array().unwrap().len(), 1, "{results}");
+
+    // The fix landed some other way: the new plan has no edit, so the request closes.
+    let file = repo.join(".github/workflows/ci.yml");
+    let text = std::fs::read_to_string(&file).unwrap();
+    std::fs::write(
+        &file,
+        text.replace("changed-files@v44", "changed-files@v46.0.1"),
+    )
+    .unwrap();
+    git_in(&repo, &["commit", "-q", "-am", "moved by hand"]);
+    git_in(&repo, &["push", "-q", "origin", "main"]);
+    fleet.write_plan();
+
+    // A plan that read nothing of this repo says nothing about it.
+    let plain = std::fs::read_to_string(&fleet.plan).unwrap();
+    let mut unread: serde_json::Value = serde_json::from_str(&plain).unwrap();
+    unread["scanned"] = serde_json::json!([]);
+    std::fs::write(&fleet.plan, unread.to_string()).unwrap();
+    let (_, results) = fleet.apply(&["--close-obsolete"], &database);
+    assert!(results.as_array().unwrap().is_empty(), "{results}");
+    assert!(!git_in(&origin, &["branch", "--list", &branch]).is_empty());
+
+    std::fs::write(&fleet.plan, &plain).unwrap();
+    let (_, results) = fleet.apply(&["--close-obsolete"], &database);
+    assert_eq!(results[0]["outcome"], "closed", "{results}");
+    assert!(git_in(&origin, &["branch", "--list", &branch]).is_empty());
+    let state = std::fs::read_to_string(format!("{}.pr", repo.display())).unwrap();
+    assert!(state.contains("CLOSED"), "{state}");
+    let _ = std::fs::remove_dir_all(&fleet.root);
+}
+
 #[test]
 fn fix_plans_applies_and_verifies_a_lock_bump_on_a_branch() {
     let root = std::env::temp_dir().join(format!("fleetreach-fix-e2e-{}", std::process::id()));
