@@ -53,9 +53,12 @@ Every [GitHub release](https://github.com/tess-fun/fleetreach/releases) has arch
 |----------|---------|
 | Linux x86-64 (glibc 2.35+) | `fleetreach-<version>-x86_64-unknown-linux-gnu.tar.gz` |
 | Linux ARM64 (glibc 2.35+) | `fleetreach-<version>-aarch64-unknown-linux-gnu.tar.gz` |
+| Linux x86-64 (static, musl) | `fleetreach-<version>-x86_64-unknown-linux-musl.tar.gz` |
+| Linux ARM64 (static, musl) | `fleetreach-<version>-aarch64-unknown-linux-musl.tar.gz` |
 | macOS Apple silicon | `fleetreach-<version>-aarch64-apple-darwin.tar.gz` |
 | macOS Intel | `fleetreach-<version>-x86_64-apple-darwin.tar.gz` |
 | Windows x86-64 | `fleetreach-<version>-x86_64-pc-windows-msvc.zip` |
+| Windows ARM64 | `fleetreach-<version>-aarch64-pc-windows-msvc.zip` |
 
 Each release has a `SHA256SUMS` file and signed build provenance:
 

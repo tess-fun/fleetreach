@@ -22,7 +22,14 @@ done
 fail() { echo "fleetreach install: $*" >&2; exit 1; }
 
 case "$(uname -s)" in
-  Linux) os=unknown-linux-gnu ;;
+  Linux)
+    # Static builds for systems without glibc, such as Alpine.
+    if ldd --version 2>&1 | grep -qi musl; then
+      os=unknown-linux-musl
+    else
+      os=unknown-linux-gnu
+    fi
+    ;;
   Darwin) os=apple-darwin ;;
   *) fail "no prebuilt binary for $(uname -s); use: cargo install fleetreach-cli --features network" ;;
 esac
