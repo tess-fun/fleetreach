@@ -542,7 +542,7 @@ impl Requests {
 /// Why an edit should not go ahead given the requests its branch already has.
 fn settled(state: &str) -> Option<&'static str> {
     match state {
-        "CLOSED" => Some("a person closed this request, so it is not opened again"),
+        "CLOSED" => Some("this request is closed, so it is not opened again"),
         "MERGED" => Some("this request is already merged; the plan is older than the merge"),
         _ => None,
     }
