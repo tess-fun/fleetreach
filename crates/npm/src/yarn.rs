@@ -24,7 +24,7 @@ pub(crate) fn parse(text: &str, dir: &Path) -> Result<Resolved, String> {
     }
 }
 
-fn is_berry(text: &str) -> bool {
+pub(crate) fn is_berry(text: &str) -> bool {
     text.lines().any(|l| l.trim_start() == "__metadata:")
 }
 
@@ -196,7 +196,7 @@ fn split_pair(body: &str) -> Option<(&str, &str)> {
     Some((name, unquote(rest.trim())))
 }
 
-fn unquote(s: &str) -> &str {
+pub(crate) fn unquote(s: &str) -> &str {
     s.strip_prefix('"')
         .and_then(|s| s.strip_suffix('"'))
         .unwrap_or(s)
@@ -204,7 +204,7 @@ fn unquote(s: &str) -> &str {
 
 /// The registry package behind a descriptor: an `npm:` alias names it explicitly
 /// (`sw@npm:string-width@^4` is `string-width`).
-fn registry_name<'a>(name: &'a str, range: &'a str) -> &'a str {
+pub(crate) fn registry_name<'a>(name: &'a str, range: &'a str) -> &'a str {
     range
         .strip_prefix("npm:")
         .and_then(|aliased| split_name_version(aliased).map(|(n, _)| n))

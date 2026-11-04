@@ -1,11 +1,11 @@
 ---
 title: Generate SBOMs
-description: Write a CycloneDX 1.6 or SPDX 2.3 SBOM per repository from the same lockfiles fleetreach scans, with the dependency graph, coverage and optional vulnerabilities.
+description: Write a CycloneDX 1.7 or SPDX 2.3 SBOM per repository from the same lockfiles fleetreach scans, with the dependency graph, coverage and optional vulnerabilities.
 sidebar:
   order: 9
 ---
 
-`fleetreach sbom` writes one SBOM per repo, CycloneDX 1.6 or SPDX 2.3 JSON, from the same
+`fleetreach sbom` writes one SBOM per repo, CycloneDX 1.7 or SPDX 2.3, from the same
 lockfiles and manifests `scan` reads, in every ecosystem. It needs no advisory data and no
 network.
 
@@ -25,11 +25,13 @@ partner-api: 5 package(s) from 1 source(s) -> boms/partner-api.cdx.json
 <!-- /run -->
 
 ```sh
-fleetreach sbom -o boms/ -f spdx    # boms/<repo-id>.spdx.json
+fleetreach sbom -o boms/ -f spdx              # boms/<repo-id>.spdx.json
+fleetreach sbom -o boms/ -f cyclonedx-xml     # boms/<repo-id>.cdx.xml
+fleetreach sbom -o boms/ --cyclonedx-version 1.6
 ```
 
-Both formats pass their official JSON schemas, and SPDX output validates with the SPDX
-tools.
+CycloneDX JSON and XML hold the same content. Every format passes its official schema, and
+SPDX output validates with the SPDX tools.
 
 ## What each BOM holds
 
@@ -38,12 +40,32 @@ tools.
 - **One component per resolved package**, identified by its package URL (`pkg:npm`,
   `pkg:pypi`, `pkg:maven`, `pkg:golang`, `pkg:githubactions` and so on). Development-only
   packages are marked `excluded`.
+- **Hashes** of the file the registry serves, where the lockfile records one. See below.
 - **The dependency graph** from the lockfiles.
 - **Compositions** that say which parts are complete and which came from a source read only
   in part, so an incomplete inventory is never presented as complete.
 
 BOMs are deterministic: set `SOURCE_DATE_EPOCH` and two runs over the same lockfiles write
 byte-identical files.
+
+## Component hashes
+
+Hashes come from the lockfile and are never computed or guessed, so a package with no
+recorded value has none.
+
+| Lockfile | Hash | Of |
+|----------|------|----|
+| `Cargo.lock` | SHA-256 | the `.crate` file |
+| `package-lock.json`, `pnpm-lock.yaml`, `bun.lock`, yarn v1 `yarn.lock` | as recorded, usually SHA-512 | the tarball |
+| `Gemfile.lock` with `CHECKSUMS` | SHA-256 | the `.gem` file |
+| `mix.lock` | SHA-256 | the tarball, from the outer checksum |
+| `uv.lock`, `poetry.lock`, `pylock.toml` | SHA-256 | the source distribution |
+| `composer.lock` | SHA-1 | the dist archive, when `dist.shasum` is set |
+
+Three lockfile hashes are left out because none is the hash of the published file: NuGet's
+`contentHash` skips the package signature, `go.sum` hashes a directory tree, and yarn
+berry's `checksum` hashes yarn's own archive. A Python package published only as wheels has no
+hash either, since a lock lists many wheels and an install uses one.
 
 ## Add the vulnerabilities
 

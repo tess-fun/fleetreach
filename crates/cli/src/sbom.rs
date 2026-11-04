@@ -1,4 +1,4 @@
-//! `fleetreach sbom`: write one CycloneDX 1.6 (or SPDX 2.3) JSON SBOM per repo (spec 05).
+//! `fleetreach sbom`: write one CycloneDX 1.7 (or SPDX 2.3) JSON SBOM per repo (spec 05).
 //!
 //! Reads the same sources `scan` reads (lockfiles and manifests, every ecosystem), needs no
 //! advisory DB and no network unless `--sync` refreshes fleet sources. Exit `0` when every
@@ -10,7 +10,10 @@
 use std::path::PathBuf;
 
 use clap::{Args, ValueEnum};
-use fleetreach_report::{sanitize_cell, to_cyclonedx, to_cyclonedx_with_vulns, to_spdx};
+use fleetreach_report::{
+    sanitize_cell, to_cyclonedx, to_cyclonedx_with_vulns, to_cyclonedx_xml, to_spdx,
+    CycloneDxVersion,
+};
 
 use fleetreach_core::inventory::RepoInventory;
 use rayon::prelude::*;
@@ -25,13 +28,16 @@ pub struct SbomArgs {
     /// fleet.toml naming the repos
     #[arg(short, long, default_value = "./fleet.toml")]
     config: PathBuf,
-    /// Directory to write `<repo-id>.cdx.json` (or `.spdx.json`) files into (created if
-    /// missing)
+    /// Directory to write `<repo-id>.cdx.json` (or `.cdx.xml`, `.spdx.json`) files into
+    /// (created if missing)
     #[arg(short, long)]
     out_dir: PathBuf,
     /// SBOM format
     #[arg(short, long, value_enum, default_value_t = BomFormat::Cyclonedx)]
     format: BomFormat,
+    /// CycloneDX spec version to declare
+    #[arg(long, value_enum, default_value_t = SpecVersion::V1_7)]
+    cyclonedx_version: SpecVersion,
     /// Embed this saved scan's findings (`fleetreach scan -f json > report.json`)
     #[arg(long)]
     report: Option<PathBuf>,
@@ -50,10 +56,20 @@ pub struct SbomArgs {
 
 #[derive(Clone, Copy, ValueEnum)]
 enum BomFormat {
-    /// CycloneDX 1.6 JSON
+    /// CycloneDX JSON, 1.7 unless `--cyclonedx-version` says otherwise
     Cyclonedx,
+    /// CycloneDX XML, the same content as the JSON
+    CyclonedxXml,
     /// SPDX 2.3 JSON
     Spdx,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum SpecVersion {
+    #[value(name = "1.6")]
+    V1_6,
+    #[value(name = "1.7")]
+    V1_7,
 }
 
 pub fn run_sbom(args: SbomArgs) -> u8 {
@@ -100,6 +116,7 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
     let inventory = |repo: &Repo| {
         let mut inv = repo_inventory_with(repo, maven.as_ref());
         crate::licenses::annotate(&mut inv, &repo.path, &cache);
+        crate::lockhash::annotate(&mut inv, &repo.path);
         if let Some(p) = materialized.provenance.iter().find(|p| p.repo == repo.id) {
             inv.url = Some(p.url.clone());
             inv.commit = Some(p.commit.clone());
@@ -108,18 +125,29 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
     };
     let write = |repo: &Repo, inv: RepoInventory| -> Result<Written, String> {
         let version = env!("CARGO_PKG_VERSION");
+        let spec = match args.cyclonedx_version {
+            SpecVersion::V1_6 => CycloneDxVersion::V1_6,
+            SpecVersion::V1_7 => CycloneDxVersion::V1_7,
+        };
         let (bom, extension) = match (args.format, &report) {
-            (BomFormat::Cyclonedx, None) => (to_cyclonedx(&inv, version, Some(&timestamp)), "cdx"),
-            (BomFormat::Cyclonedx, Some(r)) => (
-                to_cyclonedx_with_vulns(&inv, r, version, Some(&timestamp)),
-                "cdx",
-            ),
-            (BomFormat::Spdx, r) => (to_spdx(&inv, r.as_ref(), version, &timestamp), "spdx"),
+            (BomFormat::Spdx, r) => (to_spdx(&inv, r.as_ref(), version, &timestamp), "spdx.json"),
+            (format, r) => {
+                let bom = match r {
+                    Some(r) => to_cyclonedx_with_vulns(&inv, r, version, Some(&timestamp), spec),
+                    None => to_cyclonedx(&inv, version, Some(&timestamp), spec),
+                };
+                match format {
+                    BomFormat::CyclonedxXml => {
+                        (bom.and_then(|json| to_cyclonedx_xml(&json)), "cdx.xml")
+                    }
+                    _ => (bom, "cdx.json"),
+                }
+            }
         };
         let bom = bom.map_err(|e| format!("{}: {e}", repo.id))?;
         let file = args
             .out_dir
-            .join(format!("{}.{extension}.json", file_stem(&repo.id.0)));
+            .join(format!("{}.{extension}", file_stem(&repo.id.0)));
         std::fs::write(&file, bom).map_err(|e| format!("{}: {e}", file.display()))?;
         Ok(Written {
             file,

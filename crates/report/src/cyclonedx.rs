@@ -12,17 +12,36 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use fleetreach_core::inventory::{RepoInventory, ROOT};
+use fleetreach_core::inventory::{Checksum, RepoInventory, ROOT};
 use fleetreach_core::{Coverage, Ecosystem, FleetReport, Occurrence, Severity, VulnFinding};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
 use crate::vex::{machine_status, purl, MachineStatus};
 
-/// The CycloneDX spec version written.
-pub const CYCLONEDX_SPEC_VERSION: &str = "1.6";
+/// The CycloneDX spec version written unless another is asked for.
+pub const CYCLONEDX_SPEC_VERSION: &str = "1.7";
 
-/// Render `inventory` as a CycloneDX 1.6 JSON BOM.
+/// A CycloneDX spec version the BOM can declare. Nothing written differs between them: every
+/// field used is in both, and each output is checked against the version's own schema.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CycloneDxVersion {
+    V1_6,
+    #[default]
+    V1_7,
+}
+
+impl CycloneDxVersion {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CycloneDxVersion::V1_6 => "1.6",
+            CycloneDxVersion::V1_7 => CYCLONEDX_SPEC_VERSION,
+        }
+    }
+}
+
+/// Render `inventory` as a CycloneDX JSON BOM.
 ///
 /// # Errors
 ///
@@ -31,8 +50,9 @@ pub fn to_cyclonedx(
     inventory: &RepoInventory,
     tool_version: &str,
     timestamp: Option<&str>,
+    spec: CycloneDxVersion,
 ) -> Result<String, serde_json::Error> {
-    render(inventory, None, tool_version, timestamp)
+    render(inventory, None, tool_version, timestamp, spec)
 }
 
 /// [`to_cyclonedx`] plus a `vulnerabilities[]` section from `report`: this repo's findings,
@@ -49,8 +69,9 @@ pub fn to_cyclonedx_with_vulns(
     report: &FleetReport,
     tool_version: &str,
     timestamp: Option<&str>,
+    spec: CycloneDxVersion,
 ) -> Result<String, serde_json::Error> {
-    render(inventory, Some(report), tool_version, timestamp)
+    render(inventory, Some(report), tool_version, timestamp, spec)
 }
 
 /// One package of a repo, merged across the repo's sources: direct if any source says so,
@@ -64,6 +85,7 @@ pub(crate) struct Merged {
     pub sources: BTreeSet<String>,
     pub complete: bool,
     pub license: Option<String>,
+    pub checksums: BTreeSet<Checksum>,
 }
 
 /// A repo's packages by purl, its dependency edges by purl (the repo itself as `root_ref`),
@@ -100,10 +122,12 @@ pub(crate) fn merge(inventory: &RepoInventory) -> Merge {
                 sources: BTreeSet::new(),
                 complete: true,
                 license: None,
+                checksums: BTreeSet::new(),
             });
             if entry.license.is_none() {
                 entry.license.clone_from(&p.license);
             }
+            entry.checksums.extend(p.checksums.iter().cloned());
             entry.direct |= p.direct;
             entry.dev &= p.dev;
             entry.complete &= complete;
@@ -381,6 +405,7 @@ fn render(
     report: Option<&FleetReport>,
     tool_version: &str,
     timestamp: Option<&str>,
+    spec: CycloneDxVersion,
 ) -> Result<String, serde_json::Error> {
     let merged = merge(inventory);
     let Merge {
@@ -416,6 +441,13 @@ fn render(
                         json!([{ "license": { "name": license } }])
                     };
                 component["licenses"] = entry;
+            }
+            if !c.checksums.is_empty() {
+                component["hashes"] = c
+                    .checksums
+                    .iter()
+                    .map(|h| json!({ "alg": h.algorithm, "content": h.hex }))
+                    .collect();
             }
             component
         })
@@ -493,7 +525,7 @@ fn render(
 
     let mut bom = Map::new();
     bom.insert("bomFormat".into(), json!("CycloneDX"));
-    bom.insert("specVersion".into(), json!(CYCLONEDX_SPEC_VERSION));
+    bom.insert("specVersion".into(), json!(spec.as_str()));
     bom.insert("version".into(), json!(1));
     bom.insert("metadata".into(), Value::Object(metadata));
     bom.insert("components".into(), Value::Array(component_values));
@@ -582,7 +614,13 @@ mod tests {
 
     fn bom() -> Value {
         serde_json::from_str(
-            &to_cyclonedx(&inventory(), "1.2.0", Some("2026-10-30T00:00:00Z")).unwrap(),
+            &to_cyclonedx(
+                &inventory(),
+                "1.2.0",
+                Some("2026-10-30T00:00:00Z"),
+                CycloneDxVersion::default(),
+            )
+            .unwrap(),
         )
         .unwrap()
     }
@@ -607,9 +645,30 @@ mod tests {
     }
 
     #[test]
+    fn hashes_reach_the_component_and_the_version_can_be_chosen() {
+        let mut inv = inventory();
+        let hex = "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c";
+        inv.sources[0].packages[0].checksums = vec![Checksum::new("SHA-256", hex).unwrap()];
+        let out = to_cyclonedx(&inv, "1.2.0", None, CycloneDxVersion::V1_6).unwrap();
+        let bom: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(bom["specVersion"], "1.6");
+        let hashed: Vec<&Value> = bom["components"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|c| c.get("hashes").is_some())
+            .collect();
+        assert_eq!(hashed.len(), 1);
+        assert_eq!(
+            hashed[0]["hashes"],
+            json!([{ "alg": "SHA-256", "content": hex }])
+        );
+    }
+
+    #[test]
     fn components_carry_purls_scope_and_provenance() {
         let bom = bom();
-        assert_eq!(bom["specVersion"], "1.6");
+        assert_eq!(bom["specVersion"], "1.7");
         let purls: Vec<&str> = bom["components"]
             .as_array()
             .unwrap()
@@ -683,11 +742,25 @@ mod tests {
 
     #[test]
     fn output_is_deterministic_and_the_serial_ignores_the_timestamp() {
-        let a = to_cyclonedx(&inventory(), "1.2.0", Some("2026-10-30T00:00:00Z")).unwrap();
-        let b = to_cyclonedx(&inventory(), "1.2.0", Some("2026-10-30T00:00:00Z")).unwrap();
+        let a = to_cyclonedx(
+            &inventory(),
+            "1.2.0",
+            Some("2026-10-30T00:00:00Z"),
+            CycloneDxVersion::default(),
+        )
+        .unwrap();
+        let b = to_cyclonedx(
+            &inventory(),
+            "1.2.0",
+            Some("2026-10-30T00:00:00Z"),
+            CycloneDxVersion::default(),
+        )
+        .unwrap();
         assert_eq!(a, b);
-        let c: Value =
-            serde_json::from_str(&to_cyclonedx(&inventory(), "1.2.0", None).unwrap()).unwrap();
+        let c: Value = serde_json::from_str(
+            &to_cyclonedx(&inventory(), "1.2.0", None, CycloneDxVersion::default()).unwrap(),
+        )
+        .unwrap();
         assert_eq!(c["serialNumber"], bom()["serialNumber"]);
         let serial = c["serialNumber"].as_str().unwrap();
         assert!(

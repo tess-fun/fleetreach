@@ -140,7 +140,7 @@ struct Entry {
 }
 
 /// `name@1.2.3` as a registry package; anything with a protocol is not one.
-fn registry(resolution: &str) -> Option<(String, String)> {
+pub(crate) fn registry(resolution: &str) -> Option<(String, String)> {
     let (name, version) = split_name_version(resolution)?;
     (!version.contains(':')).then(|| (name.to_string(), version.to_string()))
 }
@@ -225,7 +225,7 @@ fn package_segments(path: &str) -> Vec<&str> {
 
 /// Turn bun's JSONC into JSON: drop `//` and `/* */` comments and the commas left before a
 /// closing `}` or `]`, all outside strings.
-fn to_json(text: &str) -> String {
+pub(crate) fn to_json(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
     let mut pending_comma: Option<usize> = None;

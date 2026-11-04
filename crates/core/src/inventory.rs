@@ -27,6 +27,37 @@ pub struct Package {
     pub license: Option<String>,
     /// Where the license came from (`package-lock.json`, `cargo registry`, ...).
     pub license_source: Option<String>,
+    /// Hashes of the file the registry serves, as the lockfile records them.
+    pub checksums: Vec<Checksum>,
+}
+
+/// The hash of a package's published file.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
+pub struct Checksum {
+    /// `SHA-1`, `SHA-256`, `SHA-384` or `SHA-512`.
+    pub algorithm: &'static str,
+    /// Lowercase hex.
+    pub hex: String,
+}
+
+impl Checksum {
+    /// `None` unless `hex` is hexadecimal of the algorithm's length, so a truncated or
+    /// placeholder value never reaches a BOM.
+    #[must_use]
+    pub fn new(algorithm: &'static str, hex: &str) -> Option<Self> {
+        let length = match algorithm {
+            "SHA-1" => 40,
+            "SHA-256" => 64,
+            "SHA-384" => 96,
+            "SHA-512" => 128,
+            _ => return None,
+        };
+        (hex.len() == length && hex.bytes().all(|b| b.is_ascii_hexdigit())).then(|| Checksum {
+            algorithm,
+            hex: hex.to_ascii_lowercase(),
+        })
+    }
 }
 
 impl Package {
@@ -45,6 +76,7 @@ impl Package {
             source: DepSource::default(),
             license: None,
             license_source: None,
+            checksums: Vec::new(),
         }
     }
 
@@ -136,6 +168,16 @@ impl RepoInventory {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn checksums_must_be_hex_of_the_right_length() {
+        let hex = "A".repeat(64);
+        assert_eq!(Checksum::new("SHA-256", &hex).unwrap().hex, "a".repeat(64));
+        assert!(Checksum::new("SHA-512", &hex).is_none());
+        assert!(Checksum::new("MD5", &hex).is_none());
+        assert!(Checksum::new("SHA-1", &"g".repeat(40)).is_none());
+    }
 
     #[test]
     fn graph_root_becomes_the_shared_root_and_gaps_keep_the_worst_level() {

@@ -496,7 +496,7 @@ fn home() -> Option<PathBuf> {
 }
 
 /// The directory of a source: the parent of its first file (`sub/package-lock.json, ...`).
-fn source_dir(repo_root: &Path, source: &str) -> PathBuf {
+pub(crate) fn source_dir(repo_root: &Path, source: &str) -> PathBuf {
     let first = source.split(", ").next().unwrap_or(source);
     let path = repo_root.join(first);
     if path.is_dir() {
@@ -631,7 +631,7 @@ fn cargo_license(crate_dir: &Path) -> Option<License> {
     normalize(&[license.to_string()])
 }
 
-fn pep503(name: &str) -> String {
+pub(crate) fn pep503(name: &str) -> String {
     let mut out = String::new();
     let mut sep = false;
     for c in name.chars() {

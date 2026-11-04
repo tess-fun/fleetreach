@@ -19,7 +19,7 @@ running package managers. They differ in what they are for.
 | Reachability | npm and Python import graphs; sound Rust call graph; Go via govulncheck | Go call analysis by default; Rust experimental |
 | KEV, EPSS, SSVC | yes, all three | not in its docs |
 | VEX | writes OpenVEX | planned |
-| SBOM | writes CycloneDX 1.6 and SPDX 2.3; reads both | reads SPDX and CycloneDX; writes SPDX 2.3, CycloneDX 1.4/1.5 |
+| SBOM | writes CycloneDX 1.7 and SPDX 2.3; reads both | reads SPDX and CycloneDX; writes SPDX 2.3, CycloneDX 1.4/1.5 |
 | Fixes | lock-only bumps on branches, re-scanned, opened as PRs or MRs | `fix` edits npm and Maven files locally (experimental) |
 | History, SLAs, notifications | yes | no |
 | Unreadable sources | fail closed: errored repo or coverage label, exit 2 | reported per file |

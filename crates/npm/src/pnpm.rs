@@ -134,7 +134,7 @@ fn target_id(dep: &str, spec: &str) -> Option<String> {
 }
 
 /// Drop a pnpm peer suffix: `react-dom@18.2.0(react@18.2.0)` -> `react-dom@18.2.0`.
-fn strip_peers(id: &str) -> &str {
+pub(crate) fn strip_peers(id: &str) -> &str {
     id.split('(').next().unwrap_or(id)
 }
 

@@ -652,7 +652,7 @@ fn sbom_writes_one_deterministic_cyclonedx_bom_per_repo() {
     let first = read("dotnet-restored");
     let bom: serde_json::Value = serde_json::from_str(&first).unwrap();
     assert_eq!(bom["bomFormat"], "CycloneDX");
-    assert_eq!(bom["specVersion"], "1.6");
+    assert_eq!(bom["specVersion"], "1.7");
     assert_eq!(bom["metadata"]["timestamp"], "2026-10-31T00:00:00Z");
     let purls: Vec<&str> = bom["components"]
         .as_array()

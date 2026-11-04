@@ -145,6 +145,15 @@ pub fn to_spdx(
             "primaryPackagePurpose": "LIBRARY",
             "externalRefs": refs,
         });
+        if !c.checksums.is_empty() {
+            package["checksums"] = c
+                .checksums
+                .iter()
+                .map(|h| {
+                    json!({ "algorithm": h.algorithm.replace('-', ""), "checksumValue": h.hex })
+                })
+                .collect();
+        }
         let mut comment = vec![format!(
             "{}; {}{}; from {}",
             ecosystem_name(c.ecosystem),

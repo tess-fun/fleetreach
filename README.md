@@ -83,7 +83,7 @@ Exit codes are the CI contract: `0` clean, `1` findings, `2` something could not
   re-scan each one, and open pull or merge requests on GitHub or GitLab.
 - **Tracks it over time.** History with no database, SLAs, time to fix, notifications to
   Slack or webhooks, one issue per owner, and a static HTML report.
-- **Produces the evidence.** CycloneDX 1.6 and SPDX 2.3 SBOMs, OpenVEX, SARIF for GitHub code
+- **Produces the evidence.** CycloneDX 1.7 and SPDX 2.3 SBOMs, OpenVEX, SARIF for GitHub code
   scanning, and license policy checks.
 - **Proves reachability.** Import-graph witness chains for npm and Python, and a sound MIR
   call-graph analysis for Rust.

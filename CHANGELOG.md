@@ -17,6 +17,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   someone else pushed to. `--close-obsolete` closes requests the plan no longer wants, only
   in repos it scanned.
 - `fix apply --max-prs`, `--canary` and `--stop-after-failures` limit a rollout.
+- SBOM components carry hashes from the lockfile: Cargo, npm, pnpm, yarn v1, bun, Bundler, mix,
+  uv, Poetry, pylock and Composer. Sampled against registry downloads: 442 hashes across ten
+  lockfile formats, all matching. NuGet's `contentHash` is left out, since it skips the package
+  signature and matched none of 25 downloads.
+- **`sbom` writes CycloneDX 1.7 by default,** with `--cyclonedx-version 1.6` on request, and XML
+  with `-f cyclonedx-xml`. All 121 test BOMs pass the official schemas in both versions, the XML
+  holds the same content as the JSON, and Grype and Trivy read them.
 - CI runs the whole test suite in a network namespace with no route out, so a test or feature
   that needs the network fails the build.
 - `ci/fleetreach.gitlab-ci.yml`, a template a GitLab pipeline can include to scan a repo and keep

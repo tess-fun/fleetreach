@@ -25,7 +25,8 @@ Other commands:
 
 | Command | Writes |
 |---------|--------|
-| `sbom -f cyclonedx` | CycloneDX 1.6 JSON per repo (default) |
+| `sbom -f cyclonedx` | CycloneDX 1.7 JSON per repo (default); 1.6 with `--cyclonedx-version 1.6` |
+| `sbom -f cyclonedx-xml` | the same in XML |
 | `sbom -f spdx` | SPDX 2.3 JSON per repo |
 | `report html` | one self-contained HTML page |
 | `notify -f generic` | `fleetreach-notify/1` JSON |

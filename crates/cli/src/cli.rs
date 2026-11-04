@@ -44,7 +44,7 @@ enum Commands {
     /// Discover and check out the repos named by `[[source]]` entries.
     #[command(subcommand)]
     Fleet(FleetCommand),
-    /// Write a CycloneDX 1.6 or SPDX 2.3 SBOM per repo from the same sources `scan` reads.
+    /// Write a CycloneDX 1.7 or SPDX 2.3 SBOM per repo from the same sources `scan` reads.
     Sbom(crate::sbom::SbomArgs),
     /// License inventory and policy violations across the fleet.
     Licenses(crate::licenses_cmd::LicensesArgs),
