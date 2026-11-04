@@ -170,6 +170,9 @@ Options:
       --ghactions-vuln-db <URL>
           OSV vulnerability DB for the toolchain-free GitHub Actions matcher, as `file://<path>` to either the osv.dev GitHub Actions export `all.zip` (read directly, fastest) or a directory of unzipped OSV JSON records. It reads .github/workflows/*.yml and matches version-pinned `uses:` actions, building nothing, so it needs no --allow-untrusted-builds; without this a workflow repo is an honest gap.
 
+      --crates-vuln-db <URL>
+          OSV vulnerability DB for the crates.io advisories RustSec does not carry, as `file://<path>` to either the osv.dev crates.io export `all.zip` (read directly, fastest) or a directory of unzipped OSV JSON records. RustSec still answers without it, and the repo is marked partial.
+
       --maven-vuln-db <URL>
           OSV vulnerability DB for the toolchain-free Maven (Java) matcher, as `file://<path>` to either the osv.dev Maven export `all.zip` (read directly, fastest) or a directory of unzipped OSV JSON records. It reads gradle.lockfile (preferred) or pom.xml and builds nothing, so it needs no --allow-untrusted-builds; without this a Maven repo is an honest gap.
 

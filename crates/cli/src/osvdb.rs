@@ -49,6 +49,7 @@ pub const OSV_ECOSYSTEMS: &[Ecosystem] = &[
     Ecosystem::GitHubActions,
     Ecosystem::Maven,
     Ecosystem::Go,
+    Ecosystem::Cargo,
 ];
 
 /// The osv.dev directory name of an ecosystem's export, or `None` if it has none.
@@ -65,7 +66,8 @@ pub fn osv_name(eco: Ecosystem) -> Option<&'static str> {
         Ecosystem::GitHubActions => "GitHub Actions",
         Ecosystem::Maven => "Maven",
         Ecosystem::Go => "Go",
-        Ecosystem::Cargo | Ecosystem::Deb | Ecosystem::Apk | Ecosystem::Rpm => return None,
+        Ecosystem::Cargo => "crates.io",
+        Ecosystem::Deb | Ecosystem::Apk | Ecosystem::Rpm => return None,
     })
 }
 
@@ -84,6 +86,7 @@ pub fn parse_ecosystem(name: &str) -> Option<Ecosystem> {
         "githubactions" | "github actions" | "actions" | "gha" => Ecosystem::GitHubActions,
         "maven" | "gradle" | "java" => Ecosystem::Maven,
         "go" | "golang" => Ecosystem::Go,
+        "crates.io" | "cargo" | "rust" => Ecosystem::Cargo,
         _ => return None,
     };
     Some(eco)
@@ -1326,7 +1329,7 @@ mod tests {
             assert_eq!(parse_ecosystem(name), Some(eco), "{name}");
         }
         assert_eq!(osv_name(Ecosystem::Go), Some("Go"));
-        assert!(osv_name(Ecosystem::Cargo).is_none());
+        assert!(osv_name(Ecosystem::Deb).is_none());
     }
 
     #[test]
@@ -1409,7 +1412,7 @@ mod tests {
             Ecosystem::Pypi,
             Ecosystem::Hex,
             Ecosystem::Maven,
-            Ecosystem::Cargo,
+            Ecosystem::Deb,
         ];
         let (found, warnings) = resolve_all(&needed, &explicit, &opts);
         assert!(warnings.is_empty());
@@ -1422,7 +1425,7 @@ mod tests {
         assert_eq!(found[&Ecosystem::Pypi].path, dir.join("PyPI"));
         assert_eq!(found[&Ecosystem::Hex].kind, SourceKind::Cache);
         assert!(!found.contains_key(&Ecosystem::Maven), "absent stays a gap");
-        assert!(!found.contains_key(&Ecosystem::Cargo));
+        assert!(!found.contains_key(&Ecosystem::Deb));
         let _ = std::fs::remove_dir_all(&tmp);
     }
 

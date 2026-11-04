@@ -425,13 +425,10 @@ fn parsed_checks(dir: &Path, overlay: Option<&Path>) -> Result<Vec<Issue>, Strin
                 Ecosystem::Hex => check!(fleetreach_hex::HexDb),
                 Ecosystem::GitHubActions => check!(fleetreach_ghactions::GhActionsDb),
                 Ecosystem::Maven => check!(fleetreach_maven::MavenDb),
-                // Go and Rust use their own databases; distro exports are per distribution
-                // and not range-checked here yet.
-                Ecosystem::Go
-                | Ecosystem::Cargo
-                | Ecosystem::Deb
-                | Ecosystem::Apk
-                | Ecosystem::Rpm => {}
+                Ecosystem::Cargo => check!(fleetreach_scan::CratesDb),
+                // Go uses its own database; distro exports are per distribution and not
+                // range-checked here yet.
+                Ecosystem::Go | Ecosystem::Deb | Ecosystem::Apk | Ecosystem::Rpm => {}
             }
             Ok(out)
         })

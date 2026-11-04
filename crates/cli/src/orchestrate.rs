@@ -27,7 +27,9 @@ use fleetreach_nuget::{nuget_db_path, NuGetDb, NuGetError};
 use fleetreach_packagist::{packagist_db_path, PackagistDb, PackagistError};
 use fleetreach_pypi::{pypi_db_path, PyPiDb, PyPiError};
 use fleetreach_rubygems::{rubygems_db_path, RubyGemsDb, RubyGemsError};
-use fleetreach_scan::{scan_lockfile, scan_toolchain, AdvisoryDb, RepoScan};
+use fleetreach_scan::{
+    crates_db_path, scan_lockfile, scan_toolchain, AdvisoryDb, CratesDb, RepoScan, ScanError,
+};
 use fleetreach_swift::{swift_db_path, SwiftDb, SwiftError};
 use rayon::prelude::*;
 use walkdir::WalkDir;
@@ -88,6 +90,8 @@ pub struct Mirrors<'a> {
     pub swift: Option<&'a str>,
     pub hex: Option<&'a str>,
     pub ghactions: Option<&'a str>,
+    /// osv.dev's crates.io export, for what RustSec does not carry.
+    pub crates: Option<&'a str>,
     pub maven: Option<&'a str>,
     /// Where to fetch POMs missing locally (`--maven-fetch`): the `settings.xml` mirror of
     /// Maven Central, or Central.
@@ -111,6 +115,7 @@ struct Dbs {
     swift: Option<Result<SwiftDb, SwiftError>>,
     hex: Option<Result<HexDb, HexError>>,
     ghactions: Option<Result<GhActionsDb, GhaError>>,
+    crates: Option<Result<CratesDb, ScanError>>,
     maven: Option<Result<MavenDb, MavenError>>,
 }
 
@@ -122,6 +127,7 @@ impl Dbs {
         go: &GoScan,
         m: &Mirrors,
         overlay: Option<&Path>,
+        rustsec: &AdvisoryDb,
     ) -> Dbs {
         // Every OSV feeder layers the organization's own records (`[settings.advisories]`)
         // over its export; Go's offline matcher reads its own format and does not.
@@ -148,6 +154,7 @@ impl Dbs {
             swift,
             hex,
             ghactions,
+            crates,
             maven,
         } = &mut dbs;
         let root = |mirror: Option<&str>, path: fn(&str) -> Option<PathBuf>| mirror.and_then(path);
@@ -206,6 +213,10 @@ impl Dbs {
             let gha_root = root(m.ghactions, ghactions_db_path);
             spawn(s, ghactions, has(E::GitHubActions), gha_root, |r: &Path| {
                 GhActionsDb::load_with_overlay(r, overlay)
+            });
+            let crates_root = root(m.crates, crates_db_path);
+            spawn(s, crates, has(E::Cargo), crates_root, |r: &Path| {
+                CratesDb::load_with_overlay(r, overlay).map(|db| db.beside(rustsec))
             });
             spawn(
                 s,
@@ -296,7 +307,7 @@ pub(crate) fn scan_fleet_with(
                 .any(|p| p.units.iter().any(|u| u.ecosystem == eco))
     };
 
-    let dbs = Dbs::load(&has, go, mirrors, config.osv.advisories.as_deref());
+    let dbs = Dbs::load(&has, go, mirrors, config.osv.advisories.as_deref(), db);
     let distro_db = load_distro_db(images);
 
     // Each repo is independent and shares only the read-only advisory DBs, so the
@@ -994,7 +1005,7 @@ fn scan_image(
         extra.push((own(Ecosystem::Go), result));
     }
     if !rust.is_empty() {
-        let mut result = scan_image_rust(&image.id, &rust, db);
+        let mut result = scan_image_rust(&image.id, &rust, db, dbs.crates.as_ref());
         attribute(&mut result, layers, |_, path| layers.of_file(path.first()?));
         extra.push((own(Ecosystem::Cargo), result));
     }
@@ -1096,17 +1107,46 @@ fn scan_image_rust(
     id: &RepoId,
     binaries: &[(String, fleetreach_os::rustbin::RustBuild)],
     db: &AdvisoryDb,
+    crates: Option<&Result<CratesDb, ScanError>>,
 ) -> RepoResult {
+    let source = "Rust binaries";
+    let (crates, gap) = crates_or_gap(id, source, crates);
     let mut vulnerabilities = Vec::new();
     let mut warnings = Vec::new();
     let mut unreadable = 0;
     for (path, build) in binaries {
-        let (scan, skipped) = fleetreach_scan::scan_crates(db, id, path, &build.crates);
+        let (scan, skipped) = fleetreach_scan::scan_crates(db, crates, id, path, &build.crates);
         vulnerabilities.extend(scan.vulnerabilities);
         warnings.extend(scan.warnings);
         unreadable += skipped;
     }
-    RepoResult::scanned(id, vulnerabilities, warnings).with_skipped(unreadable)
+    let result = RepoResult::scanned(id, vulnerabilities, warnings).with_skipped(unreadable);
+    gap.into_iter().fold(result, RepoResult::with_coverage)
+}
+
+/// The crates.io advisories, or the coverage gap of going without them: RustSec still answers,
+/// so the scan stands, but a broken export is reported as much as an absent one.
+fn crates_or_gap<'a>(
+    repo: &RepoId,
+    source: &str,
+    crates: Option<&'a Result<CratesDb, ScanError>>,
+) -> (Option<&'a CratesDb>, Option<CoverageGap>) {
+    let reason = match crates {
+        Some(Ok(db)) => return (Some(db), None),
+        Some(Err(e)) => format!("the crates.io export could not be read: {e}"),
+        None => "no crates.io export".to_string(),
+    };
+    let gap = CoverageGap {
+        repo: repo.clone(),
+        source: source.to_string(),
+        ecosystem: Ecosystem::Cargo,
+        level: Coverage::Partial,
+        reason: format!(
+            "{reason}, so advisories RustSec does not carry were not matched; run `fleetreach \
+             db sync`, or pass --osv-dir=<dir> or --crates-vuln-db=file://<path>"
+        ),
+    };
+    (None, Some(gap))
 }
 
 /// Match what an image's Java archives hold. A jar known only by its file name is placed by
@@ -1675,6 +1715,7 @@ fn scan_unit(
         }
         Ecosystem::Cargo => {}
     }
+    let (crates, crates_gap) = crates_or_gap(&repo.id, "Cargo.lock", dbs.crates.as_ref());
     let (lockfiles, walk_errors) = discover_lockfiles(repo);
     let mut vulnerabilities: Vec<VulnFinding> = Vec::new();
     let mut warnings: Vec<WarnFinding> = Vec::new();
@@ -1696,7 +1737,7 @@ fn scan_unit(
     }
 
     for lockfile in &lockfiles {
-        match scan_lockfile(db, &repo.id, lockfile) {
+        match scan_lockfile(db, crates, &repo.id, lockfile) {
             Ok(mut scan) => {
                 // Opt-in: mark each occurrence built/phantom for the host's
                 // default build. Best-effort — failures leave it unannotated.
@@ -1716,7 +1757,7 @@ fn scan_unit(
         }
     }
 
-    match error {
+    let result = match error {
         // A gap keeps the findings gathered before it (still useful), but the repo can
         // no longer be called clean — so build the Errored outcome around them directly
         // rather than through `RepoResult::errored` (which is for the empty case).
@@ -1731,7 +1772,10 @@ fn scan_unit(
             coverage: Vec::new(),
         },
         None => RepoResult::scanned(&repo.id, vulnerabilities, warnings),
-    }
+    };
+    crates_gap
+        .into_iter()
+        .fold(result, RepoResult::with_coverage)
 }
 
 /// Scan a Go repo by running govulncheck as a sidecar. govulncheck **compiles**

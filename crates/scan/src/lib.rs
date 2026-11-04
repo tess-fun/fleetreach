@@ -22,7 +22,7 @@
 //! // Open a local advisory-db clone (always available). With the `network`
 //! // feature, `AdvisoryDb::fetch()` clones the default DB from GitHub instead.
 //! let db = AdvisoryDb::open(Path::new("advisory-db"))?;
-//! let scan = scan_lockfile(&db, &RepoId("app".into()), Path::new("Cargo.lock"))?;
+//! let scan = scan_lockfile(&db, None, &RepoId("app".into()), Path::new("Cargo.lock"))?;
 //! for vuln in &scan.vulnerabilities {
 //!     println!("{}  {}", vuln.advisory_id, vuln.title);
 //! }
@@ -37,6 +37,10 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::Write as _;
 use std::path::Path;
 
+mod osv;
+
+pub use osv::{crates_db_path, CratesDb};
+
 use fleetreach_core::semver::Version;
 use fleetreach_core::{
     DepSource, DependencyKind, Occurrence, RepoId, Severity, VulnFinding, WarnFinding, WarnKind,
@@ -45,6 +49,7 @@ use rustsec::advisory::Informational;
 use rustsec::cargo_lock::dependency::graph::{EdgeDirection, NodeIndex};
 use rustsec::cargo_lock::dependency::tree::Tree;
 use rustsec::cargo_lock::dependency::Dependency;
+
 use rustsec::cargo_lock::{Metadata, Package, Patch, ResolveVersion, SourceId};
 use rustsec::database::Query;
 use rustsec::report::{Report, Settings};
@@ -183,6 +188,40 @@ pub struct RepoScan {
     pub warnings: Vec<WarnFinding>,
 }
 
+/// Every advisory id and alias RustSec reported, by package.
+fn reported_ids(report: &Report) -> BTreeMap<&Package, BTreeSet<String>> {
+    let vulnerabilities = report
+        .vulnerabilities
+        .list
+        .iter()
+        .map(|v| (&v.package, Some(&v.advisory)));
+    let warnings = report
+        .warnings
+        .values()
+        .flatten()
+        .map(|w| (&w.package, w.advisory.as_ref()));
+    let mut out: BTreeMap<&Package, BTreeSet<String>> = BTreeMap::new();
+    for (package, advisory) in vulnerabilities.chain(warnings) {
+        if let Some(meta) = advisory {
+            let ids = std::iter::once(&meta.id).chain(&meta.aliases);
+            out.entry(package)
+                .or_default()
+                .extend(ids.map(ToString::to_string));
+        }
+    }
+    out
+}
+
+/// Whether advisories about the crates.io crate of this name are about this package: a
+/// workspace member counts, as RustSec's matching has it, and a git or private-registry one
+/// does not.
+fn from_crates_io(package: &Package) -> bool {
+    package
+        .source
+        .as_ref()
+        .is_none_or(SourceId::is_default_registry)
+}
+
 fn settings() -> Settings {
     Settings {
         informational_warnings: vec![
@@ -198,6 +237,7 @@ fn settings() -> Settings {
 /// vulnerability and warning streams mapped to `core` types.
 pub fn scan_lockfile(
     db: &AdvisoryDb,
+    crates: Option<&CratesDb>,
     repo: &RepoId,
     lockfile_path: &Path,
 ) -> Result<RepoScan, ScanError> {
@@ -215,12 +255,26 @@ pub fn scan_lockfile(
     // If it cannot be built, findings simply carry no path.
     let tree = lockfile.dependency_tree().ok();
 
-    let vulnerabilities = report
+    let mut vulnerabilities: Vec<VulnFinding> = report
         .vulnerabilities
         .list
         .iter()
         .map(|v| map_vulnerability(repo, v, tree.as_ref()))
         .collect();
+    if let Some(crates) = crates {
+        let reported = reported_ids(&report);
+        let none = BTreeSet::new();
+        for package in lockfile.packages.iter().filter(|p| from_crates_io(p)) {
+            let Ok(version) = Version::parse(&package.version.to_string()) else {
+                continue;
+            };
+            let (path, kind) = provenance(tree.as_ref(), package);
+            let direct = kind == DependencyKind::Direct;
+            let name = package.name.as_str();
+            let ids = reported.get(package).unwrap_or(&none);
+            vulnerabilities.extend(crates.findings(repo, name, &version, ids, direct, &path));
+        }
+    }
 
     let warnings = report
         .warnings
@@ -240,6 +294,7 @@ pub fn scan_lockfile(
 /// name or version that could not be read.
 pub fn scan_crates(
     db: &AdvisoryDb,
+    osv: Option<&CratesDb>,
     repo: &RepoId,
     binary: &str,
     crates: &[(String, String)],
@@ -283,6 +338,17 @@ pub fn scan_crates(
         .iter()
         .map(|v| map_vulnerability(repo, v, None))
         .collect();
+    if let Some(osv) = osv {
+        let reported = reported_ids(&report);
+        let none = BTreeSet::new();
+        for package in &lockfile.packages {
+            if let Ok(version) = Version::parse(&package.version.to_string()) {
+                let name = package.name.as_str();
+                let ids = reported.get(package).unwrap_or(&none);
+                vulnerabilities.extend(osv.findings(repo, name, &version, ids, false, &[]));
+            }
+        }
+    }
     let mut warnings: Vec<WarnFinding> = report
         .warnings
         .values()

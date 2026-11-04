@@ -188,7 +188,7 @@ mod tests {
         std::fs::write(
             dir.join("go/b.json"),
             r#"{"id":"ORG-2","affected":[{"package":{"ecosystem":"Go","name":"y"}},
-                {"package":{"ecosystem":"crates.io","name":"z"}}]}"#,
+                {"package":{"ecosystem":"Pub","name":"z"}}]}"#,
         )
         .unwrap();
         std::fs::write(dir.join("notes.md"), "ignored").unwrap();
@@ -198,7 +198,7 @@ mod tests {
             overlay.not_applied,
             vec![
                 ("ORG-2".to_string(), "Go".to_string()),
-                ("ORG-2".to_string(), "crates.io".to_string())
+                ("ORG-2".to_string(), "Pub".to_string())
             ]
         );
         assert_eq!(overlay.warnings().len(), 2);

@@ -6,12 +6,13 @@ sidebar:
 ---
 
 fleetreach started as a Rust tool and Rust has the deepest support. It reads `Cargo.lock`
-with the `rustsec` engine against the [RustSec advisory database](https://rustsec.org).
+with the `rustsec` engine against the [RustSec advisory database](https://rustsec.org), then
+adds what only GitHub carries from the osv.dev `crates.io` export.
 
 | | |
 |---|---|
 | Reads | `Cargo.lock` (workspaces included) |
-| Advisory data | RustSec `advisory-db` (cloned and refreshed; `--db <path>` for a local copy) |
+| Advisory data | RustSec `advisory-db` (cloned and refreshed; `--db <path>` for a local copy), and the osv.dev `crates.io` export (`--osv-dir`, or `--crates-vuln-db=file://<path>`) |
 | Version rules | SemVer |
 | Fix apply | `cargo update -p <pkg>@<from> --precise <to>` |
 | Reachability | heuristic (no build) or sound static MIR analysis |
@@ -19,6 +20,18 @@ with the `rustsec` engine against the [RustSec advisory database](https://rustse
 Beyond vulnerabilities it reports RustSec's informational kinds as warnings: `unmaintained`,
 `unsound` and `notice`, plus yanked crate versions. The Rust toolchain's own advisories are
 checked against the installed `rustc`.
+
+## RustSec and GitHub
+
+Hundreds of crates.io advisories exist only in GitHub's database, so RustSec alone misses them.
+A crate RustSec already reported an advisory for keeps RustSec's finding, under its RUSTSEC id,
+and is not reported again. GitHub's record still counts where its range or crate list is wider
+than RustSec's, because the two disagreeing is no reason to read clean. An advisory RustSec
+withdrew stays withdrawn. As with RustSec, git and private-registry crates are not matched: a
+fork is not the crate an advisory describes.
+
+Without the export the scan still answers from RustSec, and the repo shows a partial coverage
+gap. Fetch it ahead of time with `fleetreach db sync`.
 
 ## Built or not?
 

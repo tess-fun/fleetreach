@@ -366,8 +366,8 @@ impl<V> OsvDb<V> {
 pub struct Spec<V: 'static> {
     /// The OSV `affected[].package.ecosystem` string this feeder consumes (e.g. `"Maven"`).
     pub ecosystem: &'static str,
-    /// The OSV range `type` this feeder evaluates (`"ECOSYSTEM"` or `"SEMVER"`); other types
-    /// are not `matchable`.
+    /// The OSV range `type` this feeder evaluates (`"ECOSYSTEM"`, `"SEMVER"`, or both as
+    /// `"SEMVER|ECOSYSTEM"`); other types are not `matchable`.
     pub range_type: &'static str,
     /// Parse a bound/version string with this ecosystem's version adapter (incl. its `"0"`
     /// convention). Used at load to pre-parse range bounds and the enumerated `versions`.
@@ -634,7 +634,10 @@ where
                 .iter()
                 .map(|r| {
                     let range = Range {
-                        matchable: r.kind.as_deref() == Some(spec.range_type),
+                        matchable: r
+                            .kind
+                            .as_deref()
+                            .is_some_and(|k| spec.range_type.split('|').any(|t| t == k)),
                         events: r
                             .events
                             .iter()

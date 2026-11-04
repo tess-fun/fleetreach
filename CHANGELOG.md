@@ -8,6 +8,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Rust scans missed the advisories only GitHub carries.** RustSec has no record of about 650
+  live crates.io advisories (`rustix`, `deno`, `surrealdb` among them), so `Cargo.lock` files
+  and Rust binaries read clean of them. The osv.dev crates.io export is now synced and matched
+  beside RustSec, and `--crates-vuln-db` points at a copy. A package RustSec already reported
+  an advisory for keeps RustSec's finding, so nothing is reported twice; where GitHub's range
+  or crate list is wider than RustSec's the package is reported, and what RustSec withdrew
+  stays withdrawn. Checked on 600 real lockfiles: every row added is one Trivy and Grype both
+  report, and an independent evaluation of the records agrees row for row.
+
 - **Debian, Ubuntu and Alpine advisories were two years old.** Sync preferred osv.dev's
   per-release exports (`Debian:12/all.zip`), which still download but stopped changing in
   October 2024, so every later CVE was missed. Sync now fetches the whole distribution's
@@ -245,6 +254,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `advisories` field.
 
 ### Compatibility
+
+- `fleetreach_scan::scan_lockfile` takes the new `Option<&CratesDb>` as its second argument;
+  `None` keeps the RustSec-only behavior.
+- A Rust repo or image scanned without the crates.io export now gets a partial coverage gap,
+  as a repo with workflows does without the GitHub Actions export. RustSec's findings are
+  unchanged. Network builds fetch the export on their own; offline ones need it from
+  `fleetreach db sync` or `--osv-dir`.
 
 - `fleetreach_core::Ecosystem` gains the `Deb` and `Apk` variants (JSON `deb`, `apk`). The
   enum is not `#[non_exhaustive]`, so an exhaustive `match` on it in code that depends on

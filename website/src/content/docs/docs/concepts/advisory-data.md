@@ -11,7 +11,7 @@ scrapes web pages.
 | Data | Source | Used for |
 |------|--------|----------|
 | Rust advisories | [RustSec advisory-db](https://github.com/rustsec/advisory-db) | Cargo findings, warnings, yanks |
-| Everything else | [osv.dev](https://osv.dev) per-ecosystem exports (`all.zip`) | npm, PyPI, Go, Maven and the rest |
+| Everything else | [osv.dev](https://osv.dev) per-ecosystem exports (`all.zip`) | npm, PyPI, Go, Maven and the rest, and the crates.io advisories RustSec lacks |
 | Go (with govulncheck) | [vuln.go.dev](https://vuln.go.dev) | call-level Go findings |
 | Exploitation | [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) | `--enrich`, SSVC, `--fail-on-kev` |
 | Exploit probability | [FIRST EPSS](https://www.first.org/epss/) | `--enrich`, ranking, `--min-epss` |

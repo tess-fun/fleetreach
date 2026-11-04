@@ -1,0 +1,1 @@
+{"id":"GHSA-0000-0000-0000","summary":"A crate no fixture depends on","affected":[{"package":{"name":"no-fixture-uses-this","ecosystem":"crates.io"},"ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"1.0.0"}]}]}]}

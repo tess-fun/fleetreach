@@ -440,6 +440,9 @@ pub(crate) fn language_ecosystems(images: &[Prepared]) -> BTreeSet<Ecosystem> {
         if !o.go.is_empty() || !o.packaged_go.is_empty() {
             out.insert(Ecosystem::Go);
         }
+        if !o.rust.is_empty() || !o.packaged_rust.is_empty() {
+            out.insert(Ecosystem::Cargo);
+        }
     }
     out
 }

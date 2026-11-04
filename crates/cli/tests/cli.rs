@@ -55,6 +55,7 @@ fn run_env(args: &[&str], env: &[(&str, &std::ffi::OsStr)]) -> Output {
     cmd.args(args)
         .env("FLEETREACH_OSV_SYNC", "off")
         .env("XDG_CACHE_HOME", empty_cache())
+        .env("CRATESVULNDB", file_url("crates-osv"))
         .env_remove("FLEETREACH_OSV_DIR");
     for (key, value) in env {
         cmd.env(key, value);
@@ -1670,6 +1671,69 @@ fn two_runs_are_byte_identical_modulo_the_clock() {
     a["provenance"]["generated_at"] = serde_json::Value::Null;
     b["provenance"]["generated_at"] = serde_json::Value::Null;
     assert_eq!(a, b, "runs must be deterministic apart from the clock");
+}
+
+#[test]
+fn crates_io_advisories_fill_in_what_rustsec_lacks() {
+    let dir = std::env::temp_dir().join(format!("fr-crates-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let record = |id: &str, aliases: &str| {
+        format!(
+            r#"{{"id":"{id}","aliases":[{aliases}],"summary":"bad","affected":[{{
+            "package":{{"name":"fixturevuln","ecosystem":"crates.io"}},
+            "ranges":[{{"type":"SEMVER","events":[{{"introduced":"0"}},{{"fixed":"1.0.1"}}]}}]}}]}}"#
+        )
+    };
+    let write = |id: &str, body: String| {
+        std::fs::write(dir.join(format!("{id}.json")), body).unwrap();
+    };
+    write("GHSA-aaaa-aaaa-aaaa", record("GHSA-aaaa-aaaa-aaaa", ""));
+    write(
+        "GHSA-bbbb-bbbb-bbbb",
+        record("GHSA-bbbb-bbbb-bbbb", r#""RUSTSEC-2099-0001""#),
+    );
+    write("RUSTSEC-2099-0002", record("RUSTSEC-2099-0002", ""));
+    let url = format!("file://{}", dir.display());
+    let scan = |url: &str| {
+        let env = [("CRATESVULNDB", std::ffi::OsStr::new(url))];
+        let fleet = cfg("fleet-vuln.toml");
+        let out = run_env(
+            &["scan", "-q", "-c", &fleet, "--db", &db(), "-f", "json"],
+            &env,
+        );
+        serde_json::from_str::<serde_json::Value>(&stdout(&out)).unwrap()
+    };
+
+    let report = scan(&url);
+    let ids: Vec<&str> = report["vulnerabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["advisory_id"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        ids.iter().filter(|i| **i == "GHSA-aaaa-aaaa-aaaa").count(),
+        1
+    );
+    assert_eq!(ids.iter().filter(|i| **i == "RUSTSEC-2099-0001").count(), 1);
+    assert!(!ids.contains(&"GHSA-bbbb-bbbb-bbbb"), "{ids:?}"); // RustSec's finding stands.
+    assert!(!ids.contains(&"RUSTSEC-2099-0002"), "{ids:?}");
+    assert!(report.get("coverage").is_none(), "{report}");
+
+    // Without the export RustSec still answers, and the scan says what it could not match.
+    let report = scan("");
+    let coverage = report["coverage"].as_array().unwrap();
+    assert_eq!(coverage[0]["ecosystem"], "cargo");
+    assert_eq!(coverage[0]["level"], "partial");
+    assert_eq!(report["summary"]["repos_errored"], 0);
+
+    // A broken export is not silently the same as a clean one.
+    std::fs::write(dir.join("broken.json"), "{").unwrap();
+    let report = scan(&url);
+    let reason = report["coverage"][0]["reason"].as_str().unwrap();
+    assert!(reason.contains("could not be read"), "{reason}");
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

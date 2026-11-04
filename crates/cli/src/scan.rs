@@ -244,6 +244,12 @@ pub(crate) struct ScanArgs {
     #[arg(
         long,
         value_name = "URL",
+        help = "OSV vulnerability DB for the crates.io advisories RustSec does not carry, as `file://<path>` to either the osv.dev crates.io export `all.zip` (read directly, fastest) or a directory of unzipped OSV JSON records. RustSec still answers without it, and the repo is marked partial."
+    )]
+    crates_vuln_db: Option<String>,
+    #[arg(
+        long,
+        value_name = "URL",
         help = "OSV vulnerability DB for the toolchain-free Maven (Java) matcher, as `file://<path>` to either the osv.dev Maven export `all.zip` (read directly, fastest) or a directory of unzipped OSV JSON records. It reads gradle.lockfile (preferred) or pom.xml and builds nothing, so it needs no --allow-untrusted-builds; without this a Maven repo is an honest gap."
     )]
     maven_vuln_db: Option<String>,
@@ -460,6 +466,7 @@ fn explicit_osv_dbs(args: &ScanArgs) -> BTreeMap<Ecosystem, String> {
             &args.ghactions_vuln_db,
             "GHACTIONSVULNDB",
         ),
+        (Ecosystem::Cargo, &args.crates_vuln_db, "CRATESVULNDB"),
         (Ecosystem::Maven, &args.maven_vuln_db, "MAVENVULNDB"),
     ];
     pairs
@@ -778,7 +785,7 @@ impl Feeds {
         // The OSV exports for the toolchain-free feeders (spec 01). Each ecosystem resolves from
         // its explicit flag (or env var), then the one OSV directory, then the default cache,
         // which network builds keep fresh. Only ecosystems the fleet actually has are resolved,
-        // so a Rust-only fleet never touches the network for them.
+        // so a Rust-only fleet fetches only crates.io's.
         let mut needed = fleet_ecosystems(config);
         needed.extend(crate::images::language_ecosystems(images));
         needed.sort();
@@ -928,6 +935,7 @@ impl Feeds {
             swift: url(Ecosystem::Swift),
             hex: url(Ecosystem::Hex),
             ghactions: url(Ecosystem::GitHubActions),
+            crates: url(Ecosystem::Cargo),
             maven: url(Ecosystem::Maven),
             maven_remote: self.maven_remote.as_ref(),
         }

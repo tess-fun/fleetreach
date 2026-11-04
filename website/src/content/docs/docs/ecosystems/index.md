@@ -8,7 +8,7 @@ sidebar:
 
 | Ecosystem | Reads | Advisories | Version rules |
 |-----------|-------|------------|---------------|
-| [Rust](/fleetreach/docs/ecosystems/rust/) | `Cargo.lock` | RustSec | SemVer |
+| [Rust](/fleetreach/docs/ecosystems/rust/) | `Cargo.lock` | RustSec, osv.dev | SemVer |
 | [Go](/fleetreach/docs/ecosystems/go/) | `go.mod` (or the compiled module) | osv.dev or vuln.go.dev | Go module versions |
 | [npm](/fleetreach/docs/ecosystems/npm/) | `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock` | osv.dev | SemVer |
 | [PyPI](/fleetreach/docs/ecosystems/pypi/) | `uv.lock`, `poetry.lock`, `Pipfile.lock`, `pylock.toml`, `requirements*.txt` | osv.dev | PEP 440 |

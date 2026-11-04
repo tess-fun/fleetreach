@@ -246,9 +246,9 @@ Go binaries are read for their build info, which nothing runs: the modules linke
 toolchain, whose standard library is matched as `stdlib`. A main module built as `(devel)` takes
 the version stamped by `-ldflags`, if any, and otherwise only its dependencies are matched.
 Rust binaries built with `cargo auditable` are read the same way, from the crate list in their
-`.dep-v0` section, and the crates linked in are matched against RustSec. A Rust binary without
-that list says nothing about its crates, so it is a coverage gap, which neither Trivy nor Grype
-reports.
+`.dep-v0` section, and the crates linked in are matched as a `Cargo.lock`'s are. A Rust binary
+without that list says nothing about its crates, so it is a coverage gap, which neither Trivy nor
+Grype reports.
 
 Files that belong to an OS package are skipped when a distribution's advisories know that
 package, so Debian's `python3-requests` is reported once, as the Debian package. A vendor's

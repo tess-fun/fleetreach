@@ -16,7 +16,7 @@ fn fixtures() -> PathBuf {
 fn run() -> fleetreach_scan::RepoScan {
     let db = AdvisoryDb::open(&fixtures().join("advisory-db")).expect("open fixture db");
     let repo = RepoId("fixture-repo".into());
-    scan_lockfile(&db, &repo, &fixtures().join("Cargo.lock")).expect("scan fixture lockfile")
+    scan_lockfile(&db, None, &repo, &fixtures().join("Cargo.lock")).expect("scan fixture lockfile")
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn toolchain_advisory_absent_for_a_patched_version() {
 fn vulnerability_carries_its_dependency_path() {
     let db = AdvisoryDb::open(&fixtures().join("advisory-db")).expect("open fixture db");
     let repo = RepoId("svc".into());
-    let scan = scan_lockfile(&db, &repo, &fixtures().join("Cargo-transitive.lock"))
+    let scan = scan_lockfile(&db, None, &repo, &fixtures().join("Cargo-transitive.lock"))
         .expect("scan transitive lockfile");
 
     assert_eq!(scan.vulnerabilities.len(), 1);
@@ -186,7 +186,7 @@ fn crates_of_a_binary_match_as_a_lockfile_would_and_name_the_binary() {
         ("fixturevuln".to_string(), installed.to_string()),
         ("other".to_string(), "not a version".to_string()),
     ];
-    let (scan, skipped) = scan_crates(&db, &repo, "usr/bin/app", &crates);
+    let (scan, skipped) = scan_crates(&db, None, &repo, "usr/bin/app", &crates);
     assert_eq!(skipped, 1);
     assert_eq!(scan.vulnerabilities[0].advisory_id, "RUSTSEC-2099-0001");
     let Occurrence::InRepo {
