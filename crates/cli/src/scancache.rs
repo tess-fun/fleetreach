@@ -207,6 +207,7 @@ fn is_input(name: &str) -> bool {
             | "in"
             | "cfg"
             | "mod"
+            | "go"
             | "sum"
             | "work"
             | "resolved"

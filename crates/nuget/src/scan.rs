@@ -148,6 +148,12 @@ pub fn inventory(repo_dir: &Path) -> Result<SourceInventory, NuGetError> {
     Ok(inv)
 }
 
+/// The dependency graph of the preferred source in `repo_dir`, when it can be read.
+#[must_use]
+pub fn dependency_graph(repo_dir: &Path) -> Option<DepGraph> {
+    read_sources(repo_dir).ok().map(|(_, graph, _)| graph)
+}
+
 type Read = (Vec<InstalledPackage>, DepGraph, Vec<SourceCoverage>);
 
 /// Read the preferred source in `repo_dir`.

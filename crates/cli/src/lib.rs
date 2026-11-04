@@ -50,6 +50,7 @@ pub mod sbom;
 pub mod sbom_input;
 pub mod scan;
 pub mod scancache;
+pub mod scope;
 pub mod signals;
 pub mod snapshot;
 pub mod sources;

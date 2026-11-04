@@ -214,6 +214,54 @@ pub struct Assembled {
 pub struct GateConfig {
     pub fail_on: Severity,
     pub fail_on_warnings: bool,
+    pub dev: DevGate,
+}
+
+/// How findings on dev and build-only packages gate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DevGate {
+    /// Like any other finding.
+    #[default]
+    Same,
+    At(Severity),
+    Never,
+}
+
+impl DevGate {
+    /// The floor for a dev occurrence when other findings gate at `fail_on`.
+    pub fn floor(self, fail_on: Severity) -> Option<Severity> {
+        match self {
+            DevGate::Same => Some(fail_on),
+            DevGate::At(floor) => Some(floor),
+            DevGate::Never => None,
+        }
+    }
+}
+
+fn is_dev(occurrence: &Occurrence) -> bool {
+    matches!(
+        occurrence,
+        Occurrence::InRepo {
+            scope: DepScope::Dev,
+            ..
+        }
+    )
+}
+
+/// Whether `v` trips the gate. Each occurrence answers to the floor of its own scope, and
+/// known malware to the runtime floor wherever it sits: a dev install still runs it.
+fn vuln_gates(v: &VulnFinding, gate: &GateConfig) -> bool {
+    let runtime = gates(v.severity, gate.fail_on);
+    if v.occurrences.is_empty() || is_malware(v) {
+        return runtime;
+    }
+    let dev = gate
+        .dev
+        .floor(gate.fail_on)
+        .is_some_and(|floor| gates(v.severity, floor));
+    v.occurrences
+        .iter()
+        .any(|o| if is_dev(o) { dev } else { runtime })
 }
 
 /// Whether a finding is known malware: an OSV `MAL-` record, or an advisory aliasing one.
@@ -345,11 +393,13 @@ pub fn exit_code(report: &FleetReport, gate: &GateConfig) -> u8 {
     if report.summary.repos_errored > 0 || report.summary.repos_scanned == 0 {
         return 2;
     }
-    let vuln_hit = report
-        .vulnerabilities
-        .iter()
-        .any(|v| gates(v.severity, gate.fail_on));
-    let warn_hit = gate.fail_on_warnings && !report.warnings.is_empty();
+    let vuln_hit = report.vulnerabilities.iter().any(|v| vuln_gates(v, gate));
+    let warn_hit = gate.fail_on_warnings
+        && report.warnings.iter().any(|w| {
+            gate.dev != DevGate::Never
+                || w.occurrences.is_empty()
+                || !w.occurrences.iter().all(is_dev)
+        });
     u8::from(vuln_hit || warn_hit)
 }
 

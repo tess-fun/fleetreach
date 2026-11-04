@@ -16,7 +16,8 @@ use crate::assemble::{
     retain_reachable, Assembled, GateConfig, SuppressedOccurrence, Suppression,
 };
 use crate::cli::{
-    fail, usage_fail, BuildSandbox, Format, OutcomeArg, ReachMode, SeverityArg, VexScopeArg,
+    fail, usage_fail, BuildSandbox, DevFloorArg, Format, OutcomeArg, ReachMode, SeverityArg,
+    VexScopeArg,
 };
 use crate::config::Config;
 use crate::db::{
@@ -75,6 +76,14 @@ pub(crate) struct ScanArgs {
         help = "fail if any vuln at/above [default: low, or off when --fail-on-ssvc is given alone]"
     )]
     fail_on: Option<SeverityArg>,
+    #[arg(
+        long,
+        value_enum,
+        value_name = "FLOOR",
+        help = "the floor for dev and build-only packages, or `never` [default: \
+                `[settings.gate.scope] dev`, else as --fail-on]"
+    )]
+    fail_on_dev: Option<DevFloorArg>,
     #[arg(long, help = "also fail if any warning is present")]
     fail_on_warnings: bool,
     #[arg(
@@ -109,7 +118,10 @@ pub(crate) struct ScanArgs {
     #[arg(
         long,
         help = "suppress findings on dev/build-only deps (npm devDependencies, uv/poetry dev \
-                groups, Pipfile dev-packages, composer require-dev)"
+                groups, Pipfile dev-packages, composer require-dev, Maven test and provided, \
+                Gradle test configurations, Cargo dev and build dependencies, Bundler \
+                development and test groups, Hex deps without :prod, NuGet test projects and \
+                excluded runtime assets, Go modules only tests import)"
     )]
     ignore_dev_deps: bool,
 
@@ -683,7 +695,13 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         eprintln!("{}", report::summary_line(&fleet_report));
     }
 
-    let code = gate(args, &fleet_report, baseline_new, coverage_incomplete);
+    let code = gate(
+        args,
+        &config,
+        &fleet_report,
+        baseline_new,
+        coverage_incomplete,
+    );
     // An expired decision is a failure whatever the gate's level: someone owes a new one.
     let code = combine_baseline(code, triage.report_expired(&fleet_report));
     record_history(
@@ -1599,6 +1617,7 @@ fn render(
 /// The exit code per §8, plus the opt-in KEV, SSVC, baseline and full-coverage gates.
 fn gate(
     args: &ScanArgs,
+    config: &Config,
     fleet_report: &FleetReport,
     baseline_new: bool,
     coverage_incomplete: bool,
@@ -1629,6 +1648,7 @@ fn gate(
         &GateConfig {
             fail_on: severity_gate.unwrap_or(SeverityArg::Low).into(),
             fail_on_warnings: args.fail_on_warnings,
+            dev: args.fail_on_dev.map_or(config.gate_dev, Into::into),
         },
     );
     let ssvc_hit = args

@@ -512,6 +512,14 @@ fn cache_key(
                 if !walk_errors.is_empty() {
                     return None;
                 }
+                // Scope comes from the workspace manifests beside each lockfile.
+                for lockfile in &lockfiles {
+                    let dir = lockfile.parent()?;
+                    inputs.files.insert(dir.join("Cargo.toml"));
+                    inputs
+                        .files
+                        .extend(crate::scope::cargo_manifests(dir).unwrap_or_default());
+                }
                 inputs.files.extend(lockfiles);
             }
             Ecosystem::GitHubActions => {
@@ -1880,6 +1888,7 @@ fn scan_unit(
                         annotate_built(&mut scan, &built);
                     }
                 }
+                crate::scope::mark_cargo(lockfile, &mut scan);
                 vulnerabilities.extend(scan.vulnerabilities);
                 warnings.extend(scan.warnings);
             }
@@ -1928,7 +1937,10 @@ fn scan_go_repo(repo: &Repo, go: &GoScan, go_db: Option<&Result<GoDb, GoError>>)
         // no untrusted-build consent. Without a mirror it stays an honest gap.
         return match go_db {
             Some(Ok(db)) => match fleetreach_go::scan_offline(&repo.path, db, &repo.id) {
-                Ok(vulnerabilities) => scanned(vulnerabilities),
+                Ok(mut vulnerabilities) => {
+                    crate::scope::mark(Ecosystem::Go, &repo.path, &mut vulnerabilities);
+                    scanned(vulnerabilities)
+                }
                 Err(e) => errored(format!("tier-c offline scan: {e}")),
             },
             Some(Err(e)) => errored(format!("tier-c offline DB: {e}")),
@@ -2073,19 +2085,22 @@ fn scan_tier_c<D, E: std::fmt::Display, S: std::fmt::Display>(
         Err(reason) => return RepoResult::errored(&repo.id, reason),
     };
     match scan(db) {
-        Ok((scan, gaps)) => gaps.into_iter().fold(
-            RepoResult::scanned(&repo.id, scan.findings, Vec::new())
-                .with_skipped(scan.skipped_unparseable),
-            |result, (source, level, reason)| {
-                result.with_coverage(CoverageGap {
-                    repo: repo.id.clone(),
-                    source,
-                    ecosystem,
-                    level,
-                    reason,
-                })
-            },
-        ),
+        Ok((mut scan, gaps)) => {
+            crate::scope::mark(ecosystem, &repo.path, &mut scan.findings);
+            gaps.into_iter().fold(
+                RepoResult::scanned(&repo.id, scan.findings, Vec::new())
+                    .with_skipped(scan.skipped_unparseable),
+                |result, (source, level, reason)| {
+                    result.with_coverage(CoverageGap {
+                        repo: repo.id.clone(),
+                        source,
+                        ecosystem,
+                        level,
+                        reason,
+                    })
+                },
+            )
+        }
         Err(e) => RepoResult::errored(&repo.id, format!("{} tier-c scan: {e}", eco.scan)),
     }
 }

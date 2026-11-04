@@ -19,8 +19,9 @@ use clap::{Parser, ValueEnum};
 use fleetreach_core::FleetReport;
 use fleetreach_report as report;
 
+use crate::assemble::DevGate;
 use crate::attribute;
-use crate::cli::{fail, usage_fail, SeverityArg};
+use crate::cli::{fail, usage_fail, DevFloorArg, SeverityArg};
 
 #[derive(Parser)]
 pub struct DiffArgs {
@@ -45,6 +46,9 @@ pub struct DiffArgs {
     /// base with this git ref, and gate only on what the change brought in
     #[arg(long, value_name = "REF")]
     base: Option<String>,
+    /// The floor for dev and build-only packages under `--base`, or `never`
+    #[arg(long, value_enum, value_name = "FLOOR", requires = "base")]
+    fail_on_dev: Option<DevFloorArg>,
     /// The git checkout `--base` reads
     #[arg(long, value_name = "DIR", default_value = ".", requires = "base")]
     checkout: PathBuf,
@@ -113,8 +117,9 @@ pub fn run_diff(args: DiffArgs) -> u8 {
         return 0;
     }
     let (floor, warnings) = (args.fail_on.into(), args.fail_on_warnings);
+    let dev = args.fail_on_dev.map_or(DevGate::Same, Into::into);
     let failed = match &attributed {
-        Some(findings) => findings.iter().any(|f| f.gates(floor, warnings)),
+        Some(findings) => findings.iter().any(|f| f.gates(floor, dev, warnings)),
         None => diff.regressions(floor, warnings) > 0,
     };
     u8::from(failed)

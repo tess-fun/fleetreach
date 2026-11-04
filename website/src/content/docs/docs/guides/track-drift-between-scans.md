@@ -56,6 +56,8 @@ Already here before this change, not gating (1):
   critical GHSA-3xgq-45jj-v275 cross-spawn@7.0.3 at package-lock.json:1893
 ```
 
+`--fail-on-dev` sets a separate floor for [dev and build-only packages](/fleetreach/docs/guides/gate-on-what-ships/).
+
 New findings are compared per occurrence, so an advisory already open in another repo still
 counts when this repo gains it. Each one then lands in one of three groups:
 

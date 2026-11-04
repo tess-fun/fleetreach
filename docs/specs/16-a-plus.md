@@ -1041,6 +1041,21 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: `cargo tree -e normal` vs `-e dev,build`; `mvn dependency:list` scopes; `bundle
   list --without`.
 
+  **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/scope.rs`,
+  `fleetreach_nuget::build_only`, `--fail-on-dev`, `[settings.gate.scope] dev`, guide "Gate on
+  what ships"). `docs/differential/scope_oracle.py`, no package the tool ships called dev
+  anywhere: `cargo tree` on 39 repos, 975 of 1,243 dev-only packages caught, the rest build
+  dependencies of third-party crates that `Cargo.lock` cannot separate; `go list` on 14 repos, 15
+  of 16; Bundler's own Gemfile evaluation on Mastodon 65 of 65 and Discourse 63 of 66; `mix
+  deps` under `MIX_ENV=prod` on Realtime and Plausible, 16 of 29 because both ship git deps, so
+  only declared dev deps count. `bundle list` with groups excluded and `mvn dependency:list
+  -DincludeScope=runtime` matched exactly on fixtures, and `dotnet publish` left out every
+  NuGet package called dev. Two false devs were found this way and fixed: Go needs the import
+  closure through dependency source (gitea's `klauspost/compress`), and Bundler needed edges
+  from `PATH` gems (Discourse's `unicode-display_width`). Go therefore needs `vendor/` or a
+  warm module cache, and stays runtime without. Swift and Julia stay runtime, their lockfiles
+  do not mark test dependencies. GitHub Actions stay in scope by default.
+
 #### 18. Fleet-wide provenance (A to A+)
 
 - **Gap**: shortest path only; no version distribution view.

@@ -65,6 +65,11 @@ Options:
           
           [possible values: low, medium, high, critical]
 
+      --fail-on-dev <FLOOR>
+          the floor for dev and build-only packages, or `never` [default: `[settings.gate.scope] dev`, else as --fail-on]
+          
+          [possible values: low, medium, high, critical, never]
+
       --fail-on-warnings
           also fail if any warning is present
 
@@ -90,7 +95,7 @@ Options:
           suppress findings on phantom (unbuilt optional) deps; implies --resolve-features
 
       --ignore-dev-deps
-          suppress findings on dev/build-only deps (npm devDependencies, uv/poetry dev groups, Pipfile dev-packages, composer require-dev)
+          suppress findings on dev/build-only deps (npm devDependencies, uv/poetry dev groups, Pipfile dev-packages, composer require-dev, Maven test and provided, Gradle test configurations, Cargo dev and build dependencies, Bundler development and test groups, Hex deps without :prod, NuGet test projects and excluded runtime assets, Go modules only tests import)
 
       --triage-dir <DIR>
           read triage decisions from DIR (default: `triage/` beside fleet.toml, if there)

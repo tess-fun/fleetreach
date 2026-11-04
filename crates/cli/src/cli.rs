@@ -241,6 +241,29 @@ pub(crate) enum SeverityArg {
     Critical,
 }
 
+/// A floor for dev findings: a severity, or `never`.
+#[derive(Clone, Copy, ValueEnum)]
+pub(crate) enum DevFloorArg {
+    Low,
+    Medium,
+    High,
+    Critical,
+    Never,
+}
+
+impl From<DevFloorArg> for crate::assemble::DevGate {
+    fn from(floor: DevFloorArg) -> Self {
+        use crate::assemble::DevGate;
+        match floor {
+            DevFloorArg::Low => DevGate::At(Severity::Low),
+            DevFloorArg::Medium => DevGate::At(Severity::Medium),
+            DevFloorArg::High => DevGate::At(Severity::High),
+            DevFloorArg::Critical => DevGate::At(Severity::Critical),
+            DevFloorArg::Never => DevGate::Never,
+        }
+    }
+}
+
 impl From<SeverityArg> for Severity {
     fn from(s: SeverityArg) -> Self {
         match s {

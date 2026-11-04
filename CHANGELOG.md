@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Scope for Cargo, Bundler, Hex, NuGet and Go, and a gate per scope.** A package only dev
+  dependencies lead to is now `scope: dev` in these five too, so `--ignore-dev-deps`, SBOM
+  `scope: excluded` and license `scope = "runtime"` cover them. `--fail-on-dev` and
+  `[settings.gate.scope] dev` give dev packages their own floor, or `never`; `diff --base` takes
+  the flag. Known malware keeps the runtime floor. Whatever cannot be read stays runtime: against
+  `cargo tree`, `go list`, Bundler and `mix deps` on real repos, no package those tools ship was
+  called dev. Go needs the dependency source, so run `go mod download` first. See "Gate on what
+  ships".
 - **`diff --base <ref>` says what a change brought in.** New findings are compared per
   occurrence and placed by git: brought in, with the lockfile line and the manifest line that
   caused it; already at the merge base, so the advisory is what changed, which no longer
@@ -93,6 +101,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Dependency paths for RubyGems now go through gems from `GIT` and `PATH` sources.
 - A pnpm `file:` or tarball dependency no longer appears as a package with a path for a version.
 - **`fix apply` could destroy a verified branch.** A re-run that failed its baseline scan
   deleted the branch. Branches now move only after a commit, and an unverified result goes

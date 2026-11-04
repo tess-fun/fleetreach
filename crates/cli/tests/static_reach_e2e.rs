@@ -117,6 +117,7 @@ fn static_engine_annotates_a_dependency_finding_reachable() {
         ssvc_weights: Default::default(),
         sla: Default::default(),
         history_keep: None,
+        gate_dev: Default::default(),
     };
 
     assess(
@@ -228,6 +229,7 @@ fn uninstantiated_generic_dependency_fn_is_not_reachable() {
         ssvc_weights: Default::default(),
         sla: Default::default(),
         history_keep: None,
+        gate_dev: Default::default(),
     };
 
     assess(

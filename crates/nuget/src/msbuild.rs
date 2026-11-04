@@ -15,7 +15,7 @@
 //! unresolved. A bare version (`1.2.3`) is NuGet's minimum, which restore resolves to that
 //! exact release when it exists, so it is matched as installed.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use roxmltree::{Document, Node};
@@ -268,6 +268,76 @@ fn updates(doc: &Document<'_>) -> Vec<Item> {
         .collect()
 }
 
+/// What the project files in a directory say never reaches the program they build.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct BuildOnly {
+    /// Every project here is a test project, so nothing in this directory ships.
+    pub test_project: bool,
+    /// Packages, in lower case, that stay out of a publish or a pack.
+    pub packages: BTreeSet<String>,
+}
+
+/// Whether a `PackageReference` stays out of what the project ships. `dotnet publish` and
+/// `dotnet pack` both leave out `PrivateAssets="all"`, even with its runtime assets included;
+/// only `bin/` from a plain build has it.
+fn build_only_reference(node: Node<'_, '_>) -> bool {
+    let lists = |name: &str, wanted: &[&str]| {
+        value(node, name).map(|v| {
+            v.split(';')
+                .any(|a| wanted.contains(&a.trim().to_ascii_lowercase().as_str()))
+        })
+    };
+    lists("PrivateAssets", &["all"]) == Some(true)
+        || lists("Publish", &["false"]) == Some(true)
+        || lists("ExcludeAssets", &["runtime", "all"]) == Some(true)
+        || lists("IncludeAssets", &["runtime", "all"]) == Some(false)
+}
+
+/// Reads [`BuildOnly`] from the project files in `dir`. A file that cannot be read says
+/// nothing, so its packages stay at runtime.
+#[must_use]
+pub fn build_only(dir: &Path) -> BuildOnly {
+    let mut out = BuildOnly::default();
+    let projects = project_files(dir);
+    let mut tests = 0usize;
+    let mut shipped = BTreeSet::new();
+    for project in &projects {
+        let Ok(text) = std::fs::read_to_string(project) else {
+            return BuildOnly::default();
+        };
+        let Ok(doc) = parse_xml(&text) else {
+            return BuildOnly::default();
+        };
+        let references = || {
+            doc.descendants()
+                .filter(|n| n.has_tag_name("PackageReference"))
+        };
+        let names = |n: Node<'_, '_>| n.attribute("Include").map(str::to_ascii_lowercase);
+        let mut properties = BTreeMap::new();
+        collect_properties(&doc, &mut properties);
+        let test_sdk =
+            references().any(|n| names(n).is_some_and(|name| name == "microsoft.net.test.sdk"));
+        let declared_off = properties
+            .get("istestproject")
+            .is_some_and(|v| v.eq_ignore_ascii_case("false"));
+        let declared_on = properties
+            .get("istestproject")
+            .is_some_and(|v| v.eq_ignore_ascii_case("true"));
+        tests += usize::from(declared_on || (test_sdk && !declared_off));
+        for reference in references() {
+            let into = match build_only_reference(reference) {
+                true => &mut out.packages,
+                false => &mut shipped,
+            };
+            into.extend(names(reference));
+        }
+    }
+    // Another project in this directory can take what one leaves out.
+    out.packages.retain(|name| !shipped.contains(name));
+    out.test_project = !projects.is_empty() && tests == projects.len();
+    out
+}
+
 /// An attribute, else a child element of that name.
 fn value(node: Node<'_, '_>, name: &str) -> Option<String> {
     node.attribute(name)
@@ -330,6 +400,64 @@ fn single_version(text: &str) -> Option<String> {
         return None;
     }
     parse_nuget_version(candidate).map(|_| candidate.to_string())
+}
+
+#[cfg(test)]
+mod build_only_tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+
+    fn read(project: &str) -> BuildOnly {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.csproj"), project).unwrap();
+        build_only(dir.path())
+    }
+
+    #[test]
+    fn private_or_excluded_assets_are_build_only() {
+        let got = read(
+            r#"<Project><ItemGroup>
+            <PackageReference Include="Ships" Version="1" />
+            <PackageReference Include="Partly" Version="1" PrivateAssets="compile" />
+            <PackageReference Include="Private" Version="1" PrivateAssets="All" />
+            <PackageReference Include="Tool" Version="1" ExcludeAssets="runtime" />
+            <PackageReference Include="Local" Version="1" Publish="false" />
+            <PackageReference Include="Analyzer" Version="1"><PrivateAssets>all</PrivateAssets>
+              <IncludeAssets>build; analyzers</IncludeAssets></PackageReference>
+            </ItemGroup></Project>"#,
+        );
+        assert!(!got.test_project);
+        let names: Vec<&str> = got.packages.iter().map(String::as_str).collect();
+        assert_eq!(names, vec!["analyzer", "local", "private", "tool"]);
+    }
+
+    #[test]
+    fn a_second_project_that_ships_a_package_wins() {
+        let dir = tempfile::tempdir().unwrap();
+        let reference = |extra: &str| {
+            format!(
+                r#"<Project><ItemGroup><PackageReference Include="P" Version="1" {extra}/></ItemGroup></Project>"#
+            )
+        };
+        std::fs::write(
+            dir.path().join("a.csproj"),
+            reference("PrivateAssets=\"all\" "),
+        )
+        .unwrap();
+        assert_eq!(build_only(dir.path()).packages.len(), 1);
+        std::fs::write(dir.path().join("b.csproj"), reference("")).unwrap();
+        assert!(build_only(dir.path()).packages.is_empty());
+    }
+
+    #[test]
+    fn a_test_project_is_named_by_its_sdk_or_its_property() {
+        let sdk = r#"<Project><ItemGroup><PackageReference Include="Microsoft.NET.Test.Sdk" Version="17" /></ItemGroup></Project>"#;
+        assert!(read(sdk).test_project);
+        let on = r#"<Project><PropertyGroup><IsTestProject>true</IsTestProject></PropertyGroup></Project>"#;
+        assert!(read(on).test_project);
+        let off = r#"<Project><PropertyGroup><IsTestProject>false</IsTestProject></PropertyGroup><ItemGroup><PackageReference Include="Microsoft.NET.Test.Sdk" Version="17" /></ItemGroup></Project>"#;
+        assert!(!read(off).test_project);
+    }
 }
 
 #[cfg(test)]

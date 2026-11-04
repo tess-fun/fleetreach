@@ -150,7 +150,7 @@ proptest! {
         // exit code is always one of 0/1/2 for a completed scan
         let code = exit_code(
             &r1,
-            &GateConfig { fail_on: Severity::Low, fail_on_warnings: false },
+            &GateConfig { fail_on: Severity::Low, fail_on_warnings: false, dev: Default::default() },
         );
         prop_assert!(code <= 2);
     }

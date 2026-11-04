@@ -121,7 +121,7 @@ pub fn installed_gems(lock_text: &str) -> Vec<InstalledGem> {
 ///
 /// * `"(root)" -> name` for each name in the `DEPENDENCIES` section (the direct set).
 /// * `gem -> requirement` for each 6-space dependency-edge line under a 4-space resolved gem
-///   inside a `GEM ... specs:` block (regardless of which `GEM` remote it is — the tree shape
+///   inside a `GEM`, `GIT` or `PATH` `specs:` block (regardless of which remote it is — the tree shape
 ///   is independent of registry-matchability).
 ///
 /// `chain_to(&gem.name)` then yields `[(root), …, gem]`, matching the occurrence's verbatim
@@ -144,7 +144,8 @@ pub fn dependency_graph(lock_text: &str) -> DepGraph {
             continue;
         }
         if indent == 0 {
-            in_gem = trimmed == "GEM";
+            // GIT and PATH gems are not matched, but what they depend on still ships.
+            in_gem = matches!(trimmed, "GEM" | "GIT" | "PATH");
             in_specs = false;
             current = None;
             continue;

@@ -41,6 +41,7 @@ pub fn repo_inventory_with(repo: &Repo, maven: Option<&Remote>) -> RepoInventory
         match unit_inventory(unit, maven) {
             Ok(sources) => {
                 for mut source in sources {
+                    crate::scope::mark_inventory(unit.ecosystem, &unit.repo.path, &mut source);
                     if !unit.rel_dir.is_empty() {
                         source.source = format!("{}/{}", unit.rel_dir, source.source);
                     }

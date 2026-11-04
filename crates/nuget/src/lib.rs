@@ -60,8 +60,9 @@ pub use error::{DbError, NuGetError};
 /// The OSV version-match outcome, shared with the other ecosystem feeders.
 pub use fleetreach_core::osv::Match;
 pub use lockfile::{installed_packages, InstalledPackage};
+pub use msbuild::{build_only, BuildOnly};
 pub use scan::{
-    has_nuget_sources, inventory, scan_installed, scan_offline, scan_offline_with_coverage,
-    NuGetScan, SourceCoverage,
+    dependency_graph, has_nuget_sources, inventory, scan_installed, scan_offline,
+    scan_offline_with_coverage, NuGetScan, SourceCoverage,
 };
 pub use version::{parse_nuget_version, to_semver, Version};

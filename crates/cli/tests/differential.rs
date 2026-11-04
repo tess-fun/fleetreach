@@ -90,6 +90,7 @@ fn config() -> Config {
         ssvc_weights: Default::default(),
         sla: Default::default(),
         history_keep: None,
+        gate_dev: Default::default(),
     }
 }
 

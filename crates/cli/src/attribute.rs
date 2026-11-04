@@ -11,9 +11,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use fleetreach_core::{FleetReport, Occurrence, Severity};
+use fleetreach_core::{DepScope, FleetReport, Occurrence, Severity};
 use serde::Serialize;
 
+use crate::assemble::{is_malware, DevGate};
 use crate::lockline;
 
 /// Where a new finding came from.
@@ -60,13 +61,25 @@ pub struct Attributed {
     /// The changed manifest line that names the direct dependency.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cause: Option<Place>,
+    /// On a dev or build-only package. Never set on known malware.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub dev: bool,
     #[serde(skip)]
     direct: Option<String>,
 }
 
 impl Attributed {
-    /// Whether this counts against the gate at `floor`. Unknown severity fails closed.
-    pub fn gates(&self, floor: Severity, warnings: bool) -> bool {
+    /// Whether this counts against the gate at `floor`, or at `dev` for a dev package. Unknown
+    /// severity fails closed unless dev findings never gate.
+    pub fn gates(&self, floor: Severity, dev: DevGate, warnings: bool) -> bool {
+        let floor = if self.dev {
+            dev.floor(floor)
+        } else {
+            Some(floor)
+        };
+        let Some(floor) = floor else {
+            return false;
+        };
         self.origin != Origin::Existing
             && match self.severity {
                 Some(s) => s == Severity::Unknown || s >= floor,
@@ -79,17 +92,18 @@ type OccurrenceKey = (String, String, String, String);
 
 fn occurrences(
     report: &FleetReport,
-) -> impl Iterator<Item = (&str, Option<Severity>, &Occurrence)> {
+) -> impl Iterator<Item = (&str, Option<Severity>, bool, &Occurrence)> {
     let vulns = report.vulnerabilities.iter().flat_map(|v| {
+        let malware = is_malware(v);
         v.occurrences
             .iter()
-            .map(|o| (v.advisory_id.as_str(), Some(v.severity), o))
+            .map(move |o| (v.advisory_id.as_str(), Some(v.severity), malware, o))
     });
     let warnings = report.warnings.iter().flat_map(|w| {
         let id = w.advisory_id.as_deref();
         w.occurrences
             .iter()
-            .filter_map(move |o| Some((id?, None, o)))
+            .filter_map(move |o| Some((id?, None, false, o)))
     });
     vulns.chain(warnings)
 }
@@ -118,20 +132,23 @@ fn key(advisory: &str, occurrence: &Occurrence) -> OccurrenceKey {
 
 /// The occurrences of `current` that `baseline` lacks, unplaced.
 pub fn new_occurrences(baseline: &FleetReport, current: &FleetReport) -> Vec<Attributed> {
-    let known: BTreeSet<OccurrenceKey> =
-        occurrences(baseline).map(|(id, _, o)| key(id, o)).collect();
+    let known: BTreeSet<OccurrenceKey> = occurrences(baseline)
+        .map(|(id, _, _, o)| key(id, o))
+        .collect();
     let mut seen = BTreeSet::new();
     let mut out = Vec::new();
-    for (id, severity, occurrence) in occurrences(current) {
+    for (id, severity, malware, occurrence) in occurrences(current) {
         let k = key(id, occurrence);
         if known.contains(&k) || !seen.insert(k.clone()) {
             continue;
         }
-        let direct = match occurrence {
+        let (direct, scope) = match occurrence {
             Occurrence::InRepo {
-                dependency_path, ..
-            } => dependency_path.get(1).cloned(),
-            Occurrence::Toolchain { .. } => None,
+                dependency_path,
+                scope,
+                ..
+            } => (dependency_path.get(1).cloned(), *scope),
+            Occurrence::Toolchain { .. } => (None, DepScope::Runtime),
         };
         let (repo, _, package, version) = k;
         out.push(Attributed {
@@ -143,6 +160,7 @@ pub fn new_occurrences(baseline: &FleetReport, current: &FleetReport) -> Vec<Att
             version,
             at: None,
             cause: None,
+            dev: scope == DepScope::Dev && !malware,
             direct,
         });
     }
@@ -416,8 +434,19 @@ mod tests {
             version: version.to_string(),
             at: None,
             cause: None,
+            dev: false,
             direct: direct.map(str::to_string),
         }
+    }
+
+    #[test]
+    fn a_dev_finding_gates_at_the_dev_floor() {
+        let mut f = finding("r", "p", "1", None);
+        f.dev = true;
+        let critical = DevGate::At(Severity::Critical);
+        assert!(f.gates(Severity::Low, DevGate::Same, false));
+        assert!(!f.gates(Severity::Low, critical, false));
+        assert!(!f.gates(Severity::Low, DevGate::Never, false));
     }
 
     const LOCK: &str = "{\n  \"packages\": {\n    \"node_modules/old\": {\n      \"version\": \"1.0.0\"\n    },\n    \"node_modules/tar\": {\n      \"version\": \"VERSION\"\n    }\n  }\n}\n";
@@ -485,10 +514,11 @@ mod tests {
             "package.json:3"
         );
         assert!(findings[1].cause.is_none());
-        assert!(findings[0].gates(Severity::High, false));
-        assert!(!findings[0].gates(Severity::Critical, false));
-        assert!(!findings[1].gates(Severity::Low, false));
-        assert!(findings[2].gates(Severity::Low, false));
+        let same = DevGate::Same;
+        assert!(findings[0].gates(Severity::High, same, false));
+        assert!(!findings[0].gates(Severity::Critical, same, false));
+        assert!(!findings[1].gates(Severity::Low, same, false));
+        assert!(findings[2].gates(Severity::Low, same, false));
     }
 
     #[test]

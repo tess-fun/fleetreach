@@ -2,13 +2,13 @@
 //! (errored repo, unknown severity) and byte-identical determinism.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use fleetreach_cli::assemble::{build_report, exit_code, GateConfig};
+use fleetreach_cli::assemble::{build_report, exit_code, DevGate, GateConfig};
 use fleetreach_cli::config::Ignore;
 use fleetreach_cli::ScanData;
 use fleetreach_core::semver::Version;
 use fleetreach_core::{
-    DependencyKind, Occurrence, Provenance, RepoId, RepoOutcome, ScanStatus, Severity, VulnFinding,
-    WarnFinding, WarnKind,
+    DepScope, DependencyKind, FleetReport, Occurrence, Provenance, RepoId, RepoOutcome, ScanStatus,
+    Severity, VulnFinding, WarnFinding, WarnKind,
 };
 
 fn provenance() -> Provenance {
@@ -96,7 +96,100 @@ fn gate(fail_on: Severity, fail_on_warnings: bool) -> GateConfig {
     GateConfig {
         fail_on,
         fail_on_warnings,
+        dev: Default::default(),
     }
+}
+
+/// `vuln` on a dev package.
+fn dev_vuln(id: &str, severity: Severity, repo: &str) -> VulnFinding {
+    let mut v = vuln(id, severity, repo);
+    for occurrence in &mut v.occurrences {
+        if let Occurrence::InRepo { scope, .. } = occurrence {
+            *scope = DepScope::Dev;
+        }
+    }
+    v
+}
+
+fn report_of(vulnerabilities: Vec<VulnFinding>, warnings: Vec<WarnFinding>) -> FleetReport {
+    let scan = ScanData {
+        images: Vec::new(),
+        pulled: Vec::new(),
+        reused: 0,
+        skipped_unparseable: 0,
+        coverage: Vec::new(),
+        vulnerabilities,
+        warnings,
+        outcomes: vec![scanned("a", 1, 0)],
+    };
+    build_report(scan, &[], None, provenance())
+}
+
+fn dev_gate(fail_on: Severity, dev: DevGate) -> GateConfig {
+    GateConfig {
+        fail_on,
+        fail_on_warnings: false,
+        dev,
+    }
+}
+
+#[test]
+fn dev_findings_answer_to_their_own_floor() {
+    let report = report_of(vec![dev_vuln("V", Severity::High, "a")], vec![]);
+    let at = |dev| exit_code(&report, &dev_gate(Severity::Low, dev));
+    assert_eq!(at(DevGate::Same), 1);
+    assert_eq!(at(DevGate::At(Severity::High)), 1);
+    assert_eq!(at(DevGate::At(Severity::Critical)), 0);
+    assert_eq!(at(DevGate::Never), 0);
+}
+
+#[test]
+fn a_runtime_occurrence_keeps_a_finding_at_the_runtime_floor() {
+    let mut mixed = dev_vuln("V", Severity::High, "a");
+    mixed
+        .occurrences
+        .extend(vuln("V", Severity::High, "b").occurrences);
+    let report = report_of(vec![mixed], vec![]);
+    assert_eq!(
+        exit_code(&report, &dev_gate(Severity::Low, DevGate::Never)),
+        1
+    );
+}
+
+#[test]
+fn unknown_severity_on_a_dev_package_fails_closed_unless_dev_never_gates() {
+    let report = report_of(vec![dev_vuln("V", Severity::Unknown, "a")], vec![]);
+    let critical = DevGate::At(Severity::Critical);
+    assert_eq!(exit_code(&report, &dev_gate(Severity::Low, critical)), 1);
+    assert_eq!(
+        exit_code(&report, &dev_gate(Severity::Low, DevGate::Never)),
+        0
+    );
+}
+
+#[test]
+fn malware_on_a_dev_package_gates_like_any_other() {
+    let report = report_of(vec![dev_vuln("MAL-2026-1", Severity::Low, "a")], vec![]);
+    assert_eq!(
+        exit_code(&report, &dev_gate(Severity::Low, DevGate::Never)),
+        1
+    );
+}
+
+#[test]
+fn a_warning_on_a_dev_package_does_not_gate_when_dev_never_does() {
+    let mut w = warn("W", "a");
+    if let Occurrence::InRepo { scope, .. } = &mut w.occurrences[0] {
+        *scope = DepScope::Dev;
+    }
+    let report = report_of(vec![], vec![w]);
+    let gate = |dev| GateConfig {
+        fail_on: Severity::Low,
+        fail_on_warnings: true,
+        dev,
+    };
+    assert_eq!(exit_code(&report, &gate(DevGate::Same)), 1);
+    assert_eq!(exit_code(&report, &gate(DevGate::Never)), 0);
 }
 
 #[test]

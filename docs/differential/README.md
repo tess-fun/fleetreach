@@ -7,6 +7,10 @@ record, for the daily sync check in spec 16 row 11.
 `scan --incremental` hashes for its key. `scripts/benchmark.py` produces the numbers on the scale
 benchmark page.
 
+`scope_oracle.py` compares the dev scope in SBOMs with `cargo tree`, `go list`, Bundler's own
+Gemfile evaluation and `mix deps` under `MIX_ENV=prod`, the last two in Docker. A package the
+tool builds and fleetreach calls dev is a false dev, and must stay at zero.
+
 `pr_attribution.py` makes a fixture PR per ecosystem from real lockfiles and real scans, and
 checks that `diff --base` names the entry, and that a finding git does not explain stays out
 of the gate.

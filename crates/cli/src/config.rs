@@ -8,8 +8,10 @@
 use std::path::{Path, PathBuf};
 
 use fleetreach_core::ssvc::{Exposure, MissionImpact, SafetyImpact};
-use fleetreach_core::{Ecosystem, RepoId};
+use fleetreach_core::{Ecosystem, RepoId, Severity};
 use fleetreach_report::VexScope;
+
+use crate::assemble::DevGate;
 use serde::Deserialize;
 
 /// Default depth bound for `glob = true` lockfile discovery (§6).
@@ -54,6 +56,10 @@ pub enum ConfigError {
     InvalidSsvc(String),
     #[error("settings.sla: {0}")]
     InvalidSla(String),
+    #[error(
+        "settings.gate.scope.dev `{0}` is not one of `low`, `medium`, `high`, `critical`, `never`"
+    )]
+    BadGateScope(String),
     #[error("settings.history: {0}")]
     InvalidHistory(String),
 }
@@ -322,6 +328,24 @@ struct SettingsTable {
     sla: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     history: RawHistory,
+    #[serde(default)]
+    gate: RawGate,
+}
+
+/// The `[settings.gate]` block (spec 16, row 17).
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawGate {
+    #[serde(default)]
+    scope: RawGateScope,
+}
+
+/// `[settings.gate.scope]`.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawGateScope {
+    /// The floor for dev and build-only packages, or `never`.
+    dev: Option<String>,
 }
 
 /// The `[settings.history]` block (spec 09).
@@ -474,6 +498,8 @@ pub struct Config {
     pub sla: crate::history::SlaPolicy,
     /// `[settings.history] keep`, in seconds.
     pub history_keep: Option<i64>,
+    /// `[settings.gate.scope] dev`.
+    pub gate_dev: crate::assemble::DevGate,
 }
 
 /// A rule that turns a repo's tags or forge topics into decision points. For each decision
@@ -1097,6 +1123,15 @@ impl Config {
                 )));
             }
         }
+        let gate_dev = match raw.settings.gate.scope.dev.as_deref() {
+            None => DevGate::Same,
+            Some("low") => DevGate::At(Severity::Low),
+            Some("medium") => DevGate::At(Severity::Medium),
+            Some("high") => DevGate::At(Severity::High),
+            Some("critical") => DevGate::At(Severity::Critical),
+            Some("never") => DevGate::Never,
+            Some(other) => return Err(ConfigError::BadGateScope(other.to_string())),
+        };
         let history_keep = match &raw.settings.history.keep {
             None => None,
             Some(v) => Some(
@@ -1136,6 +1171,7 @@ impl Config {
             ssvc_weights,
             sla,
             history_keep,
+            gate_dev,
         })
     }
 }

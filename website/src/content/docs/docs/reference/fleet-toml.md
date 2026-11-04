@@ -200,6 +200,12 @@ high           = "30d"
 
 `keep = "180d"` drops older snapshots; the index keeps first-seen dates.
 
+## `[settings.gate.scope]`
+
+`dev` sets the floor for dev and build-only packages: `low`, `medium`, `high`, `critical` or
+`never`. `--fail-on-dev` wins over it, and without either they gate like any other package.
+See [Gate on what ships](/fleetreach/docs/guides/gate-on-what-ships/).
+
 ## `[settings.signals]`
 
 `registries = ["npm.example.com"]`: registry hosts allowed besides the public ones.
