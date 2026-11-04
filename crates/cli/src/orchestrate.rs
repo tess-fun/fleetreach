@@ -1546,8 +1546,8 @@ pub(crate) const SKIPPED_DIRS: &[&str] = &["node_modules", ".git"];
 /// `glob_max_depth` (the same bound the `Cargo.lock` glob uses), so a polyglot repo or a
 /// monorepo whose lockfiles live below the root is scanned in full instead of as its first
 /// detected ecosystem. Root workflows (`.github/workflows`) are scanned too, alongside
-/// whatever else is found, and a repo with nothing at all falls back to Cargo, whose "no
-/// Cargo.lock found" is the honest gap.
+/// whatever else is found, and a repo with nothing at all falls back to Cargo, whose missing
+/// lockfile is the honest gap.
 pub(crate) fn plan_repo(repo: &Repo) -> RepoPlan {
     let unit = |ecosystem: Ecosystem, dir: &Path| {
         let rel_dir = dir
@@ -1861,7 +1861,13 @@ fn scan_unit(
         });
     }
     if lockfiles.is_empty() {
-        error.get_or_insert_with(|| format!("no Cargo.lock found under {}", repo.path.display()));
+        error.get_or_insert_with(|| match repo.ecosystem {
+            Some(_) => format!("no Cargo.lock found under {}", repo.path.display()),
+            None => format!(
+                "no recognized lockfile or manifest under {}",
+                repo.path.display()
+            ),
+        });
     }
 
     for lockfile in &lockfiles {

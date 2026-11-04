@@ -15,7 +15,7 @@ SBOMs; fleetreach is a binary that reads the repositories themselves and writes 
 |---|---|---|
 | Shape | CLI, files in and out | self-hosted server (Docker, Kubernetes) |
 | Input | lockfiles and manifests in 12 ecosystems; SBOMs where needed | CycloneDX SBOMs |
-| Finds the repos | yes, from a GitHub or GitLab org | no, you upload per project |
+| Finds the repos | yes, from a GitHub, GitLab, Bitbucket, Azure DevOps or Gitea org | no, you upload per project |
 | UI | static HTML report, Slack, issues | full web UI, policies, API |
 | KEV / EPSS / SSVC | yes / yes / yes | yes (since 5.1) / yes / no |
 | Fix ranking across projects | batched fix queue, bump risk from the fleet | per-project findings |

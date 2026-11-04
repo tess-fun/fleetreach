@@ -2926,8 +2926,24 @@ fn unsynced_github_source_fails_closed_with_the_fix() {
 fn invalid_sources_are_config_errors() {
     for (toml, needle) in [
         (
-            "[[source]]\nkind = \"bitbucket\"\norg = \"x\"\n",
-            "kind `bitbucket` is not one of `github`, `gitlab`, `git`",
+            "[[source]]\nkind = \"subversion\"\norg = \"x\"\n",
+            "kind `subversion` is not one of",
+        ),
+        (
+            "[[source]]\nkind = \"bitbucket\"\n",
+            "kind `bitbucket` needs `org` (a workspace)",
+        ),
+        (
+            "[[source]]\nkind = \"gitea\"\norg = \"x\"\n",
+            "kind `gitea` needs `api_url`",
+        ),
+        (
+            "[[source]]\nkind = \"bitbucket-server\"\norg = \"X\"\n",
+            "kind `bitbucket-server` needs `api_url`",
+        ),
+        (
+            "[[source]]\nkind = \"azure\"\norg = \"x\"\ntopics = [\"prod\"]\n",
+            "kind `azure` has no repo topics",
         ),
         (
             "[[source]]\nkind = \"gitlab\"\n",

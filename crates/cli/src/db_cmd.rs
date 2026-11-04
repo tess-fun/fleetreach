@@ -582,6 +582,10 @@ pub struct FleetSyncArgs {
     /// fleet.toml whose `[[source]]` entries to list and check out
     #[arg(short, long, default_value = "./fleet.toml")]
     config: PathBuf,
+    /// Append what changed in each source's listing to `inventory.jsonl` in this scan history
+    /// directory
+    #[arg(long, value_name = "DIR")]
+    history_dir: Option<PathBuf>,
     #[arg(short, long, help = "no progress output")]
     quiet: bool,
 }
@@ -611,6 +615,14 @@ pub fn run_fleet_sync(args: FleetSyncArgs) -> u8 {
         Err(e) => return fail(&e),
     };
     print_fleet(&config, &materialized);
+    if !args.quiet {
+        sources::print_inventory(&materialized.inventory);
+    }
+    if let Some(dir) = &args.history_dir {
+        if let Err(e) = crate::history::record_inventory(dir, &materialized.inventory) {
+            return fail(&format!("recording inventory: {e}"));
+        }
+    }
     u8::from(!materialized.failed.is_empty()) * 2
 }
 

@@ -31,9 +31,10 @@ List every source afresh and clone or refresh its checkouts
 Usage: fleetreach fleet sync [OPTIONS]
 
 Options:
-  -c, --config <CONFIG>  fleet.toml whose `[[source]]` entries to list and check out [default: ./fleet.toml]
-  -q, --quiet            no progress output
-  -h, --help             Print help
+  -c, --config <CONFIG>    fleet.toml whose `[[source]]` entries to list and check out [default: ./fleet.toml]
+      --history-dir <DIR>  Append what changed in each source's listing to `inventory.jsonl` in this scan history directory
+  -q, --quiet              no progress output
+  -h, --help               Print help
 ```
 
 ## fleetreach fleet list

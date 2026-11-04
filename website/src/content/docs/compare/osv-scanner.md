@@ -13,7 +13,7 @@ running package managers. They differ in what they are for.
 
 | | fleetreach | osv-scanner |
 |---|---|---|
-| Unit of work | a fleet: many repos, local or discovered from a GitHub or GitLab org | one directory tree (`-r` recurses) or one image |
+| Unit of work | a fleet: many repos, local or discovered from a GitHub, GitLab, Bitbucket, Azure DevOps or Gitea org | one directory tree (`-r` recurses) or one image |
 | Main answer | which fix clears the most repos, who owns it, what changed | which vulnerable packages this tree has |
 | Container images | no | yes (`scan image`) |
 | Reachability | npm and Python import graphs; sound Rust call graph; Go via govulncheck | Go call analysis by default; Rust experimental |

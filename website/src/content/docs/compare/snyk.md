@@ -15,7 +15,7 @@ differences are where it runs, what it costs and where its data comes from.
 | Shape | one binary, runs where you run it | SaaS, with CLI, SCM and IDE integrations |
 | Your dependency data | stays on your machine | sent to Snyk |
 | Price | free, open source | free tier (limited tests), paid plans |
-| Org-wide | yes, from a GitHub or GitLab org | yes, via SCM imports |
+| Org-wide | yes, from a GitHub, GitLab, Bitbucket, Azure DevOps or Gitea org | yes, via SCM imports |
 | Reachability | npm, Python (import graphs), Rust (sound), Go | Java, JavaScript, Python (GA) |
 | Prioritisation | KEV, EPSS, SSVC with repo context | risk score (EPSS, exploit maturity, reachability) |
 | Fix pull requests | yes, verified by re-scan | yes |

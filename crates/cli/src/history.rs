@@ -24,6 +24,7 @@ use crate::assemble::SuppressedOccurrence;
 const SNAPSHOT_SCHEMA: &str = "fleetreach-history/1";
 const INDEX_SCHEMA: &str = "fleetreach-history-index/1";
 const INDEX_FILE: &str = "index.json";
+const INVENTORY_FILE: &str = "inventory.jsonl";
 
 /// One run as stored: the full report, the occurrences ignores suppressed, and the exit code.
 #[derive(Debug, Serialize, Deserialize)]
@@ -930,6 +931,34 @@ pub fn known_packages(history: &History) -> Option<BTreeSet<&PackageName>> {
     recorded.then(|| history.index.packages.iter().map(|k| &k.package).collect())
 }
 
+/// Appends each non-empty listing change to `inventory.jsonl`, one JSON object a line.
+///
+/// # Errors
+///
+/// The directory or file cannot be written.
+pub fn record_inventory(
+    dir: &Path,
+    changes: &[crate::sources::InventoryChange],
+) -> Result<(), String> {
+    let changes: Vec<_> = changes.iter().filter(|c| !c.is_empty()).collect();
+    if changes.is_empty() {
+        return Ok(());
+    }
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let path = dir.join(INVENTORY_FILE);
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    let at = format_time(now());
+    for change in changes {
+        let line = serde_json::json!({"at": at, "change": change});
+        writeln!(file, "{line}").map_err(|e| format!("{}: {e}", path.display()))?;
+    }
+    Ok(())
+}
+
 /// What the newest run changed against the one before it.
 pub struct Changes<'a> {
     pub run: &'a Run,
@@ -979,8 +1008,32 @@ pub fn changes(history: &History) -> Option<Changes<'_>> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inventory_changes_append_and_an_empty_one_writes_nothing() {
+        use crate::sources::InventoryChange;
+        let dir = tempfile::tempdir().unwrap();
+        let change = |added: &[&str]| InventoryChange {
+            source: "gitea:acme".to_string(),
+            added: added.iter().map(|a| a.to_string()).collect(),
+            removed: Vec::new(),
+            renamed: Vec::new(),
+        };
+        record_inventory(dir.path(), &[change(&[])]).unwrap();
+        assert!(!dir.path().join(INVENTORY_FILE).exists());
+        record_inventory(dir.path(), &[change(&["a/b"])]).unwrap();
+        record_inventory(dir.path(), &[change(&["a/c"])]).unwrap();
+        let text = std::fs::read_to_string(dir.path().join(INVENTORY_FILE)).unwrap();
+        let lines: Vec<serde_json::Value> = text
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[1]["change"]["added"][0], "a/c");
+    }
 
     #[test]
     fn known_packages_keep_their_earliest_sighting() {

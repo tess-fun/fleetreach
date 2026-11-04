@@ -8,6 +8,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Five more `[[source]]` kinds**: `gitea`, `forgejo`, `bitbucket` (Cloud), `bitbucket-server`
+  (Data Center) and `azure` (Azure DevOps). `topics` on a forge without topics is a config
+  error. Listings refuse a `next` link off the API, a pager that repeats, and Azure's redirect
+  to sign-in. A sync without a token now says that only public repos were listed.
+- **`fleet sync` and `scan --sync` report the repos added, removed and renamed** since the last
+  listing, by the forge's own repo id, and `--history-dir` appends them to `inventory.jsonl`.
+- **`SSL_CERT_FILE` sets the trusted roots for forge listings**, for a forge behind a private CA.
+- A repo with nothing fleetreach reads now says "no recognized lockfile or manifest", not "no
+  Cargo.lock found".
 - **`scan --incremental` reuses a repo's findings** while the binary, the advisory data for its
   ecosystems and the files a scan reads are unchanged, and skips loading the advisory data of any
   ecosystem with nothing to re-scan. On 10,471 repos a warm run took about half the time and a

@@ -463,6 +463,17 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: live listings on test orgs (Gitea and Forgejo in Docker; Bitbucket and Azure
   free tiers) checked against the forge's own count, as was done for GitLab.
 
+  **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/forges.rs`, kinds `gitea`,
+  `forgejo`, `bitbucket`, `bitbucket-server`, `azure`; `fleet sync` inventory diff, recorded
+  in `inventory.jsonl`; `SSL_CERT_FILE`). Gitea 1.24 and Forgejo 11 in Docker behind a private
+  CA: 120 of 120 repos with a read-scoped token, private repos cloned, 80 without a token, one
+  rename, removal and addition each reported. Public listings, cloned too, against each
+  forge's own count: Codeberg 17 of 20 and gitea.com 59 of 60 (the rest empty), Bitbucket
+  Cloud 406 of 406, Azure DevOps and Data Center 1 of 1. **Not yet proven**: tokens on
+  Bitbucket Cloud, Data Center and Azure DevOps, which need accounts. Those listings ran
+  anonymously, and the Data Center and Azure lists held one repo, so Data Center paging is
+  covered by unit tests only. A rename leaves finding history under the old id.
+
 #### 5. Automated fix PRs (A- to A+)
 
 - **A+**: Renovate is the bar. For security fixes fleetreach must match its mechanics

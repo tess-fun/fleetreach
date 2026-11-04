@@ -693,6 +693,7 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         &suppressed,
         code,
         fleet_packages,
+        &materialized.inventory,
     )?;
     Ok(code)
 }
@@ -807,6 +808,9 @@ fn load_fleet(args: &ScanArgs) -> Result<(Config, sources::Materialized), u8> {
     //     listing that cannot be read stops the run: the fleet itself is unknown.
     let materialized =
         sources::materialize(&config, args.sync, args.quiet).map_err(|e| fail(&e))?;
+    if !args.quiet {
+        sources::print_inventory(&materialized.inventory);
+    }
     config.repos.extend(materialized.repos.iter().cloned());
     for (id, context) in &materialized.context {
         config
@@ -1654,8 +1658,11 @@ fn record_history(
     suppressed: &[SuppressedOccurrence],
     code: u8,
     fleet_packages: Option<Vec<crate::signals::FleetPackage>>,
+    inventory: &[sources::InventoryChange],
 ) -> Result<(), u8> {
     if let Some(dir) = &args.history_dir {
+        crate::history::record_inventory(dir, inventory)
+            .map_err(|e| fail(&format!("recording inventory: {e}")))?;
         let keys = crate::history::suppressed_keys(fleet_report, suppressed);
         let mut names: Vec<crate::history::PackageName> = fleet_packages
             .iter()

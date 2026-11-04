@@ -937,10 +937,16 @@ impl Config {
             let kind = match src.kind.as_str() {
                 "github" => crate::sources::SourceKind::GitHub,
                 "gitlab" => crate::sources::SourceKind::GitLab,
+                "gitea" => crate::sources::SourceKind::Gitea,
+                "forgejo" => crate::sources::SourceKind::Forgejo,
+                "bitbucket" => crate::sources::SourceKind::Bitbucket,
+                "bitbucket-server" => crate::sources::SourceKind::BitbucketServer,
+                "azure" => crate::sources::SourceKind::Azure,
                 "git" => crate::sources::SourceKind::Git,
                 other => {
                     return Err(invalid(format!(
-                        "kind `{other}` is not one of `github`, `gitlab`, `git`"
+                        "kind `{other}` is not one of `github`, `gitlab`, `gitea`, `forgejo`, \
+                         `bitbucket`, `bitbucket-server`, `azure`, `git`"
                     )))
                 }
             };
@@ -965,7 +971,35 @@ impl Config {
                 crate::sources::SourceKind::Git if src.urls.is_empty() => {
                     return Err(invalid("kind `git` needs `urls`".to_string()))
                 }
+                crate::sources::SourceKind::Git => {}
+                other if src.org.is_none() => {
+                    return Err(invalid(format!(
+                        "kind `{}` needs `org` ({})",
+                        other.name(),
+                        match other {
+                            crate::sources::SourceKind::Bitbucket => "a workspace",
+                            crate::sources::SourceKind::BitbucketServer =>
+                                "a project key, or `~user`",
+                            crate::sources::SourceKind::Azure =>
+                                "an organization, or `organization/project`",
+                            _ => "an organization or user",
+                        }
+                    )))
+                }
+                other if other.needs_api_url() && src.api_url.is_none() => {
+                    return Err(invalid(format!(
+                        "kind `{}` needs `api_url`, the server's API root",
+                        other.name()
+                    )))
+                }
                 _ => {}
+            }
+            // On a forge without topics the filter would match nothing and empty the fleet.
+            if !kind.has_topics() && !src.topics.is_empty() {
+                return Err(invalid(format!(
+                    "kind `{}` has no repo topics, so `topics` cannot apply",
+                    kind.name()
+                )));
             }
             if let Some(url) = src.urls.iter().find(|u| !u.starts_with("https://")) {
                 return Err(invalid(format!("url `{url}` must be https://")));

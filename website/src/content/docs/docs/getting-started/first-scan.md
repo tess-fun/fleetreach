@@ -28,7 +28,7 @@ glob = true          # a monorepo: also scan lockfiles below the root
 
 `path` is the repo's root on disk. Every ecosystem fleetreach finds there is scanned, so a
 repo with a `Cargo.lock`, a `package-lock.json` and GitHub workflows is read in full. To
-scan a whole GitHub or GitLab organisation without cloning it yourself, see
+scan a whole GitHub, GitLab, Bitbucket, Azure DevOps or Gitea organisation without cloning it yourself, see
 [Scan a GitHub or GitLab org](/fleetreach/docs/guides/scan-a-github-or-gitlab-org/).
 
 To list repos by URL instead of by path, use a source: fleetreach clones only the

@@ -1,5 +1,5 @@
-//! Fleet sources (spec 06): repos discovered from a forge (`kind = "github"`) or listed by URL
-//! (`kind = "git"`), materialized as cheap checkouts under `~/.cache/fleetreach/checkouts/`.
+//! Fleet sources (spec 06): repos discovered from a forge (GitHub, GitLab, or the kinds in
+//! [`crate::forges`]) or listed by URL (`kind = "git"`), materialized as cheap checkouts under `~/.cache/fleetreach/checkouts/`.
 //!
 //! A `lockfiles` checkout is a shallow, blob-less, sparse clone that fetches only the files
 //! the feeders read, so hundreds of repos cost little more than their lockfiles. A `full`
@@ -75,6 +75,11 @@ pub const SPARSE_PATTERNS: &[&str] = &[
 pub enum SourceKind {
     GitHub,
     GitLab,
+    Gitea,
+    Forgejo,
+    Bitbucket,
+    BitbucketServer,
+    Azure,
     Git,
 }
 
@@ -109,26 +114,57 @@ pub struct Source {
 }
 
 impl Source {
-    fn label(&self) -> String {
+    pub fn label(&self) -> String {
+        let org = self.org.as_deref().unwrap_or_default();
         match self.kind {
-            SourceKind::GitHub => format!("github:{}", self.org.as_deref().unwrap_or_default()),
-            SourceKind::GitLab => format!("gitlab:{}", self.org.as_deref().unwrap_or_default()),
             SourceKind::Git => format!("git:{} url(s)", self.urls.len()),
+            kind => format!("{}:{org}", kind.name()),
         }
     }
 
-    /// The token for this source: `token_env`, else `GITHUB_TOKEN` / `GH_TOKEN` for GitHub and
-    /// `GITLAB_TOKEN` for GitLab.
+    /// The token for this source: `token_env`, else the forge's usual variable.
     fn token(&self) -> Option<String> {
         let names: Vec<&str> = match (&self.token_env, self.kind) {
             (Some(name), _) => vec![name.as_str()],
             (None, SourceKind::GitHub) => vec!["GITHUB_TOKEN", "GH_TOKEN"],
             (None, SourceKind::GitLab) => vec!["GITLAB_TOKEN"],
+            (None, SourceKind::Gitea) => vec!["GITEA_TOKEN"],
+            (None, SourceKind::Forgejo) => vec!["FORGEJO_TOKEN"],
+            (None, SourceKind::Bitbucket) => vec!["BITBUCKET_TOKEN"],
+            (None, SourceKind::BitbucketServer) => vec!["BITBUCKET_SERVER_TOKEN"],
+            (None, SourceKind::Azure) => vec!["AZURE_DEVOPS_TOKEN", "AZURE_DEVOPS_EXT_PAT"],
             (None, SourceKind::Git) => Vec::new(),
         };
         names
             .into_iter()
             .find_map(|n| std::env::var(n).ok().filter(|v| !v.is_empty()))
+    }
+
+    /// The `Authorization` value for this source's API, for the kinds in [`crate::forges`].
+    fn api_auth(&self) -> Option<String> {
+        let token = self.token()?;
+        Some(match self.kind {
+            SourceKind::Bitbucket => match bitbucket_user() {
+                Some(user) => format!("Basic {}", base64(&format!("{user}:{token}"))),
+                None => format!("Bearer {token}"),
+            },
+            SourceKind::Azure => format!("Basic {}", base64(&format!(":{token}"))),
+            SourceKind::Gitea | SourceKind::Forgejo => format!("token {token}"),
+            _ => format!("Bearer {token}"),
+        })
+    }
+
+    /// The `Authorization` value `git` sends. Each forge names its own user for a token
+    /// over HTTPS; Data Center takes the token as a bearer.
+    fn git_auth(&self) -> Option<String> {
+        let token = self.token()?;
+        let user = match self.kind {
+            SourceKind::BitbucketServer => return Some(format!("Bearer {token}")),
+            SourceKind::Bitbucket if bitbucket_user().is_some() => "x-bitbucket-api-token-auth",
+            SourceKind::Bitbucket => "x-token-auth",
+            _ => "x-access-token",
+        };
+        Some(format!("Basic {}", base64(&format!("{user}:{token}"))))
     }
 
     /// Whether a listed repo passes this source's filters.
@@ -149,6 +185,55 @@ impl Source {
     }
 }
 
+impl SourceKind {
+    /// The name `kind =` takes.
+    pub fn name(self) -> &'static str {
+        match self {
+            SourceKind::GitHub => "github",
+            SourceKind::GitLab => "gitlab",
+            SourceKind::Gitea => "gitea",
+            SourceKind::Forgejo => "forgejo",
+            SourceKind::Bitbucket => "bitbucket",
+            SourceKind::BitbucketServer => "bitbucket-server",
+            SourceKind::Azure => "azure",
+            SourceKind::Git => "git",
+        }
+    }
+
+    /// Whether the forge has repo topics. A `topics` filter on one without would match
+    /// nothing, so the config refuses it.
+    pub fn has_topics(self) -> bool {
+        matches!(
+            self,
+            SourceKind::GitHub | SourceKind::GitLab | SourceKind::Gitea | SourceKind::Forgejo
+        )
+    }
+
+    /// The API a source of this kind uses when `api_url` is not set.
+    pub fn default_api(self) -> Option<&'static str> {
+        match self {
+            SourceKind::Bitbucket => Some("https://api.bitbucket.org/2.0"),
+            SourceKind::Azure => Some("https://dev.azure.com"),
+            _ => None,
+        }
+    }
+
+    /// Whether `api_url` must be set: these forges have no one public home.
+    pub fn needs_api_url(self) -> bool {
+        matches!(
+            self,
+            SourceKind::Gitea | SourceKind::Forgejo | SourceKind::BitbucketServer
+        )
+    }
+}
+
+/// The Atlassian account email that an API token (not an access token) goes with.
+fn bitbucket_user() -> Option<String> {
+    std::env::var("BITBUCKET_USER")
+        .ok()
+        .filter(|v| !v.is_empty())
+}
+
 /// One repo a source lists.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Listed {
@@ -162,6 +247,69 @@ pub struct Listed {
     pub fork: bool,
     #[serde(default)]
     pub topics: Vec<String>,
+    /// The forge's own id for the repo, which survives a rename.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+}
+
+/// What a fresh listing changed against the one before it, after the source's filters.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct InventoryChange {
+    pub source: String,
+    pub added: Vec<String>,
+    pub removed: Vec<String>,
+    pub renamed: Vec<Renamed>,
+}
+
+/// A repo the forge still knows under a new name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Renamed {
+    pub from: String,
+    pub to: String,
+}
+
+impl InventoryChange {
+    pub fn is_empty(&self) -> bool {
+        self.added.is_empty() && self.removed.is_empty() && self.renamed.is_empty()
+    }
+
+    fn between(source: String, before: &[Listed], now: &[Listed]) -> Self {
+        use std::collections::{BTreeMap, BTreeSet};
+        let ids = |list: &'_ [Listed]| -> BTreeSet<String> {
+            list.iter().map(|r| r.id.clone()).collect()
+        };
+        let (old, new) = (ids(before), ids(now));
+        let keyed: BTreeMap<&str, &str> = now
+            .iter()
+            .filter_map(|r| Some((r.key.as_deref()?, r.id.as_str())))
+            .collect();
+        let mut renamed = Vec::new();
+        for repo in before.iter().filter(|r| !new.contains(&r.id)) {
+            let to = repo.key.as_deref().and_then(|k| keyed.get(k));
+            if let Some(to) = to.filter(|to| !old.contains(**to)) {
+                renamed.push(Renamed {
+                    from: repo.id.clone(),
+                    to: (*to).to_string(),
+                });
+            }
+        }
+        renamed.sort_by(|a, b| a.from.cmp(&b.from));
+        let moved = |id: &String| renamed.iter().any(|r| r.from == *id || r.to == *id);
+        InventoryChange {
+            source,
+            added: new
+                .difference(&old)
+                .filter(|i| !moved(i))
+                .cloned()
+                .collect(),
+            removed: old
+                .difference(&new)
+                .filter(|i| !moved(i))
+                .cloned()
+                .collect(),
+            renamed,
+        }
+    }
 }
 
 /// The repos all sources resolved to, plus the ones that could not be checked out.
@@ -173,6 +321,8 @@ pub struct Materialized {
     pub provenance: Vec<RepoSource>,
     /// The source's context for each discovered repo, when the source sets any.
     pub context: Vec<(RepoId, crate::config::ContextFields)>,
+    /// What each fresh listing changed; a source listed for the first time has no entry.
+    pub inventory: Vec<InventoryChange>,
 }
 
 /// Case-insensitive glob with `*` (any run) and `?` (one character), as Renovate's
@@ -217,7 +367,7 @@ pub fn id_from_url(url: &str) -> Option<String> {
             && *s != "."
             && *s != ".."
             && s.chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+                .all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.'))
     };
     // `owner/name`, or a GitLab namespace path `group/subgroup/name` kept whole, so two
     // projects of the same name in different subgroups never share an id or a checkout.
@@ -228,8 +378,11 @@ fn host_of(url: &str) -> Option<&str> {
     url.strip_prefix("https://")?.split('/').next()
 }
 
+/// A listing, with what it changed when it replaced an earlier one.
+type Listing = (Vec<Listed>, Option<InventoryChange>);
+
 /// The repos a source lists, fresh from the forge (`refresh`) or from the listing cache.
-pub fn list(source: &Source, refresh: bool) -> Result<Vec<Listed>, String> {
+pub fn list(source: &Source, refresh: bool) -> Result<Listing, String> {
     match source.kind {
         SourceKind::Git => source
             .urls
@@ -243,10 +396,12 @@ pub fn list(source: &Source, refresh: bool) -> Result<Vec<Listed>, String> {
                     archived: false,
                     fork: false,
                     topics: Vec::new(),
+                    key: None,
                 })
             })
-            .collect(),
-        SourceKind::GitHub | SourceKind::GitLab => {
+            .collect::<Result<Vec<_>, String>>()
+            .map(|all| (all, None)),
+        _ => {
             let cache = listing_cache_path(source)?;
             if !refresh {
                 let text = std::fs::read_to_string(&cache).map_err(|_| {
@@ -257,21 +412,52 @@ pub fn list(source: &Source, refresh: bool) -> Result<Vec<Listed>, String> {
                 })?;
                 let all: Vec<Listed> = serde_json::from_str(&text)
                     .map_err(|e| format!("listing cache {}: {e}", cache.display()))?;
-                return Ok(all.into_iter().filter(|r| source.keeps(r)).collect());
+                return Ok((all.into_iter().filter(|r| source.keeps(r)).collect(), None));
             }
-            let all = if source.kind == SourceKind::GitLab {
-                gitlab::list(source)?
-            } else {
-                github::list(source)?
-            };
+            let all = list_forge(source)?;
+            let before: Option<Vec<Listed>> = std::fs::read_to_string(&cache)
+                .ok()
+                .and_then(|text| serde_json::from_str(&text).ok());
             if let Some(dir) = cache.parent() {
                 create_private_dir(dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
             }
             let json = serde_json::to_string(&all).map_err(|e| e.to_string())?;
             std::fs::write(&cache, json)
                 .map_err(|e| format!("writing {}: {e}", cache.display()))?;
-            Ok(all.into_iter().filter(|r| source.keeps(r)).collect())
+            let kept: Vec<Listed> = all.into_iter().filter(|r| source.keeps(r)).collect();
+            let change = before.map(|before| {
+                let before: Vec<Listed> = before.into_iter().filter(|r| source.keeps(r)).collect();
+                InventoryChange::between(source.label(), &before, &kept)
+            });
+            Ok((kept, change))
         }
+    }
+}
+
+/// A fresh listing from the source's forge.
+fn list_forge(source: &Source) -> Result<Vec<Listed>, String> {
+    use crate::forges;
+    let org = source.org.as_deref().ok_or("forge source without org")?;
+    let api = source
+        .api_url
+        .as_deref()
+        .or(source.kind.default_api())
+        .unwrap_or_default()
+        .trim_end_matches('/');
+    match source.kind {
+        SourceKind::GitHub => github::list(source),
+        SourceKind::GitLab => gitlab::list(source),
+        SourceKind::Gitea | SourceKind::Forgejo => {
+            forges::gitea(api, org, &mut forges::http_fetch(source.api_auth())?)
+        }
+        SourceKind::Bitbucket => {
+            forges::bitbucket(api, org, &mut forges::http_fetch(source.api_auth())?)
+        }
+        SourceKind::BitbucketServer => {
+            forges::bitbucket_server(api, org, &mut forges::http_fetch(source.api_auth())?)
+        }
+        SourceKind::Azure => forges::azure(api, org, &mut forges::http_fetch(source.api_auth())?),
+        SourceKind::Git => Err("a git source has no listing".to_string()),
     }
 }
 
@@ -309,11 +495,18 @@ pub fn materialize(config: &Config, sync: bool, quiet: bool) -> Result<Materiali
     let explicit: std::collections::BTreeSet<&str> =
         config.repos.iter().map(|r| r.id.0.as_str()).collect();
     for source in &config.sources {
-        let listed = list(source, sync)?;
+        let (listed, change) = list(source, sync)?;
+        out.inventory.extend(change);
+        let auth = source.git_auth();
         if !quiet {
             eprintln!("{}: {} repo(s)", source.label(), listed.len());
+            if sync && auth.is_none() && source.kind != SourceKind::Git {
+                eprintln!(
+                    "{}: no token, so only public repos were listed",
+                    source.label()
+                );
+            }
         }
-        let token = source.token();
         let work: Vec<&Listed> = listed
             .iter()
             .filter(|r| !explicit.contains(r.id.as_str()))
@@ -326,7 +519,7 @@ pub fn materialize(config: &Config, sync: bool, quiet: bool) -> Result<Materiali
                 .map_err(|e| e.to_string())?;
             pool.install(|| {
                 work.par_iter()
-                    .map(|r| (*r, checkout(&checkouts, r, source, token.as_deref(), sync)))
+                    .map(|r| (*r, checkout(&checkouts, r, source, auth.as_deref(), sync)))
                     .collect()
             })
         };
@@ -367,6 +560,29 @@ pub fn materialize(config: &Config, sync: bool, quiet: bool) -> Result<Materiali
     Ok(out)
 }
 
+/// Prints what each listing changed, to stderr.
+pub fn print_inventory(changes: &[InventoryChange]) {
+    use fleetreach_report::sanitize_cell;
+    for change in changes.iter().filter(|c| !c.is_empty()) {
+        eprintln!(
+            "{}: {} added, {} removed, {} renamed",
+            sanitize_cell(&change.source),
+            change.added.len(),
+            change.removed.len(),
+            change.renamed.len()
+        );
+        for id in &change.added {
+            eprintln!("  + {}", sanitize_cell(id));
+        }
+        for id in &change.removed {
+            eprintln!("  - {}", sanitize_cell(id));
+        }
+        for r in &change.renamed {
+            eprintln!("  ~ {} -> {}", sanitize_cell(&r.from), sanitize_cell(&r.to));
+        }
+    }
+}
+
 /// A checkout's path and commit, or why it failed.
 type CheckoutResult = Result<(PathBuf, String), String>;
 
@@ -375,7 +591,7 @@ fn checkout(
     root: &Path,
     repo: &Listed,
     source: &Source,
-    token: Option<&str>,
+    auth: Option<&str>,
     sync: bool,
 ) -> Result<(PathBuf, String), String> {
     let host = host_of(&repo.clone_url).ok_or("clone URL is not https")?;
@@ -384,7 +600,7 @@ fn checkout(
     let git = Git {
         dir: &dir,
         host,
-        token,
+        auth,
     };
     let exists = dir.join(".git").is_dir();
     if !sync {
@@ -421,7 +637,7 @@ fn checkout(
         let cloned = Git {
             dir: root,
             host,
-            token,
+            auth,
         }
         .run(&args);
         if let Err(e) = cloned {
@@ -437,7 +653,8 @@ fn checkout(
 struct Git<'a> {
     dir: &'a Path,
     host: &'a str,
-    token: Option<&'a str>,
+    /// The whole `Authorization` value, from [`Source::git_auth`].
+    auth: Option<&'a str>,
 }
 
 impl Git<'_> {
@@ -463,13 +680,9 @@ impl Git<'_> {
             .env("GIT_ASKPASS", "")
             .env_remove("GIT_DIR")
             .env_remove("GIT_WORK_TREE");
-        if let Some(token) = self.token {
-            // HTTP Basic with the token as password, the form GitHub and GitLab accept for
-            // git over HTTPS; scoped to this host only.
-            let header = format!(
-                "Authorization: Basic {}",
-                base64(&format!("x-access-token:{token}"))
-            );
+        if let Some(auth) = self.auth {
+            // Scoped to this host only.
+            let header = format!("Authorization: {auth}");
             cmd.env("GIT_CONFIG_COUNT", "1")
                 .env(
                     "GIT_CONFIG_KEY_0",
@@ -535,8 +748,6 @@ fn base64(input: &str) -> String {
 
 #[cfg(feature = "network")]
 mod github {
-    use std::time::Duration;
-
     use super::{Listed, Source};
 
     const DEFAULT_API: &str = "https://api.github.com";
@@ -548,12 +759,7 @@ mod github {
             .as_deref()
             .unwrap_or(DEFAULT_API)
             .trim_end_matches('/');
-        let agent: ureq::Agent = ureq::Agent::config_builder()
-            .https_only(true)
-            .http_status_as_error(false)
-            .timeout_global(Some(Duration::from_secs(60)))
-            .build()
-            .into();
+        let agent = crate::forges::agent(true)?;
         let token = source.token();
         let mut all = Vec::new();
         // Organizations first; a 404 means `org` is a user account.
@@ -621,6 +827,7 @@ mod github {
                                     .collect()
                             })
                             .unwrap_or_default(),
+                        key: item.get("id").map(|id| id.to_string()),
                     });
                 }
                 if n < 100 {
@@ -679,6 +886,7 @@ mod gitlab {
                     archived: p.get("archived").and_then(serde_json::Value::as_bool) == Some(true),
                     fork: p.get("forked_from_project").is_some_and(|f| !f.is_null()),
                     topics,
+                    key: p.get("id").map(|id| id.to_string()),
                 })
             })
             .collect())
@@ -701,19 +909,13 @@ mod gitlab {
 
     #[cfg(feature = "network")]
     pub(super) fn list(source: &super::Source) -> Result<Vec<Listed>, String> {
-        use std::time::Duration;
         let namespace = source.org.as_deref().ok_or("gitlab source without org")?;
         let api = source
             .api_url
             .as_deref()
             .unwrap_or(DEFAULT_API)
             .trim_end_matches('/');
-        let agent: ureq::Agent = ureq::Agent::config_builder()
-            .https_only(true)
-            .http_status_as_error(false)
-            .timeout_global(Some(Duration::from_secs(60)))
-            .build()
-            .into();
+        let agent = crate::forges::agent(true)?;
         let token = source.token();
         let encoded = encode_namespace(namespace);
         let mut all = Vec::new();
@@ -845,6 +1047,10 @@ mod tests {
             id_from_url("https://gitlab.example.com/group/sub/svc.git").as_deref(),
             Some("group/sub/svc")
         );
+        assert_eq!(
+            id_from_url("https://dev.azure.com/org/プロジェクト/api").as_deref(),
+            Some("org/プロジェクト/api")
+        );
         assert_eq!(id_from_url("https://github.com/acme").as_deref(), None);
         assert_eq!(id_from_url("https://gitlab.com/g/../svc").as_deref(), None);
         assert_eq!(id_from_url("https://github.com/acme/..").as_deref(), None);
@@ -877,12 +1083,47 @@ mod tests {
             archived,
             fork,
             topics: topics.iter().map(|t| t.to_string()).collect(),
+            key: None,
         };
         assert!(source.keeps(&repo("acme/api", false, false, &["production", "x"])));
         assert!(!source.keeps(&repo("acme/old", true, false, &["production"])));
         assert!(!source.keeps(&repo("acme/fork", false, true, &["production"])));
         assert!(!source.keeps(&repo("acme/untagged", false, false, &[])));
         assert!(!source.keeps(&repo("acme/team-sandbox", false, false, &["production"])));
+    }
+
+    #[test]
+    fn a_new_name_under_the_same_key_is_a_rename() {
+        let repo = |id: &str, key: &str| Listed {
+            id: id.into(),
+            clone_url: format!("https://forge.test/{id}.git"),
+            default_branch: None,
+            archived: false,
+            fork: false,
+            topics: Vec::new(),
+            key: (!key.is_empty()).then(|| key.to_string()),
+        };
+        let before = [repo("a/old", "1"), repo("a/gone", "2"), repo("a/same", "3")];
+        let now = [
+            repo("a/new", "1"),
+            repo("a/fresh", "4"),
+            repo("a/same", "3"),
+        ];
+        let change = InventoryChange::between("s".into(), &before, &now);
+        assert_eq!(change.added, vec!["a/fresh"]);
+        assert_eq!(change.removed, vec!["a/gone"]);
+        assert_eq!(
+            change.renamed,
+            vec![Renamed {
+                from: "a/old".into(),
+                to: "a/new".into()
+            }]
+        );
+        // A listing cached before keys were stored only shows an add and a remove.
+        let change =
+            InventoryChange::between("s".into(), &[repo("a/old", "")], &[repo("a/new", "1")]);
+        assert_eq!((change.added.len(), change.removed.len()), (1, 1));
+        assert!(InventoryChange::between("s".into(), &now, &now).is_empty());
     }
 
     #[test]

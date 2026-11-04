@@ -13,7 +13,7 @@ of them in one run.
 
 | | fleetreach | Trivy | Grype |
 |---|---|---|---|
-| Targets | many repos, or a GitHub or GitLab org | image, filesystem, one git repo, VM, Kubernetes | image, directory, SBOM |
+| Targets | many repos, or a GitHub, GitLab, Bitbucket, Azure DevOps or Gitea org | image, filesystem, one git repo, VM, Kubernetes | image, directory, SBOM |
 | OS packages in images | no | yes | yes |
 | Fleet ranking and owners | yes | no | no |
 | Reachability | yes (see [Check reachability](/fleetreach/docs/guides/check-reachability/)) | no | no |

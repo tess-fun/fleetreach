@@ -72,19 +72,19 @@ owner    = "team-api"
 ## `[[source]]`
 
 Discovers repos from a forge. See
-[Scan a GitHub or GitLab org](/fleetreach/docs/guides/scan-a-github-or-gitlab-org/).
+[Scan a forge org](/fleetreach/docs/guides/scan-a-github-or-gitlab-org/).
 
 | Key | Meaning |
 |-----|---------|
-| `kind` | `github`, `gitlab` or `git` |
-| `org` | GitHub org or user, GitLab group (with subgroups) or user |
+| `kind` | `github`, `gitlab`, `gitea`, `forgejo`, `bitbucket`, `bitbucket-server`, `azure` or `git` |
+| `org` | org, user, group (with subgroups), workspace or project; each kind's form is in the guide |
 | `urls` | for `kind = "git"`: clone URLs |
 | `include`, `exclude` | globs on the repo name |
-| `topics` | topics that must all be present |
+| `topics` | topics that must all be present (not on Bitbucket or Azure DevOps) |
 | `archived`, `forks` | include archived repos or forks (default `false`) |
 | `checkout` | `lockfiles` (sparse, default) or `full` |
 | `glob`, `glob_max_depth` | as on `[[repo]]` (default `glob = true`) |
-| `api_url` | GitHub Enterprise or self-managed GitLab API |
+| `api_url` | the API root of a self-hosted forge; required for `gitea`, `forgejo` and `bitbucket-server` |
 | `token_env` | the variable holding the token |
 | `exposure`, `mission_impact`, `safety_impact`, `owner`, `tags` | context for every repo it finds |
 
