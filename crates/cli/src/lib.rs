@@ -47,6 +47,7 @@ pub mod signals;
 pub mod sources;
 pub mod ssvc;
 pub mod static_reach;
+pub mod triage;
 pub mod typosquat;
 pub mod vex;
 pub mod vulnrichment;

@@ -328,6 +328,7 @@ fn sarif_does_not_suppress_reachable_or_undecided() {
 #[test]
 fn sarif_injects_only_approved_human_assertions() {
     let approved = HumanAssertion {
+        ecosystem: fleetreach_core::Ecosystem::Cargo,
         advisory_id: "RUSTSEC-2020-0071".into(),
         aliases: vec![],
         product_id: "pkg:cargo/app@1.0.0".into(),
@@ -338,6 +339,7 @@ fn sarif_injects_only_approved_human_assertions() {
         approved_by: Some("secteam".into()),
     };
     let unapproved = HumanAssertion {
+        ecosystem: fleetreach_core::Ecosystem::Cargo,
         advisory_id: "RUSTSEC-2021-0003".into(),
         approved_by: None,
         ..approved.clone()

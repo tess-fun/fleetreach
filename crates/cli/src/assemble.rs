@@ -7,8 +7,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use fleetreach_core::{
-    max_severity_of, BaseImage, DepScope, FleetReport, ImageBase, Occurrence, Provenance, RepoId,
-    RepoOutcome, ScanStatus, Severity, Summary, VulnFinding,
+    max_severity_of, BaseImage, DepScope, Ecosystem, FleetReport, ImageBase, Occurrence,
+    Provenance, RepoId, RepoOutcome, ScanStatus, Severity, Summary, VulnFinding,
 };
 
 /// Drop occurrences known to be phantom — a `Cargo.lock`-only optional dependency
@@ -148,11 +148,16 @@ pub struct Suppression {
     pub repo: Option<RepoId>,
     /// `None` = every package; else only this package at this version.
     pub package: Option<(String, fleetreach_core::semver::Version)>,
+    /// `None` = every package; else only this package of this ecosystem, at any version.
+    pub scope: Option<(Ecosystem, String)>,
     pub justification: Option<String>,
     /// The OpenVEX `impact_statement` when there is no `justification`.
     pub reason: String,
     /// `None` for an `ignore`; `Some(approver)` for a `vex_assertion`.
     pub approved_by: Option<String>,
+    /// A person chose to live with it: set aside, but the package is still affected, so no
+    /// `not_affected` statement comes of it.
+    pub accepted_risk: bool,
 }
 
 impl Suppression {
@@ -161,9 +166,11 @@ impl Suppression {
             id: ignore.id.clone(),
             repo: None,
             package: None,
+            scope: None,
             justification: None,
             reason: ignore.reason.clone(),
             approved_by: None,
+            accepted_risk: false,
         }
     }
 
@@ -172,9 +179,11 @@ impl Suppression {
             id: assertion.id.clone(),
             repo: assertion.repo.clone(),
             package: None,
+            scope: None,
             justification: assertion.justification.clone(),
             reason: assertion.reason.clone(),
             approved_by: Some(assertion.approved_by.clone()),
+            accepted_risk: false,
         }
     }
 }
@@ -183,12 +192,15 @@ impl Suppression {
 /// emit a `not_affected` statement (§6, §7.1).
 #[derive(Debug, Clone)]
 pub struct SuppressedOccurrence {
+    pub ecosystem: Ecosystem,
     pub advisory_id: String,
     pub aliases: Vec<String>,
     pub occurrence: Occurrence,
     pub justification: Option<String>,
     pub impact_statement: String,
     pub approved_by: Option<String>,
+    /// See [`Suppression::accepted_risk`].
+    pub accepted_risk: bool,
 }
 
 /// An assembled report plus the suppressed occurrences (consumed only by `-f vex`).
@@ -354,16 +366,18 @@ fn apply_suppressions(
     correlated.vulnerabilities.retain_mut(|v| {
         let mut kept: Vec<Occurrence> = Vec::with_capacity(v.occurrences.len());
         for occ in std::mem::take(&mut v.occurrences) {
-            match matching_suppression(suppressions, &v.advisory_id, &v.aliases, &occ) {
+            match matching_suppression(suppressions, v, &occ) {
                 Some(s) => {
                     matched.insert(s.id.clone());
                     suppressed.push(SuppressedOccurrence {
+                        ecosystem: v.ecosystem,
                         advisory_id: v.advisory_id.clone(),
                         aliases: v.aliases.clone(),
                         occurrence: occ,
                         justification: s.justification.clone(),
                         impact_statement: s.reason.clone(),
                         approved_by: s.approved_by.clone(),
+                        accepted_risk: s.accepted_risk,
                     });
                 }
                 None => kept.push(occ),
@@ -376,9 +390,9 @@ fn apply_suppressions(
     // Warnings have no per-occurrence subcomponent; suppressed only fleet-wide.
     correlated.warnings.retain(|w| match &w.advisory_id {
         Some(id)
-            if suppressions
-                .iter()
-                .any(|s| &s.id == id && s.repo.is_none() && s.package.is_none()) =>
+            if suppressions.iter().any(|s| {
+                &s.id == id && s.repo.is_none() && s.package.is_none() && s.scope.is_none()
+            }) =>
         {
             matched.insert(id.clone());
             false
@@ -403,8 +417,7 @@ fn apply_suppressions(
 /// an in-repo occurrence of that repo.
 fn matching_suppression<'a>(
     suppressions: &'a [Suppression],
-    advisory_id: &str,
-    aliases: &[String],
+    finding: &VulnFinding,
     occ: &Occurrence,
 ) -> Option<&'a Suppression> {
     let (repo, at) = match occ {
@@ -417,12 +430,24 @@ fn matching_suppression<'a>(
         Occurrence::Toolchain { .. } => (None, None),
     };
     suppressions.iter().find(|s| {
-        (s.id == advisory_id || aliases.contains(&s.id))
+        (s.id == finding.advisory_id || finding.aliases.contains(&s.id))
             && match &s.repo {
                 None => true,
                 Some(scoped) => repo == Some(scoped),
             }
             && s.package.as_ref().is_none_or(|(p, v)| at == Some((p, v)))
+            && s.scope.as_ref().is_none_or(|(ecosystem, name)| {
+                *ecosystem == finding.ecosystem && at.is_some_and(|(p, _)| p == name)
+            })
+    })
+}
+
+/// Whether any of `suppressions` would apply to a finding still in `report`.
+pub fn matches_any(report: &FleetReport, suppressions: &[Suppression]) -> bool {
+    report.vulnerabilities.iter().any(|v| {
+        v.occurrences
+            .iter()
+            .any(|occ| matching_suppression(suppressions, v, occ).is_some())
     })
 }
 

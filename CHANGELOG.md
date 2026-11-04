@@ -8,6 +8,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Human VEX statements (`[[settings.ignore]]`, `[[settings.vex_assertion]]`) named every package
+  as `pkg:cargo`, so a statement on an npm or PyPI package matched nothing in other tools.
 - **Rust scans missed the advisories only GitHub carries.** RustSec has no record of about 650
   live crates.io advisories (`rustix`, `deno`, `surrealdb` among them), so `Cargo.lock` files
   and Rust binaries read clean of them. The osv.dev crates.io export is now synced and matched
@@ -56,6 +58,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Triage files** (spec 16, row 6). One decision per finding, in
+  `triage/<advisory>/<ecosystem>-<package>.toml` beside `fleet.toml`: state (`affected`,
+  `in_triage`, `accepted_risk`, `false_positive`, `not_affected`, `fixed`), assignee, expiry,
+  justification, repos and an append-only log. Two people triaging different findings never
+  touch the same file, so branches merge clean, and git is the audit trail. `fleetreach triage
+  set` and `list` write and show them, and `scan` reads them: `accepted_risk`, `false_positive`
+  and `not_affected` set a finding aside until they expire.
+  An expired decision puts the finding back and fails the run. A file that cannot be read exits
+  2. `triage export -f openvex` publishes the decisions, and Trivy and Grype honor them: an
+  accepted risk is `affected`, never `not_affected`, so other tools keep reporting it.
 - Rust binaries in images are read: the crates `cargo auditable` lists in the binary are matched
   against RustSec, as Go binaries are against the Go database. A Rust binary with no such list
   is a coverage gap.
@@ -255,6 +267,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Compatibility
 
+- `fleetreach_report::HumanAssertion` gains an `ecosystem` field, `fleetreach_cli::Suppression`
+  gains `scope` and `accepted_risk`, and `fleetreach_cli::config::Config` gains `triage`.
 - `fleetreach_scan::scan_lockfile` takes the new `Option<&CratesDb>` as its second argument;
   `None` keeps the RustSec-only behavior.
 - A Rust repo or image scanned without the crates.io export now gets a partial coverage gap,

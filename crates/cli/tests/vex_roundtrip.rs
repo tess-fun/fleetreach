@@ -90,6 +90,7 @@ fn vex_document(vuln_id: &str, name: &str, version: &str) -> String {
         product_id_base: Some("https://fleetreach.test/".into()),
         product_ids,
         assertions: vec![HumanAssertion {
+            ecosystem: fleetreach_core::Ecosystem::Cargo,
             advisory_id: vuln_id.into(),
             aliases: vec![],
             product_id: "pkg:cargo/roundtrip@0.1.0".into(),

@@ -98,6 +98,12 @@ pub(crate) struct ScanArgs {
 
     #[arg(
         long,
+        value_name = "DIR",
+        help = "read triage decisions from DIR (default: `triage/` beside fleet.toml, if there)"
+    )]
+    triage_dir: Option<PathBuf>,
+    #[arg(
+        long,
         help = "read OpenVEX attached to images pulled from registries; a document sets \
                 findings aside when --vex-oci-key signed it"
     )]
@@ -520,6 +526,7 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
     if let Some(package) = &args.why {
         return Ok(run_why(&config, package));
     }
+    let triage = crate::triage::load_or_fail(&config, args.triage_dir.as_deref())?;
     let db = advisory_db(args)?;
     let vex_policy = oci_vex_policy(args, &config).map_err(|e| fail(&e))?;
     let mut images = crate::images::prepare_all(&config.images, args.offline, vex_policy.as_ref());
@@ -561,7 +568,18 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
     let Assembled {
         report: mut fleet_report,
         suppressed,
-    } = assemble_report(args, &config, &db, &feeds, &materialized, scan, &attested);
+    } = assemble_report(
+        args,
+        &config,
+        &db,
+        &feeds,
+        &materialized,
+        scan,
+        &Decisions {
+            attested: &attested,
+            triage: &triage.suppressions,
+        },
+    );
     let exploitation_known = enrich_report(args, &mut fleet_report);
     assess_reachability(args, &config, &mut fleet_report)?;
     let baseline_new = apply_baseline(args, &mut fleet_report)?;
@@ -578,6 +596,8 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
     }
 
     let code = gate(args, &fleet_report, baseline_new, coverage_incomplete);
+    // An expired decision is a failure whatever the gate's level: someone owes a new one.
+    let code = combine_baseline(code, triage.report_expired(&fleet_report));
     record_history(
         args,
         &config,
@@ -1054,6 +1074,12 @@ fn oci_vex_policy(
 
 /// The report: findings with ignores and VEX assertions applied, then phantom and dev-only
 /// findings dropped when asked.
+/// What people decided about findings, beside the fleet's config.
+struct Decisions<'a> {
+    attested: &'a [crate::oci_vex::Attested],
+    triage: &'a [Suppression],
+}
+
 fn assemble_report(
     args: &ScanArgs,
     config: &Config,
@@ -1061,7 +1087,7 @@ fn assemble_report(
     feeds: &Feeds,
     materialized: &sources::Materialized,
     scan: crate::orchestrate::ScanData,
-    attested: &[crate::oci_vex::Attested],
+    decisions: &Decisions<'_>,
 ) -> Assembled {
     // 5. Assemble. Ignores + vex_assertions suppress findings; the removed
     //    occurrences are captured for VEX promotion (used only by `-f vex`).
@@ -1096,7 +1122,8 @@ fn assemble_report(
             .iter()
             .map(Suppression::from_assertion),
     );
-    let (image_vex, set_aside) = crate::oci_vex::suppressions(attested, &scan.vulnerabilities);
+    let (image_vex, set_aside) =
+        crate::oci_vex::suppressions(decisions.attested, &scan.vulnerabilities);
     if !image_vex.is_empty() {
         eprintln!(
             "set aside {} finding(s) on VEX attached to images",
@@ -1104,6 +1131,7 @@ fn assemble_report(
         );
     }
     suppressions.extend(image_vex);
+    suppressions.extend_from_slice(decisions.triage);
     for attestation in provenance.images.iter_mut().flat_map(|i| &mut i.vex) {
         attestation.set_aside = set_aside.get(&attestation.digest).copied().unwrap_or(0);
     }

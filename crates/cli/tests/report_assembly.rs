@@ -286,9 +286,11 @@ fn repo_scoped_suppression_removes_only_that_repos_occurrence() {
         id: "RUSTSEC-SCOPED".into(),
         repo: Some(RepoId("a".into())),
         package: None,
+        scope: None,
         justification: Some("component_not_present".into()),
         reason: "dev only in a".into(),
         approved_by: Some("secteam".into()),
+        accepted_risk: false,
     }];
     let out = assemble(scan, &suppressions, None, provenance());
 

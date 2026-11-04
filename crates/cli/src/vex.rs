@@ -82,6 +82,10 @@ pub fn build_human_assertions(
         let Some(product_id) = product_ids.get(&repo.0) else {
             continue;
         };
+        // An accepted risk is still affected: no statement, so other tools keep reporting it.
+        if s.accepted_risk {
+            continue;
+        }
         if warn_free_text && s.justification.is_none() && nudged.insert(&s.advisory_id) {
             eprintln!(
                 "warning: vex suppression for {} uses a free-text reason; \
@@ -90,6 +94,7 @@ pub fn build_human_assertions(
             );
         }
         assertions.push(report::HumanAssertion {
+            ecosystem: s.ecosystem,
             advisory_id: s.advisory_id.clone(),
             aliases: s.aliases.clone(),
             product_id: product_id.clone(),
@@ -128,7 +133,12 @@ pub fn projection_params(
 
 /// A plain fresh scan assembled with the config's ignores + vex_assertions, for
 /// `vex check`/`verify` to compare against a committed document.
-pub fn assemble_fresh(config: &Config, db: &AdvisoryDb, provenance: Provenance) -> Assembled {
+pub fn assemble_fresh(
+    config: &Config,
+    db: &AdvisoryDb,
+    provenance: Provenance,
+    triage: &[Suppression],
+) -> Assembled {
     // No govulncheck binary or npm/PyPI mirror here, so Go/npm/PyPI repos surface as gaps
     // before any work — the sandbox policy + DB mirrors are moot; `None` is the neutral
     // choice.
@@ -156,6 +166,7 @@ pub fn assemble_fresh(config: &Config, db: &AdvisoryDb, provenance: Provenance) 
             .iter()
             .map(Suppression::from_assertion),
     );
+    suppressions.extend_from_slice(triage);
     assemble(scan, &suppressions, None, provenance)
 }
 
@@ -472,8 +483,13 @@ pub(crate) fn run_vex_check(args: VexCheckArgs) -> u8 {
         }
     };
 
+    let triage = match crate::triage::Triage::load(&config, None) {
+        Ok(triage) => triage,
+        Err(e) => return fail(&e),
+    };
     let provenance = build_provenance(&db.meta());
-    let Assembled { report, suppressed } = assemble_fresh(&config, &db, provenance);
+    let Assembled { report, suppressed } =
+        assemble_fresh(&config, &db, provenance, &triage.suppressions);
     let product_ids = resolve_product_ids(&config);
     let assertions = build_human_assertions(&suppressed, &product_ids, false);
     let params = projection_params(product_ids, assertions);
@@ -543,11 +559,15 @@ pub(crate) fn run_vex_verify(args: VexVerifyArgs) -> u8 {
         Ok(db) => db,
         Err(e) => return fail(&e),
     };
+    let triage = match crate::triage::Triage::load(&config, None) {
+        Ok(triage) => triage,
+        Err(e) => return fail(&e),
+    };
     let provenance = build_provenance(&db.meta());
     let Assembled {
         mut report,
         suppressed: _,
-    } = assemble_fresh(&config, &db, provenance);
+    } = assemble_fresh(&config, &db, provenance, &triage.suppressions);
 
     let features = fleetreach_reach::FeatureSelection {
         all_features: args.all_features,

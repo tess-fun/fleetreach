@@ -1736,6 +1736,146 @@ fn crates_io_advisories_fill_in_what_rustsec_lacks() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// `triage set` into `dir` with the fixture's finding, and the rest of the arguments.
+fn triage_set(dir: &std::path::Path, advisory: &str, rest: &[&str]) -> Output {
+    let dir = dir.to_str().unwrap();
+    let mut args = vec![
+        "triage",
+        "set",
+        advisory,
+        "--package",
+        "fixturevuln",
+        "--ecosystem",
+        "cargo",
+        "--by",
+        "pat",
+        "--dir",
+        dir,
+    ];
+    args.extend_from_slice(rest);
+    run(&args)
+}
+
+fn triage_dir(tag: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("fr-triage-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+fn scan_triaged(dir: &std::path::Path, extra: &[&str]) -> Output {
+    let fleet = cfg("fleet-vuln.toml");
+    let database = db();
+    let mut args = vec!["scan", "-c", &fleet, "--db", &database];
+    args.extend_from_slice(&["--triage-dir", dir.to_str().unwrap()]);
+    args.extend_from_slice(extra);
+    run(&args)
+}
+
+#[test]
+fn triage_decisions_set_findings_aside_until_they_expire() {
+    let dir = triage_dir("gate");
+    assert_eq!(code(&scan_triaged(&dir, &[])), 1);
+    let id = "RUSTSEC-2099-0001";
+
+    // Only a decision that says so sets the finding aside.
+    assert_eq!(code(&triage_set(&dir, id, &["--state", "in_triage"])), 0);
+    assert_eq!(code(&scan_triaged(&dir, &[])), 1);
+    let rest = ["--state", "accepted_risk", "--reason", "internal only"];
+    let dated = [&rest[..], &["--expires", "2099-01-01"]].concat();
+    assert_eq!(code(&triage_set(&dir, id, &dated)), 0);
+    assert_eq!(code(&scan_triaged(&dir, &[])), 0);
+
+    // Expired: the finding is back and the run fails.
+    let lapsed = [&rest[..], &["--expires", "2020-01-01"]].concat();
+    assert_eq!(code(&triage_set(&dir, id, &lapsed)), 0);
+    let out = scan_triaged(&dir, &[]);
+    assert_eq!(code(&out), 1, "{}", stderr(&out));
+    let said = stderr(&out);
+    assert!(said.contains("expired on 2020-01-01"), "{said}");
+
+    // The log keeps every change.
+    let file = dir.join(id).join("cargo-fixturevuln.toml");
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert_eq!(text.matches("[[log]]").count(), 3, "{text}");
+
+    // A file that cannot be read is never a decision skipped.
+    std::fs::write(&file, "state = ").unwrap();
+    assert_eq!(code(&scan_triaged(&dir, &[])), 2);
+    let moved = dir.join("x.toml");
+    std::fs::rename(&file, &moved).unwrap();
+    std::fs::write(&moved, text).unwrap();
+    assert_eq!(code(&scan_triaged(&dir, &[])), 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn accepted_risk_is_no_not_affected_statement() {
+    let dir = triage_dir("vex");
+    let id = "RUSTSEC-2099-0001";
+    let vex = |dir: &std::path::Path| {
+        let stamp = "2026-01-01T00:00:00Z";
+        let args = ["-f", "vex", "--vex-author", "sec", "--vex-timestamp", stamp];
+        let out = scan_triaged(dir, &args);
+        assert_eq!(code(&out), 0, "{}", stderr(&out));
+        stdout(&out).contains("not_affected")
+    };
+    let accepted = ["--state", "accepted_risk", "--reason", "fine"];
+    assert_eq!(code(&triage_set(&dir, id, &accepted)), 0);
+    assert!(!vex(&dir));
+    let label = "vulnerable_code_not_present";
+    let not_affected = [
+        "--state",
+        "not_affected",
+        "--reason",
+        "no",
+        "--justification",
+        label,
+    ];
+    assert_eq!(code(&triage_set(&dir, id, &not_affected)), 0);
+    assert!(vex(&dir));
+
+    let out = run(&[
+        "triage",
+        "export",
+        "--author",
+        "sec",
+        "--dir",
+        dir.to_str().unwrap(),
+    ]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    let doc: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    let statement = &doc["statements"][0];
+    assert_eq!(statement["status"], "not_affected");
+    assert_eq!(statement["justification"], label);
+    assert_eq!(statement["products"][0]["@id"], "pkg:cargo/fixturevuln");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn two_branches_triaging_different_findings_merge_clean() {
+    let root = triage_dir("merge");
+    git_in(&root, &["init", "-q", "-b", "main"]);
+    git_in(&root, &["config", "user.email", "t@example.test"]);
+    git_in(&root, &["config", "user.name", "t"]);
+    let dir = root.join("triage");
+    let decide = |branch: &str, id: &str| {
+        git_in(&root, &["checkout", "-q", "-b", branch, "base"]);
+        assert_eq!(code(&triage_set(&dir, id, &["--state", "in_triage"])), 0);
+        git_in(&root, &["add", "-A"]);
+        git_in(&root, &["commit", "-q", "-m", id]);
+    };
+    git_in(&root, &["commit", "-q", "--allow-empty", "-m", "base"]);
+    git_in(&root, &["branch", "base"]);
+    decide("one", "GHSA-aaaa-aaaa-aaaa");
+    decide("two", "GHSA-bbbb-bbbb-bbbb");
+    git_in(&root, &["merge", "-q", "--no-edit", "one"]);
+    let out = run(&["triage", "list", "--json", "--dir", dir.to_str().unwrap()]);
+    let decisions: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(decisions.as_array().unwrap().len(), 2);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn quiet_suppresses_the_summary_line() {
     let out = run(&["scan", "-c", &cfg("fleet-clean.toml"), "--db", &db(), "-q"]);

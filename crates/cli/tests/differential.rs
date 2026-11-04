@@ -70,6 +70,10 @@ fn config() -> Config {
             ecosystem: None,
         }],
         ignores: vec![],
+        triage: fleetreach_cli::config::TriageSettings {
+            dir: "triage".into(),
+            explicit: false,
+        },
         vex: Default::default(),
         vex_assertions: vec![],
         osv: Default::default(),

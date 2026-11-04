@@ -77,6 +77,8 @@ pub struct VexParams {
 /// `vex_assertion`. Disjoint from machine statements.
 #[derive(Clone)]
 pub struct HumanAssertion {
+    /// The package's ecosystem, for its PURL.
+    pub ecosystem: Ecosystem,
     pub advisory_id: String,
     pub aliases: Vec<String>,
     pub product_id: String,
@@ -342,11 +344,9 @@ fn human_statement(assertion: &HumanAssertion, params: &VexParams) -> Statement 
         .justification
         .is_none()
         .then(|| assertion.impact_statement.clone());
-    // A config-authored assertion has no lockfile source or ecosystem; treat it as the bare
-    // crates.io PURL (its identity is the package name, as authored). Per-ecosystem human
-    // assertions would need an ecosystem field on the config assertion (follow-up).
+    // A config-authored assertion has no lockfile source; its identity is the package name.
     let subcomponents = subcomponents(
-        Ecosystem::Cargo,
+        assertion.ecosystem,
         &assertion.package,
         &assertion.version,
         &DepSource::CratesIo,
@@ -998,6 +998,7 @@ mod tests {
 
     fn assertion(id: &str, justification: Option<&str>, approver: Option<&str>) -> HumanAssertion {
         HumanAssertion {
+            ecosystem: Ecosystem::Cargo,
             advisory_id: id.to_string(),
             aliases: vec![],
             product_id: "pkg:cargo/app@1.0.0".to_string(),

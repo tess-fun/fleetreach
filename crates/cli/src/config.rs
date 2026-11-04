@@ -293,6 +293,8 @@ struct SettingsTable {
     osv: RawOsv,
     #[serde(default)]
     advisories: RawAdvisories,
+    #[serde(default)]
+    triage: RawTriage,
     licenses: Option<RawLicenses>,
     #[serde(default)]
     signals: RawSignals,
@@ -362,6 +364,13 @@ struct RawOsv {
     refresh: Option<String>,
 }
 
+/// The `[settings.triage]` block (spec 16, row 6).
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTriage {
+    dir: Option<PathBuf>,
+}
+
 /// The `[settings.advisories]` block (spec 16, row 12): the organization's own OSV records,
 /// layered over the upstream exports.
 #[derive(Debug, Default, Deserialize)]
@@ -417,6 +426,7 @@ struct RawVex {
 pub struct Config {
     pub repos: Vec<Repo>,
     pub ignores: Vec<Ignore>,
+    pub triage: TriageSettings,
     pub vex: VexConfig,
     pub vex_assertions: Vec<VexAssertion>,
     pub osv: OsvSettings,
@@ -506,6 +516,15 @@ pub struct Image {
     pub reference: Option<String>,
     pub platform: Option<String>,
     pub distro: Option<String>,
+}
+
+/// Where the fleet's triage files live.
+#[derive(Debug, Clone)]
+pub struct TriageSettings {
+    /// `[settings.triage] dir`, else `triage/`, beside the config file.
+    pub dir: PathBuf,
+    /// Set in the config, so a scan refuses to run when it is missing.
+    pub explicit: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -983,9 +1002,15 @@ impl Config {
             ),
         };
 
+        let triage = TriageSettings {
+            explicit: raw.settings.triage.dir.is_some(),
+            dir: base_dir.join(raw.settings.triage.dir.unwrap_or_else(|| "triage".into())),
+        };
+
         Ok(Config {
             repos,
             ignores,
+            triage,
             vex,
             vex_assertions,
             osv,

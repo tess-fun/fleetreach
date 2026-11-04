@@ -97,6 +97,10 @@ fn static_engine_annotates_a_dependency_finding_reachable() {
             ecosystem: None,
         }],
         ignores: vec![],
+        triage: fleetreach_cli::config::TriageSettings {
+            dir: "triage".into(),
+            explicit: false,
+        },
         vex: Default::default(),
         vex_assertions: vec![],
         osv: Default::default(),
@@ -203,6 +207,10 @@ fn uninstantiated_generic_dependency_fn_is_not_reachable() {
             ecosystem: None,
         }],
         ignores: vec![],
+        triage: fleetreach_cli::config::TriageSettings {
+            dir: "triage".into(),
+            explicit: false,
+        },
         vex: Default::default(),
         vex_assertions: vec![],
         osv: Default::default(),

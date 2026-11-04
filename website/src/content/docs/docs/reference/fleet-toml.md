@@ -126,6 +126,16 @@ key signed. See [VEX attached to images](/docs/ecosystems/container-images/#vex-
 | `dir` | a directory of osv.dev exports, `<dir>/<Ecosystem>/all.zip` |
 | `refresh` | how stale the default cache may get before a re-check (default `6h`) |
 
+## `[settings.triage]`
+
+```toml
+[settings.triage]
+dir = "security/triage"
+```
+
+Where [triage decisions](/fleetreach/docs/guides/triage-findings/) live, relative to this file. The
+default is `triage/`, read if it is there; a `dir` set here must exist.
+
 ## `[settings.advisories]`
 
 | Key | Meaning |

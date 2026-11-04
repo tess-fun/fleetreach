@@ -20,6 +20,7 @@ Generated from `fleetreach --help`; each command's page has its full help.
 | [`history`](/fleetreach/docs/reference/cli/history/) | Trends, age, SLA breaches and time to fix from `scan --history-dir` snapshots |
 | [`notify`](/fleetreach/docs/reference/cli/notify/) | Send what the newest history run changed, and SLA breaches, to a webhook or issues |
 | [`report`](/fleetreach/docs/reference/cli/report/) | Publishable reports from the scan history |
+| [`triage`](/fleetreach/docs/reference/cli/triage/) | Decisions on findings, kept as files in git: set, list and export them |
 
 ```text
 Fleet-native dependency security audit across 12 ecosystems
@@ -38,6 +39,7 @@ Commands:
   history   Trends, age, SLA breaches and time to fix from `scan --history-dir` snapshots
   notify    Send what the newest history run changed, and SLA breaches, to a webhook or issues
   report    Publishable reports from the scan history
+  triage    Decisions on findings, kept as files in git: set, list and export them
   help      Print this message or the help of the given subcommand(s)
 
 Options:

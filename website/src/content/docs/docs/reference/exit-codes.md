@@ -8,7 +8,7 @@ sidebar:
 | Code | `scan` | Meaning |
 |------|--------|---------|
 | `0` | every repo read, nothing tripped the gate | safe to pass |
-| `1` | a finding (or, with `--fail-on-warnings`, a warning) tripped the gate | fix or ignore |
+| `1` | a finding (or, with `--fail-on-warnings`, a warning) tripped the gate, or a triage decision on an open finding expired | fix, ignore or decide again |
 | `2` | a repo, source or database could not be read, or the run failed | never a pass |
 
 `2` wins over `1`: a run with findings and an unreadable repo exits 2, so a partial scan is

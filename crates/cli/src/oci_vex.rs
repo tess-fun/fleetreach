@@ -677,9 +677,11 @@ pub(crate) fn suppressions(
                     id: v.advisory_id.clone(),
                     repo: Some(repo.clone()),
                     package: Some((package.clone(), installed.clone())),
+                    scope: None,
                     justification: s.justification.clone(),
                     reason: s.reason.clone(),
                     approved_by: Some(format!("VEX attestation {}", s.document)),
+                    accepted_risk: false,
                 });
             }
         }

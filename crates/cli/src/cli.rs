@@ -59,6 +59,9 @@ enum Commands {
     /// Publishable reports from the scan history.
     #[command(subcommand)]
     Report(crate::report_html::ReportCommand),
+    /// Decisions on findings, kept as files in git: set, list and export them.
+    #[command(subcommand)]
+    Triage(crate::triage::TriageCommand),
 }
 
 #[derive(Subcommand)]
@@ -111,6 +114,7 @@ pub fn dispatch(cli: Cli) -> u8 {
         Commands::History(command) => crate::history_cmd::run_history(command),
         Commands::Notify(args) => crate::notify::run_notify(&args),
         Commands::Report(command) => crate::report_html::run_report(command),
+        Commands::Triage(command) => crate::triage::run_triage(command),
     }
 }
 
