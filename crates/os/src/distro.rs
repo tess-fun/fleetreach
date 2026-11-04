@@ -240,6 +240,34 @@ pub fn legacy_release(text: &str) -> Option<OsRelease> {
     )))
 }
 
+/// Root's other spelling of a build. `.root.io.N` and `.aikido.N` share one counter, so a fix
+/// at `root.io.19` is followed by `aikido.20`, though dpkg sorts `aikido` below `root`.
+const AIKIDO: &str = ".aikido.";
+
+/// A Root version with its build in one spelling, so that versions compare by the counter.
+pub fn root_build(version: &str) -> String {
+    version.replace(AIKIDO, ".root.io.")
+}
+
+/// Whether `version` is a build of Root's: `.root.io.N` or `.aikido.N` on dpkg, and on apk a
+/// five-digit release of the form `-r<D>007<D>` (`9.3_p2-r20071`).
+pub fn is_root_build(version: &str) -> bool {
+    let apk = version.rsplit_once("-r").is_some_and(|(_, r)| {
+        r.len() == 5 && r.bytes().all(|b| b.is_ascii_digit()) && &r[1..4] == "007"
+    });
+    apk || version.contains("root.io") || version.contains(AIKIDO)
+}
+
+/// The name of a package Root renamed: `rootio-coreutils` is Debian's `coreutils`.
+pub fn unrooted(name: &str) -> &str {
+    name.strip_prefix("rootio-").unwrap_or(name)
+}
+
+/// The name Root gives a package it renamed.
+pub fn rooted(name: &str) -> String {
+    format!("rootio-{}", unrooted(name))
+}
+
 /// Debian releases gone from the security tracker that osv.dev's frozen exports still cover.
 const FROZEN_DEBIAN: [&str; 5] = ["7", "8", "9", "10", "11"];
 
@@ -297,7 +325,7 @@ impl Hints {
         let mut h = Hints::default();
         for v in versions {
             h.esm |= v.contains("+esm");
-            h.root_io |= v.contains("root.io");
+            h.root_io |= is_root_build(v);
         }
         h
     }
@@ -1189,6 +1217,8 @@ mod tests {
         assert!(plain.overlays.is_empty());
         assert_eq!(plain.supplements, vec!["Ubuntu:Pro:18.04:LTS"]);
         let deb = os("ID=debian\nVERSION_ID=\"12\"\n");
+        assert!(Hints::from_versions(["1.57.0-r00072"]).root_io);
+        assert!(!Hints::from_versions(["1.57.0-r10"]).root_io);
         let h = Hints::from_versions(["3.0.11-1~deb12u2.root.io.1"]);
         assert_eq!(
             detect(&deb, None, h).unwrap().ecosystems(),

@@ -17,6 +17,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   frozen osv.dev exports are now read too, wherever the maintained export says nothing about a
   CVE; `db sync --distros Debian:11` fetches both, `--max-db-age` does not apply to a frozen
   export, and the image's coverage gap says the data stops in October 2024.
+- **Root's patched images could read as clean when they were not.** Root numbers its builds
+  on one counter under two spellings, `.root.io.N` and `.aikido.N`, and dpkg sorts `aikido`
+  below `root`, so a package at `root.io.2` counted as past a fix at `root.io.3`. Versions now
+  compare by the counter. Packages Root renames (`rootio-coreutils`) now get Debian's and
+  Alpine's records, records filed under either name are found, Root's apk builds
+  (`-r00072`) are recognized, and Root's fix is shown for packages it has not rebuilt. Found
+  on Root's public images: every Root row Trivy reports is now reported too.
 - A registry that rate limits a pull (429) is now waited for and tried again.
 - Files of third-party OS packages in images (`docker-ce-cli`, `mongodb-database-tools`) were
   skipped as if a distribution's advisories covered them. They are skipped now only when a

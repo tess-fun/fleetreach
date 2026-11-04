@@ -562,8 +562,14 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     over 619,997 dpkg and 619,999 apk pairs from the exports (apk validity agrees on all
     42,587 distinct versions). Installed sets equal `dpkg-query -W` / `apk info -v` on 8 real
     images, and findings equal an independent real-tool evaluation of the exports on 11.
+    Root's OS records checked 2026-11-04 on 6 public `rootpublic/*` images against Trivy
+    0.73.0: every Root row Trivy reports is reported, after fixing the `.aikido.N` build order
+    (a false clean), `rootio-*` renames, records under either name and apk `-r00072` builds.
     Still open: the language records some hardened-image exports carry (`Echo:PyPI`,
-    `Root:npm`).
+    `Root:npm`). None of those images holds a patched language package, and Trivy matched
+    theirs against GHSA and the Go database, so there is nothing yet to validate a rule
+    against. A renamed one (`rootio-requests`, `@rootio/undici`) matches no upstream record
+    today.
     **Fuzzing done 2026-11-03**: cargo-fuzz targets `rpmdb` (SQLite with its log, Berkeley
     DB, NDB, seeded with the test databases), `image_layers` (a program of colliding paths,
     link cycles and whiteouts over several layers, plus raw tar bytes), `jar` and

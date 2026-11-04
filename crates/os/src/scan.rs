@@ -11,8 +11,9 @@
 //!   distro itself rates `unimportant` (Debian) or `negligible` (Ubuntu).
 //! - **Overlays win per CVE.** Ubuntu Pro (ESM) and Root publish their own fixes for CVEs
 //!   the base release also lists; where an overlay has a record for the same package and
-//!   CVE, its verdict replaces the base one. Root's overlay applies only to packages Root
-//!   patched (a `root.io` version).
+//!   CVE, its verdict replaces the base one. On a package Root did not build, Root speaks
+//!   only where it finds the package affected, as its fix is on another line: a Debian build
+//!   above that fix is not thereby clean.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -335,8 +336,10 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
     by_name: impl Fn(&str, &str) -> &'d [Advisory<V>],
     out: &mut Vec<VulnFinding>,
 ) {
-    let lookup = |eco: &str| by_name(eco, src.name);
-    let applies = |eco: &str| !eco.starts_with("Root:") || src.version.contains("root.io");
+    let is_root = |eco: &str| eco.starts_with("Root:");
+    let plain_name = crate::distro::unrooted(src.name);
+    let lookup = |eco: &str| by_name(eco, if is_root(eco) { src.name } else { plain_name });
+    let root_build = crate::distro::is_root_build(src.version);
     // Whether an advisory can be about this build at all: another module stream's advisory,
     // or a non-module fix for a module build, says nothing about it, so it neither matches
     // nor counts as the release having spoken about the CVE (php:8.0's RHSA must not hide
@@ -347,19 +350,35 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
             .is_none_or(|m| in_stream(ctx.distro, src, m))
             && !non_module_fix_for_module_build(src, adv)
     };
-    let overlays: Vec<&str> = ctx
+    let overlays: Vec<&Advisory<V>> = ctx
         .distro
         .overlays
         .iter()
-        .map(String::as_str)
-        .filter(|e| applies(e))
+        .flat_map(|eco| {
+            let own_word = !is_root(eco) || root_build;
+            // Root files a record under the plain name, its `rootio-` name, or both.
+            let renamed = if is_root(eco) {
+                by_name(eco, &crate::distro::rooted(plain_name))
+            } else {
+                &[]
+            };
+            by_name(eco, plain_name)
+                .iter()
+                .chain(renamed)
+                .filter(move |a| own_word || affected(v, a).is_some())
+        })
         .collect();
-    let mut superseded: BTreeSet<&str> = BTreeSet::new();
-    for eco in &overlays {
-        for adv in lookup(eco) {
-            superseded.extend(adv.keys().filter(|k| k.starts_with("CVE-")));
-        }
-    }
+    let overlays = {
+        let mut seen = BTreeSet::new();
+        let mut own = overlays;
+        own.retain(|a| seen.insert(a.id.as_str()));
+        own
+    };
+    let superseded: BTreeSet<&str> = overlays
+        .iter()
+        .flat_map(|a| a.keys())
+        .filter(|k| k.starts_with("CVE-"))
+        .collect();
     let release = std::iter::once(&ctx.distro.ecosystem).chain(&ctx.distro.also);
     // A release record can name the source package and not each binary (Red Hat's
     // RHSA-2026:22717 lists `vim`, and vim-minimal and vim-filesystem are its builds), so a
@@ -382,7 +401,7 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
     // package (fixed there or not), and names the binary or its source package.
     let known: BTreeSet<&str> = base
         .clone()
-        .chain(overlays.iter().flat_map(|e| lookup(e).iter()))
+        .chain(overlays.iter().copied())
         .filter(|a| reach(a))
         .flat_map(Advisory::keys)
         .filter(|k| k.starts_with("CVE-"))
@@ -403,7 +422,7 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
     // entries can be about another stream, so a release fix stays first there.
     let hit: BTreeSet<&str> = base
         .clone()
-        .chain(overlays.iter().flat_map(|e| lookup(e).iter()))
+        .chain(overlays.iter().copied())
         .filter(|a| reach(a) && affected(v, a).is_some())
         .flat_map(Advisory::keys)
         .filter(|k| k.starts_with("CVE-"))
@@ -497,7 +516,7 @@ fn match_source<'d, V: Ord + Clone + std::fmt::Display + 'd>(
         .clone()
         .filter(|a| !notice(a))
         .filter(|a| !a.keys().any(|k| superseded.contains(k)))
-        .chain(overlays.iter().flat_map(|e| lookup(e).iter()))
+        .chain(overlays.iter().copied())
         .chain(supplements);
     for adv in candidates.filter(|a| wanted(a)) {
         if let Some(fixed) = affected(v, adv) {
@@ -595,7 +614,7 @@ pub fn scan(
     let mut skipped_unparseable = 0u32;
     for src in sources(packages, distro.binary_names) {
         match distro.family {
-            Family::Deb => match DebVersion::parse(src.version) {
+            Family::Deb => match DebVersion::parse(&crate::distro::root_build(src.version)) {
                 Some(v) => match_source(
                     &ctx,
                     &src,
@@ -852,8 +871,50 @@ mod tests {
         };
         // Root patched it: the base record's later fix no longer applies.
         assert_eq!(run("1.0-2.root.io.1"), 0);
-        // Not a Root package: the base record decides.
+        // Not a Root build, and below Root's fix: Root's word, with Root's fix.
         assert_eq!(run("1.0-2"), 1);
+        // Above Root's fix but not Root's build: that fix is not in it, so the base decides.
+        assert_eq!(run("1.0-2+deb12u1"), 1);
+    }
+
+    #[test]
+    fn root_builds_compare_by_their_shared_counter() {
+        let os = crate::distro::parse_os_release("ID=debian\nVERSION_ID=12\n");
+        let hints = crate::distro::Hints {
+            root_io: true,
+            ..Default::default()
+        };
+        let debian = crate::distro::detect(&os, None, hints).unwrap();
+        let mut db = DistroDb::default();
+        let record = r#"{"id":"ROOT-OS-DEBIAN-12-CVE-2026-1","upstream":["CVE-2026-1"],
+            "affected":[{"package":{"name":"rootio-glibc","ecosystem":"Root:Debian:12"},
+            "ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"0"},
+            {"fixed":"2.36-9.root.io.19"},{"fixed":"2.36-9.aikido.20"}]}]}]}"#;
+        let mut w = crate::db::Wanted::default();
+        w.ecosystems.insert("Root:Debian:12".into(), Family::Deb);
+        db.absorb(record.as_bytes(), &w);
+        let open = adv("CVE-2026-2", &[("introduced", "0")], DebVersion::parse);
+        db.insert_deb("Debian:12", "glibc", open);
+        let ids = |version: &str| -> Vec<String> {
+            let pkg = OsPackage {
+                name: "rootio-libc6".into(),
+                version: version.into(),
+                source: "rootio-glibc".into(),
+                source_version: version.into(),
+                arch: None,
+                module: None,
+            };
+            let repo = RepoId("img".into());
+            let s = scan(&debian, &[pkg], &db, &repo, ScanOptions::default());
+            s.findings.into_iter().map(|f| f.advisory_id).collect()
+        };
+        // Below the fix, though dpkg sorts `aikido.20` under `root.io.18`; Debian's record for
+        // the package Root renamed still speaks.
+        assert_eq!(
+            ids("2.36-9.root.io.18"),
+            ["CVE-2026-2", "ROOT-OS-DEBIAN-12-CVE-2026-1"]
+        );
+        assert_eq!(ids("2.36-9.aikido.20"), ["CVE-2026-2"]);
     }
 
     #[test]

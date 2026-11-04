@@ -124,7 +124,17 @@ impl DistroDb {
             .push(adv);
     }
 
+    /// File one OSV record, as loading an export would.
     #[cfg(test)]
+    pub(crate) fn absorb(&mut self, record: &[u8], wanted: &Wanted) {
+        let (entries, _) = parse_record(record, wanted, Path::new("test")).unwrap_or_default();
+        for e in entries {
+            if let Entry::Deb(k, a) = e {
+                self.deb.entry(k).or_default().push(a);
+            }
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn insert_deb(&mut self, ecosystem: &str, package: &str, adv: Advisory<DebVersion>) {
         self.deb
@@ -377,6 +387,22 @@ fn entries_of(mut r: Record, wanted: &Wanted) -> (Vec<Entry>, BTreeMap<String, u
     let cvss_vector = osv::cvss_vector_of(&shared);
     let title = title(&r);
     let aliases = aliases(&r);
+    for a in &mut r.affected {
+        let root = a
+            .package
+            .as_ref()
+            .and_then(|p| p.ecosystem.as_deref())
+            .is_some_and(|e| e.starts_with("Root:"));
+        if root {
+            for v in &mut a.versions {
+                *v = crate::distro::root_build(v);
+            }
+            let events = a.ranges.iter_mut().flat_map(|r| r.events.iter_mut());
+            for fixed in events.filter_map(|e| e.fixed.as_mut()) {
+                *fixed = crate::distro::root_build(fixed);
+            }
+        }
+    }
     if not_security(&r.id, &aliases) {
         return (out, counts);
     }

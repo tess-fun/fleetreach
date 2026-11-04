@@ -45,8 +45,9 @@ against that digest. Only the files that matter are kept in memory: the package 
 The distribution comes from `/etc/os-release`. Debian, Ubuntu (an LTS release also takes the
 Ubuntu Pro export when its packages carry `+esm` versions), Alpine (`3.20.10` matches as
 `v3.20`), Wolfi, Chainguard, MinimOS, Alpaquita, Echo and CleanStart are recognized, and Root's
-patched packages (`root.io` versions) take Root's own advisories first. Distroless images are
-Debian, read from `/var/lib/dpkg/status.d`.
+patched packages (`root.io`, `aikido` and apk `-r00072` builds, also when renamed `rootio-*`) take
+Root's own advisories first, and in such an image Root's fix is shown for any package it finds
+affected. Distroless images are Debian, read from `/var/lib/dpkg/status.d`.
 
 rpm-based images are recognized too: Red Hat Enterprise Linux and UBI (matched against the
 release's BaseOS, AppStream and CRB repositories), AlmaLinux, Rocky Linux, openSUSE Leap,

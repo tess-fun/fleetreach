@@ -780,6 +780,11 @@ fn load_distro_db(images: &Images) -> Option<Result<fleetreach_os::db::DistroDb,
         // Source names, and binary names for distros whose advisories or vendor VEX name
         // binaries (SUSE's VEX does, its osv.dev records do not).
         packages.extend(installed.iter().map(|p| p.source.clone()));
+        // Root renames what it rebuilds, and files records under either name.
+        for p in installed {
+            packages.insert(fleetreach_os::distro::unrooted(&p.source).to_string());
+            packages.insert(fleetreach_os::distro::rooted(&p.source));
+        }
         if distro.binary_names || !distro.fallbacks.is_empty() {
             packages.extend(installed.iter().map(|p| p.name.clone()));
         }
