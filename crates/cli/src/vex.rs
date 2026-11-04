@@ -155,9 +155,7 @@ pub fn assemble_fresh(
         },
         &Mirrors::default(),
     );
-    let mut suppressions: Vec<Suppression> = config
-        .ignores
-        .iter()
+    let mut suppressions: Vec<Suppression> = crate::triage::live_ignores(config)
         .map(Suppression::from_ignore)
         .collect();
     suppressions.extend(

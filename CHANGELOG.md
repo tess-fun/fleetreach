@@ -17,6 +17,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   someone else pushed to. `--close-obsolete` closes requests the plan no longer wants, only
   in repos it scanned.
 - `fix apply --max-prs`, `--canary` and `--stop-after-failures` limit a rollout.
+- `[[settings.ignore]]` takes `expires` and `owner`. After its last day an ignore stops
+  hiding its finding, and the scan fails while the finding is open, as for triage decisions.
 - `[[settings.context.tag_rules]]` sets SSVC exposure and impact from repo tags and forge
   topics. The report's `context[].set_by` names the rule behind each value.
 

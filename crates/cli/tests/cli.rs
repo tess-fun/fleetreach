@@ -2141,6 +2141,40 @@ fn scan_triaged(dir: &std::path::Path, extra: &[&str]) -> Output {
 }
 
 #[test]
+fn an_ignore_holds_through_its_last_day_and_then_fails_the_scan() {
+    let base = std::fs::read_to_string(cfg("fleet-vuln.toml")).unwrap();
+    let dir = triage_dir("ignore-expiry");
+    let scan_with = |extra: &str| {
+        let fleet = dir.join("fleet.toml");
+        let root = std::path::Path::new(&cfg("fleet-vuln.toml"))
+            .parent()
+            .unwrap()
+            .display()
+            .to_string();
+        let moved = base.replace("path = \"", &format!("path = \"{root}/"));
+        std::fs::write(&fleet, format!("{moved}\n{extra}")).unwrap();
+        run(&["scan", "-c", fleet.to_str().unwrap(), "--db", &db()])
+    };
+    let ignore = |day: &str| {
+        format!(
+            "[[settings.ignore]]\nid = \"RUSTSEC-2099-0001\"\nreason = \"r\"\n\
+             owner = \"platform\"\nexpires = \"{day}\"\n"
+        )
+    };
+    assert_eq!(code(&scan_with(&ignore("2099-01-01"))), 0);
+
+    let out = scan_with(&ignore("2020-01-01"));
+    assert_eq!(code(&out), 1, "{}", stderr(&out));
+    let said = stderr(&out);
+    assert!(said.contains("owner platform"), "{said}");
+    assert!(said.contains("expired on 2020-01-01"), "{said}");
+
+    let out = scan_with(&ignore("soon"));
+    assert_eq!(code(&out), 2, "{}", stderr(&out));
+    assert!(stderr(&out).contains("is not a YYYY-MM-DD date"));
+}
+
+#[test]
 fn triage_decisions_set_findings_aside_until_they_expire() {
     let dir = triage_dir("gate");
     assert_eq!(code(&scan_triaged(&dir, &[])), 1);

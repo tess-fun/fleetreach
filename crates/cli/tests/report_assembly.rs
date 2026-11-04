@@ -211,10 +211,14 @@ fn ignores_suppress_findings_and_report_stale() {
         Ignore {
             id: "RUSTSEC-PRESENT".into(),
             reason: "dev only".into(),
+            expires: None,
+            owner: None,
         },
         Ignore {
             id: "RUSTSEC-ABSENT".into(),
             reason: "no longer relevant".into(),
+            expires: None,
+            owner: None,
         },
     ];
     let report = build_report(scan, &ignores, None, provenance());
@@ -246,6 +250,8 @@ fn ignore_naming_an_alias_suppresses_the_finding() {
     let ignores = vec![Ignore {
         id: "PYSEC-2026-1".into(),
         reason: "not exposed".into(),
+        expires: None,
+        owner: None,
     }];
     let report = build_report(scan, &ignores, None, provenance());
 

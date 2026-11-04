@@ -1111,9 +1111,7 @@ fn assemble_report(
         .collect();
     provenance.sources = materialized.provenance.clone();
     provenance.images.clone_from(&scan.pulled);
-    let mut suppressions: Vec<Suppression> = config
-        .ignores
-        .iter()
+    let mut suppressions: Vec<Suppression> = crate::triage::live_ignores(config)
         .map(Suppression::from_ignore)
         .collect();
     suppressions.extend(

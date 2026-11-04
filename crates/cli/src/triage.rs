@@ -19,7 +19,7 @@ use time::{Date, Month};
 
 use crate::assemble::{matches_any, Suppression};
 use crate::cli::fail;
-use crate::config::{Config, VEX_JUSTIFICATIONS};
+use crate::config::{Config, Ignore, VEX_JUSTIFICATIONS};
 use crate::history::{format_time, now};
 
 /// What is known about a finding.
@@ -95,7 +95,7 @@ pub struct Decision {
     pub log: Vec<LogEntry>,
 }
 
-fn parse_day(s: &str) -> Option<Date> {
+pub(crate) fn parse_day(s: &str) -> Option<Date> {
     let mut parts = s.split('-');
     let (year, month, day) = (parts.next()?, parts.next()?, parts.next()?);
     if parts.next().is_some() || year.len() != 4 || month.len() != 2 || day.len() != 2 {
@@ -225,8 +225,22 @@ pub fn read_all(dir: &Path) -> Result<Vec<Decision>, String> {
 pub struct Triage {
     /// What sets findings aside today.
     pub suppressions: Vec<Suppression>,
-    /// What set findings aside until it expired.
-    expired: Vec<(Suppression, String)>,
+    /// What set findings aside until it expired: how to name it, and its last day.
+    expired: Vec<(Suppression, String, String)>,
+}
+
+fn ignore_expired(ignore: &Ignore, today: Date) -> bool {
+    let last = ignore.expires.as_deref().and_then(parse_day);
+    last.is_some_and(|day| today > day)
+}
+
+/// The `[[settings.ignore]]` entries that still hold today.
+pub(crate) fn live_ignores(config: &Config) -> impl Iterator<Item = &Ignore> {
+    let today = now().date();
+    config
+        .ignores
+        .iter()
+        .filter(move |i| !ignore_expired(i, today))
 }
 
 impl Triage {
@@ -241,21 +255,31 @@ impl Triage {
                     chosen.display()
                 ));
             }
-            return Ok(Triage::default());
+            return Ok(Triage::of(&[], &config.ignores, now().date()));
         }
         let decisions = read_all(chosen).map_err(|e| format!("triage file {e}"))?;
-        Ok(Triage::of(&decisions, now().date()))
+        Ok(Triage::of(&decisions, &config.ignores, now().date()))
     }
 
-    fn of(decisions: &[Decision], today: Date) -> Triage {
+    fn of(decisions: &[Decision], ignores: &[Ignore], today: Date) -> Triage {
         let mut triage = Triage::default();
+        for ignore in ignores.iter().filter(|i| ignore_expired(i, today)) {
+            let name = match &ignore.owner {
+                Some(owner) => format!("ignore of {} (owner {owner})", ignore.id),
+                None => format!("ignore of {}", ignore.id),
+            };
+            let day = ignore.expires.clone().unwrap_or_default();
+            let suppression = Suppression::from_ignore(ignore);
+            triage.expired.push((suppression, name, day));
+        }
         for decision in decisions.iter().filter(|d| d.state.sets_aside()) {
             if decision.expired(today) {
                 let day = decision.expires.clone().unwrap_or_default();
-                let lapsed = decision
-                    .suppressions()
-                    .into_iter()
-                    .map(|s| (s, day.clone()));
+                let lapsed = decision.suppressions().into_iter().map(|s| {
+                    let package = s.scope.as_ref().map_or("", |(_, p)| p.as_str());
+                    let name = format!("triage decision on {} in {package}", s.id);
+                    (s, name, day.clone())
+                });
                 triage.expired.extend(lapsed);
             } else {
                 triage.suppressions.extend(decision.suppressions());
@@ -267,14 +291,10 @@ impl Triage {
     /// Say which open findings an expired decision used to set aside, and whether any do.
     pub fn report_expired(&self, report: &FleetReport) -> bool {
         let mut any = false;
-        for (suppression, day) in &self.expired {
+        for (suppression, name, day) in &self.expired {
             if matches_any(report, std::slice::from_ref(suppression)) {
                 any = true;
-                eprintln!(
-                    "error: triage decision on {} in {} expired on {day}, and the finding is open",
-                    suppression.id,
-                    suppression.scope.as_ref().map_or("", |(_, p)| p.as_str()),
-                );
+                eprintln!("error: {name} expired on {day}, and the finding is open");
             }
         }
         any
@@ -652,13 +672,21 @@ mod tests {
             (State::InTriage, 0),
             (State::Fixed, 0),
         ] {
-            let triage = Triage::of(&[decision(state, None)], today);
+            let triage = Triage::of(&[decision(state, None)], &[], today);
             assert_eq!(triage.suppressions.len(), count, "{state:?}");
         }
         // The last day still holds.
-        let holds = Triage::of(&[decision(State::AcceptedRisk, Some("2026-11-04"))], today);
+        let holds = Triage::of(
+            &[decision(State::AcceptedRisk, Some("2026-11-04"))],
+            &[],
+            today,
+        );
         assert_eq!((holds.suppressions.len(), holds.expired.len()), (1, 0));
-        let lapsed = Triage::of(&[decision(State::AcceptedRisk, Some("2026-11-03"))], today);
+        let lapsed = Triage::of(
+            &[decision(State::AcceptedRisk, Some("2026-11-03"))],
+            &[],
+            today,
+        );
         assert_eq!((lapsed.suppressions.len(), lapsed.expired.len()), (0, 1));
     }
 

@@ -34,6 +34,8 @@ pub enum ConfigError {
     DuplicateRepoId(String),
     #[error("ignore `{0}` must have a non-empty `reason`")]
     EmptyIgnoreReason(String),
+    #[error("ignore `{id}`: `expires` `{day}` is not a YYYY-MM-DD date")]
+    InvalidIgnoreExpiry { id: String, day: String },
     #[error("settings.vex.scope `{0}` is not one of `runtime`, `build`")]
     InvalidVexScope(String),
     #[error("vex_assertion `{0}` must have a non-empty `reason`")]
@@ -398,6 +400,8 @@ struct RawAdvisories {
 struct RawIgnore {
     id: String,
     reason: String,
+    expires: Option<String>,
+    owner: Option<String>,
 }
 
 /// A `[[settings.vex_assertion]]` entry (§6): a richer `ignore` with an optional
@@ -587,6 +591,11 @@ pub struct TriageSettings {
 pub struct Ignore {
     pub id: String,
     pub reason: String,
+    /// The last day it holds, `YYYY-MM-DD`. After that it fails the scan while its finding is
+    /// open.
+    pub expires: Option<String>,
+    /// Who to ask about it.
+    pub owner: Option<String>,
 }
 
 /// Validated `[settings.vex]` (§12); resolved against `--vex-*` flags at `-f vex`.
@@ -841,9 +850,19 @@ impl Config {
             if ig.reason.trim().is_empty() {
                 return Err(ConfigError::EmptyIgnoreReason(ig.id));
             }
+            if let Some(day) = ig.expires.as_deref() {
+                if crate::triage::parse_day(day).is_none() {
+                    return Err(ConfigError::InvalidIgnoreExpiry {
+                        id: ig.id,
+                        day: day.to_string(),
+                    });
+                }
+            }
             ignores.push(Ignore {
                 id: ig.id,
                 reason: ig.reason,
+                expires: ig.expires,
+                owner: ig.owner,
             });
         }
 

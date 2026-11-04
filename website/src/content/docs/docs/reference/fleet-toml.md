@@ -94,9 +94,12 @@ Discovers repos from a forge. See
 [[settings.ignore]]
 id     = "RUSTSEC-2020-0071"
 reason = "dev-dependency only"     # required
+expires = "2027-01-31"             # the last day it holds
+owner  = "platform"
 ```
 
-A stale ignore, one that matches nothing, is reported.
+A stale ignore, one that matches nothing, is reported. After its `expires` day an ignore stops
+hiding its finding, and the run exits 1 whatever the gate's level while the finding is open.
 
 ## `[[settings.vex_assertion]]`
 
