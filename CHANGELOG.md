@@ -17,6 +17,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   someone else pushed to. `--close-obsolete` closes requests the plan no longer wants, only
   in repos it scanned.
 - `fix apply --max-prs`, `--canary` and `--stop-after-failures` limit a rollout.
+- `scan --why --all-paths` lists every path into a package, shortest first and capped by
+  `--max-paths`. `scan --versions <pkg>` lists each version across the fleet with its repos.
+  Both, and plain `--why`, take `-f json`.
 - `[[settings.ignore]]` takes `expires` and `owner`. After its last day an ignore stops
   hiding its finding, and the scan fails while the finding is open, as for triage decisions.
 - `[[settings.context.tag_rules]]` sets SSVC exposure and impact from repo tags and forge

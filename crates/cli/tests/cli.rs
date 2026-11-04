@@ -922,6 +922,37 @@ fn why_finds_a_package_outside_cargo() {
 }
 
 #[test]
+fn why_lists_every_path_as_json_and_versions_lists_the_fleet() {
+    let fleet = cfg("fleet-npm.toml");
+    let database = db();
+    let base = ["scan", "-c", &fleet, "--db", &database];
+    let json = |extra: &[&str]| {
+        let out = run(&[&base[..], extra].concat());
+        assert_eq!(code(&out), 0, "{}", stderr(&out));
+        serde_json::from_str::<serde_json::Value>(&stdout(&out)).unwrap()
+    };
+
+    let why = json(&["--why", "lodash", "--all-paths", "-f", "json"]);
+    assert_eq!(why["schema"], "fleetreach-why/1");
+    assert_eq!(why["routes"][0]["ecosystem"], "npm");
+    assert_eq!(why["routes"][0]["paths"][0][1], "lodash");
+    assert_eq!(why["routes"][0]["truncated"], false);
+
+    let versions = json(&["--versions", "lodash", "-f", "json"]);
+    assert_eq!(versions["schema"], "fleetreach-versions/1");
+    assert_eq!(versions["packages"][0]["name"], "lodash");
+    assert_eq!(
+        versions["packages"][0]["versions"][0]["repos"][0],
+        "npm-demo"
+    );
+
+    let out = run(&[&base[..], &["--versions", "absent"]].concat());
+    assert_eq!(code(&out), 2);
+    let out = run(&[&base[..], &["--all-paths"]].concat());
+    assert_eq!(code(&out), 3, "--all-paths needs --why");
+}
+
+#[test]
 fn workflows_are_scanned_alongside_a_lockfile() {
     // A repo with a Cargo.lock AND workflows: the workflows were once scanned only when no
     // lockfile was found, so their actions were never matched (a silent false clean).

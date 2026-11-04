@@ -256,6 +256,17 @@ Options:
       --why <PKG>
           show how a package enters the fleet's dependency trees and exit
 
+      --all-paths
+          with --why, list every path into the package, not the shortest
+
+      --max-paths <N>
+          with --all-paths, at most N paths per package and version
+          
+          [default: 100]
+
+      --versions <PKG>
+          show every version of a package across the fleet, with its repos, and exit
+
   -q, --quiet
           suppress the summary line
 

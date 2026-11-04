@@ -52,6 +52,7 @@ pub mod triage;
 pub mod typosquat;
 pub mod vex;
 pub mod vulnrichment;
+pub(crate) mod why;
 
 pub use assemble::{
     assemble, build_report, combine_baseline, drop_dev, drop_phantom, exit_code, retain_min_epss,

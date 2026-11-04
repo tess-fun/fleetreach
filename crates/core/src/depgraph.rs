@@ -104,9 +104,160 @@ impl DepGraph {
     }
 }
 
+/// Every path without a repeated node from one of `roots` to `target`, shortest first and then
+/// in sorted order, at most `cap` of them. `next` gives a node's dependencies. The `bool` says
+/// the list stopped short: at `cap`, or when a tangled graph used up the walk's budget.
+pub fn all_paths<N: Ord + Clone>(
+    roots: &[N],
+    next: impl Fn(&N) -> Vec<N>,
+    target: &N,
+    cap: usize,
+) -> (Vec<Vec<N>>, bool) {
+    // Each reachable node's distance to the target prunes every walk that cannot get there
+    // within the length being tried.
+    let mut seen: BTreeSet<N> = roots.iter().cloned().collect();
+    let mut queue: VecDeque<N> = roots.iter().cloned().collect();
+    let mut dependents: BTreeMap<N, Vec<N>> = BTreeMap::new();
+    while let Some(node) = queue.pop_front() {
+        for dep in next(&node) {
+            dependents
+                .entry(dep.clone())
+                .or_default()
+                .push(node.clone());
+            if seen.insert(dep.clone()) {
+                queue.push_back(dep);
+            }
+        }
+    }
+    let mut distance: BTreeMap<N, usize> = BTreeMap::new();
+    if seen.contains(target) {
+        distance.insert(target.clone(), 0);
+        queue.push_back(target.clone());
+    }
+    while let Some(node) = queue.pop_front() {
+        let away = distance[&node] + 1;
+        for dependent in dependents.get(&node).into_iter().flatten() {
+            if !distance.contains_key(dependent) {
+                distance.insert(dependent.clone(), away);
+                queue.push_back(dependent.clone());
+            }
+        }
+    }
+    let mut roots: Vec<N> = roots.to_vec();
+    roots.sort();
+    roots.dedup();
+    let mut walk = Walk {
+        next,
+        target,
+        distance,
+        out: Vec::new(),
+        cap,
+        steps: WALK_BUDGET,
+        short: false,
+    };
+    for length in 1..=seen.len() {
+        for root in &roots {
+            walk.extend(&mut vec![root.clone()], length);
+        }
+        if walk.short {
+            break;
+        }
+    }
+    (walk.out, walk.short)
+}
+
+/// How many nodes one [`all_paths`] may visit.
+const WALK_BUDGET: usize = 2_000_000;
+
+struct Walk<'a, N, F> {
+    next: F,
+    target: &'a N,
+    distance: BTreeMap<N, usize>,
+    out: Vec<Vec<N>>,
+    cap: usize,
+    steps: usize,
+    short: bool,
+}
+
+impl<N: Ord + Clone, F: Fn(&N) -> Vec<N>> Walk<'_, N, F> {
+    /// Finish `path` into every path of exactly `length` nodes.
+    fn extend(&mut self, path: &mut Vec<N>, length: usize) {
+        if self.short {
+            return;
+        }
+        let Some(node) = path.last().cloned() else {
+            return;
+        };
+        let left = length - path.len();
+        if self.distance.get(&node).is_none_or(|d| *d > left) {
+            return;
+        }
+        if self.steps == 0 {
+            self.short = true;
+            return;
+        }
+        self.steps -= 1;
+        if left == 0 {
+            if node == *self.target {
+                if self.out.len() == self.cap {
+                    self.short = true;
+                } else {
+                    self.out.push(path.clone());
+                }
+            }
+            return;
+        }
+        let mut deps = (self.next)(&node);
+        deps.sort();
+        deps.dedup();
+        for dep in deps {
+            if !path.contains(&dep) {
+                path.push(dep);
+                self.extend(path, length);
+                path.pop();
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn paths(edges: &[(&'static str, &'static str)], cap: usize) -> (Vec<String>, bool) {
+        let next = |n: &&'static str| -> Vec<&'static str> {
+            edges.iter().filter(|e| e.0 == *n).map(|e| e.1).collect()
+        };
+        let (found, short) = all_paths(&["app"], next, &"t", cap);
+        (found.iter().map(|p| p.join(">")).collect(), short)
+    }
+
+    #[test]
+    fn all_paths_come_shortest_first_and_stop_at_the_cap() {
+        let edges = [
+            ("app", "z"),
+            ("app", "a"),
+            ("a", "b"),
+            ("b", "t"),
+            ("z", "t"),
+            ("a", "t"),
+        ];
+        let (found, short) = paths(&edges, 10);
+        assert_eq!(found, ["app>a>t", "app>z>t", "app>a>b>t"]);
+        assert!(!short);
+        let (found, short) = paths(&edges, 2);
+        assert_eq!(found, ["app>a>t", "app>z>t"]);
+        assert!(short);
+        // Exactly the cap is not short.
+        assert!(!paths(&edges, 3).1);
+    }
+
+    #[test]
+    fn all_paths_survive_cycles_and_a_missing_target() {
+        let edges = [("app", "a"), ("a", "b"), ("b", "a"), ("b", "t")];
+        assert_eq!(paths(&edges, 10).0, ["app>a>b>t"]);
+        assert!(paths(&[("app", "a")], 10).0.is_empty());
+    }
 
     #[test]
     fn chain_includes_root_and_target() {

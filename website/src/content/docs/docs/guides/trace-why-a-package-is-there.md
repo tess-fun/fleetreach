@@ -51,6 +51,28 @@ ledger-svc — time 0.2.7 (direct):
 ```
 <!-- /run -->
 
+## See every path
+
+`--why` shows the shortest chain. `--all-paths` lists every path into the package, shortest
+first, up to `--max-paths` (default 100) per package and version, and says when there are more:
+
+```sh
+fleetreach scan --why qs --all-paths
+```
+
+Outside Rust the graph is by package name, so two versions of one package share a node. `npm ls`
+stops at a `deduped` entry, so it shows fewer paths than this.
+
+## See every version in the fleet
+
+`--versions` lists each version of a package and the repos on it:
+
+```sh
+fleetreach scan --versions lodash
+```
+
+Both take `-f json`, with the schemas `fleetreach-why/1` and `fleetreach-versions/1`.
+
 ## Exit codes
 
 `0` when the package is in at least one tree, `2` when it is in none, so a script can ask:
@@ -59,7 +81,7 @@ ledger-svc — time 0.2.7 (direct):
 if fleetreach scan --why log4j-core >/dev/null 2>&1; then echo "exposed"; fi
 ```
 
-`--why` reads lockfiles only. It needs no advisory data and no network.
+`--versions` exits the same way. Both read lockfiles only. They need no advisory data and no network.
 
 ## Related
 

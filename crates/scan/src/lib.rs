@@ -574,6 +574,62 @@ pub fn routes_to(lockfile_path: &Path, package_name: &str) -> Result<Vec<Route>,
     Ok(routes)
 }
 
+/// Every path into one version of a package, for `--why --all-paths`.
+#[derive(Debug, Clone)]
+pub struct AllRoutes {
+    pub version: String,
+    pub paths: Vec<Vec<String>>,
+    /// The list stopped at the cap.
+    pub short: bool,
+}
+
+/// Every path into a package of `package_name`, one list per matching version, sorted by
+/// version.
+pub fn all_routes_to(
+    lockfile_path: &Path,
+    package_name: &str,
+    cap: usize,
+) -> Result<Vec<AllRoutes>, ScanError> {
+    let failed = |e: String| ScanError::Lockfile {
+        path: lockfile_path.display().to_string(),
+        message: e,
+    };
+    let lockfile = Lockfile::load(lockfile_path).map_err(|e| failed(e.to_string()))?;
+    let tree = lockfile
+        .dependency_tree()
+        .map_err(|e| failed(e.to_string()))?;
+    let graph = tree.graph();
+    let next = |node: &NodeIndex| {
+        graph
+            .neighbors_directed(*node, EdgeDirection::Outgoing)
+            .collect::<Vec<_>>()
+    };
+    let roots = tree.roots();
+    let mut routes: Vec<_> = tree
+        .nodes()
+        .iter()
+        .filter(|(dep, _)| dep.name.as_str() == package_name)
+        .map(|(_, &target)| {
+            let (paths, short) = fleetreach_core::depgraph::all_paths(&roots, next, &target, cap);
+            let named = paths
+                .iter()
+                .map(|p| {
+                    p.iter()
+                        .map(|&i| graph[i].name.as_str().to_string())
+                        .collect()
+                })
+                .collect();
+            AllRoutes {
+                version: graph[target].version.to_string(),
+                paths: named,
+                short,
+            }
+        })
+        .collect();
+    routes.sort_by(|a: &AllRoutes, b| a.version.cmp(&b.version));
+    Ok(routes)
+}
+
 /// Map a package's lockfile source to the [`DepSource`] the VEX PURL needs (§4.1).
 /// A lockfile entry with no `source` is a path/workspace-local crate; otherwise we
 /// classify the `SourceId` (crates.io default registry, git remote + locked rev,

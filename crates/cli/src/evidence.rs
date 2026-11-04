@@ -110,7 +110,7 @@ pub(crate) fn key(ecosystem: Ecosystem, name: &str) -> String {
 /// A version in SemVer terms, as the findings carry it: `v1.2` and `1.2` become `1.2.0`; a
 /// qualifier that is not a valid SemVer pre-release is dropped. `None` when there is no
 /// numeric core at all.
-fn coerce(version: &str) -> Option<Version> {
+pub(crate) fn coerce(version: &str) -> Option<Version> {
     let v = version.trim().trim_start_matches(['v', 'V']);
     if let Ok(parsed) = Version::parse(v) {
         return Some(parsed);

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use clap::Parser;
 use fleetreach_core::{Ecosystem, FleetReport, RepoOutcome, ScanStatus, Severity};
 use fleetreach_report as report;
-use fleetreach_scan::{routes_to, AdvisoryDb};
+use fleetreach_scan::AdvisoryDb;
 
 use crate::assemble::{
     assemble, combine_baseline, drop_dev, drop_phantom, exit_code, retain_min_epss, retain_new,
@@ -18,13 +18,13 @@ use crate::assemble::{
 use crate::cli::{
     fail, usage_fail, BuildSandbox, Format, OutcomeArg, ReachMode, SeverityArg, VexScopeArg,
 };
-use crate::config::{Config, Repo};
+use crate::config::Config;
 use crate::db::{
     build_provenance, check_db_age, detect_toolchain, fetch_enrichment, load_db_from,
     parse_duration_secs,
 };
 use crate::enrich::{self, Enrichment};
-use crate::orchestrate::{discover_lockfiles, fleet_ecosystems, scan_fleet_with, GoScan, Mirrors};
+use crate::orchestrate::{fleet_ecosystems, scan_fleet_with, GoScan, Mirrors};
 use crate::{npm_reach, osvdb, py_reach, reach, resolve, sources, static_reach, vex};
 
 #[derive(Parser)]
@@ -382,6 +382,30 @@ pub(crate) struct ScanArgs {
     )]
     why: Option<String>,
 
+    #[arg(
+        long,
+        requires = "why",
+        help = "with --why, list every path into the package, not the shortest"
+    )]
+    all_paths: bool,
+
+    #[arg(
+        long,
+        value_name = "N",
+        default_value_t = 100,
+        requires = "all_paths",
+        help = "with --all-paths, at most N paths per package and version"
+    )]
+    max_paths: usize,
+
+    #[arg(
+        long,
+        value_name = "PKG",
+        conflicts_with = "why",
+        help = "show every version of a package across the fleet, with its repos, and exit"
+    )]
+    versions: Option<String>,
+
     #[arg(short, long, help = "suppress the summary line")]
     quiet: bool,
     #[arg(short, long, help = "per-repo progress to stderr")]
@@ -522,9 +546,14 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         return explain(args, id);
     }
     let (config, materialized) = load_fleet(args)?;
-    // --why short-circuits (§10.1): a dependency-tree query, no advisory DB.
+    // --why and --versions short-circuit (§10.1): dependency-tree queries, no advisory DB.
+    let json = matches!(args.format, Format::Json);
     if let Some(package) = &args.why {
-        return Ok(run_why(&config, package));
+        let cap = args.all_paths.then_some(args.max_paths);
+        return Ok(crate::why::run_why(&config, package, cap, json));
+    }
+    if let Some(package) = &args.versions {
+        return Ok(crate::why::run_versions(&config, package, json));
     }
     let triage = crate::triage::load_or_fail(&config, args.triage_dir.as_deref())?;
     let db = advisory_db(args)?;
@@ -1645,105 +1674,4 @@ fn build_vex_params(
         version: args.vex_version,
         supersedes: args.vex_supersedes.clone(),
     })
-}
-
-/// `--why`: print every route by which a package enters each repo's dependency
-/// tree, in every ecosystem. Exits `0` if found anywhere, `2` if it is in no tree.
-fn run_why(config: &Config, package: &str) -> u8 {
-    use fleetreach_report::sanitize_cell;
-    let mut found = false;
-    for repo in &config.repos {
-        for route in other_routes(repo, package) {
-            found = true;
-            let path: Vec<String> = route.path.iter().map(|s| sanitize_cell(s)).collect();
-            println!(
-                "{} — {} {} ({}, {}):",
-                sanitize_cell(&repo.id.0),
-                sanitize_cell(&route.name),
-                sanitize_cell(&route.version),
-                format!("{:?}", route.ecosystem).to_lowercase(),
-                if route.direct { "direct" } else { "transitive" },
-            );
-            println!("  {}", path.join(" → "));
-        }
-        for lockfile in discover_lockfiles(repo).0 {
-            match routes_to(&lockfile, package) {
-                Ok(routes) => {
-                    for route in routes {
-                        found = true;
-                        let kind = if route.direct { "direct" } else { "transitive" };
-                        // package (arg), version + path segments (untrusted lockfile)
-                        // are echoed to the terminal; neutralize control sequences.
-                        let path: Vec<String> =
-                            route.path.iter().map(|s| sanitize_cell(s)).collect();
-                        println!(
-                            "{} — {} {} ({kind}):",
-                            sanitize_cell(&repo.id.0),
-                            sanitize_cell(package),
-                            sanitize_cell(&route.version),
-                        );
-                        println!("  {}", path.join(" → "));
-                    }
-                }
-                Err(e) => eprintln!("warning: {}: {e}", repo.id),
-            }
-        }
-    }
-    if found {
-        0
-    } else {
-        eprintln!("`{package}` is not in any repo's dependency tree");
-        2
-    }
-}
-
-/// One way a non-Cargo package enters a repo, for `--why`.
-struct OtherRoute {
-    ecosystem: Ecosystem,
-    name: String,
-    version: String,
-    direct: bool,
-    path: Vec<String>,
-}
-
-/// `--why` outside Cargo: the package in every other source the repo declares, matched by its
-/// full name or its last segment (`log4j-core` for `org.apache.logging.log4j:log4j-core`,
-/// `grpc` for `google.golang.org/grpc`), case-insensitively, with the shortest chain from the
-/// source's dependency graph. A source without a graph shows the repo and the package alone.
-fn other_routes(repo: &Repo, package: &str) -> Vec<OtherRoute> {
-    use fleetreach_core::depgraph::DepGraph;
-    use fleetreach_core::inventory::ROOT;
-    let wanted = |name: &str| {
-        let last = name.rsplit([':', '/']).next().unwrap_or(name);
-        name.eq_ignore_ascii_case(package) || last.eq_ignore_ascii_case(package)
-    };
-    let inventory = crate::inventory::repo_inventory(repo);
-    for error in &inventory.errors {
-        eprintln!("warning: {}: {error}", repo.id);
-    }
-    let mut routes = Vec::new();
-    for source in &inventory.sources {
-        if source.ecosystem == Ecosystem::Cargo {
-            continue;
-        }
-        let mut graph = DepGraph::new(ROOT);
-        for (from, to) in &source.edges {
-            graph.add_edges(from, [to.as_str()]);
-        }
-        for pkg in source.packages.iter().filter(|p| wanted(&p.name)) {
-            let mut path = graph.chain_to(&pkg.name);
-            if path.is_empty() {
-                path = vec![ROOT.to_string(), pkg.name.clone()];
-            }
-            path[0] = repo.id.0.clone();
-            routes.push(OtherRoute {
-                ecosystem: source.ecosystem,
-                name: pkg.name.clone(),
-                version: pkg.version.clone(),
-                direct: pkg.direct,
-                path,
-            });
-        }
-    }
-    routes
 }
