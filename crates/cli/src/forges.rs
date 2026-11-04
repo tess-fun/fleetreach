@@ -425,6 +425,54 @@ pub fn http_fetch(
     })
 }
 
+/// A reply kept as bytes, with where a redirect leads.
+pub struct Raw {
+    pub status: u16,
+    pub location: Option<String>,
+    pub body: Vec<u8>,
+}
+
+/// `GET url`, with an `Accept` value and an `Authorization` value.
+pub type Download = Box<dyn FnMut(&str, &str, Option<&str>) -> Result<Raw, String>>;
+
+/// A GET that does not follow redirects, for files rather than listings.
+#[cfg(feature = "network")]
+pub fn download_fn() -> Result<Download, String> {
+    let agent = agent(false)?;
+    Ok(Box::new(
+        move |url: &str, accept: &str, auth: Option<&str>| {
+            let mut req = agent.get(url).header("Accept", accept).header(
+                "User-Agent",
+                concat!("fleetreach/", env!("CARGO_PKG_VERSION")),
+            );
+            if let Some(value) = auth {
+                req = req.header("Authorization", value);
+            }
+            let mut resp = req.call().map_err(|e| format!("GET {url}: {e}"))?;
+            let status = resp.status().as_u16();
+            let location = resp.headers().get("location");
+            let location = location.and_then(|l| l.to_str().ok()).map(str::to_string);
+            let body = resp
+                .body_mut()
+                .with_config()
+                .limit(128 << 20)
+                .read_to_vec()
+                .map_err(|e| format!("reading {url}: {e}"))?;
+            Ok(Raw {
+                status,
+                location,
+                body,
+            })
+        },
+    ))
+}
+
+/// Refuses without the network feature.
+#[cfg(not(feature = "network"))]
+pub fn download_fn() -> Result<Download, String> {
+    Err("fetching release assets needs a network build (`--features network`)".to_string())
+}
+
 /// Refuses without the network feature.
 #[cfg(not(feature = "network"))]
 pub fn http_fetch(

@@ -8,6 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **SBOM input takes CycloneDX XML, SPDX tag-value and GitHub's dependency graph export**, and
+  finds SBOMs by itself. `[settings.sbom] discover` scans the SBOMs in a repo with nothing else
+  to read, `[[repo]] sbom_discover` sets that per repo, and `[[source]] sbom_assets` fetches
+  those on the latest release on `fleet sync` (GitHub, Gitea, Forgejo). An SBOM older than the
+  newest lockfile commit is a coverage gap.
 - **`scan --health` asks registries what a lockfile cannot show**: npm and NuGet deprecations,
   PyPI, RubyGems, crates.io and NuGet yanks, Packagist `abandoned` with the replacement, Go
   deprecations and retractions, Hex retirements and Maven relocations, plus archived GitHub
@@ -106,6 +111,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   topics. The report's `context[].set_by` names the rule behind each value.
 
 ### Fixed
+
+- A repo scanned from `sbom =` with no lockfile of the same ecosystem errored, because the
+  advisory data for what the SBOM held was never loaded.
 
 - Dependency paths for RubyGems now go through gems from `GIT` and `PATH` sources.
 - A pnpm `file:` or tarball dependency no longer appears as a package with a path for a version.

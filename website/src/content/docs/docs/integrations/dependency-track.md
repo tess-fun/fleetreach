@@ -24,8 +24,8 @@ A repo that could not be fully read still gets its SBOM, marked incomplete, and 
 ## The other way round
 
 Where a build is opaque to fleetreach (Gradle without locking, Bazel) but writes a CycloneDX
-or SPDX SBOM, point the repo at it with `sbom = "build/reports/bom.json"` and fleetreach
-scans the SBOM instead. See [Generate SBOMs](/fleetreach/docs/guides/generate-sboms/).
+or SPDX SBOM, in JSON, XML or tag-value, point the repo at it with
+`sbom = "build/reports/bom.json"` and fleetreach scans the SBOM instead. See [Generate SBOMs](/fleetreach/docs/guides/generate-sboms/).
 
 ## Which to use
 

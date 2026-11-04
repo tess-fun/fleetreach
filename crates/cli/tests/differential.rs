@@ -92,6 +92,8 @@ fn config() -> Config {
         history_keep: None,
         gate_dev: Default::default(),
         health_min_scorecard: None,
+        sbom_discover: false,
+        sbom_discover_repos: Default::default(),
     }
 }
 

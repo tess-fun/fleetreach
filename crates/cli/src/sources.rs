@@ -22,6 +22,19 @@ use crate::osvdb::{create_private_dir, private_subdir};
 /// The files the feeders read (plus their sibling manifests), checked out sparsely in
 /// `lockfiles` mode. Keep in step with the feeders' lockfile detection.
 pub const SPARSE_PATTERNS: &[&str] = &[
+    "**/*.cdx.json",
+    "**/*.cdx.xml",
+    "**/*.spdx.json",
+    "**/*.spdx",
+    "**/*.bom.json",
+    "**/*.bom.xml",
+    "**/*.sbom.json",
+    "**/*.sbom.xml",
+    "**/*.sbom",
+    "**/bom.json",
+    "**/bom.xml",
+    "**/sbom.json",
+    "**/sbom.xml",
     "**/Cargo.lock",
     "**/Cargo.toml",
     "**/go.mod",
@@ -106,6 +119,8 @@ pub struct Source {
     pub glob: bool,
     pub glob_max_depth: usize,
     pub token_env: Option<String>,
+    /// Fetch SBOMs attached to each repo's latest release on `fleet sync`.
+    pub sbom_assets: bool,
     /// Exposure and impact context (spec 08) for every repo this source discovers; a
     /// `[[repo]]` with the same id is explicit and keeps its own. Not part of the listing
     /// cache key: context does not change which repos are listed.
@@ -527,6 +542,17 @@ pub fn materialize(config: &Config, sync: bool, quiet: bool) -> Result<Materiali
             let id = RepoId(listed.id.clone());
             match result {
                 Ok((path, commit)) => {
+                    if sync && source.sbom_assets {
+                        let fetched = crate::forges::download_fn()
+                            .and_then(|mut get| release_sboms(&path, source, listed, &mut get));
+                        if let Err(e) = fetched {
+                            eprintln!(
+                                "note: {}: release SBOMs: {}",
+                                fleetreach_report::sanitize_cell(&listed.id),
+                                fleetreach_report::sanitize_cell(&e)
+                            );
+                        }
+                    }
                     out.provenance.push(RepoSource {
                         repo: id.clone(),
                         url: listed.clone_url.clone(),
@@ -587,6 +613,110 @@ pub fn print_inventory(changes: &[InventoryChange]) {
 type CheckoutResult = Result<(PathBuf, String), String>;
 
 /// Clone or refresh one repo; returns its checkout path and commit.
+/// GitHub's API, where a source names no other.
+const GITHUB_API: &str = "https://api.github.com";
+
+/// The most assets read from one release, and the largest.
+const MAX_ASSETS: usize = 20;
+const MAX_ASSET_BYTES: usize = 64 << 20;
+
+/// `GET url`, with an `Accept` value and an `Authorization` value.
+type Download<'a> = dyn FnMut(&str, &str, Option<&str>) -> Result<crate::forges::Raw, String> + 'a;
+
+/// A GET that follows redirects itself: the login goes to the first host and no further, since
+/// release files are served from elsewhere.
+fn get_following(
+    get: &mut Download<'_>,
+    url: &str,
+    accept: &str,
+    auth: Option<&str>,
+) -> Result<crate::forges::Raw, String> {
+    let mut url = url.to_string();
+    let mut auth = auth;
+    for _ in 0..5 {
+        let reply = get(&url, accept, auth)?;
+        match (reply.status, &reply.location) {
+            (301 | 302 | 303 | 307 | 308, Some(next)) => {
+                url = next.clone();
+                auth = None;
+            }
+            _ => return Ok(reply),
+        }
+    }
+    Err(format!("too many redirects from {url}"))
+}
+
+/// Replaces `<checkout>/.fleetreach/sbom` with the SBOMs on the repo's latest release, which
+/// `[settings.sbom] discover` then finds. A repo chooses what is in its checkout, so a link in
+/// that path is refused rather than followed.
+fn release_sboms(
+    checkout: &Path,
+    source: &Source,
+    repo: &Listed,
+    get: &mut Download<'_>,
+) -> Result<(), String> {
+    let api = source
+        .api_url
+        .as_deref()
+        .or((source.kind == SourceKind::GitHub).then_some(GITHUB_API))
+        .ok_or("no API URL")?
+        .trim_end_matches('/');
+    let auth = source.api_auth();
+    let segments: Vec<String> = repo
+        .id
+        .split('/')
+        .map(crate::forges::encode_segment)
+        .collect();
+    let url = format!("{api}/repos/{}/releases/latest", segments.join("/"));
+    let reply = get_following(get, &url, "application/json", auth.as_deref())?;
+    let assets = match reply.status {
+        200 => {
+            let doc: serde_json::Value =
+                serde_json::from_slice(&reply.body).map_err(|e| format!("{url}: {e}"))?;
+            let list = doc.get("assets").and_then(|a| a.as_array()).cloned();
+            list.unwrap_or_default()
+        }
+        404 => Vec::new(),
+        status => return Err(format!("{url}: HTTP {status}")),
+    };
+    let dir = checkout.join(crate::sbom_input::ASSET_DIR);
+    let parent = dir.parent().ok_or("no parent")?;
+    for path in [parent, dir.as_path()] {
+        if std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(format!("{} is a link", path.display()));
+        }
+    }
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    let host = host_of(api);
+    let named = assets.iter().filter_map(|asset| {
+        let name = asset.get("name")?.as_str()?;
+        let safe = !name.starts_with('.') && !name.contains(['/', '\\']);
+        (safe && crate::sbom_input::looks_like_sbom(name)).then_some((name, asset))
+    });
+    for (name, asset) in named.take(MAX_ASSETS) {
+        // GitHub serves a private repo's asset from the API, Gitea from its own host.
+        let api_url = asset.get("url").and_then(|u| u.as_str());
+        let plain = asset.get("browser_download_url").and_then(|u| u.as_str());
+        let Some(url) = api_url.filter(|u| u.starts_with(api)).or(plain) else {
+            continue;
+        };
+        let login = auth.as_deref().filter(|_| host_of(url) == host);
+        let reply = get_following(get, url, "application/octet-stream", login)?;
+        if reply.status != 200 {
+            return Err(format!("{url}: HTTP {}", reply.status));
+        }
+        if reply.body.len() > MAX_ASSET_BYTES {
+            return Err(format!("{name} is larger than {MAX_ASSET_BYTES} bytes"));
+        }
+        create_private_dir(parent).map_err(|e| format!("creating {}: {e}", parent.display()))?;
+        create_private_dir(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+        std::fs::write(dir.join(name), &reply.body).map_err(|e| format!("{name}: {e}"))?;
+    }
+    Ok(())
+}
+
 fn checkout(
     root: &Path,
     repo: &Listed,
@@ -750,14 +880,12 @@ fn base64(input: &str) -> String {
 mod github {
     use super::{Listed, Source};
 
-    const DEFAULT_API: &str = "https://api.github.com";
-
     pub(super) fn list(source: &Source) -> Result<Vec<Listed>, String> {
         let org = source.org.as_deref().ok_or("github source without org")?;
         let api = source
             .api_url
             .as_deref()
-            .unwrap_or(DEFAULT_API)
+            .unwrap_or(super::GITHUB_API)
             .trim_end_matches('/');
         let agent = crate::forges::agent(true)?;
         let token = source.token();
@@ -1027,6 +1155,94 @@ mod gitlab {
 mod tests {
     use super::*;
 
+    fn asset_source(api: &str) -> Source {
+        Source {
+            kind: SourceKind::GitHub,
+            org: Some("acme".to_string()),
+            api_url: Some(api.to_string()),
+            urls: Vec::new(),
+            include: Vec::new(),
+            exclude: Vec::new(),
+            topics: Vec::new(),
+            archived: false,
+            forks: false,
+            checkout: Checkout::Lockfiles,
+            glob: true,
+            glob_max_depth: 1,
+            token_env: Some("FLEETREACH_TEST_ASSET_TOKEN".to_string()),
+            sbom_assets: true,
+            context: Default::default(),
+        }
+    }
+
+    fn listed() -> Listed {
+        Listed {
+            id: "acme/app".to_string(),
+            clone_url: "https://forge.test/acme/app.git".to_string(),
+            default_branch: None,
+            archived: false,
+            fork: false,
+            topics: Vec::new(),
+            key: None,
+        }
+    }
+
+    fn raw(status: u16, location: Option<&str>, body: &str) -> crate::forges::Raw {
+        crate::forges::Raw {
+            status,
+            location: location.map(str::to_string),
+            body: body.as_bytes().to_vec(),
+        }
+    }
+
+    #[test]
+    fn release_sboms_are_saved_and_the_login_stops_at_the_redirect() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join(".fleetreach/sbom/old.cdx.json");
+        std::fs::create_dir_all(old.parent().unwrap()).unwrap();
+        std::fs::write(&old, "{}").unwrap();
+        let release = r#"{"assets":[
+            {"name":"app.spdx.json","url":"https://forge.test/api/repos/acme/app/releases/assets/1",
+             "browser_download_url":"https://forge.test/d/1"},
+            {"name":"../evil.spdx.json","browser_download_url":"https://forge.test/d/2"},
+            {"name":"app.tar.gz","browser_download_url":"https://forge.test/d/3"}]}"#;
+        let mut seen = Vec::new();
+        let mut get = |url: &str, _: &str, auth: Option<&str>| {
+            seen.push((url.to_string(), auth.is_some()));
+            Ok(match url {
+                "https://forge.test/api/repos/acme/app/releases/latest" => raw(200, None, release),
+                "https://forge.test/api/repos/acme/app/releases/assets/1" => {
+                    raw(302, Some("https://cdn.test/blob"), "")
+                }
+                "https://cdn.test/blob" => raw(200, None, "{\"spdxVersion\":\"SPDX-2.3\"}"),
+                other => panic!("asked for {other}"),
+            })
+        };
+        std::env::set_var("FLEETREACH_TEST_ASSET_TOKEN", "t");
+        let source = asset_source("https://forge.test/api");
+        release_sboms(dir.path(), &source, &listed(), &mut get).unwrap();
+        assert!(!old.exists(), "an older release's file is gone");
+        assert!(dir.path().join(".fleetreach/sbom/app.spdx.json").is_file());
+        let cdn = seen
+            .iter()
+            .find(|(url, _)| url.contains("cdn.test"))
+            .unwrap();
+        assert!(!cdn.1, "no login on the other host");
+        assert!(seen[1].1, "the login on the API");
+        assert_eq!(seen.len(), 3);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_in_the_asset_path_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(outside.path(), dir.path().join(".fleetreach")).unwrap();
+        let mut get = |_: &str, _: &str, _: Option<&str>| Ok(raw(200, None, r#"{"assets":[]}"#));
+        let source = asset_source("https://forge.test/api");
+        assert!(release_sboms(dir.path(), &source, &listed(), &mut get).is_err());
+    }
+
     #[test]
     fn globs_match_like_renovate_filters() {
         assert!(glob_match("*", "anything"));
@@ -1074,6 +1290,7 @@ mod tests {
             glob: true,
             glob_max_depth: 3,
             token_env: None,
+            sbom_assets: false,
             context: Default::default(),
         };
         let repo = |id: &str, archived: bool, fork: bool, topics: &[&str]| Listed {

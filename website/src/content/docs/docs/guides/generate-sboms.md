@@ -88,8 +88,42 @@ SBOM, point the repo at it:
 [[repo]]
 id   = "android-app"
 path = "../android-app"
-sbom = "build/reports/bom.json"   # CycloneDX 1.4 to 1.6 or SPDX 2.3 JSON
+sbom = "build/reports/bom.json"
 ```
+
+fleetreach reads CycloneDX as JSON or XML, SPDX 2 as JSON or tag-value, and the JSON GitHub's
+dependency graph export returns. SPDX 3 is refused by name, as is anything else that is not an
+SBOM. A scan reads the same packages from any format of one generator's run, checked on Syft,
+Trivy, cdxgen, Microsoft sbom-tool and GitHub.
+
+A coverage gap says what the SBOM could not vouch for: it does not assert it is complete, it is
+older than the newest commit to a lockfile, or it lists components no matcher takes. `pkg:cargo`
+and `pkg:golang` are among those for now, as are OS packages, so a Rust or Go repo needs its
+lockfiles. No age is claimed in a shallow clone, which has no history to compare with, and fleet
+checkouts are shallow.
+
+### Find SBOMs by themselves
+
+```toml
+[settings.sbom]
+discover = true
+
+[[source]]
+kind        = "github"
+org         = "acme"
+sbom_assets = true
+```
+
+With `discover`, a repo with no lockfile or manifest is scanned from the SBOMs it holds, by name:
+`bom.json`, `bom.xml`, `sbom.json`, `sbom.xml`, and `.cdx.json`, `.cdx.xml`, `.spdx.json`,
+`.spdx`, `.bom.json`, `.bom.xml`, `.sbom.json`, `.sbom.xml` or `.sbom` endings. Several are read
+as one, complete only if all are. A file with such a name that is not an SBOM errors the repo
+rather than leaving it unscanned, and `sbom_discover = false` on the `[[repo]]` turns it off.
+
+`sbom_assets` also brings in what a release carries: `fleet sync` keeps up to 20 SBOM files of
+64 MB from each repo's latest release in the checkout, for GitHub, Gitea and Forgejo. A release
+that cannot be read is a note, and the files of the last good sync stay. GitLab releases only
+link to their files, so they are not fetched.
 
 ## Next
 

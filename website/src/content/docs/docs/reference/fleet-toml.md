@@ -19,6 +19,7 @@ glob           = true                # also scan lockfiles below the root
 glob_max_depth = 4                   # default 3
 # ecosystem    = "cargo"             # scan exactly one ecosystem at the root
 # sbom         = "build/bom.json"    # scan this SBOM instead of lockfiles
+# sbom_discover = true               # [settings.sbom] discover for this repo alone
 exposure       = "open"
 mission_impact = "mission-failure"
 safety_impact  = "negligible"
@@ -32,7 +33,8 @@ tags           = ["pci", "tier-1"]
 | `path` | Repo root. |
 | `glob`, `glob_max_depth` | Also scan lockfiles in subdirectories, to this depth (default 3). `node_modules` and `.git` are never searched. |
 | `ecosystem` | `cargo` (or `rust`), `go`, `npm`, `pypi` (or `python`), `rubygems` (or `ruby`), `packagist` (or `composer`, `php`), `nuget`, `julia`, `swift`, `hex`, `maven`, `githubactions`. Without it every ecosystem found is scanned. |
-| `sbom` | A CycloneDX or SPDX JSON file to scan instead of the lockfiles. |
+| `sbom` | A CycloneDX (JSON or XML) or SPDX 2 (JSON or tag-value) file to scan instead of the lockfiles. |
+| `sbom_discover` | `true` or `false`: `[settings.sbom] discover` for this repo alone. |
 | `exposure` | `small`, `controlled` or `open`. |
 | `mission_impact` | `degraded`, `mef-support-crippled`, `mef-failure` or `mission-failure`. |
 | `safety_impact` | `negligible`, `marginal`, `critical` or `catastrophic`. |
@@ -86,6 +88,7 @@ Discovers repos from a forge. See
 | `glob`, `glob_max_depth` | as on `[[repo]]` (default `glob = true`) |
 | `api_url` | the API root of a self-hosted forge; required for `gitea`, `forgejo` and `bitbucket-server` |
 | `token_env` | the variable holding the token |
+| `sbom_assets` | on `fleet sync`, fetch the SBOMs on each repo's latest release (`github`, `gitea`, `forgejo`; needs `[settings.sbom] discover`) |
 | `exposure`, `mission_impact`, `safety_impact`, `owner`, `tags` | context for every repo it finds |
 
 ## `[[settings.ignore]]`
@@ -211,6 +214,17 @@ See [Gate on what ships](/fleetreach/docs/guides/gate-on-what-ships/).
 `min_scorecard` makes `scan --health` warn on source repos with an OpenSSF Scorecard under this
 value, 0 to 10. Unset, Scorecard is not asked. See
 [What registries say](/fleetreach/docs/guides/detect-supply-chain-signals/#what-registries-say).
+
+## `[settings.sbom]`
+
+```toml
+[settings.sbom]
+discover = true     # scan the SBOMs in a repo with nothing else to read
+```
+
+A repo with a lockfile or manifest is read from those, whatever SBOMs it holds. Otherwise every
+SBOM found to six levels down, outside test and vendor directories, is read as one. See
+[Generate SBOMs](/fleetreach/docs/guides/generate-sboms/#scan-an-sbom-instead-of-lockfiles).
 
 ## `[settings.signals]`
 

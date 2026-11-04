@@ -116,6 +116,9 @@ struct RawSource {
     glob: Option<bool>,
     glob_max_depth: Option<usize>,
     token_env: Option<String>,
+    /// Fetch SBOMs attached to each repo's latest release on `fleet sync`.
+    #[serde(default)]
+    sbom_assets: bool,
     // Context (spec 08) for every discovered repo; inline for `deny_unknown_fields`.
     exposure: Option<Exposure>,
     mission_impact: Option<MissionImpact>,
@@ -144,6 +147,8 @@ struct RawRepo {
     /// An SBOM (CycloneDX or SPDX JSON) to scan instead of the repo's lockfiles, relative to
     /// the config file.
     sbom: Option<String>,
+    /// `[settings.sbom] discover` for this repo alone.
+    sbom_discover: Option<bool>,
     /// Optional ecosystem override (`cargo`/`rust`/`go`/`npm`/`pypi`/`rubygems`/`packagist`/
     /// `nuget`/`julia`/`swift`/`hex`/`maven`/`githubactions`).
     /// Absent = auto-detect from the repo's manifests at scan time.
@@ -334,6 +339,17 @@ struct SettingsTable {
     gate: RawGate,
     #[serde(default)]
     health: RawHealth,
+    #[serde(default)]
+    sbom: RawSbom,
+}
+
+/// The `[settings.sbom]` block (spec 16, row 26).
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawSbom {
+    /// Scan the SBOMs in a repo that has nothing else to read.
+    #[serde(default)]
+    discover: bool,
 }
 
 /// The `[settings.health]` block (spec 16, row 21).
@@ -493,6 +509,10 @@ pub struct Config {
     pub images: Vec<Image>,
     /// `[[repo]] sbom`: repos scanned from an SBOM instead of their lockfiles.
     pub sboms: std::collections::BTreeMap<RepoId, PathBuf>,
+    /// `[settings.sbom] discover`.
+    pub sbom_discover: bool,
+    /// `[[repo]] sbom_discover`, which wins over it.
+    pub sbom_discover_repos: std::collections::BTreeMap<RepoId, bool>,
     /// Per-repo exposure and impact context (spec 08), for repos that set any.
     pub context: std::collections::BTreeMap<RepoId, ContextFields>,
     /// `[settings.context.defaults]`, applied where a repo sets nothing.
@@ -732,6 +752,14 @@ fn license_policy(raw: RawLicenses) -> Result<crate::licenses::Policy, ConfigErr
 }
 
 impl Config {
+    /// Whether a repo with nothing else to read is scanned from the SBOMs it holds.
+    pub fn discovers_sboms(&self, repo: &RepoId) -> bool {
+        self.sbom_discover_repos
+            .get(repo)
+            .copied()
+            .unwrap_or(self.sbom_discover)
+    }
+
     /// Read and validate a `fleet.toml` from disk. Repo paths are resolved
     /// relative to the config file's directory.
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
@@ -772,6 +800,7 @@ impl Config {
 
         let mut repos = Vec::with_capacity(raw.repo.len());
         let mut sboms = std::collections::BTreeMap::new();
+        let mut sbom_discover_repos = std::collections::BTreeMap::new();
         let mut context = std::collections::BTreeMap::new();
         let mut seen = std::collections::BTreeSet::new();
         for r in raw.repo {
@@ -793,6 +822,9 @@ impl Config {
             }
             if let Some(sbom) = &r.sbom {
                 sboms.insert(RepoId(r.id.clone()), base_dir.join(sbom));
+            }
+            if let Some(discover) = r.sbom_discover {
+                sbom_discover_repos.insert(RepoId(r.id.clone()), discover);
             }
             let fields = ContextFields::from(RawContext {
                 exposure: r.exposure,
@@ -1051,6 +1083,24 @@ impl Config {
             {
                 return Err(invalid(format!("api_url `{api}` must be https://")));
             }
+            if src.sbom_assets {
+                if !matches!(
+                    kind,
+                    crate::sources::SourceKind::GitHub
+                        | crate::sources::SourceKind::Gitea
+                        | crate::sources::SourceKind::Forgejo
+                ) {
+                    return Err(invalid(
+                        "sbom_assets needs kind github, gitea or forgejo".to_string(),
+                    ));
+                }
+                if !raw.settings.sbom.discover {
+                    return Err(invalid(
+                        "sbom_assets needs `[settings.sbom] discover = true`, which reads them"
+                            .to_string(),
+                    ));
+                }
+            }
             sources.push(crate::sources::Source {
                 kind,
                 org: src.org,
@@ -1065,6 +1115,7 @@ impl Config {
                 glob: src.glob.unwrap_or(true),
                 glob_max_depth: src.glob_max_depth.unwrap_or(DEFAULT_GLOB_MAX_DEPTH),
                 token_env: src.token_env,
+                sbom_assets: src.sbom_assets,
                 context: ContextFields::from(RawContext {
                     exposure: src.exposure,
                     mission_impact: src.mission_impact,
@@ -1181,6 +1232,8 @@ impl Config {
             signal_registries: raw.settings.signals.registries,
             images,
             sboms,
+            sbom_discover: raw.settings.sbom.discover,
+            sbom_discover_repos,
             context,
             context_defaults: raw.settings.context.defaults.map(ContextFields::from),
             tag_rules: tag_rules(raw.settings.context.tag_rules)?,

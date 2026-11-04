@@ -289,10 +289,7 @@ pub(crate) fn scan_fleet_with(
     let plans: Vec<RepoPlan> = config
         .repos
         .par_iter()
-        .map(|repo| match config.sboms.get(&repo.id) {
-            Some(path) => sbom_plan(repo, path),
-            None => plan_repo(repo),
-        })
+        .map(|repo| repo_plan(config, repo))
         .collect();
     let image_plans: Vec<Option<RepoPlan>> = images
         .prepared
@@ -542,7 +539,7 @@ pub fn fleet_ecosystems(config: &Config) -> Vec<Ecosystem> {
     let found: BTreeSet<Ecosystem> = config
         .repos
         .par_iter()
-        .map(plan_repo)
+        .map(|repo| repo_plan(config, repo))
         .collect::<Vec<_>>()
         .iter()
         .flat_map(|p| p.units.iter().map(|u| u.ecosystem))
@@ -650,15 +647,67 @@ pub(crate) struct RepoPlan {
     pub(crate) unsupported: Vec<CoverageGap>,
 }
 
-/// The plan of a repo scanned from its SBOM: one unit per ecosystem the SBOM holds, plus a
-/// coverage gap when the SBOM does not assert completeness or lists packages no matcher takes.
-fn sbom_plan(repo: &Repo, path: &Path) -> RepoPlan {
-    let source = path
-        .strip_prefix(&repo.path)
-        .unwrap_or(path)
-        .display()
-        .to_string();
-    let read = crate::sbom_input::read(path);
+/// What a repo is scanned from: the SBOM it names, its own files, or the SBOMs it holds.
+fn repo_plan(config: &Config, repo: &Repo) -> RepoPlan {
+    match config.sboms.get(&repo.id) {
+        Some(path) => sbom_plan(repo, std::slice::from_ref(path)),
+        None => discovered_plan(config, plan_repo(repo), repo),
+    }
+}
+
+/// `plan`, or with `[settings.sbom] discover` and nothing else to read, the SBOMs in the repo.
+/// A lockfile is always the better source, so one never gives way to an SBOM.
+fn discovered_plan(config: &Config, plan: RepoPlan, repo: &Repo) -> RepoPlan {
+    if !plan.walk_errors.is_empty() || !config.discovers_sboms(&repo.id) {
+        return plan;
+    }
+    // A repo with nothing to read still plans one Cargo unit, which reports that.
+    let reads_something = plan.units.iter().any(|u| match u.ecosystem {
+        Ecosystem::GitHubActions => false,
+        Ecosystem::Cargo => !discover_lockfiles(repo).0.is_empty(),
+        _ => true,
+    });
+    if reads_something {
+        return plan;
+    }
+    let found = crate::sbom_input::discover(&repo.path);
+    if found.is_empty() {
+        return plan;
+    }
+    let mut from_sboms = sbom_plan(repo, &found);
+    let has_actions = |p: &RepoPlan| {
+        p.units
+            .iter()
+            .any(|u| u.ecosystem == Ecosystem::GitHubActions)
+    };
+    if !has_actions(&from_sboms) {
+        let workflows = plan
+            .units
+            .into_iter()
+            .filter(|u| u.ecosystem == Ecosystem::GitHubActions)
+            .map(|u| ScanUnit {
+                alongside: true,
+                ..u
+            });
+        from_sboms.units.extend(workflows);
+    }
+    from_sboms.unsupported.extend(plan.unsupported);
+    from_sboms
+}
+
+/// The plan of a repo scanned from its SBOMs: one unit per ecosystem they hold, plus a coverage
+/// gap when they do not assert completeness, predate the lockfiles or list packages no matcher
+/// takes.
+fn sbom_plan(repo: &Repo, paths: &[PathBuf]) -> RepoPlan {
+    let source = match paths {
+        [path] => path
+            .strip_prefix(&repo.path)
+            .unwrap_or(path)
+            .display()
+            .to_string(),
+        many => format!("{} SBOMs", many.len()),
+    };
+    let read = crate::sbom_input::read_all(paths);
     let mut plan = RepoPlan {
         id: repo.id.clone(),
         units: Vec::new(),
@@ -680,6 +729,9 @@ fn sbom_plan(repo: &Repo, path: &Path) -> RepoPlan {
                      with aggregate complete); packages it omits were not scanned"
                         .to_string(),
                 ));
+            }
+            if let Some(reason) = crate::sbom_input::stale(&repo.path, input.created) {
+                plan.unsupported.push(gap(reason));
             }
             if !input.unrouted.is_empty() {
                 plan.unsupported.push(gap(format!(

@@ -1176,6 +1176,15 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Effort**: M. **Release**: 1.6.0 + 1.7.0.
 - **Proof**: SBOMs from Syft, Trivy, cdxgen, Microsoft sbom-tool, GitHub dependency graph
   and spdx-tools in every format: identical component sets across formats of one run.
+- **Status: XML, tag-value, discovery, release assets and staleness implemented 2026-11-04,
+  unreleased** (`crates/cli/src/sbom_input.rs`, `release_sboms` in `sources.rs`).
+  `docs/differential/sbom_formats.py` over six repos (Rust, Go, npm, PHP, Python, Ruby) and three
+  GitHub exports: 75 documents from Syft, Trivy, cdxgen, sbom-tool and GitHub, with spdx-tools
+  and cyclonedx-cli conversions, 0 format differences, 0 purls lost against a separate read of
+  the JSON. Release assets fetched from GitHub (cosign, Trivy) and a private repo on Gitea 1.24
+  in Docker. **Left**: SPDX 3 and OS purls (1.7.0); `pkg:cargo` and `pkg:golang` are named gaps,
+  so Rust and Go SBOMs do not scan yet; SPDX as YAML, RDF or XML is refused; GitLab release
+  assets are links and are not fetched; staleness says nothing in a shallow clone.
 
 ### Operating model
 

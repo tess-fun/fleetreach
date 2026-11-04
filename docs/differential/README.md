@@ -7,6 +7,12 @@ record, for the daily sync check in spec 16 row 11.
 `scan --incremental` hashes for its key. `scripts/benchmark.py` produces the numbers on the scale
 benchmark page.
 
+`sbom_formats.py` reads one generator run in every format that generator writes, or that
+spdx-tools and cyclonedx-cli convert it to, and compares the component sets. It also reads each
+JSON document's purls itself, so a package every format lost would show. Needs Docker, `gh` and
+`dotnet tool install --global microsoft.sbom.dotnettool`; build the reader with
+`cargo build --release -p fleetreach-cli --example sbom_components`.
+
 `health_oracle.py` checks `scan --health` warnings and clean answers against each registry by
 another route than fleetreach reads: `npm view`, `go list -m -u -retracted`, PyPI's simple API,
 RubyGems v2, the crates.io API, the Packagist package page, Hex's release endpoint, Maven
