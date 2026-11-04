@@ -85,6 +85,9 @@ Options:
       --release-age <DUR>
           warn on dependency versions published less than DUR ago, e.g. 72h (looks publish times up on deps.dev, which sends each package's name and version; cached)
 
+      --health
+          warn on what registries say of packages: deprecated, yanked, abandoned, retracted, retired, relocated. Sends each public package's name and version to its registry; with `[settings.health] min_scorecard` or a GitHub token also to deps.dev, to find its repo; with GITHUB_TOKEN or GH_TOKEN repo names to GitHub, to find archived ones. Cached for a week. With --offline only the cache is read, and a package with no answer is a coverage gap
+
       --require-full-coverage
           exit 2 if any source was read with less than full coverage (a pom.xml without a resolved graph, a lockfile format fleetreach cannot read), as for an errored repo
 

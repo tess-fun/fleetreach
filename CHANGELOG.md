@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`scan --health` asks registries what a lockfile cannot show**: npm and NuGet deprecations,
+  PyPI, RubyGems, crates.io and NuGet yanks, Packagist `abandoned` with the replacement, Go
+  deprecations and retractions, Hex retirements and Maven relocations, plus archived GitHub
+  repos with a token and low OpenSSF Scorecards with `[settings.health] min_scorecard`. Only
+  public packages are sent, and answers are cached for a week. A package with no answer is a
+  coverage gap, never clean.
 - **Scope for Cargo, Bundler, Hex, NuGet and Go, and a gate per scope.** A package only dev
   dependencies lead to is now `scope: dev` in these five too, so `--ignore-dev-deps`, SBOM
   `scope: excluded` and license `scope = "runtime"` cover them. `--fail-on-dev` and

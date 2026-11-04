@@ -1115,6 +1115,15 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: 200 flagged packages checked against the registries; offline without cache is a
   gap, never clean.
 
+  **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/health.rs`, `scan --health`,
+  `[settings.health] min_scorecard`). `docs/differential/health_oracle.py`, by another route
+  than the code reads: 220 of 220 flagged packages and 183 of 183 clean ones agreed, across all
+  nine registries. Archived matched `gh api` on 76 of 76 repos. Differences from the plan:
+  deps.dev does not report archived repos, so that check reads GitHub and needs a token, and is
+  a note without one; Scorecard is opt-in, because 3.0 flags about one package in ten; Hex
+  retirements and Maven relocations were added; PyPI project status (PEP 792) is not read, it
+  sits only in the full simple-API listing; Julia's registry has nothing to read.
+
 ### CI and interop
 
 #### 22. SARIF + exit gating (A+, keep)

@@ -23,6 +23,7 @@ pub mod evidence;
 pub mod fix;
 pub(crate) mod fix_managers;
 pub mod forges;
+pub mod health;
 pub mod history;
 pub mod history_cmd;
 pub mod images;

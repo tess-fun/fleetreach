@@ -504,7 +504,7 @@ fn go_mod(text: &str) -> GoMod {
 }
 
 /// A path as the module cache spells it: capitals become `!` and the lower-case letter.
-fn cache_escaped(path: &str) -> String {
+pub(crate) fn cache_escaped(path: &str) -> String {
     let mut out = String::with_capacity(path.len());
     for c in path.chars() {
         if c.is_ascii_uppercase() {

@@ -60,6 +60,8 @@ pub enum ConfigError {
         "settings.gate.scope.dev `{0}` is not one of `low`, `medium`, `high`, `critical`, `never`"
     )]
     BadGateScope(String),
+    #[error("settings.health.min_scorecard `{0}` is not between 0 and 10")]
+    BadMinScorecard(f64),
     #[error("settings.history: {0}")]
     InvalidHistory(String),
 }
@@ -330,6 +332,16 @@ struct SettingsTable {
     history: RawHistory,
     #[serde(default)]
     gate: RawGate,
+    #[serde(default)]
+    health: RawHealth,
+}
+
+/// The `[settings.health]` block (spec 16, row 21).
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawHealth {
+    /// Flag source repos with an OpenSSF Scorecard under this.
+    min_scorecard: Option<f64>,
 }
 
 /// The `[settings.gate]` block (spec 16, row 17).
@@ -500,6 +512,8 @@ pub struct Config {
     pub history_keep: Option<i64>,
     /// `[settings.gate.scope] dev`.
     pub gate_dev: crate::assemble::DevGate,
+    /// `[settings.health] min_scorecard`.
+    pub health_min_scorecard: Option<f64>,
 }
 
 /// A rule that turns a repo's tags or forge topics into decision points. For each decision
@@ -1132,6 +1146,10 @@ impl Config {
             Some("never") => DevGate::Never,
             Some(other) => return Err(ConfigError::BadGateScope(other.to_string())),
         };
+        let health_min_scorecard = raw.settings.health.min_scorecard;
+        if let Some(score) = health_min_scorecard.filter(|s| !(0.0..=10.0).contains(s)) {
+            return Err(ConfigError::BadMinScorecard(score));
+        }
         let history_keep = match &raw.settings.history.keep {
             None => None,
             Some(v) => Some(
@@ -1172,6 +1190,7 @@ impl Config {
             sla,
             history_keep,
             gate_dev,
+            health_min_scorecard,
         })
     }
 }

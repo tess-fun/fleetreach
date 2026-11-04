@@ -91,6 +91,7 @@ fn config() -> Config {
         sla: Default::default(),
         history_keep: None,
         gate_dev: Default::default(),
+        health_min_scorecard: None,
     }
 }
 

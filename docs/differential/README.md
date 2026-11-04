@@ -7,6 +7,11 @@ record, for the daily sync check in spec 16 row 11.
 `scan --incremental` hashes for its key. `scripts/benchmark.py` produces the numbers on the scale
 benchmark page.
 
+`health_oracle.py` checks `scan --health` warnings and clean answers against each registry by
+another route than fleetreach reads: `npm view`, `go list -m -u -retracted`, PyPI's simple API,
+RubyGems v2, the crates.io API, the Packagist package page, Hex's release endpoint, Maven
+Central's other host and deps.dev.
+
 `scope_oracle.py` compares the dev scope in SBOMs with `cargo tree`, `go list`, Bundler's own
 Gemfile evaluation and `mix deps` under `MIX_ENV=prod`, the last two in Docker. A package the
 tool builds and fleetreach calls dev is a false dev, and must stay at zero.

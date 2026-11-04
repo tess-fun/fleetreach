@@ -101,6 +101,11 @@ pub(crate) struct ScanArgs {
     release_age: Option<String>,
     #[arg(
         long,
+        help = "warn on what registries say of packages: deprecated, yanked, abandoned, retracted, retired, relocated. Sends each public package's name and version to its registry; with `[settings.health] min_scorecard` or a GitHub token also to deps.dev, to find its repo; with GITHUB_TOKEN or GH_TOKEN repo names to GitHub, to find archived ones. Cached for a week. With --offline only the cache is read, and a package with no answer is a coverage gap"
+    )]
+    health: bool,
+    #[arg(
+        long,
         help = "exit 2 if any source was read with less than full coverage (a pom.xml without a resolved graph, a lockfile format fleetreach cannot read), as for an errored repo"
     )]
     require_full_coverage: bool,
@@ -1111,6 +1116,20 @@ fn add_fleet_signals(
             Ok(findings) => scan.warnings.extend(findings),
             Err(e) => return Err(fail(&format!("--release-age: {e}"))),
         }
+    }
+    if args.health {
+        let outcome = crate::health::scan(
+            &config.repos,
+            maven_remote,
+            config.health_min_scorecard,
+            args.offline,
+        )
+        .map_err(|e| fail(&format!("--health: {e}")))?;
+        for note in &outcome.notes {
+            eprintln!("note: --health: {}", fleetreach_report::sanitize_cell(note));
+        }
+        scan.warnings.extend(outcome.findings);
+        scan.coverage.extend(outcome.gaps);
     }
     scan.outcomes.extend(
         materialized

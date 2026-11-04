@@ -206,6 +206,12 @@ high           = "30d"
 `never`. `--fail-on-dev` wins over it, and without either they gate like any other package.
 See [Gate on what ships](/fleetreach/docs/guides/gate-on-what-ships/).
 
+## `[settings.health]`
+
+`min_scorecard` makes `scan --health` warn on source repos with an OpenSSF Scorecard under this
+value, 0 to 10. Unset, Scorecard is not asked. See
+[What registries say](/fleetreach/docs/guides/detect-supply-chain-signals/#what-registries-say).
+
 ## `[settings.signals]`
 
 `registries = ["npm.example.com"]`: registry hosts allowed besides the public ones.

@@ -300,7 +300,7 @@ pub fn new_to_fleet(
 }
 
 /// A version for the shared model; tags like `v4` or refs like `main` become `0.0.0`.
-fn lenient_version(raw: &str) -> Version {
+pub(crate) fn lenient_version(raw: &str) -> Version {
     let trimmed = raw.trim_start_matches('v');
     Version::parse(trimmed)
         .or_else(|_| Version::parse(&format!("{trimmed}.0")))
