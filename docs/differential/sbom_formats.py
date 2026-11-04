@@ -170,8 +170,13 @@ def compare(label, binary, paths, totals):
         print(f"  {label} {names}: {len(routed)} routed{extra} {errors[:1] or ''}")
         totals["documents"] += 1
         totals["errors"] += bool(errors)
-        if lines != sets[first]:
-            a, b = set(sets[first]), set(lines)
+        # Formats can carry different graphs: Syft's SPDX reaches a Cargo project's dependencies
+        # from the root, and its CycloneDX does not. Which packages must not differ.
+        bare = lambda rows: {l.removesuffix(" direct") for l in rows}
+        if lines != sets[first] and bare(lines) == bare(sets[first]):
+            totals["direct_differ"] += 1
+        elif lines != sets[first]:
+            a, b = bare(sets[first]), bare(lines)
             print(f"    DIFFERS from {os.path.basename(first)}: "
                   f"-{sorted(a - b)[:6]} +{sorted(b - a)[:6]}")
             totals["differ"] += 1

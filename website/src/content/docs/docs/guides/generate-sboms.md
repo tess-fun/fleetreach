@@ -94,12 +94,16 @@ sbom = "build/reports/bom.json"
 fleetreach reads CycloneDX as JSON or XML, SPDX 2 as JSON or tag-value, and the JSON GitHub's
 dependency graph export returns. SPDX 3 is refused by name, as is anything else that is not an
 SBOM. A scan reads the same packages from any format of one generator's run, checked on Syft,
-Trivy, cdxgen, Microsoft sbom-tool and GitHub.
+Trivy, cdxgen, Microsoft sbom-tool and GitHub. Go and Rust repos scanned from Syft's or Trivy's
+SBOM gave the findings their lockfiles give, except where the SBOM left a package out.
+
+Direct and transitive come from the SBOM's own graph, so they are only as good as the generator's.
+Syft's CycloneDX has no edges from the root, so everything reads as transitive; Trivy hangs every Go module
+from the project, and all of them read as direct.
 
 A coverage gap says what the SBOM could not vouch for: it does not assert it is complete, it is
-older than the newest commit to a lockfile, or it lists components no matcher takes. `pkg:cargo`
-and `pkg:golang` are among those for now, as are OS packages, so a Rust or Go repo needs its
-lockfiles. No age is claimed in a shallow clone, which has no history to compare with, and fleet
+older than the newest commit to a lockfile, or it lists components no matcher takes, as OS
+packages are for now. No age is claimed in a shallow clone, which has no history to compare with, and fleet
 checkouts are shallow.
 
 ### Find SBOMs by themselves

@@ -6,7 +6,8 @@ fn main() {
             Ok(input) => {
                 for (ecosystem, packages) in &input.packages {
                     for p in packages {
-                        println!("{ecosystem:?} {} {}", p.name, p.version);
+                        let direct = if p.direct { " direct" } else { "" };
+                        println!("{ecosystem:?} {} {}{direct}", p.name, p.version);
                     }
                 }
                 for line in &input.unrouted {

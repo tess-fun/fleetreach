@@ -37,7 +37,7 @@ pub struct SbomInput {
     pub graph: DepGraph,
     /// The document asserts it lists everything (CycloneDX `compositions`).
     pub complete: bool,
-    /// Components that were not routed, e.g. `cargo (12)`, `no purl (3)`.
+    /// Components that were not routed, e.g. `deb (12)`, `no purl (3)`.
     pub unrouted: Vec<String>,
     /// When the document says it was made, in Unix seconds.
     pub created: Option<i64>,
@@ -64,6 +64,8 @@ fn route(purl: &str) -> Result<(Ecosystem, String, String), String> {
         "hex" => (Ecosystem::Hex, joined),
         "julia" => (Ecosystem::Julia, joined),
         "swift" => (Ecosystem::Swift, joined),
+        "golang" => (Ecosystem::Go, joined),
+        "cargo" => (Ecosystem::Cargo, joined),
         other => return Err(other.to_string()),
     };
     Ok((eco.0, eco.1, version))
@@ -481,6 +483,33 @@ impl Builder {
         }
     }
 
+    /// What the root depends on, looking through what is no package: Trivy puts each lockfile
+    /// under the root, and the project's own unversioned module under that, so the direct
+    /// dependencies are below both.
+    fn through_holders(
+        &self,
+        root_deps: &BTreeSet<String>,
+        edges: &[(String, String)],
+    ) -> BTreeSet<String> {
+        let mut below: BTreeMap<&str, Vec<&String>> = BTreeMap::new();
+        for (from, to) in edges {
+            below.entry(from).or_default().push(to);
+        }
+        let mut out = root_deps.clone();
+        let mut pending: Vec<String> = root_deps.iter().cloned().collect();
+        while let Some(reference) = pending.pop() {
+            if self.by_ref.contains_key(&reference) {
+                continue;
+            }
+            for to in below.get(reference.as_str()).into_iter().flatten() {
+                if out.insert((*to).clone()) {
+                    pending.push((*to).clone());
+                }
+            }
+        }
+        out
+    }
+
     fn finish(
         self,
         root_deps: &BTreeSet<String>,
@@ -488,6 +517,8 @@ impl Builder {
         complete: bool,
     ) -> SbomInput {
         const ROOT: &str = "(root)";
+        let root_deps = self.through_holders(root_deps, edges);
+        let root_deps = &root_deps;
         let mut graph = DepGraph::new(ROOT);
         let name_of = |r: &str| self.by_ref.get(r).map(|(_, n, _, _)| n.clone());
         // Root edges come in `root_deps`; the rest link two routed packages.
@@ -656,6 +687,11 @@ fn spdx(doc: &serde_json::Value) -> SbomInput {
         match kind {
             "DEPENDS_ON" => edges.push((a.to_string(), z.to_string())),
             "DEPENDENCY_OF" => edges.push((z.to_string(), a.to_string())),
+            // How Trivy hangs a lockfile from the root and a project from the lockfile. Syft
+            // has the root contain every package, which says nothing of what is direct.
+            "CONTAINS" if !(roots.contains(a) && b.by_ref.contains_key(z)) => {
+                edges.push((a.to_string(), z.to_string()));
+            }
             _ => {}
         }
     }
@@ -800,6 +836,50 @@ Relationship: SPDXRef-b DEPENDENCY_OF SPDXRef-a
     }
 
     #[test]
+    fn direct_dependencies_are_found_below_lockfiles_and_the_project() {
+        let cyclonedx = r#"{"bomFormat":"CycloneDX","metadata":{"component":{"bom-ref":"root"}},
+          "components":[{"type":"application","bom-ref":"lock","name":"go.mod"},
+            {"type":"library","bom-ref":"main","purl":"pkg:golang/example.com/main"},
+            {"type":"library","bom-ref":"a","purl":"pkg:golang/example.com/a@v1.0.0"},
+            {"type":"library","bom-ref":"b","purl":"pkg:golang/example.com/b@v1.0.0"}],
+          "dependencies":[{"ref":"root","dependsOn":["lock"]},{"ref":"lock","dependsOn":["main"]},
+            {"ref":"main","dependsOn":["a"]},{"ref":"a","dependsOn":["b"]}]}"#;
+        let spdx_json = r#"{"spdxVersion":"SPDX-2.3","packages":[{"SPDXID":"SPDXRef-root"},
+            {"SPDXID":"SPDXRef-lock","primaryPackagePurpose":"APPLICATION"},
+            {"SPDXID":"SPDXRef-main","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:golang/example.com/main"}]},
+            {"SPDXID":"SPDXRef-a","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:golang/example.com/a@v1.0.0"}]},
+            {"SPDXID":"SPDXRef-b","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:golang/example.com/b@v1.0.0"}]}],
+          "relationships":[{"spdxElementId":"SPDXRef-DOCUMENT","relationshipType":"DESCRIBES","relatedSpdxElement":"SPDXRef-root"},
+            {"spdxElementId":"SPDXRef-root","relationshipType":"CONTAINS","relatedSpdxElement":"SPDXRef-lock"},
+            {"spdxElementId":"SPDXRef-lock","relationshipType":"CONTAINS","relatedSpdxElement":"SPDXRef-main"},
+            {"spdxElementId":"SPDXRef-main","relationshipType":"DEPENDS_ON","relatedSpdxElement":"SPDXRef-a"},
+            {"spdxElementId":"SPDXRef-a","relationshipType":"DEPENDS_ON","relatedSpdxElement":"SPDXRef-b"}]}"#;
+        for text in [cyclonedx, spdx_json] {
+            let input = parse(text).unwrap();
+            let go = &input.packages[&Ecosystem::Go];
+            let direct: Vec<(&str, bool)> =
+                go.iter().map(|p| (p.name.as_str(), p.direct)).collect();
+            assert_eq!(
+                direct,
+                vec![("example.com/a", true), ("example.com/b", false)]
+            );
+            assert_eq!(
+                input.graph.chain_to("example.com/b"),
+                vec!["(root)", "example.com/a", "example.com/b"]
+            );
+        }
+    }
+
+    #[test]
+    fn a_root_containing_every_package_makes_none_direct() {
+        let text = r#"{"spdxVersion":"SPDX-2.3","packages":[{"SPDXID":"SPDXRef-root"},
+            {"SPDXID":"SPDXRef-a","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:npm/a@1.0.0"}]}],
+          "relationships":[{"spdxElementId":"SPDXRef-DOCUMENT","relationshipType":"DESCRIBES","relatedSpdxElement":"SPDXRef-root"},
+            {"spdxElementId":"SPDXRef-root","relationshipType":"CONTAINS","relatedSpdxElement":"SPDXRef-a"}]}"#;
+        assert!(!parse(text).unwrap().packages[&Ecosystem::Npm][0].direct);
+    }
+
+    #[test]
     fn a_byte_order_mark_is_skipped() {
         same(
             &parse(&format!("\u{feff}{JSON}")).unwrap(),
@@ -912,7 +992,23 @@ Relationship: SPDXRef-b DEPENDENCY_OF SPDXRef-a
             route("pkg:composer/Monolog/Monolog@3.5.0").unwrap().1,
             "monolog/monolog"
         );
-        assert_eq!(route("pkg:cargo/serde@1.0.0").unwrap_err(), "cargo");
+        assert_eq!(
+            route("pkg:cargo/serde@1.0.0").unwrap(),
+            (Ecosystem::Cargo, "serde".to_string(), "1.0.0".to_string())
+        );
+        assert_eq!(
+            route("pkg:golang/github.com/a/b/v2@v2.0.0%2Bincompatible#sub/dir").unwrap(),
+            (
+                Ecosystem::Go,
+                "github.com/a/b/v2".to_string(),
+                "v2.0.0+incompatible".to_string()
+            )
+        );
+        assert_eq!(
+            route("pkg:golang/github.com%2Fa%2Fb@v1.0.0").unwrap().1,
+            "github.com/a/b"
+        );
+        assert_eq!(route("pkg:deb/debian/curl@8").unwrap_err(), "deb");
         assert!(route("pkg:npm/left-pad").is_err(), "no version");
     }
 
@@ -941,7 +1037,7 @@ Relationship: SPDXRef-b DEPENDENCY_OF SPDXRef-a
         assert!(!get("qs").direct);
         assert!(get("jest").dev);
         assert!(input.complete);
-        assert_eq!(input.unrouted, vec!["cargo (1)", "no purl (1)"]);
+        assert_eq!(input.unrouted, vec!["no purl (1)"]);
         assert_eq!(input.graph.chain_to("qs"), vec!["(root)", "express", "qs"]);
     }
 

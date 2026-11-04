@@ -58,9 +58,37 @@ pub struct GoDb {
     /// Advisory id → its OSV record. Holds exactly the advisories the index references;
     /// an id whose file is absent is simply omitted (it can never match).
     advisories: BTreeMap<String, Osv>,
+    /// Lowercased module path → the module paths in `index` it may stand for.
+    folded: BTreeMap<String, Vec<String>>,
+}
+
+/// Indexes the module paths of `index` by their lowercase form.
+fn folded(index: &BTreeMap<String, Vec<String>>) -> BTreeMap<String, Vec<String>> {
+    let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for module in index.keys() {
+        out.entry(module.to_lowercase())
+            .or_default()
+            .push(module.clone());
+    }
+    out
 }
 
 impl GoDb {
+    /// The module paths a package URL's name may stand for. Module paths are case-sensitive,
+    /// but Trivy lowercases its purls, so a lowercase name is every module it could have been:
+    /// `github.com/azure/go-ntlmssp` must still reach `github.com/Azure/go-ntlmssp`'s
+    /// advisories. A name with capitals kept them, and stands for itself.
+    #[must_use]
+    pub fn modules_named(&self, name: &str) -> Vec<String> {
+        if name.chars().any(char::is_uppercase) {
+            return vec![name.to_string()];
+        }
+        match self.folded.get(name) {
+            Some(modules) => modules.clone(),
+            None => vec![name.to_string()],
+        }
+    }
+
     /// Load the mirror rooted at `db_root`: parse `index/modules.json`, then read and
     /// parse every advisory it references from `ID/<id>.json`.
     ///
@@ -92,7 +120,12 @@ impl GoDb {
                 }
             }
         }
-        Ok(GoDb { index, advisories })
+        let folded = folded(&index);
+        Ok(GoDb {
+            index,
+            advisories,
+            folded,
+        })
     }
 }
 
@@ -163,7 +196,12 @@ impl GoDb {
             }
             advisories.insert(osv.id.clone(), osv);
         }
-        Ok(GoDb { index, advisories })
+        let folded = folded(&index);
+        Ok(GoDb {
+            index,
+            advisories,
+            folded,
+        })
     }
 }
 
@@ -593,6 +631,37 @@ mod tests {
         Match::Affected {
             fixed: Some(v(fix)),
         }
+    }
+
+    #[test]
+    fn a_lowercased_purl_reaches_the_module_it_stands_for() {
+        let index: BTreeMap<String, Vec<String>> = [
+            "github.com/Azure/go-ntlmssp",
+            "github.com/Sirupsen/logrus",
+            "github.com/sirupsen/logrus",
+        ]
+        .iter()
+        .map(|m| (m.to_string(), Vec::new()))
+        .collect();
+        let db = GoDb {
+            folded: folded(&index),
+            index,
+            advisories: BTreeMap::new(),
+        };
+        let named = |name| db.modules_named(name);
+        assert_eq!(
+            named("github.com/azure/go-ntlmssp"),
+            vec!["github.com/Azure/go-ntlmssp"]
+        );
+        assert_eq!(
+            named("github.com/sirupsen/logrus"),
+            vec!["github.com/Sirupsen/logrus", "github.com/sirupsen/logrus"]
+        );
+        assert_eq!(
+            named("github.com/Sirupsen/logrus"),
+            vec!["github.com/Sirupsen/logrus"]
+        );
+        assert_eq!(named("example.com/none"), vec!["example.com/none"]);
     }
 
     #[test]

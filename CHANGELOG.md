@@ -13,6 +13,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to read, `[[repo]] sbom_discover` sets that per repo, and `[[source]] sbom_assets` fetches
   those on the latest release on `fleet sync` (GitHub, Gitea, Forgejo). An SBOM older than the
   newest lockfile commit is a coverage gap.
+- **`pkg:golang` and `pkg:cargo` in an SBOM are now matched**, with RustSec and the crates.io
+  export for Rust. Go names compare without case where a purl lost it, as Trivy's do. Direct
+  dependencies are found below the lockfile and project nodes Trivy puts under the root, in
+  every ecosystem.
 - **`scan --health` asks registries what a lockfile cannot show**: npm and NuGet deprecations,
   PyPI, RubyGems, crates.io and NuGet yanks, Packagist `abandoned` with the replacement, Go
   deprecations and retractions, Hex retirements and Maven relocations, plus archived GitHub

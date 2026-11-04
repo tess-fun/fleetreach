@@ -13,6 +13,9 @@ JSON document's purls itself, so a package every format lost would show. Needs D
 `dotnet tool install --global microsoft.sbom.dotnettool`; build the reader with
 `cargo build --release -p fleetreach-cli --example sbom_components`.
 
+`sbom_vs_lockfile.py` scans Go and Rust repos from their lockfiles and from Syft's and Trivy's
+SBOMs of them, and names any finding the lockfiles give that an SBOM's listed packages do not.
+
 `health_oracle.py` checks `scan --health` warnings and clean answers against each registry by
 another route than fleetreach reads: `npm view`, `go list -m -u -retracted`, PyPI's simple API,
 RubyGems v2, the crates.io API, the Packagist package page, Hex's release endpoint, Maven

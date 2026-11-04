@@ -1181,9 +1181,11 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   `docs/differential/sbom_formats.py` over six repos (Rust, Go, npm, PHP, Python, Ruby) and three
   GitHub exports: 75 documents from Syft, Trivy, cdxgen, sbom-tool and GitHub, with spdx-tools
   and cyclonedx-cli conversions, 0 format differences, 0 purls lost against a separate read of
-  the JSON. Release assets fetched from GitHub (cosign, Trivy) and a private repo on Gitea 1.24
-  in Docker. **Left**: SPDX 3 and OS purls (1.7.0); `pkg:cargo` and `pkg:golang` are named gaps,
-  so Rust and Go SBOMs do not scan yet; SPDX as YAML, RDF or XML is refused; GitLab release
+  the JSON, and direct flags differing only in Syft's two forms of one Cargo repo, whose graphs
+  differ. `pkg:golang` and `pkg:cargo` route to the matchers: `docs/differential/sbom_vs_lockfile.py`
+  over gitea, caddy, meilisearch, deno, zed and calcit, 547 findings shared with the lockfile scan
+  across Syft and Trivy, 0 extra, 9 missing, all packages Trivy did not list. Release assets fetched from GitHub (cosign, Trivy) and a private repo on Gitea 1.24
+  in Docker. **Left**: SPDX 3 and OS purls (1.7.0); SPDX as YAML, RDF or XML is refused; GitLab release
   assets are links and are not fetched; staleness says nothing in a shallow clone.
 
 ### Operating model

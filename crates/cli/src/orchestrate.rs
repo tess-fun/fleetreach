@@ -14,8 +14,8 @@ use std::path::{Path, PathBuf};
 use fleetreach_core::osv::TierCScan;
 use fleetreach_core::semver::Version;
 use fleetreach_core::{
-    Coverage, CoverageGap, Ecosystem, Occurrence, RepoId, RepoOutcome, ScanStatus, VulnFinding,
-    WarnFinding,
+    Coverage, CoverageGap, DepScope, DependencyKind, Ecosystem, Occurrence, RepoId, RepoOutcome,
+    ScanStatus, VulnFinding, WarnFinding,
 };
 use fleetreach_ghactions::{ghactions_db_path, GhActionsDb, GhaError};
 use fleetreach_go::{GoDb, GoError, SandboxPolicy};
@@ -333,7 +333,7 @@ pub(crate) fn scan_fleet_with(
     // is byte-identical to a serial scan regardless of completion order.
     let scan_unit_with = |unit: &ScanUnit| {
         if let Some(sbom) = &unit.sbom {
-            return scan_sbom_unit(&unit.repo, unit.ecosystem, sbom, &dbs);
+            return scan_sbom_unit(db, &unit.repo, unit.ecosystem, sbom, &dbs);
         }
         if unit.alongside && dbs.ghactions.is_none() {
             return RepoResult::scanned(&unit.repo.id, Vec::new(), Vec::new()).with_coverage(
@@ -763,6 +763,7 @@ fn sbom_plan(repo: &Repo, paths: &[PathBuf]) -> RepoPlan {
 
 /// Scan one ecosystem's packages from an SBOM with that ecosystem's matcher.
 fn scan_sbom_unit(
+    advisories: &AdvisoryDb,
     repo: &Repo,
     ecosystem: Ecosystem,
     sbom: &Result<crate::sbom_input::SbomInput, String>,
@@ -790,8 +791,40 @@ fn scan_sbom_unit(
         }
     }
     let g = &input.graph;
+    if ecosystem == Ecosystem::Cargo {
+        let crates: Vec<(String, String)> = pkgs
+            .iter()
+            .map(|p| (p.name.clone(), p.version.clone()))
+            .collect();
+        let (osv, gap) = crates_or_gap(&repo.id, "SBOM", dbs.crates.as_ref());
+        let (mut scan, skipped) =
+            fleetreach_scan::scan_crates(advisories, osv, &repo.id, "SBOM", &crates);
+        place_in_sbom(&mut scan.vulnerabilities, pkgs, g);
+        let result = RepoResult::scanned(&repo.id, scan.vulnerabilities, scan.warnings)
+            .with_skipped(skipped);
+        return gap.into_iter().fold(result, RepoResult::with_coverage);
+    }
     let scan = (|| -> Result<TierCScan, String> {
         Ok(match ecosystem {
+            Ecosystem::Go => {
+                let db = db(dbs.go.as_ref(), ecosystem)?;
+                let modules: Vec<(String, String, String)> = pkgs
+                    .iter()
+                    .flat_map(|p| {
+                        let named = db.modules_named(&p.name);
+                        named
+                            .into_iter()
+                            .map(|module| (String::new(), module, p.version.clone()))
+                    })
+                    .collect();
+                let (mut findings, skipped_unparseable) =
+                    fleetreach_go::scan_built(&modules, db, &repo.id);
+                place_in_sbom(&mut findings, pkgs, g);
+                TierCScan {
+                    findings,
+                    skipped_unparseable,
+                }
+            }
             Ecosystem::Npm => fleetreach_npm::scan_installed(
                 &pkgs
                     .iter()
@@ -935,6 +968,45 @@ fn scan_sbom_unit(
         Ok(scan) => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
             .with_skipped(scan.skipped_unparseable),
         Err(e) => errored(e),
+    }
+}
+
+/// Fills in what the SBOM says of each finding's package, for the matchers built to read
+/// binaries, which know nothing of it. A name held at several versions is direct if any is, and
+/// dev only if all are. Names compare without case, as Go purls may have lost theirs.
+fn place_in_sbom(
+    findings: &mut [VulnFinding],
+    packages: &[crate::sbom_input::SbomPackage],
+    graph: &fleetreach_core::DepGraph,
+) {
+    let mut by_name: BTreeMap<String, (&str, bool, bool)> = BTreeMap::new();
+    for p in packages {
+        let entry = by_name
+            .entry(p.name.to_lowercase())
+            .or_insert((p.name.as_str(), false, true));
+        entry.1 |= p.direct;
+        entry.2 &= p.dev;
+    }
+    for occurrence in findings.iter_mut().flat_map(|f| &mut f.occurrences) {
+        if let Occurrence::InRepo {
+            package,
+            dependency_kind,
+            dependency_path,
+            scope,
+            ..
+        } = occurrence
+        {
+            let Some((name, direct, dev)) = by_name.get(&package.to_lowercase()) else {
+                continue;
+            };
+            *dependency_path = graph.chain_to(name);
+            if *direct {
+                *dependency_kind = DependencyKind::Direct;
+            }
+            if *dev {
+                *scope = DepScope::Dev;
+            }
+        }
     }
 }
 
