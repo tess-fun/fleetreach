@@ -14,7 +14,9 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use fleetreach_core::osv::{self, Match};
+use fleetreach_core::osv::{
+    self, cvss_vector_in, severity_from, DatabaseSpecific, Match, SeverityEntry,
+};
 use fleetreach_core::semver::{Version, VersionReq};
 use fleetreach_core::{
     Ecosystem, Occurrence, ReachVerdict, Reachability, RepoId, Severity, VulnFinding,
@@ -60,6 +62,64 @@ pub struct GoDb {
     advisories: BTreeMap<String, Osv>,
     /// Lowercased module path → the module paths in `index` it may stand for.
     folded: BTreeMap<String, Vec<String>>,
+    /// Advisory id → how bad it is, for those any record rates.
+    ratings: BTreeMap<String, Rating>,
+}
+
+/// How bad an advisory is.
+#[derive(Debug, Clone, PartialEq)]
+struct Rating {
+    severity: Severity,
+    score: Option<f32>,
+    vector: Option<String>,
+}
+
+/// Rates every advisory. The Go team's `GO-` records carry no severity, so each takes GitHub's
+/// from the records sharing an id with it, and where those disagree the worst of them: a finding
+/// no record rates stays `Unknown`, which always trips a gate.
+fn ratings(advisories: &BTreeMap<String, Osv>) -> BTreeMap<String, Rating> {
+    let own: BTreeMap<&str, Rating> = advisories
+        .iter()
+        .filter_map(|(id, osv)| {
+            let (severity, score) = severity_from(&osv.severity, osv.database_specific.as_ref());
+            let vector = cvss_vector_in(&osv.severity);
+            (severity != Severity::Unknown).then_some((
+                id.as_str(),
+                Rating {
+                    severity,
+                    score,
+                    vector,
+                },
+            ))
+        })
+        .collect();
+    let mut by_name: BTreeMap<&str, Vec<&Rating>> = BTreeMap::new();
+    for (id, rating) in &own {
+        let aliases = advisories[*id].aliases.iter().flatten();
+        for name in aliases.map(String::as_str).chain([*id]) {
+            by_name.entry(name).or_default().push(rating);
+        }
+    }
+    let mut out = BTreeMap::new();
+    for (id, osv) in advisories {
+        if let Some(rating) = own.get(id.as_str()) {
+            out.insert(id.clone(), rating.clone());
+            continue;
+        }
+        let aliases = osv.aliases.iter().flatten().map(String::as_str);
+        let twins = aliases.chain([id.as_str()]).filter_map(|n| by_name.get(n));
+        let worst = twins.flatten().max_by(|a, b| {
+            let score = |r: &Rating| r.score.unwrap_or(0.0);
+            a.severity
+                .cmp(&b.severity)
+                .then_with(|| score(a).total_cmp(&score(b)))
+                .then_with(|| b.vector.cmp(&a.vector))
+        });
+        if let Some(rating) = worst {
+            out.insert(id.clone(), (*rating).clone());
+        }
+    }
+    out
 }
 
 /// Indexes the module paths of `index` by their lowercase form.
@@ -121,10 +181,12 @@ impl GoDb {
             }
         }
         let folded = folded(&index);
+        let ratings = ratings(&advisories);
         Ok(GoDb {
             index,
             advisories,
             folded,
+            ratings,
         })
     }
 }
@@ -197,10 +259,12 @@ impl GoDb {
             advisories.insert(osv.id.clone(), osv);
         }
         let folded = folded(&index);
+        let ratings = ratings(&advisories);
         Ok(GoDb {
             index,
             advisories,
             folded,
+            ratings,
         })
     }
 }
@@ -261,7 +325,7 @@ pub fn scan_offline(
             };
             // Match on the effective module; classify direct/transitive on the declared one.
             if let Some(finding) =
-                match_module(osv, &eff_path, &installed, &module.path, &direct, repo)
+                match_module(db, osv, &eff_path, &installed, &module.path, &direct, repo)
             {
                 out.push(finding);
             }
@@ -294,7 +358,8 @@ pub fn scan_built(
             let Some(osv) = db.advisories.get(id) else {
                 continue;
             };
-            if let Some(mut finding) = match_module(osv, module, &installed, module, &direct, repo)
+            if let Some(mut finding) =
+                match_module(db, osv, module, &installed, module, &direct, repo)
             {
                 for occurrence in &mut finding.occurrences {
                     if let Occurrence::InRepo {
@@ -316,6 +381,7 @@ pub fn scan_built(
 /// `replace`) as affected at `installed`. `declared_path` is the original require path,
 /// used only to classify direct vs. transitive.
 fn match_module(
+    db: &GoDb,
     osv: &Osv,
     module: &str,
     installed: &Version,
@@ -352,15 +418,16 @@ fn match_module(
         osv::patched_reqs(&osv::safe_intervals(&bare, &parsed), ToString::to_string);
 
     let dependency_kind = dep_kind(direct, declared_path);
+    let rating = db.ratings.get(&osv.id);
 
     Some(VulnFinding {
         advisory_id: osv.id.clone(),
         aliases: osv.aliases.clone().unwrap_or_default(),
         ecosystem: Ecosystem::Go,
         title: osv.summary.clone().unwrap_or_else(|| osv.id.clone()),
-        severity: Severity::Unknown,
-        cvss_score: None,
-        cvss_vector: None,
+        severity: rating.map_or(Severity::Unknown, |r| r.severity),
+        cvss_score: rating.and_then(|r| r.score),
+        cvss_vector: rating.and_then(|r| r.vector.clone()),
         url: Some(go_vuln_url(&osv.id)),
         occurrences: vec![Occurrence::InRepo {
             repo: repo.clone(),
@@ -540,6 +607,9 @@ struct Osv {
     withdrawn: Option<String>,
     #[serde(default)]
     affected: Vec<Affected>,
+    #[serde(default)]
+    severity: Vec<SeverityEntry>,
+    database_specific: Option<DatabaseSpecific>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -633,6 +703,43 @@ mod tests {
         }
     }
 
+    fn record(id: &str, aliases: &[&str], band: Option<&str>, vector: Option<&str>) -> Osv {
+        let text = serde_json::json!({
+            "id": id,
+            "aliases": aliases,
+            "database_specific": {"severity": band},
+            "severity": vector.map_or(Vec::new(), |v| vec![serde_json::json!({"type": "CVSS_V3", "score": v})]),
+        });
+        serde_json::from_value(text).unwrap()
+    }
+
+    #[test]
+    fn a_go_record_takes_the_worst_severity_of_its_twins() {
+        const HIGH: &str = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N";
+        let records = [
+            record("GO-1", &["CVE-1", "GHSA-a"], None, None),
+            record("GHSA-a", &["CVE-1"], Some("MODERATE"), None),
+            // Names the same CVE, and the GO record only through that.
+            record("GHSA-b", &["CVE-1"], Some("HIGH"), Some(HIGH)),
+            // Only GitHub's record names the Go one.
+            record("GO-2", &[], None, None),
+            record("GHSA-c", &["GO-2"], Some("LOW"), None),
+            record("GO-3", &["CVE-3"], None, None),
+        ];
+        let advisories: BTreeMap<String, Osv> =
+            records.into_iter().map(|r| (r.id.clone(), r)).collect();
+        let got = ratings(&advisories);
+        assert_eq!(got["GO-1"].severity, Severity::High);
+        assert_eq!(got["GO-1"].score, Some(7.5));
+        assert_eq!(got["GO-1"].vector.as_deref(), Some(HIGH));
+        assert_eq!(got["GHSA-a"].severity, Severity::Medium, "its own stands");
+        assert_eq!(got["GO-2"].severity, Severity::Low);
+        assert!(
+            !got.contains_key("GO-3"),
+            "nothing rates it: it stays unknown"
+        );
+    }
+
     #[test]
     fn a_lowercased_purl_reaches_the_module_it_stands_for() {
         let index: BTreeMap<String, Vec<String>> = [
@@ -647,6 +754,7 @@ mod tests {
             folded: folded(&index),
             index,
             advisories: BTreeMap::new(),
+            ratings: BTreeMap::new(),
         };
         let named = |name| db.modules_named(name);
         assert_eq!(

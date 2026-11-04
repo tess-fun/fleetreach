@@ -116,6 +116,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Go findings have severities.** They all read `unknown` and so failed every `--fail-on`
+  floor. The offline matcher now reads GitHub's records in the osv.dev export, and a `GO-` record
+  takes the worst band of the records sharing an id with it. A Go finding under the floor no
+  longer fails it. What nothing rates stays `unknown` and still fails, as do all findings from
+  govulncheck or a vuln.go.dev mirror, which carry no severity.
 - A repo scanned from `sbom =` with no lockfile of the same ecosystem errored, because the
   advisory data for what the SBOM held was never loaded.
 

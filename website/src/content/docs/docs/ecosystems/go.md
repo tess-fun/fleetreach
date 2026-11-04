@@ -10,14 +10,19 @@ Go has two modes.
 | | govulncheck | Toolchain-free |
 |---|---|---|
 | Reads | the compiled module | `go.mod` |
-| Advisory data | vuln.go.dev (or `--go-vuln-db file://<mirror>`) | osv.dev `Go` export, `GO-` records only |
+| Advisory data | vuln.go.dev (or `--go-vuln-db file://<mirror>`) | osv.dev `Go` export |
 | Needs | `govulncheck` on `PATH` and `--allow-untrusted-builds` | nothing |
 | Reachability | calls confirmed: `reachable` | module level, `unknown` |
+| Severity | `unknown` | GitHub's band |
 
 When `govulncheck` is not available, or builds are not allowed, the module-level matcher
 reads `go.mod` (including `// indirect` requirements and `replace` directives, and
 pseudo-versions) and matches it against the export `fleetreach db sync` keeps with the
-others. Only `GO-` records count, so the export's GHSA copies are not counted twice.
+others. A `GO-` record and its GHSA twin collapse into one finding.
+
+The Go team's records carry no severity, so a `GO-` record takes the band of the GitHub records
+sharing an id with it, the worst if they disagree. Most of the standard library's have none, and
+stay `unknown`, which fails every `--fail-on` floor.
 
 `govulncheck` compiles the module, so it runs inside the build sandbox (`--build-sandbox`),
 which denies network; a confined scan needs a local `--go-vuln-db` mirror.
@@ -39,19 +44,19 @@ $ fleetreach scan -c ecosystems/go.toml -f packages
 ┌───────┬────────┬────────────┬────────────┬──────────┬──────────┬─────────┬─────────────────────────────────┐
 │ Repos ┆ Direct ┆ Transitive ┆ Advisories ┆ Severity ┆ Fix      ┆ Exploit ┆ Package                         │
 ╞═══════╪════════╪════════════╪════════════╪══════════╪══════════╪═════════╪═════════════════════════════════╡
-│ 1     ┆ 0      ┆ 1          ┆ 23         ┆ unknown  ┆ upstream ┆ -       ┆ golang.org/x/crypto (go)        │
+│ 1     ┆ 0      ┆ 1          ┆ 23         ┆ critical ┆ upstream ┆ -       ┆ golang.org/x/crypto (go)        │
 ├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
-│ 1     ┆ 1      ┆ 0          ┆ 21         ┆ unknown  ┆ manifest ┆ -       ┆ golang.org/x/net (go)           │
+│ 1     ┆ 1      ┆ 0          ┆ 6          ┆ critical ┆ manifest ┆ -       ┆ google.golang.org/grpc (go)     │
 ├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
-│ 1     ┆ 1      ┆ 0          ┆ 6          ┆ unknown  ┆ manifest ┆ -       ┆ google.golang.org/grpc (go)     │
+│ 1     ┆ 1      ┆ 0          ┆ 21         ┆ medium   ┆ manifest ┆ -       ┆ golang.org/x/net (go)           │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 1          ┆ medium   ┆ manifest ┆ -       ┆ github.com/gin-gonic/gin (go)   │
+├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ 1     ┆ 1      ┆ 0          ┆ 1          ┆ medium   ┆ manifest ┆ -       ┆ google.golang.org/protobuf (go) │
 ├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
 │ 1     ┆ 0      ┆ 1          ┆ 2          ┆ unknown  ┆ upstream ┆ -       ┆ golang.org/x/text (go)          │
 ├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
-│ 1     ┆ 1      ┆ 0          ┆ 1          ┆ unknown  ┆ manifest ┆ -       ┆ github.com/gin-gonic/gin (go)   │
-├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
 │ 1     ┆ 0      ┆ 1          ┆ 1          ┆ unknown  ┆ upstream ┆ -       ┆ golang.org/x/sys (go)           │
-├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
-│ 1     ┆ 1      ┆ 0          ┆ 1          ┆ unknown  ┆ manifest ┆ -       ┆ google.golang.org/protobuf (go) │
 └───────┴────────┴────────────┴────────────┴──────────┴──────────┴─────────┴─────────────────────────────────┘
 ```
 <!-- /run -->

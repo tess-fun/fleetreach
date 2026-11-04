@@ -695,8 +695,13 @@ where
 
 /// The record's CVSS vector: the first `CVSS_V3` entry, else the first `CVSS_V4`.
 pub fn cvss_vector_of(osv: &OsvRecord) -> Option<String> {
+    cvss_vector_in(&osv.severity)
+}
+
+/// [`cvss_vector_of`], from a record's `severity[]`.
+pub fn cvss_vector_in(entries: &[SeverityEntry]) -> Option<String> {
     ["CVSS_V3", "CVSS_V4"].iter().find_map(|kind| {
-        osv.severity
+        entries
             .iter()
             .find(|s| s.kind.as_deref() == Some(kind))
             .and_then(|s| s.score.clone())
@@ -707,15 +712,20 @@ pub fn cvss_vector_of(osv: &OsvRecord) -> Option<String> {
 /// (`database_specific.severity`), and take the best CVSS_V3 base score across the record's
 /// `severity[]` vectors (deriving the band from it when no GHSA band is present).
 pub fn default_severity(osv: &OsvRecord) -> (Severity, Option<f32>) {
-    let band = osv
-        .database_specific
-        .as_ref()
+    severity_from(&osv.severity, osv.database_specific.as_ref())
+}
+
+/// [`default_severity`], from the two parts of a record it reads.
+pub fn severity_from(
+    entries: &[SeverityEntry],
+    database_specific: Option<&DatabaseSpecific>,
+) -> (Severity, Option<f32>) {
+    let band = database_specific
         .and_then(|d| d.severity.as_deref())
         .map(band_from_label)
         .unwrap_or(Severity::Unknown);
 
-    let scored: Option<(Severity, f32)> = osv
-        .severity
+    let scored: Option<(Severity, f32)> = entries
         .iter()
         .filter(|s| s.kind.as_deref() == Some("CVSS_V3"))
         .filter_map(|s| cvss::v3::Vector::from_str(s.score.as_deref()?).ok())

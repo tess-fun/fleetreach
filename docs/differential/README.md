@@ -16,6 +16,9 @@ JSON document's purls itself, so a package every format lost would show. Needs D
 `sbom_vs_lockfile.py` scans Go and Rust repos from their lockfiles and from Syft's and Trivy's
 SBOMs of them, and names any finding the lockfiles give that an SBOM's listed packages do not.
 
+`go_severity.py` works each Go finding's severity out again from the export, and compares it
+with what Trivy and Grype say of the same module, version and CVE.
+
 `health_oracle.py` checks `scan --health` warnings and clean answers against each registry by
 another route than fleetreach reads: `npm view`, `go list -m -u -retracted`, PyPI's simple API,
 RubyGems v2, the crates.io API, the Packagist package page, Hex's release endpoint, Maven
