@@ -17,6 +17,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   someone else pushed to. `--close-obsolete` closes requests the plan no longer wants, only
   in repos it scanned.
 - `fix apply --max-prs`, `--canary` and `--stop-after-failures` limit a rollout.
+- `history epss` flags open advisories whose EPSS rose by 0.1 or entered the top 5%, and exits 1
+  on any. Findings now carry `epss_percentile`. Checked by replaying 31 days of real EPSS files
+  against a frozen fleet.
 - `scan --why --all-paths` lists every path into a package, shortest first and capped by
   `--max-paths`. `scan --versions <pkg>` lists each version across the fleet with its repos.
   Both, and plain `--why`, take `-f json`.

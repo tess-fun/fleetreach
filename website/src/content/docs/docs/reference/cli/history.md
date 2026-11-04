@@ -17,6 +17,7 @@ Commands:
   age    Open findings by how long they have been open, oldest first
   sla    Open findings past their `[settings.sla]` deadline; exits 1 on any
   mttr   Mean and median time to fix
+  epss   Open advisories whose EPSS rose sharply; exits 1 on any
   help   Print this message or the help of the given subcommand(s)
 
 Options:
@@ -89,5 +90,24 @@ Options:
   -f, --format <FORMAT>            [default: table] [possible values: table, json]
       --at <AT>                    Measure as of this time (RFC 3339) instead of now
       --by <BY>                    [default: severity] [possible values: severity, ssvc, ecosystem, owner]
+  -h, --help                       Print help
+```
+
+## fleetreach history epss
+
+Open advisories whose EPSS rose sharply; exits 1 on any
+
+```text
+Open advisories whose EPSS rose sharply; exits 1 on any
+
+Usage: fleetreach history epss [OPTIONS] --history-dir <HISTORY_DIR>
+
+Options:
+      --history-dir <HISTORY_DIR>  The directory `scan --history-dir` writes
+  -f, --format <FORMAT>            [default: table] [possible values: table, json]
+      --at <AT>                    Measure as of this time (RFC 3339) instead of now
+      --since <SINCE>              Only runs this recent (`30d`)
+      --rise <RISE>                Flag a rise of at least this much [default: 0.1]
+      --top <TOP>                  Flag an entry into this top share of all scored CVEs [default: 0.05]
   -h, --help                       Print help
 ```

@@ -545,6 +545,7 @@ fn fix_first_ranks_severity_over_blast_radius() {
     kev.exploit = Exploitability {
         kev: true,
         epss: Some(0.9),
+        epss_percentile: None,
     };
 
     let mut r = report(vec![low_wide, crit, kev]);

@@ -922,6 +922,52 @@ fn why_finds_a_package_outside_cargo() {
 }
 
 #[test]
+fn history_epss_flags_a_rise_and_an_entry_into_the_top_share() {
+    let dir = triage_dir("epss-history");
+    let history = dir.join("history");
+    std::fs::create_dir_all(&history).unwrap();
+    let fleet = cfg("fleet-vuln.toml");
+    let database = db();
+    let scan_with = |day: i64, score: &str, percentile: &str| {
+        let csv = dir.join("epss.csv");
+        let row = format!("cve,epss,percentile\nCVE-2099-0001,{score},{percentile}\n");
+        std::fs::write(&csv, row).unwrap();
+        let args = [
+            "scan",
+            "-q",
+            "-c",
+            &fleet,
+            "--db",
+            &database,
+            "--epss-file",
+            csv.to_str().unwrap(),
+            "--history-dir",
+            history.to_str().unwrap(),
+        ];
+        let at = (1_790_000_000 + day * 86_400).to_string();
+        run_env(&args, &[("SOURCE_DATE_EPOCH", std::ffi::OsStr::new(&at))]);
+    };
+    let jumps = |extra: &[&str]| {
+        let hist = history.to_str().unwrap();
+        let base = ["history", "epss", "--history-dir", hist, "-f", "json"];
+        let out = run(&[&base[..], extra].concat());
+        let list: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+        (code(&out), list)
+    };
+
+    scan_with(0, "0.10", "0.80");
+    assert_eq!(jumps(&[]).0, 0, "one score has no rise");
+    scan_with(1, "0.15", "0.90");
+    assert_eq!(jumps(&[]).0, 0, "a small rise stays below the bar");
+    scan_with(2, "0.25", "0.96");
+    let (exit, list) = jumps(&[]);
+    assert_eq!(exit, 1);
+    assert_eq!(list[0]["advisory"], "RUSTSEC-2099-0001");
+    assert_eq!(list[0]["reasons"], serde_json::json!(["rise", "top"]));
+    assert_eq!(list[0]["repos"][0], "app");
+}
+
+#[test]
 fn why_lists_every_path_as_json_and_versions_lists_the_fleet() {
     let fleet = cfg("fleet-npm.toml");
     let database = db();

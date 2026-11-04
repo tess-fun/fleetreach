@@ -267,6 +267,9 @@ pub struct Exploitability {
     /// EPSS probability of exploitation in the next 30 days (0.0–1.0).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub epss: Option<f32>,
+    /// Where that score ranks among all scored CVEs (0.0–1.0).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub epss_percentile: Option<f32>,
 }
 
 fn is_false(value: &bool) -> bool {

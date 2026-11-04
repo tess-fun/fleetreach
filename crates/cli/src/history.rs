@@ -810,6 +810,97 @@ pub fn mttr(history: &History, by: GroupBy) -> Vec<Mttr> {
 /// one, otherwise its osv.dev page.
 pub struct AdvisoryLinks(BTreeMap<String, String>);
 
+/// A score's rise that is worth a look, for `history epss`.
+#[derive(Debug, Clone, Copy)]
+pub struct EpssRule {
+    /// A rise of at least this much.
+    pub rise: f32,
+    /// Or an entry into the top share of all scored CVEs (`0.05` for the top 5%).
+    pub top: f32,
+}
+
+/// An open advisory whose EPSS rose over the runs looked at.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct EpssJump {
+    pub advisory: String,
+    pub from: f32,
+    pub to: f32,
+    pub from_at: String,
+    pub to_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub percentile: Option<f32>,
+    /// What set it off: `rise`, `top`, or both.
+    pub reasons: Vec<&'static str>,
+    pub repos: Vec<String>,
+}
+
+/// Each advisory open in the newest run, compared with the first score the runs since `since`
+/// hold for it. Comparing with the first and not the last run catches a slow climb. A run
+/// without EPSS data says nothing either way, and an advisory seen with a score once has no
+/// rise to report.
+pub fn epss_jumps(
+    history: &History,
+    rule: EpssRule,
+    since: Option<OffsetDateTime>,
+) -> Vec<EpssJump> {
+    let Some(newest) = history.snapshots.last() else {
+        return Vec::new();
+    };
+    let cutoff =
+        |s: &&Snapshot| since.is_none_or(|t| parse_time(&s.run.at).is_some_and(|at| at >= t));
+    let mut jumps: Vec<EpssJump> = newest
+        .report
+        .vulnerabilities
+        .iter()
+        .filter_map(|finding| {
+            let scored = history.snapshots.iter().filter(cutoff).filter_map(|s| {
+                let same = |v: &&fleetreach_core::VulnFinding| v.advisory_id == finding.advisory_id;
+                let then = s.report.vulnerabilities.iter().find(same)?;
+                Some((s.run.at.as_str(), then.exploit))
+            });
+            let scored: Vec<_> = scored
+                .filter_map(|(at, e)| Some((at, e.epss?, e.epss_percentile)))
+                .collect();
+            let (first, last) = (scored.first()?, scored.last()?);
+            let top = 1.0 - rule.top;
+            let mut reasons = Vec::new();
+            if last.1 - first.1 >= rule.rise {
+                reasons.push("rise");
+            }
+            if last.2.is_some_and(|p| p >= top) && first.2.is_some_and(|p| p < top) {
+                reasons.push("top");
+            }
+            if reasons.is_empty() {
+                return None;
+            }
+            let repos: BTreeSet<String> = finding
+                .occurrences
+                .iter()
+                .filter_map(|o| match o {
+                    Occurrence::InRepo { repo, .. } => Some(repo.0.clone()),
+                    Occurrence::Toolchain { .. } => None,
+                })
+                .collect();
+            Some(EpssJump {
+                advisory: finding.advisory_id.clone(),
+                from: first.1,
+                to: last.1,
+                from_at: first.0.to_string(),
+                to_at: last.0.to_string(),
+                percentile: last.2,
+                reasons,
+                repos: repos.into_iter().collect(),
+            })
+        })
+        .collect();
+    jumps.sort_by(|a, b| {
+        (b.to - b.from)
+            .total_cmp(&(a.to - a.from))
+            .then_with(|| a.advisory.cmp(&b.advisory))
+    });
+    jumps
+}
+
 impl AdvisoryLinks {
     pub fn new(history: &History) -> AdvisoryLinks {
         let mut urls = BTreeMap::new();

@@ -29,6 +29,8 @@ pub struct Enrichment {
     pub kev: BTreeSet<String>,
     /// CVE → EPSS probability (0.0–1.0).
     pub epss: BTreeMap<String, f32>,
+    /// CVE → EPSS percentile (0.0–1.0).
+    pub epss_percentile: BTreeMap<String, f32>,
     /// CVE → CVSS base score (0.0–10.0) recovered from NVD, used to backfill the
     /// severity *and* the numeric score of advisories that carry no CVSS of their
     /// own. Empty on the offline (`*_file`) path.
@@ -42,9 +44,11 @@ impl Enrichment {
     /// Requires the `network` feature; otherwise use [`from_files`](Self::from_files).
     #[cfg(feature = "network")]
     pub fn fetch(cves: &[String], backfill_cves: &[String]) -> Result<Self, String> {
+        let (epss, epss_percentile) = net::fetch_epss(cves)?;
         Ok(Self {
             kev: parse_kev(&net::http_get(net::KEV_URL)?)?,
-            epss: net::fetch_epss(cves)?,
+            epss,
+            epss_percentile,
             cvss: net::fetch_nvd_scores(backfill_cves),
         })
     }
@@ -57,13 +61,14 @@ impl Enrichment {
             Some(p) => parse_kev(&read(p)?)?,
             None => BTreeSet::new(),
         };
-        let epss = match epss_path {
+        let (epss, epss_percentile) = match epss_path {
             Some(p) => parse_epss_csv(&read(p)?),
-            None => BTreeMap::new(),
+            None => (BTreeMap::new(), BTreeMap::new()),
         };
         Ok(Self {
             kev,
             epss,
+            epss_percentile,
             cvss: BTreeMap::new(),
         })
     }
@@ -84,6 +89,10 @@ impl Enrichment {
             finding.exploit.epss = cves
                 .iter()
                 .filter_map(|c| self.epss.get(*c).copied())
+                .fold(None, |acc, v| Some(acc.map_or(v, |a: f32| a.max(v))));
+            finding.exploit.epss_percentile = cves
+                .iter()
+                .filter_map(|c| self.epss_percentile.get(*c).copied())
                 .fold(None, |acc, v| Some(acc.map_or(v, |a: f32| a.max(v))));
 
             if finding.severity == Severity::Unknown {
@@ -172,8 +181,9 @@ pub(crate) fn is_valid_cve(s: &str) -> bool {
 }
 
 /// Parse the bulk EPSS CSV (`cve,epss,percentile`), skipping comment/header lines.
-fn parse_epss_csv(body: &str) -> BTreeMap<String, f32> {
+fn parse_epss_csv(body: &str) -> (BTreeMap<String, f32>, BTreeMap<String, f32>) {
     let mut out = BTreeMap::new();
+    let mut percentiles = BTreeMap::new();
     for line in body.lines() {
         if line.starts_with('#') || line.starts_with("cve") {
             continue;
@@ -183,9 +193,12 @@ fn parse_epss_csv(body: &str) -> BTreeMap<String, f32> {
             if let Ok(score) = score.trim().parse::<f32>() {
                 out.insert(cve.trim().to_string(), score);
             }
+            if let Some(Ok(percentile)) = parts.next().map(|p| p.trim().parse::<f32>()) {
+                percentiles.insert(cve.trim().to_string(), percentile);
+            }
         }
     }
-    out
+    (out, percentiles)
 }
 
 fn read(path: &Path) -> Result<String, String> {
@@ -245,8 +258,10 @@ mod net {
         }
     }
 
-    pub(super) fn fetch_epss(cves: &[String]) -> Result<BTreeMap<String, f32>, String> {
-        let mut out = BTreeMap::new();
+    pub(super) fn fetch_epss(
+        cves: &[String],
+    ) -> Result<(BTreeMap<String, f32>, BTreeMap<String, f32>), String> {
+        let mut out = (BTreeMap::new(), BTreeMap::new());
         let cve_ids: Vec<&str> = cves
             .iter()
             .filter(|c| super::is_valid_cve(c))
@@ -263,7 +278,10 @@ mod net {
         Ok(out)
     }
 
-    fn merge_epss_json(body: &str, out: &mut BTreeMap<String, f32>) -> Result<(), String> {
+    fn merge_epss_json(
+        body: &str,
+        out: &mut (BTreeMap<String, f32>, BTreeMap<String, f32>),
+    ) -> Result<(), String> {
         let value: serde_json::Value =
             serde_json::from_str(body).map_err(|e| format!("EPSS JSON: {e}"))?;
         if let Some(rows) = value.get("data").and_then(|d| d.as_array()) {
@@ -273,7 +291,11 @@ mod net {
                     row.get("epss").and_then(|s| s.as_str()),
                 ) {
                     if let Ok(score) = score.parse::<f32>() {
-                        out.insert(cve.to_string(), score);
+                        out.0.insert(cve.to_string(), score);
+                    }
+                    let percentile = row.get("percentile").and_then(|s| s.as_str());
+                    if let Some(Ok(percentile)) = percentile.map(str::parse::<f32>) {
+                        out.1.insert(cve.to_string(), percentile);
                     }
                 }
             }

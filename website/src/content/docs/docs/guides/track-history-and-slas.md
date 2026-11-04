@@ -37,6 +37,7 @@ another time.
 | `age` | Open findings, oldest first, with the date first seen. |
 | `sla` | Open findings past their deadline, most overdue first. Exits `1` on a breach, `2` with no policy. |
 | `mttr` | Mean and median days from first seen to fixed, per group. |
+| `epss` | Open advisories whose EPSS rose by `--rise` (default 0.1) or entered the top `--top` share of scored CVEs (default 0.05), from the first score in `--since` to the newest. Exits 1 on any. It needs runs made with `--enrich` or `--epss-file`. |
 
 The demo fleet has two recorded runs, on 1 September and 15 October, measured here as of
 1 November:

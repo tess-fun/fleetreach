@@ -26,6 +26,8 @@ pub enum HistoryCommand {
     Sla(SlaArgs),
     /// Mean and median time to fix.
     Mttr(MttrArgs),
+    /// Open advisories whose EPSS rose sharply; exits 1 on any.
+    Epss(EpssArgs),
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -83,12 +85,28 @@ pub struct MttrArgs {
     by: GroupBy,
 }
 
+#[derive(Args)]
+pub struct EpssArgs {
+    #[command(flatten)]
+    common: Common,
+    /// Only runs this recent (`30d`)
+    #[arg(long)]
+    since: Option<String>,
+    /// Flag a rise of at least this much
+    #[arg(long, default_value_t = 0.1)]
+    rise: f32,
+    /// Flag an entry into this top share of all scored CVEs
+    #[arg(long, default_value_t = 0.05)]
+    top: f32,
+}
+
 pub fn run_history(command: HistoryCommand) -> u8 {
     match command {
         HistoryCommand::Trend(a) => run_trend(&a),
         HistoryCommand::Age(a) => run_age(&a),
         HistoryCommand::Sla(a) => run_sla(&a),
         HistoryCommand::Mttr(a) => run_mttr(&a),
+        HistoryCommand::Epss(a) => run_epss(&a),
     }
 }
 
@@ -287,6 +305,43 @@ fn run_sla(args: &SlaArgs) -> u8 {
     println!("{t}");
     eprintln!("{} finding(s) past their SLA", breaches.len());
     code
+}
+
+fn run_epss(args: &EpssArgs) -> u8 {
+    let (h, at) = match open(&args.common) {
+        Ok(x) => x,
+        Err(e) => return fail(&e),
+    };
+    let since = match since_cutoff(args.since.as_deref(), at) {
+        Ok(s) => s,
+        Err(e) => return fail(&e),
+    };
+    let rule = history::EpssRule {
+        rise: args.rise,
+        top: args.top,
+    };
+    let jumps = history::epss_jumps(&h, rule, since);
+    let printed = if let HistoryFormat::Json = args.common.format {
+        print_json(&jumps)
+    } else {
+        let mut t = table(&["Advisory", "From", "To", "Percentile", "Why", "Repos"]);
+        for j in &jumps {
+            t.add_row(vec![
+                sanitize_cell(&j.advisory),
+                format!("{:.3}", j.from),
+                format!("{:.3}", j.to),
+                j.percentile.map_or("-".to_string(), |p| format!("{p:.3}")),
+                j.reasons.join(", "),
+                j.repos.len().to_string(),
+            ]);
+        }
+        println!("{t}");
+        0
+    };
+    if printed == 0 && !jumps.is_empty() {
+        return 1;
+    }
+    printed
 }
 
 fn run_mttr(args: &MttrArgs) -> u8 {

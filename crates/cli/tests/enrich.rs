@@ -59,6 +59,7 @@ fn enrich_is_ecosystem_agnostic_keying_on_cve() {
     let enrichment = Enrichment {
         kev: BTreeSet::from(["CVE-2099-0001".to_string()]),
         epss: BTreeMap::from([("CVE-2099-0001".to_string(), 0.42)]),
+        epss_percentile: BTreeMap::new(),
         cvss: BTreeMap::from([("CVE-2022-0778".to_string(), 7.5)]),
     };
     let mut findings = vec![
@@ -123,6 +124,7 @@ fn backfill_fills_unknown_severity_and_score_from_nvd_without_downgrading() {
     let enrichment = Enrichment {
         kev: BTreeSet::new(),
         epss: BTreeMap::new(),
+        epss_percentile: BTreeMap::new(),
         cvss: BTreeMap::from([
             ("CVE-2022-0778".to_string(), 7.5),
             ("CVE-2099-0002".to_string(), 9.5),
@@ -167,6 +169,7 @@ fn backfill_takes_worst_score_across_aliases() {
     let enrichment = Enrichment {
         kev: BTreeSet::new(),
         epss: BTreeMap::new(),
+        epss_percentile: BTreeMap::new(),
         cvss: BTreeMap::from([
             ("CVE-2099-0001".to_string(), 3.5),
             ("CVE-2099-0002".to_string(), 9.5),
@@ -226,6 +229,7 @@ fn summary_max_severity_is_refreshed_after_enrichment_backfill() {
     let enrichment = Enrichment {
         kev: BTreeSet::new(),
         epss: BTreeMap::new(),
+        epss_percentile: BTreeMap::new(),
         cvss: BTreeMap::from([("CVE-2022-0778".to_string(), 9.8)]),
     };
     enrichment.apply(&mut report.vulnerabilities);
@@ -248,7 +252,11 @@ fn summary_max_severity_is_refreshed_after_enrichment_backfill() {
 fn rank_puts_kev_first_then_epss_descending() {
     let with = |id: &str, kev: bool, epss: Option<f32>| {
         let mut v = vuln(id, "CVE-0000-0000", Severity::Low);
-        v.exploit = Exploitability { kev, epss };
+        v.exploit = Exploitability {
+            kev,
+            epss,
+            epss_percentile: None,
+        };
         v
     };
     let mut findings = vec![
