@@ -922,6 +922,24 @@ fn why_finds_a_package_outside_cargo() {
 }
 
 #[test]
+fn sarif_points_at_the_lockfile_line_of_the_package() {
+    let fleet = cfg("fleet-vuln.toml");
+    let out = run(&["scan", "-q", "-c", &fleet, "--db", &db(), "-f", "sarif"]);
+    let sarif: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    let results = sarif["runs"][0]["results"].as_array().unwrap();
+    let vuln = results
+        .iter()
+        .find(|r| r["ruleId"] == "RUSTSEC-2099-0001")
+        .unwrap();
+    let line = vuln["locations"][0]["physicalLocation"]["region"]["startLine"]
+        .as_u64()
+        .unwrap() as usize;
+    let lock = manifest().join("tests/fixtures/repos/repo-vuln/Cargo.lock");
+    let text = std::fs::read_to_string(lock).unwrap();
+    assert_eq!(text.lines().nth(line - 1), Some("name = \"fixturevuln\""));
+}
+
+#[test]
 fn history_epss_flags_a_rise_and_an_entry_into_the_top_share() {
     let dir = triage_dir("epss-history");
     let history = dir.join("history");

@@ -63,10 +63,13 @@ Java and GitHub Actions), the summary line and the first rows look like this:
 <!-- run: fleetreach scan 2>&1 | head -n 14 -->
 ```console
 $ fleetreach scan 2>&1 | head -n 14
-note: 1 source(s) scanned with incomplete coverage (findings outside what was read were never matched):
+note: no OSV export for crates.io; run `fleetreach db sync` (network build) or pass --osv-dir <dir> laid out as <dir>/<Ecosystem>/all.zip
+note: 3 source(s) scanned with incomplete coverage (findings outside what was read were never matched):
+  payments-api: Cargo.lock [partial] no crates.io export, so advisories RustSec does not carry were not matched; run `fleetreach db sync`, or pass --osv-dir=<dir> or --crates-vuln-db=file://<path>
+  ledger-svc: Cargo.lock [partial] no crates.io export, so advisories RustSec does not carry were not matched; run `fleetreach db sync`, or pass --osv-dir=<dir> or --crates-vuln-db=file://<path>
   data-pipeline: requirements.txt [partial] every requirement is pinned, but nothing shows the file lists the full transitive set (no pip-compile or uv header, `# via` annotations or hashes); dependencies of these packages may be missing
 note: SSVC decisions not computed: no exploitation data: run with --enrich, or --kev-file offline
-Scanned 9 repo(s) (0 errored): 211 vulns, 1 warning(s); max severity critical. Incomplete coverage: 1 source(s) in 1 repo(s).
+Scanned 9 repo(s) (0 errored): 211 vulns, 1 warning(s); max severity critical. Incomplete coverage: 3 source(s) in 3 repo(s).
 ┌───────────────┬─────────────────────┬──────────────────────────────────────────────────────────────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Severity      ┆ Advisory            ┆ Title                                                                    ┆ Locations                                                                                                              │
 ╞═══════════════╪═════════════════════╪══════════════════════════════════════════════════════════════════════════╪════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╡
@@ -74,9 +77,6 @@ Scanned 9 repo(s) (0 errored): 211 vulns, 1 warning(s); max severity critical. I
 ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
 │ critical      ┆ GHSA-6q48-6c7w-9gw2 ┆ certifi bundles emSign root CAs with compromise…                         ┆ data-pipeline/certifi@2022.9.24 → 2026.10.18 (direct)                                                                  │
 ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
-│ critical 9.0  ┆ GHSA-7rjr-3q55-vv33 ┆ Incomplete fix for Apache Log4j vulnerability                            ┆ partner-api/org.apache.logging.log4j:log4j-core@2.14.1 → 2.16.0 (direct)                                               │
-├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
-│ critical 10.0 ┆ GHSA-jfh8-c2jp-5v3q ┆ Remote code injection in Log4j                                           ┆ partner-api/org.apache.logging.log4j:log4j-core@2.14.1 → 2.15.0 (direct)                                               │
 ```
 <!-- /run -->
 

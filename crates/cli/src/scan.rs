@@ -1461,8 +1461,22 @@ fn render(
                 .iter()
                 .map(|r| (r.id.0.as_str(), r.path.as_path()))
                 .collect();
-            let locate = |repo: &fleetreach_core::RepoId, ecosystem: Ecosystem, package: &str| {
+            let file = |repo: &fleetreach_core::RepoId, ecosystem: Ecosystem, package: &str| {
                 sarif_source(paths.get(repo.0.as_str()).copied(), ecosystem, package)
+            };
+            // Every result in a repo reads the same lockfile.
+            let texts = std::cell::RefCell::new(BTreeMap::<PathBuf, Option<String>>::new());
+            let line = |repo: &fleetreach_core::RepoId, uri: &str, package: &str, version: &str| {
+                let path = paths.get(repo.0.as_str())?.join(uri);
+                let mut texts = texts.borrow_mut();
+                let text = texts
+                    .entry(path)
+                    .or_insert_with_key(|p| std::fs::read_to_string(p).ok());
+                crate::lockline::entry_line(uri, text.as_deref()?, package, version)
+            };
+            let locate = report::Locate {
+                file: &file,
+                line: &line,
             };
             match report::to_sarif_located(fleet_report, &assertions, &locate) {
                 Ok(sarif) => sarif,

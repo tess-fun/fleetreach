@@ -54,6 +54,9 @@ $ fleetreach scan -f sarif | jq '.runs[0].results[0]'
       "physicalLocation": {
         "artifactLocation": {
           "uri": "Gemfile.lock"
+        },
+        "region": {
+          "startLine": 5
         }
       }
     }
@@ -117,10 +120,13 @@ exploitation data (`--enrich`):
 <!-- run: fleetreach scan --fail-on critical >/dev/null; echo "exit $?" -->
 ```console
 $ fleetreach scan --fail-on critical >/dev/null; echo "exit $?"
-note: 1 source(s) scanned with incomplete coverage (findings outside what was read were never matched):
+note: no OSV export for crates.io; run `fleetreach db sync` (network build) or pass --osv-dir <dir> laid out as <dir>/<Ecosystem>/all.zip
+note: 3 source(s) scanned with incomplete coverage (findings outside what was read were never matched):
+  payments-api: Cargo.lock [partial] no crates.io export, so advisories RustSec does not carry were not matched; run `fleetreach db sync`, or pass --osv-dir=<dir> or --crates-vuln-db=file://<path>
+  ledger-svc: Cargo.lock [partial] no crates.io export, so advisories RustSec does not carry were not matched; run `fleetreach db sync`, or pass --osv-dir=<dir> or --crates-vuln-db=file://<path>
   data-pipeline: requirements.txt [partial] every requirement is pinned, but nothing shows the file lists the full transitive set (no pip-compile or uv header, `# via` annotations or hashes); dependencies of these packages may be missing
 note: SSVC decisions not computed: no exploitation data: run with --enrich, or --kev-file offline
-Scanned 9 repo(s) (0 errored): 211 vulns, 1 warning(s); max severity critical. Incomplete coverage: 1 source(s) in 1 repo(s).
+Scanned 9 repo(s) (0 errored): 211 vulns, 1 warning(s); max severity critical. Incomplete coverage: 3 source(s) in 3 repo(s).
 exit 1
 ```
 <!-- /run -->

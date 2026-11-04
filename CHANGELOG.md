@@ -17,6 +17,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   someone else pushed to. `--close-obsolete` closes requests the plan no longer wants, only
   in repos it scanned.
 - `fix apply --max-prs`, `--canary` and `--stop-after-failures` limit a rollout.
+- SARIF results point at the package's line in its lockfile, and carry the dependency chain as
+  `codeFlows`. A package whose line cannot be found keeps a file-level location. Checked on 30
+  repos and 600 real lockfiles: the output passes the SARIF 2.1.0 schema, and every line named
+  holds its package.
 - `history epss` flags open advisories whose EPSS rose by 0.1 or entered the top 5%, and exits 1
   on any. Findings now carry `epss_percentile`. Checked by replaying 31 days of real EPSS files
   against a frozen fleet.

@@ -258,9 +258,10 @@ mod net {
         }
     }
 
-    pub(super) fn fetch_epss(
-        cves: &[String],
-    ) -> Result<(BTreeMap<String, f32>, BTreeMap<String, f32>), String> {
+    /// EPSS scores and percentiles, by CVE.
+    type Scores = (BTreeMap<String, f32>, BTreeMap<String, f32>);
+
+    pub(super) fn fetch_epss(cves: &[String]) -> Result<Scores, String> {
         let mut out = (BTreeMap::new(), BTreeMap::new());
         let cve_ids: Vec<&str> = cves
             .iter()
@@ -278,10 +279,7 @@ mod net {
         Ok(out)
     }
 
-    fn merge_epss_json(
-        body: &str,
-        out: &mut (BTreeMap<String, f32>, BTreeMap<String, f32>),
-    ) -> Result<(), String> {
+    fn merge_epss_json(body: &str, out: &mut Scores) -> Result<(), String> {
         let value: serde_json::Value =
             serde_json::from_str(body).map_err(|e| format!("EPSS JSON: {e}"))?;
         if let Some(rows) = value.get("data").and_then(|d| d.as_array()) {

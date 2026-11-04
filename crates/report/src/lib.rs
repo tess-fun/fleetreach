@@ -93,9 +93,21 @@ pub fn to_sarif(
     report: &FleetReport,
     approved: &[HumanAssertion],
 ) -> Result<String, serde_json::Error> {
-    to_sarif_located(report, approved, &|_, ecosystem, _| {
-        default_source(ecosystem).to_string()
-    })
+    let locate = Locate {
+        file: &|_, ecosystem, _| default_source(ecosystem).to_string(),
+        line: &|_, _, _, _| None,
+    };
+    to_sarif_located(report, approved, &locate)
+}
+
+/// Where a SARIF result points.
+pub struct Locate<'a> {
+    /// `(repo, ecosystem, package)`: the source file the package was read from, relative to the
+    /// repo root.
+    pub file: &'a dyn Fn(&RepoId, Ecosystem, &str) -> String,
+    /// `(repo, file, package, version)`: the line of the package's entry in that file. The
+    /// version is empty for a package met on a chain.
+    pub line: &'a dyn Fn(&RepoId, &str, &str, &str) -> Option<u32>,
 }
 
 /// The file, relative to the repo root, that an ecosystem is usually read from: where a
@@ -121,12 +133,11 @@ pub fn default_source(ecosystem: Ecosystem) -> &'static str {
     }
 }
 
-/// [`to_sarif`] with each result located by `locate(repo, ecosystem, package)`: the source
-/// file the package was read from, relative to the repo root.
+/// [`to_sarif`] with each result located by `locate`.
 pub fn to_sarif_located(
     report: &FleetReport,
     approved: &[HumanAssertion],
-    locate: &dyn Fn(&RepoId, Ecosystem, &str) -> String,
+    locate: &Locate,
 ) -> Result<String, serde_json::Error> {
     let mut rules = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
@@ -313,6 +324,9 @@ struct SarifResult {
     level: &'static str,
     message: SarifText,
     locations: [SarifLocation; 1],
+    /// The dependency chain into the package, one step per package after the project.
+    #[serde(rename = "codeFlows", skip_serializing_if = "Vec::is_empty")]
+    code_flows: Vec<SarifCodeFlow>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     suppressions: Vec<SarifSuppression>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -363,6 +377,37 @@ struct SarifLocation {
 struct SarifPhysical {
     #[serde(rename = "artifactLocation")]
     artifact_location: SarifArtifact,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    region: Option<SarifRegion>,
+}
+
+#[derive(Serialize)]
+struct SarifRegion {
+    #[serde(rename = "startLine")]
+    start_line: u32,
+}
+
+#[derive(Serialize)]
+struct SarifCodeFlow {
+    #[serde(rename = "threadFlows")]
+    thread_flows: [SarifThreadFlow; 1],
+}
+
+#[derive(Serialize)]
+struct SarifThreadFlow {
+    locations: Vec<SarifFlowStep>,
+}
+
+#[derive(Serialize)]
+struct SarifFlowStep {
+    location: SarifStepLocation,
+}
+
+#[derive(Serialize)]
+struct SarifStepLocation {
+    #[serde(rename = "physicalLocation")]
+    physical_location: SarifPhysical,
+    message: SarifText,
 }
 
 #[derive(Serialize)]
@@ -393,7 +438,8 @@ fn human_sarif_result(a: &HumanAssertion) -> SarifResult {
                 a.package, a.version
             ),
         },
-        locations: [location("Cargo.lock".to_string())],
+        locations: [location("Cargo.lock".to_string(), None)],
+        code_flows: Vec::new(),
         suppressions: vec![SarifSuppression {
             kind: "external",
             justification: format!("VEX not_affected: {reason}; approved_by {approver}"),
@@ -409,12 +455,38 @@ fn warn_rule_id(w: &WarnFinding) -> String {
         .unwrap_or_else(|| format!("{:?}", w.kind).to_lowercase())
 }
 
-fn location(uri: String) -> SarifLocation {
-    SarifLocation {
-        physical_location: SarifPhysical {
-            artifact_location: SarifArtifact { uri },
-        },
+fn physical(uri: String, line: Option<u32>) -> SarifPhysical {
+    SarifPhysical {
+        artifact_location: SarifArtifact { uri },
+        region: line.map(|start_line| SarifRegion { start_line }),
     }
+}
+
+fn location(uri: String, line: Option<u32>) -> SarifLocation {
+    SarifLocation {
+        physical_location: physical(uri, line),
+    }
+}
+
+/// `chain` (`[project, ..., package]`) as a code flow through `uri`, when it has a middle.
+fn code_flows(repo: &RepoId, uri: &str, chain: &[String], locate: &Locate) -> Vec<SarifCodeFlow> {
+    if chain.len() <= 2 {
+        return Vec::new();
+    }
+    let locations = chain[1..]
+        .iter()
+        .map(|package| SarifFlowStep {
+            location: SarifStepLocation {
+                physical_location: physical(uri.to_string(), (locate.line)(repo, uri, package, "")),
+                message: SarifText {
+                    text: package.clone(),
+                },
+            },
+        })
+        .collect();
+    vec![SarifCodeFlow {
+        thread_flows: [SarifThreadFlow { locations }],
+    }]
 }
 
 fn sarif_result(
@@ -424,9 +496,9 @@ fn sarif_result(
     ecosystem: Ecosystem,
     occ: &Occurrence,
     suppression: Option<String>,
-    locate: &dyn Fn(&RepoId, Ecosystem, &str) -> String,
+    locate: &Locate,
 ) -> SarifResult {
-    let (text, uri) = match occ {
+    let (text, uri, line, flows) = match occ {
         Occurrence::InRepo {
             repo,
             package,
@@ -446,9 +518,14 @@ fn sarif_result(
             } else {
                 String::new()
             };
+            let uri = (locate.file)(repo, ecosystem, package);
+            let line = (locate.line)(repo, &uri, package, &installed.to_string());
+            let flows = code_flows(repo, &uri, dependency_path, locate);
             (
                 format!("{title} — {package} {installed} in {repo}{via}{fix}"),
-                locate(repo, ecosystem, package),
+                uri,
+                line,
+                flows,
             )
         }
         Occurrence::Toolchain {
@@ -462,6 +539,8 @@ fn sarif_result(
                     .unwrap_or_default()
             ),
             "rust-toolchain.toml".to_string(),
+            None,
+            Vec::new(),
         ),
     };
     let properties = match occ {
@@ -488,7 +567,8 @@ fn sarif_result(
         rule_id,
         level,
         message: SarifText { text },
-        locations: [location(uri)],
+        locations: [location(uri, line)],
+        code_flows: flows,
         suppressions: suppression
             .map(|justification| SarifSuppression {
                 kind: "external",
