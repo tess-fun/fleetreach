@@ -21,5 +21,8 @@ Options:
       --fail-on <FAIL_ON>  fail if any NEW vuln is at/above this severity (Unknown always counts) [default: low] [possible values: low, medium, high, critical]
       --fail-on-warnings   also fail if a NEW supply-chain warning appeared
       --exit-zero          always exit 0 (report-only; never gate on new findings)
+      --base <REF>         Attribute each new finding to the lockfile and manifest lines changed since the merge base with this git ref, and gate only on what the change brought in
+      --checkout <DIR>     The git checkout `--base` reads [default: .]
+      --repo <ID>          The repo id of that checkout, when the reports cover several repos
   -h, --help               Print help
 ```

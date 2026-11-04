@@ -7,6 +7,7 @@
 //! so `main.rs` is a thin shell that just parses and dispatches.
 
 pub mod assemble;
+pub mod attribute;
 pub mod cli;
 pub mod config;
 pub mod crosscheck;

@@ -4,6 +4,9 @@
 //! *new* findings from a live scan; `diff` is pure (no scanning, no DB, no network),
 //! works off two JSON files, and reports fixed + still-open too.
 //!
+//! With `--base <ref>` the new findings go per occurrence and git says which this change
+//! brought in; see [`crate::attribute`]. One the merge base already had no longer gates.
+//!
 //! Exit code: `0` clean (no gating-new findings), `1` a new finding tripped the
 //! gate, `2` a file could not be read or parsed. `--exit-zero` forces `0` for a
 //! report-only run.
@@ -16,7 +19,8 @@ use clap::{Parser, ValueEnum};
 use fleetreach_core::FleetReport;
 use fleetreach_report as report;
 
-use crate::cli::{fail, SeverityArg};
+use crate::attribute;
+use crate::cli::{fail, usage_fail, SeverityArg};
 
 #[derive(Parser)]
 pub struct DiffArgs {
@@ -37,6 +41,16 @@ pub struct DiffArgs {
     fail_on_warnings: bool,
     #[arg(long, help = "always exit 0 (report-only; never gate on new findings)")]
     exit_zero: bool,
+    /// Attribute each new finding to the lockfile and manifest lines changed since the merge
+    /// base with this git ref, and gate only on what the change brought in
+    #[arg(long, value_name = "REF")]
+    base: Option<String>,
+    /// The git checkout `--base` reads
+    #[arg(long, value_name = "DIR", default_value = ".", requires = "base")]
+    checkout: PathBuf,
+    /// The repo id of that checkout, when the reports cover several repos
+    #[arg(long, value_name = "ID", requires = "base")]
+    repo: Option<String>,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -57,8 +71,30 @@ pub fn run_diff(args: DiffArgs) -> u8 {
     };
 
     let diff = report::diff_reports(&baseline, &current);
+    let attributed = match &args.base {
+        Some(base) => {
+            let mut findings = attribute::new_occurrences(&baseline, &current);
+            let repo = match args.repo.clone() {
+                Some(repo) => Some(repo),
+                None => match attribute::single_repo(&findings) {
+                    Ok(repo) => repo,
+                    Err(e) => return usage_fail(&e),
+                },
+            };
+            let placed = attribute::Checkout::open(&args.checkout, base)
+                .and_then(|checkout| attribute::place(&checkout, repo.as_deref(), &mut findings));
+            if let Err(e) = placed {
+                return fail(&e);
+            }
+            findings.sort_by(|a, b| {
+                (a.origin, &a.advisory_id, &a.package).cmp(&(b.origin, &b.advisory_id, &b.package))
+            });
+            Some(findings)
+        }
+        None => None,
+    };
     match args.format {
-        DiffFormat::Json => match report::to_diff_json(&diff) {
+        DiffFormat::Json => match to_json(&diff, attributed.as_deref()) {
             Ok(json) => println!("{json}"),
             Err(e) => return fail(&format!("serializing diff: {e}")),
         },
@@ -67,13 +103,75 @@ pub fn run_diff(args: DiffArgs) -> u8 {
                 "{}",
                 report::to_diff_table(&diff, std::io::stdout().is_terminal())
             );
+            if let Some(findings) = &attributed {
+                print!("{}", attribution_text(findings));
+            }
         }
     }
 
     if args.exit_zero {
         return 0;
     }
-    u8::from(diff.regressions(args.fail_on.into(), args.fail_on_warnings) > 0)
+    let (floor, warnings) = (args.fail_on.into(), args.fail_on_warnings);
+    let failed = match &attributed {
+        Some(findings) => findings.iter().any(|f| f.gates(floor, warnings)),
+        None => diff.regressions(floor, warnings) > 0,
+    };
+    u8::from(failed)
+}
+
+fn to_json(
+    diff: &report::FleetDiff,
+    attributed: Option<&[attribute::Attributed]>,
+) -> Result<String, serde_json::Error> {
+    let Some(findings) = attributed else {
+        return report::to_diff_json(diff);
+    };
+    let mut value = serde_json::to_value(diff)?;
+    if let Some(object) = value.as_object_mut() {
+        object.insert("attribution".to_string(), serde_json::to_value(findings)?);
+    }
+    serde_json::to_string_pretty(&value)
+}
+
+/// One section per origin, each finding on a line.
+fn attribution_text(findings: &[attribute::Attributed]) -> String {
+    use attribute::Origin;
+    use report::sanitize_cell;
+    let mut out = String::new();
+    for (origin, heading) in [
+        (Origin::Introduced, "Brought in by this change"),
+        (Origin::Unknown, "Not placed in this checkout, still gating"),
+        (
+            Origin::Existing,
+            "Already here before this change, not gating",
+        ),
+    ] {
+        let rows: Vec<_> = findings.iter().filter(|f| f.origin == origin).collect();
+        if rows.is_empty() {
+            continue;
+        }
+        out.push_str(&format!("\n{heading} ({}):\n", rows.len()));
+        for f in rows {
+            let severity = f
+                .severity
+                .map_or("warning".to_string(), |s| format!("{s:?}").to_lowercase());
+            out.push_str(&format!(
+                "  {severity:<8} {} {}@{}",
+                sanitize_cell(&f.advisory_id),
+                sanitize_cell(&f.package),
+                sanitize_cell(&f.version),
+            ));
+            if let Some(at) = &f.at {
+                out.push_str(&format!(" at {}", sanitize_cell(&at.to_string())));
+            }
+            if let Some(cause) = &f.cause {
+                out.push_str(&format!(" from {}", sanitize_cell(&cause.to_string())));
+            }
+            out.push('\n');
+        }
+    }
+    out
 }
 
 /// Read and parse a saved fleet report, mapping IO/JSON failures to a message.

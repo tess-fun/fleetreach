@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`diff --base <ref>` says what a change brought in.** New findings are compared per
+  occurrence and placed by git: brought in, with the lockfile line and the manifest line that
+  caused it; already at the merge base, so the advisory is what changed, which no longer
+  gates; or not placed, which still gates. Fixture PRs from real lockfiles passed on all twelve
+  ecosystems.
+- SARIF regions now also cover `gradle.lockfile`, `packages.config`, `pylock.toml` and
+  requirements files under other names.
 - **Five more `[[source]]` kinds**: `gitea`, `forgejo`, `bitbucket` (Cloud), `bitbucket-server`
   (Data Center) and `azure` (Azure DevOps). `topics` on a forge without topics is a config
   error. Listings refuse a `next` link off the API, a pager that repeats, and Azure's redirect

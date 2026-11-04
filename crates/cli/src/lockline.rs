@@ -26,6 +26,123 @@ fn pick(
     u32::try_from(line + 1).ok()
 }
 
+/// Whether `version` stands alone in `line`: `1.2.3` is not in `11.2.3`, `1.2.3-beta` or the
+/// range `^1.2.3`.
+fn holds(line: &str, version: &str) -> bool {
+    let bytes = line.as_bytes();
+    let at = |i: usize, back: usize| i.checked_sub(back).and_then(|p| bytes.get(p)).copied();
+    let name_char = |b: Option<u8>| b.is_some_and(|b| b.is_ascii_alphanumeric());
+    line.match_indices(version).any(|(i, _)| {
+        let (before, prior) = (at(i, 1), at(i, 2));
+        let clean_before = match before {
+            None => true,
+            Some(b'v') => !name_char(prior),
+            // `<version>1.2` is a value; `>1.2` and `>=1.2` are ranges.
+            Some(b'>') => name_char(prior),
+            Some(b'=') => !prior.is_some_and(|b| b"<>~!".contains(&b)),
+            Some(b) => !b.is_ascii_alphanumeric() && !b".-+^~<".contains(&b),
+        };
+        let after = bytes.get(i + version.len()).copied();
+        clean_before && !name_char(after) && !after.is_some_and(|b| b".-+".contains(&b))
+    })
+}
+
+/// The line of `package`'s entry when that entry is at exactly `version`. Unlike
+/// [`entry_line`] this never settles for the package at another version.
+#[must_use]
+pub fn exact_line(file: &str, text: &str, package: &str, version: &str) -> Option<u32> {
+    if version.is_empty() {
+        return None;
+    }
+    let line = entry_line(file, text, package, version)?;
+    let name = Path::new(file).file_name()?.to_str()?;
+    // Hashes or metadata can stand between these entries and their version.
+    let reach = match name {
+        "Pipfile.lock" | "Manifest.toml" | "Package.resolved" => 64,
+        _ => 4,
+    };
+    let start = usize::try_from(line).ok()?.checked_sub(1)?;
+    // A workflow says `@v4` where the finding has the padded `4.0.0`.
+    let tag = version.trim_end_matches(".0");
+    let short = (name.ends_with(".yml") || name.ends_with(".yaml")).then_some(tag);
+    for (i, l) in text.lines().skip(start).take(reach).enumerate() {
+        if holds(l, version) || short.is_some_and(|tag| holds(l, tag)) {
+            return Some(line);
+        }
+        if i > 0 && (l.trim().is_empty() || l.contains("version")) {
+            return None;
+        }
+    }
+    None
+}
+
+/// Whether [`entry_line`] can read `file`.
+#[must_use]
+pub fn reads(file: &str) -> bool {
+    let Some(name) = Path::new(file).file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    matches!(
+        name,
+        "Cargo.lock"
+            | "uv.lock"
+            | "poetry.lock"
+            | "pylock.toml"
+            | "package-lock.json"
+            | "npm-shrinkwrap.json"
+            | "yarn.lock"
+            | "pnpm-lock.yaml"
+            | "Gemfile.lock"
+            | "composer.lock"
+            | "go.mod"
+            | "packages.lock.json"
+            | "packages.config"
+            | "Pipfile.lock"
+            | "bun.lock"
+            | "pom.xml"
+            | "gradle.lockfile"
+            | "mix.lock"
+            | "Manifest.toml"
+            | "Package.resolved"
+    ) || is_requirements(name)
+        || name.ends_with("proj")
+        || name.ends_with(".props")
+        || file.contains(".github/workflows/")
+            && (name.ends_with(".yml") || name.ends_with(".yaml"))
+}
+
+fn is_requirements(name: &str) -> bool {
+    name.ends_with(".txt") && (name.contains("requirements") || name.starts_with("constraints"))
+}
+
+/// Whether `file` declares dependencies by hand, so a changed line in it is a cause.
+#[must_use]
+pub fn is_manifest(file: &str) -> bool {
+    let Some(name) = Path::new(file).file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    matches!(
+        name,
+        "Cargo.toml"
+            | "package.json"
+            | "pyproject.toml"
+            | "Pipfile"
+            | "go.mod"
+            | "Gemfile"
+            | "composer.json"
+            | "pom.xml"
+            | "build.gradle"
+            | "build.gradle.kts"
+            | "libs.versions.toml"
+            | "mix.exs"
+            | "Project.toml"
+            | "Package.swift"
+    ) || is_requirements(name)
+        || name.ends_with(".gemspec")
+        || name.ends_with("proj")
+        || name.ends_with(".props")
+}
+
 /// `package` at `version` (empty when not known) in `file`, whose contents are `text`.
 #[must_use]
 pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Option<u32> {
@@ -37,7 +154,7 @@ pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Optio
             let key = format!("name = \"{package}\"");
             pick(text, version, |l| l == key, quoted)
         }
-        "uv.lock" | "poetry.lock" => {
+        "uv.lock" | "poetry.lock" | "pylock.toml" => {
             let wanted = pep503(package);
             let entry = |l: &str| {
                 let value = l
@@ -109,14 +226,27 @@ pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Optio
         }
         "packages.lock.json" | "Pipfile.lock" | "bun.lock" => {
             let key = format!("\"{}\":", package.to_ascii_lowercase());
+            // A bun package entry is an array; a string under that key is a workspace's range.
+            let bun = name == "bun.lock";
+            let entry = |l: &str| {
+                l.trim_start().to_ascii_lowercase().starts_with(&key) && (!bun || l.contains('['))
+            };
+            pick(text, version, entry, holds)
+        }
+        "gradle.lockfile" => {
+            let key = format!("{package}:");
+            pick(text, version, |l| l.starts_with(&key), any)
+        }
+        "packages.config" => {
+            let key = format!("id=\"{}\"", package.to_ascii_lowercase());
             pick(
                 text,
                 version,
-                |l| l.trim_start().to_ascii_lowercase().starts_with(&key),
+                |l| l.to_ascii_lowercase().contains(&key),
                 any,
             )
         }
-        "requirements.txt" => {
+        _ if is_requirements(name) => {
             let wanted = pep503(package);
             let entry = |l: &str| {
                 let end = l.find(|c: char| !(c.is_alphanumeric() || "-_.".contains(c)));
@@ -155,7 +285,13 @@ pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Optio
         }
         _ if name.ends_with(".yml") || name.ends_with(".yaml") => {
             let key = format!("uses: {package}@");
-            pick(text, version, |l| l.contains(&key), any)
+            let tag = version.trim_end_matches(".0");
+            pick(
+                text,
+                version,
+                |l| l.contains(&key),
+                |l, _| holds(l, tag) || holds(l, version),
+            )
         }
         _ if name.ends_with("proj") || name.ends_with(".props") => {
             let key = format!("include=\"{}\"", package.to_ascii_lowercase());
@@ -172,7 +308,55 @@ pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Optio
 
 #[cfg(test)]
 mod tests {
-    use super::entry_line;
+    use super::{entry_line, exact_line};
+
+    #[test]
+    fn an_exact_line_is_the_package_at_that_version_or_nothing() {
+        let cargo = "[[package]]\nname = \"time\"\nversion = \"0.1.43\"\n";
+        assert_eq!(exact_line("Cargo.lock", cargo, "time", "0.1.43"), Some(2));
+        assert_eq!(exact_line("Cargo.lock", cargo, "time", "0.1.4"), None);
+        assert_eq!(exact_line("Cargo.lock", cargo, "time", "1.43"), None);
+        let bun = "    \"vite\": \"^8.3.1\",\n\n    \"vite\": [\"vite@8.3.1\", \"\"],\n";
+        assert_eq!(exact_line("bun.lock", bun, "vite", "8.3.1"), Some(3));
+        let range = "    \"vite\": \"^8.3.1\",\n";
+        assert_eq!(exact_line("bun.lock", range, "vite", "8.3.1"), None);
+        let pipfile = "\"rack\": {\n\"hashes\": [\n\"a\",\n\"b\",\n\"c\",\n\"d\"\n],\n\"version\": \"==2.0\"\n}";
+        assert_eq!(exact_line("Pipfile.lock", pipfile, "rack", "2.0"), Some(1));
+        let pom = "<artifactId>a</artifactId>\n<version>1.2</version>\n";
+        assert_eq!(exact_line("pom.xml", pom, "g:a", "1.2"), Some(1));
+        assert_eq!(
+            exact_line("requirements.txt", "rack>=2.0\n", "rack", "2.0"),
+            None
+        );
+        assert_eq!(
+            exact_line("requirements.txt", "rack==2.0\n", "rack", "2.0"),
+            Some(1)
+        );
+        let flow = "      - uses: a/b@v4\n";
+        assert_eq!(
+            exact_line(".github/workflows/c.yml", flow, "a/b", "4.0.0"),
+            Some(1)
+        );
+        assert_eq!(
+            exact_line(".github/workflows/c.yml", flow, "a/b", "4.1.0"),
+            None
+        );
+        let go = "require golang.org/x/text v0.3.0\n";
+        assert_eq!(
+            exact_line("go.mod", go, "golang.org/x/text", "0.3.0"),
+            Some(1)
+        );
+        let gradle = "org.a:b:1.2=compileClasspath\n";
+        assert_eq!(
+            exact_line("gradle.lockfile", gradle, "org.a:b", "1.2"),
+            Some(1)
+        );
+        let config = "  <package id=\"Foo\" version=\"1.0.0\" />\n";
+        assert_eq!(
+            exact_line("packages.config", config, "foo", "1.0.0"),
+            Some(1)
+        );
+    }
 
     #[test]
     fn each_format_finds_the_entry_at_its_version() {

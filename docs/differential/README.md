@@ -7,6 +7,10 @@ record, for the daily sync check in spec 16 row 11.
 `scan --incremental` hashes for its key. `scripts/benchmark.py` produces the numbers on the scale
 benchmark page.
 
+`pr_attribution.py` makes a fixture PR per ecosystem from real lockfiles and real scans, and
+checks that `diff --base` names the entry, and that a finding git does not explain stays out
+of the gate.
+
 `pm_oracle.py` asks pnpm, yarn and bun what each lockfile holds, in a container with scripts
 off; `pm_compare.py` compares that with the package set in fleetreach's SBOMs. `targets.json`
 lists each lockfile's id, directory and tool (`pnpm`, `pnpm5`, `pnpm6`, `yarn1`, `berry`, `bun`).

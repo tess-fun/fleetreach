@@ -1116,6 +1116,14 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   means failure.
 - **Effort**: M. **Release**: 1.6.0. **Proof**: fixture PRs per ecosystem.
 
+  **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/attribute.rs`, exact-version
+  check in `lockline.rs`; expiry shipped earlier). `docs/differential/pr_attribution.py` makes
+  17 fixture PRs across all 12 ecosystems and each lockfile format, 11 from real repos and 6
+  (Cargo, Go, Maven, Swift, Actions, Julia) from small written fixtures. Each names the
+  right file and entry, and the same report with no git change does not gate, except Maven: a
+  transitive package with no lockfile is in no file, so it stays not placed and gates. A
+  rewound fixture only changes a lockfile, so manifest causes are proven by unit test.
+
 #### 24. VEX (A+, keep)
 
 - **Beyond the bar**: CycloneDX VEX and CSAF 2.0 VEX in and out (CSAF in also feeds row 12),

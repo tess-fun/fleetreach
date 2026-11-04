@@ -39,6 +39,38 @@ New (29):
 ```
 <!-- /run -->
 
+## Gate a pull request on what it brought in
+
+With `--base`, `diff` asks git which new findings the change is responsible for. Run it in
+the checkout, with the history back to the merge base (`fetch-depth: 0` on GitHub Actions):
+
+```sh
+fleetreach diff baseline.json current.json --base origin/main --fail-on high
+```
+
+```text
+Brought in by this change (1):
+  high     GHSA-r6q2-hw4h-h46w tar@6.2.1 at package-lock.json:4120 from package.json:18
+
+Already here before this change, not gating (1):
+  critical GHSA-3xgq-45jj-v275 cross-spawn@7.0.3 at package-lock.json:1893
+```
+
+New findings are compared per occurrence, so an advisory already open in another repo still
+counts when this repo gains it. Each one then lands in one of three groups:
+
+| Group | Meaning | Gates |
+|-------|---------|-------|
+| Brought in | the package at that version is in a file now, and not in that file at the merge base; `from` is the changed manifest line that names its direct dependency, when there is one | yes |
+| Already here | every file holding it held it at the merge base, so the advisory is what changed | no |
+| Not placed | not found in the checkout: another repo of the report, a Maven or Gradle transitive package with no lockfile, a pin by commit, or a file `diff` cannot read | yes |
+
+`--checkout <dir>` names the checkout when it is not the current directory, and
+`--repo <id>` names its repo id when the reports cover several. `--format json` adds an
+`attribution` list. Only dependency files are read: a change that removes an ignore or
+touches the fleet config brings a finding back without any changed line, so it shows as
+already here.
+
 ## Keep a baseline
 
 The usual pattern: the default branch saves its report as an artifact (or commits it), and
