@@ -1,6 +1,6 @@
 ---
 title: Check reachability
-description: Find out whether vulnerable code is actually reached, with import-graph witness chains for npm and Python and a sound MIR call-graph analysis for Rust.
+description: Find out whether vulnerable code is actually reached, with import witness chains for eight ecosystems and a sound MIR call-graph analysis for Rust.
 sidebar:
   order: 12
 ---
@@ -23,12 +23,29 @@ fleetreach scan --reachability
 - **Python** does the same over a repo's virtualenv, mapping modules to distributions
   through their `RECORD` files, so `import yaml` is PyYAML. It is positive-only: an
   unreached distribution stays `unknown`.
+- **Ruby, PHP, .NET, Java and Kotlin, Elixir and Swift** read the import lines of your own
+  source and follow the lockfile from there. The chain starts at a file and line, and every
+  later hop is a dependency the lockfile records. This is positive-only too.
 - **Other ecosystems** grep your source for imports of each direct dependency, and for Rust
-  for the advisory's affected function names. A match raises a finding to reachable; no
-  match never lowers it.
+  for the advisory's affected function names. Those six fall back to the same grep. A match
+  raises a finding to reachable; no match never lowers it.
 
 The table's `Reach` column shows the chain, for example
-`imported via fastapi → starlette → python-multipart`.
+`imported via fastapi → starlette → python-multipart`, or with the line where one is known,
+`imported at app/models/user.rb:3 via loofah → nokogiri`. In SARIF the chain is a `codeFlow`
+that starts at that line, so a code scanning alert links to the import.
+
+| Language | Lines read | How an import becomes a package |
+|----------|------------|---------------------------------|
+| Ruby | `require`, `Bundler.require` | the longest gem named by the path; `Bundler.require` loads the `Gemfile`'s gems, less `require: false` |
+| PHP | `use` | the PSR-4 and PSR-0 prefixes in `composer.lock` |
+| C#, F#, VB | `using`, `open`, `Imports` | assemblies in `project.assets.json` when present, then package ids |
+| Java, Kotlin, Scala, Groovy | `import` | classes in jars under `~/.m2` and the Gradle cache, then group and artifact when only one fits |
+| Elixir | `alias`, `import`, `require`, `use` | the longest package named by the module |
+| Swift | `import` | `.product` in `Package.swift`, then the repository's name |
+
+An import that resolves to no locked package is dropped rather than guessed, and imports of the
+repo's own namespaces never count.
 
 The demo fleet's [`admin-dashboard`](https://github.com/tess-fun/fleetreach/tree/main/website/demo/repos/admin-dashboard) has one Express server,
 `src/server.js`, that requires express, axios, jsonwebtoken and lodash. The packages it

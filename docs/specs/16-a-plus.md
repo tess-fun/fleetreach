@@ -1016,6 +1016,17 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: on 20 real repos per ecosystem, every chain's first hop points at a real import
   line (checked by script); positive-only asserted in tests.
 
+  **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/import_reach.rs`,
+  `reachability.import_site`, SARIF `codeFlows`). `docs/differential/import_chains.py`, with
+  patterns of its own: 7,561 chains over 132 repos (20 to 24 with chains per ecosystem) and every
+  first hop is an import line. On a scan of 119 of those repos 509 of 709 findings in these ecosystems
+  got a chain, none `NotReachable`. Differences from the plan: hops after the first are lockfile
+  edges, not imports read from installed code, so an optional dependency counts; jars are read
+  only if already in `~/.m2` or the Gradle cache, and without one the coordinates must decide;
+  a package sharing a namespace prefix can take a class of its neighbour (`laravel/ui` for
+  `Illuminate\Foundation\Auth\User`); npm and Python witnesses gained code flows but no
+  import line.
+
 #### 15. KEV + EPSS (A to A+)
 
 - **Gap**: no EPSS trend; no exploit maturity beyond KEV.

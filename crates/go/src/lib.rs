@@ -212,6 +212,7 @@ fn build_finding(
             engine: engine.to_string(),
             targets: Vec::new(),
             witness: None,
+            import_site: None,
         }),
         exploit: Default::default(),
     })

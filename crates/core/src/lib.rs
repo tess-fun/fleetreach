@@ -54,8 +54,8 @@ pub mod ssvc;
 
 pub use depgraph::DepGraph;
 pub use finding::{
-    DepScope, DepSource, DependencyKind, Ecosystem, Exploitability, ImageLayer, Occurrence,
-    ReachVerdict, Reachability, RepoId, VulnFinding, WarnFinding, WarnKind,
+    DepScope, DepSource, DependencyKind, Ecosystem, Exploitability, ImageLayer, ImportSite,
+    Occurrence, ReachVerdict, Reachability, RepoId, VulnFinding, WarnFinding, WarnKind,
 };
 pub use outcome::{RepoOutcome, ScanStatus};
 pub use remediation::{

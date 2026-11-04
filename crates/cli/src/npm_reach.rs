@@ -87,6 +87,7 @@ pub fn assess(report: &mut FleetReport, config: &Config, opts: &Options) {
             engine: "fleetreach-npm-imports".to_string(),
             targets: Vec::new(),
             witness: None,
+            import_site: None,
         });
     }
 }

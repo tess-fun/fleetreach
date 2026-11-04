@@ -13,6 +13,7 @@ fn reachability(verdict: ReachVerdict) -> Reachability {
         engine: "static-mir-rta@0.1".into(),
         targets: vec![],
         witness: None,
+        import_site: None,
     }
 }
 

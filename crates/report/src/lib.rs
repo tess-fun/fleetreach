@@ -209,6 +209,9 @@ pub fn to_sarif_located(
                 suppression,
                 locate,
             );
+            if let Some(flows) = import_flows(v, occ, locate) {
+                result.code_flows = flows;
+            }
             if let (Some(d), Some(props)) = (decision, result.properties.as_mut()) {
                 props.ssvc = Some(d.outcome.label());
                 props.ssvc_vector = Some(d.vector.clone());
@@ -491,6 +494,47 @@ fn code_flows(repo: &RepoId, uri: &str, chain: &[String], locate: &Locate) -> Ve
     vec![SarifCodeFlow {
         thread_flows: [SarifThreadFlow { locations }],
     }]
+}
+
+/// An import engine's chain as a code flow, from the import line when it knows one and on
+/// through the lockfile. `None` for anything else, which keeps the dependency path.
+fn import_flows(v: &VulnFinding, occ: &Occurrence, locate: &Locate) -> Option<Vec<SarifCodeFlow>> {
+    let reach = v
+        .reachability
+        .as_ref()
+        .filter(|r| r.config == "import-graph")?;
+    let ReachVerdict::Reachable { witness } = &reach.verdict else {
+        return None;
+    };
+    let Occurrence::InRepo { repo, package, .. } = occ else {
+        return None;
+    };
+    // A chain ends at this finding's package in the repo it was read from.
+    let site = reach.import_site.as_ref();
+    if witness.last() != Some(package) || site.is_some_and(|s| s.repo != *repo) {
+        return None;
+    }
+    let uri = (locate.file)(repo, v.ecosystem, package);
+    let step = |uri: String, line: Option<u32>, text: String| SarifFlowStep {
+        location: SarifStepLocation {
+            physical_location: physical(uri, line),
+            message: SarifText { text },
+        },
+    };
+    let mut locations = Vec::new();
+    if let Some(site) = site {
+        let text = format!("imports {}", witness.first()?);
+        locations.push(step(site.file.clone(), Some(site.line), text));
+    }
+    for name in witness {
+        let line = (locate.line)(repo, &uri, name, "");
+        locations.push(step(uri.clone(), line, name.clone()));
+    }
+    (locations.len() > 1).then(|| {
+        vec![SarifCodeFlow {
+            thread_flows: [SarifThreadFlow { locations }],
+        }]
+    })
 }
 
 fn sarif_result(
@@ -1815,6 +1859,7 @@ fn reach_cell(v: &VulnFinding) -> String {
     let Some(Reachability {
         verdict: ReachVerdict::Reachable { witness },
         config,
+        import_site,
         ..
     }) = &v.reachability
     else {
@@ -1840,7 +1885,13 @@ fn reach_cell(v: &VulnFinding) -> String {
     } else {
         "reachable"
     };
-    format!("{verb} via {chain}")
+    match import_site {
+        Some(site) => {
+            let file = sanitize_cell(&site.file);
+            format!("{verb} at {file}:{} via {chain}", site.line)
+        }
+        None => format!("{verb} via {chain}"),
+    }
 }
 
 /// Honest labels for the source-presence heuristic — never "(un)reachable".

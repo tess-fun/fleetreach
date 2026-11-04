@@ -623,6 +623,7 @@ mod tests {
             engine: "static-mir-rta@0.1.0".to_string(),
             targets: vec!["x86_64-unknown-linux-gnu".to_string()],
             witness: Some("sha256:deadbeef".to_string()),
+            import_site: None,
         }
     }
 

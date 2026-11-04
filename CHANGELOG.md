@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`scan --reachability` builds witness chains for Ruby, PHP, .NET, Java and Kotlin, Elixir and
+  Swift.** A chain starts at the import line in your source and follows the lockfile, for example
+  `imported at app/models/user.rb:3 via loofah → nokogiri`. Positive-only, like Python's. JSON
+  reports the line as `reachability.import_site`.
+- **SARIF `codeFlows` follow import chains**, for npm and Python too, and start at the import line
+  where it is known.
 - **`licenses --detect` reads the license files packages ship**, with the `spdx` crate's own
   matcher over the SPDX texts, in pure Rust, on this machine. A package nothing declared takes
   the license its files say, unless one of them could not be recognized. A package whose files

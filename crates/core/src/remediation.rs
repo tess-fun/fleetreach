@@ -669,6 +669,7 @@ mod tests {
             engine: "test".into(),
             targets: vec![],
             witness: None,
+            import_site: None,
         });
         f
     }

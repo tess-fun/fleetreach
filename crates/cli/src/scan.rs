@@ -26,7 +26,7 @@ use crate::db::{
 };
 use crate::enrich::{self, Enrichment};
 use crate::orchestrate::{fleet_ecosystems, scan_fleet_with, GoScan, Mirrors};
-use crate::{npm_reach, osvdb, py_reach, reach, resolve, sources, static_reach, vex};
+use crate::{import_reach, npm_reach, osvdb, py_reach, reach, resolve, sources, static_reach, vex};
 
 #[derive(Parser)]
 pub(crate) struct ScanArgs {
@@ -1390,6 +1390,9 @@ fn assess_reachability(
                 // PyPI likewise gets a package import graph over the repo's virtualenv(s):
                 // transitive reachability with a witness chain, positive-only.
                 py_reach::assess(fleet_report, config);
+                // Six more read import lines and follow the lockfile: positive-only, so the
+                // grep's answer stands where they find no chain.
+                import_reach::assess(fleet_report, config);
             }
             ReachMode::Static => {
                 // Static reachability COMPILES each repo, which runs its build

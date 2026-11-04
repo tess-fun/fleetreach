@@ -351,6 +351,19 @@ pub struct Reachability {
     /// `None` for `Reachable`/`Unknown` and when caching was impossible.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub witness: Option<String>,
+    /// The source line a `Reachable` chain starts from, when an import engine read it.
+    /// Additive; omitted when unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub import_site: Option<ImportSite>,
+}
+
+/// A line of a repo's own source that imports a package.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportSite {
+    pub repo: RepoId,
+    /// Relative to the repo root, with `/`.
+    pub file: String,
+    pub line: u32,
 }
 
 /// The reachability outcome. The acceptable error direction is over-reporting
@@ -387,6 +400,7 @@ impl Reachability {
             engine: "fleetreach-tier-c".to_string(),
             targets: Vec::new(),
             witness: None,
+            import_site: None,
         }
     }
 

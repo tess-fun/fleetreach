@@ -88,6 +88,7 @@ pub fn assess(report: &mut FleetReport, config: &Config) {
             engine: "fleetreach-pypi-imports".to_string(),
             targets: Vec::new(),
             witness: None,
+            import_site: None,
         });
     }
 }

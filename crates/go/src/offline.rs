@@ -458,6 +458,7 @@ fn match_module(
             engine: "fleetreach-tier-c".to_string(),
             targets: Vec::new(),
             witness: None,
+            import_site: None,
         }),
         exploit: Default::default(),
     })

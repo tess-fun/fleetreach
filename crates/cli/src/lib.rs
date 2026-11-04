@@ -27,6 +27,7 @@ pub mod health;
 pub mod history;
 pub mod history_cmd;
 pub mod images;
+pub mod import_reach;
 pub mod inventory;
 pub mod licensefetch;
 pub mod licenses;

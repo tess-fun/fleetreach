@@ -144,6 +144,7 @@ pub fn assess(report: &mut FleetReport, config: &Config, opts: &Options) {
             engine: engine.clone(),
             targets,
             witness,
+            import_site: None,
         };
         v.reachable = reachability.as_legacy_bool();
         v.reachability = Some(reachability);

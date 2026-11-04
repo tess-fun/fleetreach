@@ -635,6 +635,7 @@ mod tests {
                 engine: "e".into(),
                 targets: vec!["x86_64-unknown-linux-gnu".into()],
                 witness: Some("sha256:abc".into()),
+                import_site: None,
             }),
             exploit: Default::default(),
         }

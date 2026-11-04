@@ -275,6 +275,7 @@ fn sarif_suppresses_a_not_reachable_finding() {
         engine: "static-mir-rta@0.1.0".into(),
         targets: vec!["x86_64-unknown-linux-gnu".into()],
         witness: Some("sha256:abc".into()),
+        import_site: None,
     });
     let run = sarif_value(&report(vec![v]), &[]);
     let result = &run["runs"][0]["results"][0];
@@ -284,6 +285,35 @@ fn sarif_suppresses_a_not_reachable_finding() {
         .as_str()
         .unwrap()
         .contains("vulnerable_code_not_in_execute_path"));
+}
+
+/// An import chain is a code flow that starts at the import line.
+#[test]
+fn sarif_flow_starts_at_the_import_line() {
+    let mut v = a_vuln();
+    v.reachability = Some(Reachability {
+        verdict: ReachVerdict::Reachable {
+            witness: vec!["rails".into(), "foo".into()],
+        },
+        config: "import-graph".into(),
+        engine: "fleetreach-imports".into(),
+        targets: vec![],
+        witness: None,
+        import_site: Some(fleetreach_core::ImportSite {
+            repo: RepoId("app".into()),
+            file: "app/models/user.rb".into(),
+            line: 7,
+        }),
+    });
+    let run = sarif_value(&report(vec![v]), &[]);
+    let steps = &run["runs"][0]["results"][0]["codeFlows"][0]["threadFlows"][0]["locations"];
+    let first = &steps[0]["location"];
+    assert_eq!(first["message"]["text"], "imports rails");
+    let place = &first["physicalLocation"];
+    assert_eq!(place["artifactLocation"]["uri"], "app/models/user.rb");
+    assert_eq!(place["region"]["startLine"], 7);
+    assert_eq!(steps.as_array().unwrap().len(), 3);
+    assert_eq!(steps[2]["location"]["message"]["text"], "foo");
 }
 
 /// A phantom dependency (`active: Some(false)`) is also a machine `not_affected`.
@@ -314,6 +344,7 @@ fn sarif_does_not_suppress_reachable_or_undecided() {
         engine: "e".into(),
         targets: vec![],
         witness: None,
+        import_site: None,
     });
     let undecided = a_vuln(); // no reachability -> under_investigation
     let run = sarif_value(&report(vec![reachable, undecided]), &[]);
@@ -641,6 +672,7 @@ fn remediation_promotes_reachable_within_a_severity_band() {
         engine: "e".into(),
         targets: vec![],
         witness: None,
+        import_site: None,
     });
     let mut wide_unknown = a_vuln();
     wide_unknown.advisory_id = "RUSTSEC-WIDE".into();
@@ -671,6 +703,7 @@ fn remediation_gate_demotes_not_reachable() {
         engine: "test".into(),
         targets: vec![],
         witness: None,
+        import_site: None,
     });
     let mut dead = a_vuln();
     dead.advisory_id = "RUSTSEC-DEAD".into();
@@ -681,6 +714,7 @@ fn remediation_gate_demotes_not_reachable() {
         engine: "test".into(),
         targets: vec![],
         witness: None,
+        import_site: None,
     });
 
     let out = fleetreach_report::to_remediation(&report(vec![live, dead]), false);
@@ -759,6 +793,7 @@ fn table_shows_the_reach_witness_chain() {
         engine: "fleetreach-pypi-imports".into(),
         targets: vec![],
         witness: None,
+        import_site: None,
     });
     let t = to_table(&report(vec![v]), false);
     assert!(

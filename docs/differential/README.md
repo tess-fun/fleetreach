@@ -90,3 +90,19 @@ and all said the same.
 `license_cargo.py <fleetreach> <repo>...` compares every crate of a Cargo repo with
 `cargo deny list`: 2,013 of 2,015 crates over fleetreach, Deno and Meilisearch had the same ids.
 The two others are `LGPL-2.0` read as `LGPL-2.0-only`, and a crate cargo-deny left empty.
+
+## Import chains
+
+`import_chains.py` checks the first hop of every chain the import engine finds, whether or not a
+finding needs it, with patterns of its own rather than the engine's parser:
+
+```bash
+cargo build --release -p fleetreach-cli --example import_chains
+target/release/examples/import_chains <repo>... > chains.jsonl
+python3 -B import_chains.py chains.jsonl
+```
+
+It reports lines that are not imports, and imports sharing no word with their package to read by
+hand, which is how `laravel/pint`'s `App\` and `com.fasterxml:classmate` were found. Over 132
+public repos, 7,561 chains and no line that was not an import.
+
