@@ -84,6 +84,7 @@ fn config() -> Config {
         sboms: Default::default(),
         context: Default::default(),
         context_defaults: None,
+        tag_rules: Vec::new(),
         ssvc_poc_epss: None,
         ssvc_table: Default::default(),
         ssvc_weights: Default::default(),

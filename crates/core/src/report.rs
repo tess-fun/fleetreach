@@ -106,6 +106,9 @@ pub struct RepoContext {
     pub owner: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+    /// Which `tag_rules` entry set each decision point, by field name.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub set_by: std::collections::BTreeMap<String, String>,
     /// Exposure or impact came from neither the repo nor `[settings.context.defaults]`, so
     /// the fail-closed values (`open`, Human Impact `very-high`) were used.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

@@ -335,8 +335,17 @@ pub fn materialize(config: &Config, sync: bool, quiet: bool) -> Result<Materiali
                         url: listed.clone_url.clone(),
                         commit,
                     });
-                    if !source.context.is_empty() {
-                        out.context.push((id.clone(), source.context.clone()));
+                    // Forge topics join the tags when `tag_rules` will read them.
+                    let mut context = source.context.clone();
+                    if !config.tag_rules.is_empty() {
+                        for topic in &listed.topics {
+                            if !context.tags.contains(topic) {
+                                context.tags.push(topic.clone());
+                            }
+                        }
+                    }
+                    if !context.is_empty() {
+                        out.context.push((id.clone(), context));
                     }
                     out.repos.push(Repo {
                         id,

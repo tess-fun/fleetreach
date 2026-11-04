@@ -7,8 +7,9 @@
 //!
 //! - Without exploitation data no decision is made at all; guessing `none` would be a
 //!   false-clean in priority form.
-//! - Context a repo does not set falls back to `[settings.context.defaults]`, then to the
-//!   most urgent values (`open`, `mission-failure`, `catastrophic`), and the repo is marked.
+//! - Context a repo does not set falls back to `[[settings.context.tag_rules]]`, then to
+//!   `[settings.context.defaults]`, then to the most urgent values (`open`, `mission-failure`,
+//!   `catastrophic`), and the repo is marked.
 //!
 //! A sound signal that the code cannot run (a phantom dependency or a `NotReachable`
 //! verdict, the same signals that make VEX say `not_affected`) forces `defer`.
@@ -21,7 +22,8 @@ use fleetreach_core::{
     VulnFinding,
 };
 
-use crate::config::{Config, ContextFields};
+use crate::config::{Config, ContextFields, TagRule};
+use crate::sources::glob_match;
 use crate::vulnrichment::Vulnrichment;
 
 /// What the scan knows about exploitation, beyond the per-finding KEV/EPSS fields.
@@ -39,6 +41,7 @@ pub struct Inputs<'a> {
 #[must_use]
 pub fn enabled(config: &Config) -> bool {
     config.context_defaults.is_some()
+        || !config.tag_rules.is_empty()
         || config
             .context
             .values()
@@ -107,9 +110,43 @@ fn resolve(
     let empty = ContextFields::default();
     let own = own.unwrap_or(&empty);
     let defaults = config.context_defaults.as_ref().unwrap_or(&empty);
-    let exposure = own.exposure.or(defaults.exposure);
-    let mission_impact = own.mission_impact.or(defaults.mission_impact);
-    let safety_impact = own.safety_impact.or(defaults.safety_impact);
+    let tags = if own.tags.is_empty() {
+        &defaults.tags
+    } else {
+        &own.tags
+    };
+    let rules: Vec<&TagRule> = config
+        .tag_rules
+        .iter()
+        .filter(|rule| {
+            let matches = |pattern: &String| tags.iter().any(|t| glob_match(pattern, t));
+            rule.tags.iter().any(matches)
+        })
+        .collect();
+    let mut set_by = BTreeMap::new();
+    let mut from_rules = |field: &str, own_value: bool, named: Option<&TagRule>| {
+        if let (false, Some(rule)) = (own_value, named) {
+            set_by.insert(field.to_string(), rule.name.clone());
+        }
+    };
+    let exposure_rule = rules.iter().copied().find(|r| r.exposure.is_some());
+    let mission_rule = rules.iter().copied().find(|r| r.mission_impact.is_some());
+    let safety_rule = rules.iter().copied().find(|r| r.safety_impact.is_some());
+    from_rules("exposure", own.exposure.is_some(), exposure_rule);
+    from_rules("mission_impact", own.mission_impact.is_some(), mission_rule);
+    from_rules("safety_impact", own.safety_impact.is_some(), safety_rule);
+    let exposure = own
+        .exposure
+        .or(exposure_rule.and_then(|r| r.exposure))
+        .or(defaults.exposure);
+    let mission_impact = own
+        .mission_impact
+        .or(mission_rule.and_then(|r| r.mission_impact))
+        .or(defaults.mission_impact);
+    let safety_impact = own
+        .safety_impact
+        .or(safety_rule.and_then(|r| r.safety_impact))
+        .or(defaults.safety_impact);
     let fail_closed =
         enabled && (exposure.is_none() || mission_impact.is_none() || safety_impact.is_none());
     RepoContext {
@@ -118,11 +155,8 @@ fn resolve(
         mission_impact: mission_impact.or(enabled.then_some(MissionImpact::MissionFailure)),
         safety_impact: safety_impact.or(enabled.then_some(SafetyImpact::Catastrophic)),
         owner: own.owner.clone().or_else(|| defaults.owner.clone()),
-        tags: if own.tags.is_empty() {
-            defaults.tags.clone()
-        } else {
-            own.tags.clone()
-        },
+        tags: tags.clone(),
+        set_by,
         fail_closed,
     }
 }
@@ -371,6 +405,65 @@ mod tests {
         assert_eq!(d.outcome, Outcome::Defer);
         assert_eq!(d.owner.as_deref(), Some("platform"));
         assert!(!r.context[0].fail_closed);
+    }
+
+    #[test]
+    fn tag_rules_sit_between_a_repo_and_the_defaults() {
+        let dir = std::env::temp_dir();
+        let text = format!(
+            r#"
+            [[repo]]
+            id = "edge"
+            path = {dir:?}
+            tags = ["internet-facing", "tier-1"]
+            [[repo]]
+            id = "own"
+            path = {dir:?}
+            tags = ["internet-facing"]
+            exposure = "small"
+            [[repo]]
+            id = "plain"
+            path = {dir:?}
+            [settings.context.defaults]
+            exposure = "controlled"
+            [[settings.context.tag_rules]]
+            name = "edge"
+            tags = ["internet-*"]
+            exposure = "open"
+            [[settings.context.tag_rules]]
+            tags = ["internet-facing", "tier-*"]
+            exposure = "small"
+            mission_impact = "mef-failure"
+            "#
+        );
+        let config = Config::from_str(&text, Path::new("/"), "t").unwrap();
+        let mut report = report(serde_json::json!({ "kev": false }), serde_json::json!({}));
+        annotate(&mut report, &config, KNOWN);
+        let of = |id: &str| report.context.iter().find(|c| c.repo.0 == id).unwrap();
+        // First match per decision point: `edge` has exposure, the second rule the rest.
+        assert_eq!(of("edge").exposure, Some(Exposure::Open));
+        assert_eq!(of("edge").mission_impact, Some(MissionImpact::MefFailure));
+        assert_eq!(of("edge").set_by["exposure"], "edge");
+        assert_eq!(of("edge").set_by["mission_impact"], "tag_rules[1]");
+        // A repo's own value beats a rule, and is not credited to one.
+        assert_eq!(of("own").exposure, Some(Exposure::Small));
+        assert!(!of("own").set_by.contains_key("exposure"));
+        // No tag, no rule: the defaults, and what they leave open stays fail-closed.
+        assert_eq!(of("plain").exposure, Some(Exposure::Controlled));
+        assert!(of("plain").set_by.is_empty());
+        assert!(of("plain").fail_closed);
+    }
+
+    #[test]
+    fn a_tag_rule_must_match_and_set_something() {
+        let bad = |rule: &str| {
+            let text = format!("[[settings.context.tag_rules]]\n{rule}\n");
+            Config::from_str(&text, Path::new("/"), "t")
+                .unwrap_err()
+                .to_string()
+        };
+        assert!(bad("tags = []\nexposure = \"open\"").contains("`tags` is empty"));
+        assert!(bad("name = \"x\"\ntags = [\"a\"]").contains("x: sets none"));
     }
 
     #[test]

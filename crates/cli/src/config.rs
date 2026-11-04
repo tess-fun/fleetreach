@@ -201,6 +201,19 @@ impl From<RawContext> for ContextFields {
 #[serde(deny_unknown_fields)]
 struct RawContextSettings {
     defaults: Option<RawContext>,
+    #[serde(default)]
+    tag_rules: Vec<RawTagRule>,
+}
+
+/// One `[[settings.context.tag_rules]]`.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTagRule {
+    name: Option<String>,
+    tags: Vec<String>,
+    exposure: Option<Exposure>,
+    mission_impact: Option<MissionImpact>,
+    safety_impact: Option<SafetyImpact>,
 }
 
 /// The `[settings.ssvc]` block (spec 08).
@@ -444,6 +457,9 @@ pub struct Config {
     pub context: std::collections::BTreeMap<RepoId, ContextFields>,
     /// `[settings.context.defaults]`, applied where a repo sets nothing.
     pub context_defaults: Option<ContextFields>,
+    /// `[[settings.context.tag_rules]]` in file order: between a repo's own values and the
+    /// defaults.
+    pub tag_rules: Vec<TagRule>,
     /// `[settings.ssvc] poc_epss`.
     pub ssvc_poc_epss: Option<f32>,
     /// `[settings.ssvc] table`, else the published deployer table.
@@ -454,6 +470,46 @@ pub struct Config {
     pub sla: crate::history::SlaPolicy,
     /// `[settings.history] keep`, in seconds.
     pub history_keep: Option<i64>,
+}
+
+/// A rule that turns a repo's tags or forge topics into decision points. For each decision
+/// point the first matching rule that sets it wins.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TagRule {
+    /// `name`, or the rule's place in the file.
+    pub name: String,
+    /// Globs; any one matching any of the repo's tags applies the rule.
+    pub tags: Vec<String>,
+    pub exposure: Option<Exposure>,
+    pub mission_impact: Option<MissionImpact>,
+    pub safety_impact: Option<SafetyImpact>,
+}
+
+fn tag_rules(raw: Vec<RawTagRule>) -> Result<Vec<TagRule>, ConfigError> {
+    raw.into_iter()
+        .enumerate()
+        .map(|(index, rule)| {
+            let name = rule.name.unwrap_or_else(|| format!("tag_rules[{index}]"));
+            if rule.tags.is_empty() {
+                return Err(ConfigError::InvalidSsvc(format!("{name}: `tags` is empty")));
+            }
+            if rule.exposure.is_none()
+                && rule.mission_impact.is_none()
+                && rule.safety_impact.is_none()
+            {
+                return Err(ConfigError::InvalidSsvc(format!(
+                    "{name}: sets none of `exposure`, `mission_impact`, `safety_impact`"
+                )));
+            }
+            Ok(TagRule {
+                name,
+                tags: rule.tags,
+                exposure: rule.exposure,
+                mission_impact: rule.mission_impact,
+                safety_impact: rule.safety_impact,
+            })
+        })
+        .collect()
 }
 
 /// Validated exposure and impact context (spec 08).
@@ -1021,6 +1077,7 @@ impl Config {
             sboms,
             context,
             context_defaults: raw.settings.context.defaults.map(ContextFields::from),
+            tag_rules: tag_rules(raw.settings.context.tag_rules)?,
             ssvc_poc_epss,
             ssvc_table,
             ssvc_weights,

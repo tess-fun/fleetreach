@@ -148,6 +148,30 @@ default is `triage/`, read if it is there; a `dir` set here must exist.
 not set them. Its presence turns on SSVC decisions. A repo with a value unset and no default
 is decided with the most urgent value.
 
+## `[[settings.context.tag_rules]]`
+
+Sets decision points from a repo's `tags`. A repo found through a `[[source]]` also has its
+forge topics as tags. Every rule must set at least one value:
+
+```toml
+[[settings.context.tag_rules]]
+name = "public edge"
+tags = ["internet-facing", "edge-*"]
+exposure = "open"
+mission_impact = "mef-failure"
+```
+
+| Key | Meaning |
+|-----|---------|
+| `name` | how the report names the rule; default `tag_rules[<index>]` |
+| `tags` | globs; one matching any of the repo's tags applies the rule |
+| `exposure`, `mission_impact`, `safety_impact` | the values to set |
+
+For each decision point, the first matching rule that sets it wins, in file order. A repo's
+own value beats a rule, and a rule beats `[settings.context.defaults]`. The report's
+`context[].set_by` names the rule behind each value. Rules turn on SSVC decisions, and a repo
+no rule or default covers is decided with the most urgent values.
+
 ## `[settings.ssvc]`
 
 | Key | Meaning |
