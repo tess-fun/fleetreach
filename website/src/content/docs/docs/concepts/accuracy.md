@@ -40,6 +40,9 @@ the CERT/CC SSVC table (row by row), `pyspdxtools`, `go list` and `uv lock --che
 Disagreements were fixed before release, among them safe-version selection across
 overlapping ranges, Go modules with several OSV entries, and SBOM timestamps.
 
+On 217 public images, every difference from Trivy and Grype has a reason: see the
+[image differential](/fleetreach/docs/concepts/image-differential/).
+
 A scan of 13 large open-source monorepos found and fixed four bugs, including polyglot repos
 where only the root ecosystem was detected. That class of bug, a silent false clean, is
 what the [fail-closed design](/fleetreach/docs/concepts/coverage-and-fail-closed/) and

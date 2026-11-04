@@ -69,6 +69,13 @@ pair both report, apart from those Red Hat fixes CentOS 8 never shipped (557 pai
 calls fixed). CentOS Stream is built ahead of RHEL, so Red Hat's records are not about its
 builds; its images are a coverage gap.
 
+RHEL 6 and 7 images also take Red Hat's Extended Life Support records where the release's own
+say nothing. CentOS 6 and 7 stay affected by those fixes, which it never shipped.
+
+Ubuntu stops a release's records at the end of standard support, and publishes universe's only
+for Ubuntu Pro, so Pro's records speak about CVEs the release never mentions, on any Ubuntu
+LTS image. Their fixes need a Pro subscription.
+
 Amazon Linux, Oracle Linux, Photon OS, Fedora and Bottlerocket publish no advisories to osv.dev, so
 fleetreach reads their vendors' own feeds and converts them to OSV records, cached beside the
 osv.dev exports:
@@ -228,11 +235,21 @@ warning does not change the exit code.
 ## Language packages in the image
 
 Lockfiles in the image (`package-lock.json`, `poetry.lock`, `Gemfile.lock`, `go.mod`, ...) are
-scanned by the same matchers as repositories. Installed Python packages (`*.dist-info`) and
-npm packages (`node_modules/*/package.json`) with no lockfile beside them are matched too.
-Files that belong to an OS package are skipped, so Debian's `python3-requests` is reported
-once, as the Debian package. Installed gems (`specifications/*.gemspec`) are matched as
-RubyGems.
+scanned by the same matchers as repositories. Installed Python packages (`*.dist-info`,
+`*.egg-info`) and any `package.json` naming a package and version, with no lockfile beside it,
+are matched too, unless it is marked `"private": true`, which keeps a project off the registry.
+Installed gems (`specifications/*.gemspec`) are matched as RubyGems, Composer's
+`vendor/composer/installed.json` as Packagist, and .NET's `*.deps.json` as NuGet.
+
+Go binaries are read for their build info, which nothing runs: the modules linked in and the
+toolchain, whose standard library is matched as `stdlib`. A main module built as `(devel)` takes
+the version stamped by `-ldflags`, if any, and otherwise only its dependencies are matched.
+Rust binaries are not read.
+
+Files that belong to an OS package are skipped when a distribution's advisories know that
+package, so Debian's `python3-requests` is reported once, as the Debian package. A vendor's
+package (`mongodb-database-tools`, `docker-ce-cli`) has no such advisories, so its files are
+scanned.
 
 Java archives (`.jar`, `.war`, `.ear`, `.par`, `.kar`, `.jpi`, `.hpi`) are opened, along with
 the archives nested in them, and matched as Maven packages. Nothing in them is run. Each is
@@ -371,5 +388,7 @@ images (all three formats, from CentOS 7 to Fedora 41) equal `rpm -qa`, field by
 findings on 11 real dpkg and apk images, older releases included, equal an independent
 evaluation of the same exports that uses the real tools for every version comparison; so do
 the 1,130 findings on 12 rpm images (AlmaLinux 8 and 9, Rocky 8 and 9, UBI 8 and 9, Azure
-Linux 3, CBL-Mariner 2, openSUSE Leap 15.5 and 15.6), with rpm deciding every comparison. See
+Linux 3, CBL-Mariner 2, openSUSE Leap 15.5 and 15.6), with rpm deciding every comparison. On
+217 public images, every difference from Trivy and Grype has a reason: see the
+[image differential](/fleetreach/docs/concepts/image-differential/). See also
 [Accuracy and validation](/fleetreach/docs/concepts/accuracy/).

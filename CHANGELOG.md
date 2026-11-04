@@ -14,6 +14,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   export, and a scan warns when an export has not changed for a year. Found by the Trivy and
   Grype differential.
 - A registry that rate limits a pull (429) is now waited for and tried again.
+- Files of third-party OS packages in images (`docker-ce-cli`, `mongodb-database-tools`) were
+  skipped as if a distribution's advisories covered them. They are skipped now only when a
+  distribution's records know the package, on dpkg, rpm and apk images.
+- Ubuntu Pro's records were read only for `+esm` images; on any LTS they now speak about CVEs
+  the release's own records never mention.
+- CentOS 6 images have no `os-release` and were not matched; they are now read from
+  `/etc/centos-release`, and RHEL's from `/etc/redhat-release`. CentOS stays affected by a Red
+  Hat fix made after it stopped.
+- Red Hat's Extended Life Support records are read for RHEL 6 and 7, and RHEL 10's records,
+  which go by minor release, are read at all. A Red Hat record naming only the source package
+  now applies to binaries it does not list.
+- A Ubuntu or Debian notice no longer joins the CVEs it covers into one finding that takes the
+  first one's status. A finding's title no longer names another release's status, and one
+  GitHub record naming packages in two ecosystems stays two findings.
+- Alpine ranges whose lower bound is above their fix hid open CVEs; the bound is dropped.
+- Go records from GitHub in osv.dev's Go export were dropped, and `+incompatible` versions missed
+  `last_affected` bounds.
+- A `package.json` marked `"private": true` is not matched as a registry package.
+- A retired Debian release now reports a coverage gap, where its CVEs went silently unreported.
 
 ### Added
 
@@ -47,6 +66,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   verifies its signature, or with `--vex-oci-unsigned`; others are listed in the report and
   change nothing. A document naming another image is refused. The latest statement decides,
   and a source package or a many-CVE advisory goes only when every binary and CVE is covered.
+- **Go binaries, Composer and .NET in images** (spec 16, row 10). Go binaries are read for their
+  build info and matched as Go modules and `stdlib`. Composer's `installed.json`, .NET's
+  `.deps.json`, any `package.json` and bare `.egg-info` files are read as installed packages.
+- **Image differential** (spec 16, row 10, phase 3). 217 public images against Trivy 0.73.0 and
+  Grype v0.121.1, every difference in findings classified, in `docs/differential`.
 - **Image layers and base images** (spec 16, row 10, phase 3). Every finding in an image names
   the layer that put the package there, with its digest and build step, and whether it belongs
   to the base image. Where several images share a base, the report's `base_images` and the

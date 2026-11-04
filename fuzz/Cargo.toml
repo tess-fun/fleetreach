@@ -67,3 +67,9 @@ doc = false
 bench = false
 
 [workspace]
+
+[[bin]]
+name = "go_binary"
+path = "fuzz_targets/go_binary.rs"
+test = false
+doc = false

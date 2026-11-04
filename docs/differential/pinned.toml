@@ -1,0 +1,868 @@
+[[image]]
+id = "alpine_3.12"
+ref = "public.ecr.aws/docker/library/alpine@sha256:cb64bbe7fa613666c234e1090e91427314ee18ec6420e9426cf4e7f314056813"
+
+[[image]]
+id = "alpine_3.14"
+ref = "public.ecr.aws/docker/library/alpine@sha256:71859b0c62df47efaeae4f93698b56a8dddafbf041778fd668bbd1ab45a864f8"
+
+[[image]]
+id = "alpine_3.16"
+ref = "public.ecr.aws/docker/library/alpine@sha256:0db9d004361b106932f8c7632ae54d56e92c18281e2dd203127d77405020abf6"
+
+[[image]]
+id = "alpine_3.18"
+ref = "public.ecr.aws/docker/library/alpine@sha256:fd032399cd767f310a1d1274e81cab9f0fd8a49b3589eba2c3420228cd45b6a7"
+
+[[image]]
+id = "alpine_3.19"
+ref = "public.ecr.aws/docker/library/alpine@sha256:b58899f069c47216f6002a6850143dc6fae0d35eb8b0df9300bbe6327b9c2171"
+
+[[image]]
+id = "alpine_3.20"
+ref = "public.ecr.aws/docker/library/alpine@sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e"
+
+[[image]]
+id = "alpine_3.21"
+ref = "public.ecr.aws/docker/library/alpine@sha256:f765c92e59538d44c6946f8073bdbffd2e8d5916981161faed1b30aa0ef0c2c5"
+
+[[image]]
+id = "alpine_3.22"
+ref = "public.ecr.aws/docker/library/alpine@sha256:dc92f017beea8e7f43263073d717f7bc011228c95d5312e440deb4d035bb4eec"
+
+[[image]]
+id = "debian_10"
+ref = "public.ecr.aws/docker/library/debian@sha256:2a0c1b9175adf759420fe0fbd7f5b449038319171eb76554bb76cbe172b62b42"
+
+[[image]]
+id = "debian_11"
+ref = "public.ecr.aws/docker/library/debian@sha256:c0a2ad73611131275b0e9a2e7544cfe3725f4268d4085d8c6f61fdd55aef7917"
+
+[[image]]
+id = "debian_12"
+ref = "public.ecr.aws/docker/library/debian@sha256:a0039cc6bb3eb2215aabcd3437cce8808a3858d86bf483eee2ee14fe4d2551c2"
+
+[[image]]
+id = "debian_13"
+ref = "public.ecr.aws/docker/library/debian@sha256:e2914ec98e08b24b4cee3cefcb9f90dfb5519f8d215a2ccf0c9a49b10b6e43de"
+
+[[image]]
+id = "debian_11-slim"
+ref = "public.ecr.aws/docker/library/debian@sha256:70509c95d1857a3704c0a5d92ee2e0adac95f612a9386889d70760bfd7c1ebba"
+
+[[image]]
+id = "debian_12-slim"
+ref = "public.ecr.aws/docker/library/debian@sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e"
+
+[[image]]
+id = "debian_13-slim"
+ref = "public.ecr.aws/docker/library/debian@sha256:1e1a22175fbf1b32157ddaf0219e1db4e5401fab2b94ed285add64d18587cd2d"
+
+[[image]]
+id = "ubuntu_18.04"
+ref = "public.ecr.aws/docker/library/ubuntu@sha256:dca176c9663a7ba4c1f0e710986f5a25e672842963d95b960191e2d9f7185ebe"
+
+[[image]]
+id = "ubuntu_20.04"
+ref = "public.ecr.aws/docker/library/ubuntu@sha256:c664f8f86ed5a386b0a340d981b8f81714e21a8b9c73f658c4bea56aa179d54a"
+
+[[image]]
+id = "ubuntu_22.04"
+ref = "public.ecr.aws/docker/library/ubuntu@sha256:8a2321a92b438238f93b4346fff61bc4259c99fdd4d9b52ee86f153fee0c344f"
+
+[[image]]
+id = "ubuntu_24.04"
+ref = "public.ecr.aws/docker/library/ubuntu@sha256:78d4744ead1f5b19b04d0df558ab182a5300903900755e515b2ca4d10eb2044d"
+
+[[image]]
+id = "ubuntu_25.04"
+ref = "public.ecr.aws/docker/library/ubuntu@sha256:34e8533bf27ac50f60bec267f6ce18c9aeb9556574e1ec1a8ce89926d32ea8f3"
+
+[[image]]
+id = "amazonlinux_2"
+ref = "public.ecr.aws/docker/library/amazonlinux@sha256:db0ac4a862dfaf310dff39eb9a8a064a8572280e043e8b038c3bc651ee1ee363"
+
+[[image]]
+id = "amazonlinux_2023"
+ref = "public.ecr.aws/docker/library/amazonlinux@sha256:edbd5bb0b4d454d1bb678f62e138fbb9b5133bd52718a566d4e411bbd3d82ad0"
+
+[[image]]
+id = "oraclelinux_7"
+ref = "public.ecr.aws/docker/library/oraclelinux@sha256:7bd67d839b5296423b49806513e985d1440c1666732bdab49d8fe4f2eaa8882e"
+
+[[image]]
+id = "oraclelinux_8"
+ref = "public.ecr.aws/docker/library/oraclelinux@sha256:e8381229b92a4e0735be3a270702f9c090e47e41c9f58076aa7471a19c73390e"
+
+[[image]]
+id = "oraclelinux_9"
+ref = "public.ecr.aws/docker/library/oraclelinux@sha256:33676baa86f98335ba44c423cad6860c92eca747c4e0506e283c8d5e8a677c01"
+
+[[image]]
+id = "oraclelinux_8-slim"
+ref = "public.ecr.aws/docker/library/oraclelinux@sha256:2189254876f5ec7a454094c1303c5610d2596a9a51cd5a1501fd11b06a95d6c4"
+
+[[image]]
+id = "oraclelinux_9-slim"
+ref = "public.ecr.aws/docker/library/oraclelinux@sha256:bb3d452d39d721b06733f754e1d4c5098915c7895e2cca9b33e6bd07696cbcaa"
+
+[[image]]
+id = "oraclelinux_10"
+ref = "public.ecr.aws/docker/library/oraclelinux@sha256:e246cc6daacf8b7cb83302eb55c19be9af9f8ffca84c877fbbbfd08e94acf3e7"
+
+[[image]]
+id = "rockylinux_8"
+ref = "public.ecr.aws/docker/library/rockylinux@sha256:2d05a9266523bbf24f33ebc3a9832e4d5fd74b973c220f2204ca802286aa275d"
+
+[[image]]
+id = "rockylinux_9"
+ref = "public.ecr.aws/docker/library/rockylinux@sha256:d644d203142cd5b54ad2a83a203e1dee68af2229f8fe32f52a30c6e1d3c3a9e0"
+
+[[image]]
+id = "rockylinux_8-minimal"
+ref = "public.ecr.aws/docker/library/rockylinux@sha256:29a6dc56405a7a07ba473645d5599808ff0fd0710d362e134bac18c8dbcf34d0"
+
+[[image]]
+id = "rockylinux_9-minimal"
+ref = "public.ecr.aws/docker/library/rockylinux@sha256:197b1569a8e5d46de75412cfd80b88a437d25bb2a5338dc82d5421d835245ec7"
+
+[[image]]
+id = "almalinux_8"
+ref = "public.ecr.aws/docker/library/almalinux@sha256:1965cb10f9c392766b2d544d3c1b997eb008d0e413c808e6a20086e87c802a80"
+
+[[image]]
+id = "almalinux_9"
+ref = "public.ecr.aws/docker/library/almalinux@sha256:465a5007813f19b5ac8a88cd161f3d8dcc6b1958e0c03c31f7c9a1b079d0a7da"
+
+[[image]]
+id = "almalinux_10"
+ref = "public.ecr.aws/docker/library/almalinux@sha256:be4feaca99462d71397c21275f3a8a000e5175aaa94bb9fb52adc4494662a442"
+
+[[image]]
+id = "almalinux_8-minimal"
+ref = "public.ecr.aws/docker/library/almalinux@sha256:0e1d3a40acf7d9e24e7b7bc2ff3f0fd32955adb069b38c45428b628f14664532"
+
+[[image]]
+id = "almalinux_9-minimal"
+ref = "public.ecr.aws/docker/library/almalinux@sha256:7dc48de6be22bf7271c217984310e413901c570c4e4cb58e9b6928565c2e4eb0"
+
+[[image]]
+id = "fedora_41"
+ref = "public.ecr.aws/docker/library/fedora@sha256:68bb1ba893be0c05991b2df55bc6571862bab7526fd6053b1ebacd53a2a75366"
+
+[[image]]
+id = "fedora_42"
+ref = "public.ecr.aws/docker/library/fedora@sha256:7c63468daf71fdc5bda3699cd483b169bb995b5137265d5ffe8f04e2ce87fbb8"
+
+[[image]]
+id = "fedora_43"
+ref = "public.ecr.aws/docker/library/fedora@sha256:3a515a26e06ffe17847b46f2f71a45140180ba2e39206d9c83fde648f0767cad"
+
+[[image]]
+id = "centos_6"
+ref = "public.ecr.aws/docker/library/centos@sha256:3688aa867eb84332460e172b9250c9c198fdfd8d987605fd53f246f498c60bcf"
+
+[[image]]
+id = "centos_7"
+ref = "public.ecr.aws/docker/library/centos@sha256:dead07b4d8ed7e29e98de0f4504d87e8880d4347859d839686a31da35a3b532f"
+
+[[image]]
+id = "centos_8"
+ref = "public.ecr.aws/docker/library/centos@sha256:a1801b843b1bfaf77c501e7a6d3f709401a1e0c83863037fa3aab063a7fdb9dc"
+
+[[image]]
+id = "photon_3.0"
+ref = "public.ecr.aws/docker/library/photon@sha256:503271ede129dbaf7946e82ea51f4e927d4e602a5ac52707c1e3f73b1424355f"
+
+[[image]]
+id = "photon_4.0"
+ref = "public.ecr.aws/docker/library/photon@sha256:1a1358b8e7db32123e8a20dd0e274331d5d9d1f8d9cae194a3969d623034d49f"
+
+[[image]]
+id = "photon_5.0"
+ref = "public.ecr.aws/docker/library/photon@sha256:9c69c85e441ee0192d5b0b1c3183d5595be655f3ecfff4fea5fc34a45513bfa7"
+
+[[image]]
+id = "registry.opensuse.org_opensuse_leap_15.5"
+ref = "registry.opensuse.org/opensuse/leap@sha256:8c8eb97f3eb24a2e00b05260c5272ecba2cdc2b621c2f85b6f6501064405d7c8"
+
+[[image]]
+id = "registry.opensuse.org_opensuse_leap_15.6"
+ref = "registry.opensuse.org/opensuse/leap@sha256:a783ee8a37eef5e06dfd44c715ff5a228dfce4328415e5bc5651c9d99a95045d"
+
+[[image]]
+id = "registry.opensuse.org_opensuse_leap_16.0"
+ref = "registry.opensuse.org/opensuse/leap@sha256:98652d07368918d2c746632cb69ae62d219a70fbb0f6e8fb005b931355e04bc2"
+
+[[image]]
+id = "registry.opensuse.org_opensuse_tumbleweed_latest"
+ref = "registry.opensuse.org/opensuse/tumbleweed@sha256:73873f450fd5174e9279c8566277734c4ed79ace96bd139ed04f9498017da73f"
+
+[[image]]
+id = "registry.suse.com_bci_bci-base_15.5"
+ref = "registry.suse.com/bci/bci-base@sha256:d9566b7970d05e7a0773130e5c8c6b7ee52897e9ad031e41822c8731b0aeb2ed"
+
+[[image]]
+id = "registry.suse.com_bci_bci-base_15.6"
+ref = "registry.suse.com/bci/bci-base@sha256:3d195d20c50b2c9d3676eeb18c9cd2a1f2407fab9978aad54dd2661ce6944615"
+
+[[image]]
+id = "registry.suse.com_bci_bci-micro_15.6"
+ref = "registry.suse.com/bci/bci-micro@sha256:af648da49d79a2a2af3615f7bfb04b57872aea1c7549c1bbb1add7faba55babd"
+
+[[image]]
+id = "registry.suse.com_bci_bci-minimal_15.6"
+ref = "registry.suse.com/bci/bci-minimal@sha256:84a0a183e0268f94361dc5bd19ff3e438f6682911cdcf82474d0c35a502606ce"
+
+[[image]]
+id = "registry.access.redhat.com_ubi7_ubi_latest"
+ref = "registry.access.redhat.com/ubi7/ubi@sha256:dce9f8caf5b4c3a3a511f71b0e2f23a6eada9bd1c8cc3c912f0e50b6d3b824fc"
+
+[[image]]
+id = "registry.access.redhat.com_ubi8_ubi_latest"
+ref = "registry.access.redhat.com/ubi8/ubi@sha256:018534b4e3bdc491de8b4dfd3b21662dba5c19fb24d11b8778d370de4d5e9eed"
+
+[[image]]
+id = "registry.access.redhat.com_ubi9_ubi_latest"
+ref = "registry.access.redhat.com/ubi9/ubi@sha256:a13ba2d8404f5eb59522fc5a6c1b852203d91d4f23e91d5ae3f14fcf4b3c66a6"
+
+[[image]]
+id = "registry.access.redhat.com_ubi10_ubi_latest"
+ref = "registry.access.redhat.com/ubi10/ubi@sha256:cddefa639135721e8ecd9edabda5d465118d52adfadf8d746b6a0ee49d19a3f8"
+
+[[image]]
+id = "registry.access.redhat.com_ubi8_ubi-minimal_latest"
+ref = "registry.access.redhat.com/ubi8/ubi-minimal@sha256:fd1e6b927c67a5d6ccad9baadc1781c60e71e4856274347344bdfb367eeaa1f7"
+
+[[image]]
+id = "registry.access.redhat.com_ubi9_ubi-minimal_latest"
+ref = "registry.access.redhat.com/ubi9/ubi-minimal@sha256:312b02a8f8ad5bdd219849c3e854cc5191c92fb7b8ce9b30fe2daed2de849094"
+
+[[image]]
+id = "registry.access.redhat.com_ubi9_ubi-micro_latest"
+ref = "registry.access.redhat.com/ubi9/ubi-micro@sha256:7325ffb45d8401b227033dc26c567e138c919731ed2f8119e921ddba71835f87"
+
+[[image]]
+id = "registry.access.redhat.com_ubi9_nodejs-20_latest"
+ref = "registry.access.redhat.com/ubi9/nodejs-20@sha256:e395d430f6534e9f8df4519cbbf11fe5a3ac8f2c1209c821bf7b05520dd7c7ce"
+
+[[image]]
+id = "registry.access.redhat.com_ubi9_python-311_latest"
+ref = "registry.access.redhat.com/ubi9/python-311@sha256:7b6cb58d3ff034df7b300800bd89a469d9bd2f739d43250d76b9c9e805307ab5"
+
+[[image]]
+id = "registry.access.redhat.com_ubi9_openjdk-17_latest"
+ref = "registry.access.redhat.com/ubi9/openjdk-17@sha256:979502ae9e2993c9fde09f4ef174663e797c889d5dec0c0bc10eabfddfd269ee"
+
+[[image]]
+id = "mcr.microsoft.com_cbl-mariner_base_core_2.0"
+ref = "mcr.microsoft.com/cbl-mariner/base/core@sha256:fdf30afe733831d3af0db95aa8e6870fb1094b2c4f531caaaa06e37481b95253"
+
+[[image]]
+id = "mcr.microsoft.com_azurelinux_base_core_3.0"
+ref = "mcr.microsoft.com/azurelinux/base/core@sha256:3f03ad7f9c0e04f10bb523538bcb0b1f8ca670c692c12a1ef9373a6b41b84fd7"
+
+[[image]]
+id = "mcr.microsoft.com_azurelinux_distroless_base_3.0"
+ref = "mcr.microsoft.com/azurelinux/distroless/base@sha256:3c930e76ff360e11f2e0124a89a4b1f577d7f45b973992a2da848883816ad452"
+
+[[image]]
+id = "cgr.dev_chainguard_wolfi-base_latest"
+ref = "cgr.dev/chainguard/wolfi-base@sha256:79233fc1de443dc3800c994a8d14fe4fec514e661c6f010485a82a80f3d32713"
+
+[[image]]
+id = "cgr.dev_chainguard_nginx_latest"
+ref = "cgr.dev/chainguard/nginx@sha256:39534c47d51ede2ce7a9c6c1437dfc16e4cfdcea3b7c0ddaf4c1aa04d1b8d644"
+
+[[image]]
+id = "cgr.dev_chainguard_python_latest"
+ref = "cgr.dev/chainguard/python@sha256:26c63a31f4b8bfc4c6b2404e16fd5fd37481f4bb871b31147def1af2202c71b2"
+
+[[image]]
+id = "cgr.dev_chainguard_node_latest"
+ref = "cgr.dev/chainguard/node@sha256:f1d67c3959dcb573d73552557a826f7a4c2fe1f63d6fec7fc05b1a66e146a78a"
+
+[[image]]
+id = "cgr.dev_chainguard_go_latest"
+ref = "cgr.dev/chainguard/go@sha256:06588856382ee981efb2d5deee5af157e69a16c8ff3c4d302264997a18d49767"
+
+[[image]]
+id = "cgr.dev_chainguard_redis_latest"
+ref = "cgr.dev/chainguard/redis@sha256:0fc5a9df5dae2320cc5606b7b4df950f2eaadd51b59e3a9cd476c68512cfcb4f"
+
+[[image]]
+id = "gcr.io_distroless_static-debian12_latest"
+ref = "gcr.io/distroless/static-debian12@sha256:6d635b323e6ab633016668144d38e368e2894bd824500369151573225078ee03"
+
+[[image]]
+id = "gcr.io_distroless_base-debian12_latest"
+ref = "gcr.io/distroless/base-debian12@sha256:d2add786f2a5f43d1ab3ae54cd3193de929d0d12c378ff60891921f56f3e47ff"
+
+[[image]]
+id = "gcr.io_distroless_cc-debian12_latest"
+ref = "gcr.io/distroless/cc-debian12@sha256:6dc8478fd8e790ae427aeff51e588573dec83b13adb7e5d10505a717927009b5"
+
+[[image]]
+id = "gcr.io_distroless_java21-debian12_latest"
+ref = "gcr.io/distroless/java21-debian12@sha256:5732983ef98fcde2b19a24d0d3b5f46644f059d339740e024f29a169eb8a2a65"
+
+[[image]]
+id = "gcr.io_distroless_python3-debian12_latest"
+ref = "gcr.io/distroless/python3-debian12@sha256:87406cabca8cc6846b5ea08bd9b25960b4e29b845f76c1af0e3f4a0affd1d7b4"
+
+[[image]]
+id = "gcr.io_distroless_nodejs22-debian12_latest"
+ref = "gcr.io/distroless/nodejs22-debian12@sha256:8e8237445c76a400dfa7832936605e5da55752ec245b5dd659466506ed010fa7"
+
+[[image]]
+id = "gcr.io_distroless_base-debian11_latest"
+ref = "gcr.io/distroless/base-debian11@sha256:2eebbdaceeec718d203fd32370a1c1960b7d9d550d6acb1bca4957ab8560e3fb"
+
+[[image]]
+id = "python_3.8"
+ref = "public.ecr.aws/docker/library/python@sha256:7aa279fb41dad2962d3c915aa6f6615134baa412ab5aafa9d4384dcaaa0af15d"
+
+[[image]]
+id = "python_3.9"
+ref = "public.ecr.aws/docker/library/python@sha256:d6ca7d9522a172c424721d3509ee12079f7864a742b6adf1eeb66b6c405307ee"
+
+[[image]]
+id = "python_3.10"
+ref = "public.ecr.aws/docker/library/python@sha256:1e6c6bf3c26f586f312cb8da3de3dd8d56c1950eb5dfd59e68630e60df0e3550"
+
+[[image]]
+id = "python_3.11"
+ref = "public.ecr.aws/docker/library/python@sha256:aa24d1f30c72a360c82754ec26aa72437ee72152123ec319415c9eb49ff16fff"
+
+[[image]]
+id = "python_3.12"
+ref = "public.ecr.aws/docker/library/python@sha256:279bb0f4c79859d7ebbb87f02f3954d496353ae6616b0ffcbf17178b4a9a4587"
+
+[[image]]
+id = "python_3.13"
+ref = "public.ecr.aws/docker/library/python@sha256:f23cf6c01ace0da9aa4d04fd078dba0fcce0c23cf3320329a38a2b6890761f9c"
+
+[[image]]
+id = "python_3.11-slim"
+ref = "public.ecr.aws/docker/library/python@sha256:6d10e720318bd84cc3d88af92bb5a47189222e17620a2fd214da6445e4afb679"
+
+[[image]]
+id = "python_3.12-slim"
+ref = "public.ecr.aws/docker/library/python@sha256:1148dbb014615300fa7e713b2f94f550c0d1c69780c0805f84f093ceee34dd0b"
+
+[[image]]
+id = "python_3.12-alpine"
+ref = "public.ecr.aws/docker/library/python@sha256:69ebe56e2a764c399514a0a6117131cb730cc4d0e71e85c08deb9af74cbb9f41"
+
+[[image]]
+id = "python_3.13-alpine"
+ref = "public.ecr.aws/docker/library/python@sha256:7712cfd23e0501f5cb58faa5e6e0d515c9939bdbce866921799b31e696a1d13c"
+
+[[image]]
+id = "node_16"
+ref = "public.ecr.aws/docker/library/node@sha256:c94b82f9827cab6e421b350965a9ef11b25b13ffbd1030536203d541f55dcbe2"
+
+[[image]]
+id = "node_18"
+ref = "public.ecr.aws/docker/library/node@sha256:eb29363371ee2859fad6a3c5af88d4abc6ff7d399addb13b7de3c1f11bdee6b9"
+
+[[image]]
+id = "node_20"
+ref = "public.ecr.aws/docker/library/node@sha256:cacf10e99285cbbc891452e31249c1b5ec3ba225f40028fae946b75aeaf1b66a"
+
+[[image]]
+id = "node_22"
+ref = "public.ecr.aws/docker/library/node@sha256:94c973596a8581a87ba42746ceb0b0e0b5246d098de45b1ce04dcc967cfc5dfb"
+
+[[image]]
+id = "node_24"
+ref = "public.ecr.aws/docker/library/node@sha256:8544b46b91d1a8c8bf8fc0d53ae9f276ed07d0ffa9098dc4a9c2f627363a13a0"
+
+[[image]]
+id = "node_20-slim"
+ref = "public.ecr.aws/docker/library/node@sha256:3d0f05455dea2c82e2f76e7e2543964c30f6b7d673fc1a83286736d44fe4c41c"
+
+[[image]]
+id = "node_20-alpine"
+ref = "public.ecr.aws/docker/library/node@sha256:afdf98210b07b586eb71fa22ba2e432e058e4cd1304d31ed60888755b8c865fb"
+
+[[image]]
+id = "node_22-alpine"
+ref = "public.ecr.aws/docker/library/node@sha256:025b8e975a61d94e33abeafaad1255ef44e4898cf1a1b6446860009c72e6d284"
+
+[[image]]
+id = "ruby_2.7"
+ref = "public.ecr.aws/docker/library/ruby@sha256:f4420f957a9b4fae91a8d8c7fab8ba43e5a76bd640c87cb2b20ef669039e1319"
+
+[[image]]
+id = "ruby_3.1"
+ref = "public.ecr.aws/docker/library/ruby@sha256:78004237c5b503d0b5f5a9af7d6a1afff39163d316bf02b84d7f9022a0470812"
+
+[[image]]
+id = "ruby_3.3"
+ref = "public.ecr.aws/docker/library/ruby@sha256:d763fb89f4db239074995851aa511a2c81e7ba4c1f5febdc130155e709306913"
+
+[[image]]
+id = "ruby_3.4"
+ref = "public.ecr.aws/docker/library/ruby@sha256:4acdd7de7f3a91eebc2d2376c92aebc08cffe00eb3ea4a2391a602e68f1c675d"
+
+[[image]]
+id = "ruby_3.3-alpine"
+ref = "public.ecr.aws/docker/library/ruby@sha256:351992bf612a20125e802b5d883368e4fb2cb0ff62b78f2717213ac3154d674e"
+
+[[image]]
+id = "php_7.4-apache"
+ref = "public.ecr.aws/docker/library/php@sha256:18b3497ee7f2099a90b66c23a0bc3d5261b12bab367263e1b40e9b004c39e882"
+
+[[image]]
+id = "php_8.1-fpm"
+ref = "public.ecr.aws/docker/library/php@sha256:99290dd99e3de7786de51dbcefbf7b3bfd460ce0723808cea7099d37f281b967"
+
+[[image]]
+id = "php_8.2-cli"
+ref = "public.ecr.aws/docker/library/php@sha256:52675732bad0b332e3ba89a76a18ca12bad23eb06a9735cbd812059785716d6c"
+
+[[image]]
+id = "php_8.3-apache"
+ref = "public.ecr.aws/docker/library/php@sha256:6de36404ca0ebab48551d9aed7351b48cca46e63a6f985fb94fa40f0f372c101"
+
+[[image]]
+id = "php_8.3-fpm-alpine"
+ref = "public.ecr.aws/docker/library/php@sha256:4bba7da77c6a8473122b7826df62763b5639d89b1eedfe6d38ffa10bb222f4fa"
+
+[[image]]
+id = "golang_1.19"
+ref = "public.ecr.aws/docker/library/golang@sha256:1611d4f97c5ab666d3c123d72b3bb646dd12bbf7577dd1388fdb191d54cdf440"
+
+[[image]]
+id = "golang_1.21"
+ref = "public.ecr.aws/docker/library/golang@sha256:e6ba96dde4af9f4e06caba475fa65e94e4c54fe4aa3e9f4f504c02178eb8934e"
+
+[[image]]
+id = "golang_1.23"
+ref = "public.ecr.aws/docker/library/golang@sha256:e87b2a5f6df2dff71ea330d55d54f4979eb380ae58a7e3aabc9d53121243e689"
+
+[[image]]
+id = "golang_1.24"
+ref = "public.ecr.aws/docker/library/golang@sha256:46fdd02b6cbcd624a4087ea298e4c8505e5d400c4ee5181e4dd06e2297d647ae"
+
+[[image]]
+id = "golang_1.23-alpine"
+ref = "public.ecr.aws/docker/library/golang@sha256:a7ecaac5efda22510d8c903bdc6b19026543f1eac3317d47363680df22161bd8"
+
+[[image]]
+id = "eclipse-temurin_8"
+ref = "public.ecr.aws/docker/library/eclipse-temurin@sha256:ff03bfa576c52365e8a19e50f4cf4e3b50dacfaf4f2b6d68797569115bd7eb51"
+
+[[image]]
+id = "eclipse-temurin_11"
+ref = "public.ecr.aws/docker/library/eclipse-temurin@sha256:9a9048a82b8b345f73bf1e9f6c58d8b9258d40bef6b98e43dc6f1d06164edd6e"
+
+[[image]]
+id = "eclipse-temurin_17"
+ref = "public.ecr.aws/docker/library/eclipse-temurin@sha256:101376794254cc58a1aa952a35ade1709cbc0f5942d5da35e226009171dde46e"
+
+[[image]]
+id = "eclipse-temurin_21"
+ref = "public.ecr.aws/docker/library/eclipse-temurin@sha256:0b84a658e0d745af944a4e4d40454bac2b2fba5252cf0f2990573a8aa0cb83e1"
+
+[[image]]
+id = "eclipse-temurin_21-jre-alpine"
+ref = "public.ecr.aws/docker/library/eclipse-temurin@sha256:62bf9bb9847846f8087545330db86e84dbdf5a13e7fe49a29f31d329091203c6"
+
+[[image]]
+id = "openjdk_8"
+ref = "public.ecr.aws/docker/library/openjdk@sha256:3af2ac94130765b73fc8f1b42ffc04f77996ed8210c297fcfa28ca880ff0a217"
+
+[[image]]
+id = "openjdk_11"
+ref = "public.ecr.aws/docker/library/openjdk@sha256:e81b7f317654b0f26d3993e014b04bcb29250339b11b9de41e130feecd4cd43c"
+
+[[image]]
+id = "openjdk_17"
+ref = "public.ecr.aws/docker/library/openjdk@sha256:98f0304b3a3b7c12ce641177a99d1f3be56f532473a528fda38d53d519cafb13"
+
+[[image]]
+id = "perl_5.38"
+ref = "public.ecr.aws/docker/library/perl@sha256:feded19f1a40e4199ae1553489fd70b41cedcb5cbf0b4516e1801cb81121352a"
+
+[[image]]
+id = "perl_5.40"
+ref = "public.ecr.aws/docker/library/perl@sha256:be959ecbdce4f44e8fad50400f44256e0be76e2f4a5344baf738f313e02ca2ef"
+
+[[image]]
+id = "rust_1.70"
+ref = "public.ecr.aws/docker/library/rust@sha256:b9331b83517a41d3c0d5dceb4ac83f3fc2c1b6d9781d8284d783ba04a7efd9ca"
+
+[[image]]
+id = "rust_1.85"
+ref = "public.ecr.aws/docker/library/rust@sha256:bf7d87666c4da6eace19e06d21bc4859c6e2a5c97a21ac273b0e082112753cf0"
+
+[[image]]
+id = "maven_3.9-eclipse-temurin-17"
+ref = "public.ecr.aws/docker/library/maven@sha256:c97d0fa42bed8c381518d76d7ca541ff5c6427b21fa93ac6fc4bd68ffb9a258d"
+
+[[image]]
+id = "gradle_8-jdk17"
+ref = "public.ecr.aws/docker/library/gradle@sha256:aa47d892a4019c39eae67ee738af969883e732a3e8f81925d91d6a6b9acc0961"
+
+[[image]]
+id = "elixir_1.16"
+ref = "public.ecr.aws/docker/library/elixir@sha256:5d15c71aa61c32323720b7f4137287b78c62c1f880aa247fb2b7cc26f1683db5"
+
+[[image]]
+id = "erlang_26"
+ref = "public.ecr.aws/docker/library/erlang@sha256:0bcc58174fb445f862c3c1a74bda16653a353b5b80cbe73d49615f231ca9ec0e"
+
+[[image]]
+id = "swift_5.10"
+ref = "public.ecr.aws/docker/library/swift@sha256:2d1c71154f1f9c8ca712997f49a7b42366978ae7d28fa9a76ea3672d62dbd251"
+
+[[image]]
+id = "julia_1.10"
+ref = "public.ecr.aws/docker/library/julia@sha256:9abf0b7186f0c5d9de383fd65110309d6ee87c7a0470ebc70006f14b4fce5912"
+
+[[image]]
+id = "r-base_4.4.1"
+ref = "public.ecr.aws/docker/library/r-base@sha256:498a8b27aeb8338860074cdd8da46c4bbbe423c569502b237e737a3f622cba80"
+
+[[image]]
+id = "mcr.microsoft.com_dotnet_aspnet_6.0"
+ref = "mcr.microsoft.com/dotnet/aspnet@sha256:81135806af87989b59279bc614dabb5e259bba91ee2bea4b53a44fb47feeb99f"
+
+[[image]]
+id = "mcr.microsoft.com_dotnet_aspnet_8.0"
+ref = "mcr.microsoft.com/dotnet/aspnet@sha256:0e274f165134f4a7802017c33a11afcb12b3d480de644d56d5ec4a41a5194ca9"
+
+[[image]]
+id = "mcr.microsoft.com_dotnet_aspnet_9.0"
+ref = "mcr.microsoft.com/dotnet/aspnet@sha256:6a04c40d0f59e86238e272d6342fbda7f53ceef01b3fa0304fa5ff963aa6c85f"
+
+[[image]]
+id = "mcr.microsoft.com_dotnet_sdk_8.0"
+ref = "mcr.microsoft.com/dotnet/sdk@sha256:458bbff44a116eaa8bc91ed43ecb4da4d0dd5cddc977585ad831185e466183c1"
+
+[[image]]
+id = "mcr.microsoft.com_dotnet_runtime_8.0"
+ref = "mcr.microsoft.com/dotnet/runtime@sha256:4bed79c73dbc051b932b41c3b54ae112d8fdc26d415f6f99dd53ab8d0e99aeb2"
+
+[[image]]
+id = "nginx_1.21"
+ref = "public.ecr.aws/docker/library/nginx@sha256:25dedae0aceb6b4fe5837a0acbacc6580453717f126a095aa05a3c6fcea14dd4"
+
+[[image]]
+id = "nginx_1.25"
+ref = "public.ecr.aws/docker/library/nginx@sha256:e688fed0b0c7513a63364959e7d389c37ac8ecac7a6c6a31455eca2f5a71ab8b"
+
+[[image]]
+id = "nginx_1.27"
+ref = "public.ecr.aws/docker/library/nginx@sha256:fafd5f55296511cd0f1c991efa0cb85f323449bf643f3b6d760c6542f020d6e5"
+
+[[image]]
+id = "nginx_1.27-alpine"
+ref = "public.ecr.aws/docker/library/nginx@sha256:62223d644fa234c3a1cc785ee14242ec47a77364226f1c811d2f669f96dc2ac8"
+
+[[image]]
+id = "nginx_stable-alpine"
+ref = "public.ecr.aws/docker/library/nginx@sha256:84ed8c0dd296c188bfc24ed506f46589e9285fb0b11cf3a04d91d524d3067e11"
+
+[[image]]
+id = "httpd_2.4.54"
+ref = "public.ecr.aws/docker/library/httpd@sha256:c13feaef62bdb03e65e645f47d9780adea5a080c78eb9e4b3c32e861327262b4"
+
+[[image]]
+id = "httpd_2.4"
+ref = "public.ecr.aws/docker/library/httpd@sha256:c492904b9367e83e16e0e8c0a3175b0bb97b861023a17dcdfd09cd4c8b6efd9f"
+
+[[image]]
+id = "httpd_2.4-alpine"
+ref = "public.ecr.aws/docker/library/httpd@sha256:013ffcb0bf1a584c1939c6d7889ff5c68b8ea903e065fc10e4eb6da492767f77"
+
+[[image]]
+id = "tomcat_8.5"
+ref = "public.ecr.aws/docker/library/tomcat@sha256:a8db74c98a712eb765cdb94908a22a1566df5e1b663095f86bf6986a8c5991a9"
+
+[[image]]
+id = "tomcat_9.0"
+ref = "public.ecr.aws/docker/library/tomcat@sha256:7bb7874d08add789f9a802c456fce4d42cd54289becbeeb5c193f4d31d625a02"
+
+[[image]]
+id = "tomcat_10.1"
+ref = "public.ecr.aws/docker/library/tomcat@sha256:d6200a6b822a4ebe9c71692f56771c082d613e7b1dda076b4a88f60ac2110d9a"
+
+[[image]]
+id = "tomcat_11.0"
+ref = "public.ecr.aws/docker/library/tomcat@sha256:36d06c1dd65071399f8965388a61a396b876d7b2c7950073b48f149dea656ca4"
+
+[[image]]
+id = "haproxy_2.4"
+ref = "public.ecr.aws/docker/library/haproxy@sha256:1ffd54dcc67a7dff13a9953d182a3cf52811e553da1e9abe9e9d3bfd1b1019ca"
+
+[[image]]
+id = "haproxy_2.8"
+ref = "public.ecr.aws/docker/library/haproxy@sha256:a711c6dd78472e82771d61cd9f205757993bb093544feb4fa37e0eb55e99f9c3"
+
+[[image]]
+id = "haproxy_3.0"
+ref = "public.ecr.aws/docker/library/haproxy@sha256:02442e5a661fddec59ab4f52a89bfdbee09055f4662344422901e14bc5dea06a"
+
+[[image]]
+id = "traefik_2.11"
+ref = "public.ecr.aws/docker/library/traefik@sha256:13064dcca35341355072281e92861d4ed5ee6134013e1f243b7b6d8f55107f75"
+
+[[image]]
+id = "traefik_3.2"
+ref = "public.ecr.aws/docker/library/traefik@sha256:684cb01614fc38240a5f13e302920a12ba3c6d604ff90d0a6c0ade9a1294a712"
+
+[[image]]
+id = "caddy_2.8"
+ref = "public.ecr.aws/docker/library/caddy@sha256:b95ed06fbc6d74d24a40902090c8cc6086ce7d08ba60a3a7e8e62bf164a9d7bb"
+
+[[image]]
+id = "postgres_12"
+ref = "public.ecr.aws/docker/library/postgres@sha256:4bf4eb8e5932534db5fb9d3d91a212a91406aecf1fa626a60df4a9e2781d73ae"
+
+[[image]]
+id = "postgres_14"
+ref = "public.ecr.aws/docker/library/postgres@sha256:88fcdf80f9bacd1976ae84b85813e8a7f2c26cb1b23cb6068423094e9674d830"
+
+[[image]]
+id = "postgres_16"
+ref = "public.ecr.aws/docker/library/postgres@sha256:b95b87e93ceb7594715d5c71fb6e09f6fc878851ab537735d617325eb9ba8b1b"
+
+[[image]]
+id = "postgres_17"
+ref = "public.ecr.aws/docker/library/postgres@sha256:0b81cec82228160abfa753aeaad0609b709eb26eeb950f2e404ad2326e1cc370"
+
+[[image]]
+id = "postgres_16-alpine"
+ref = "public.ecr.aws/docker/library/postgres@sha256:cbf42f0edc946c0bc1b8eeed62403734e1f25dc67a3491455d07a92fdb558b28"
+
+[[image]]
+id = "mysql_5.7"
+ref = "public.ecr.aws/docker/library/mysql@sha256:dab0a802b44617303694fb17d166501de279c3031ddeb28c56ecf7fcab5ef0da"
+
+[[image]]
+id = "mysql_8.0"
+ref = "public.ecr.aws/docker/library/mysql@sha256:62fb722c78b24245ddff1796a0fcee4a49cc5b87e0aaaf20c92d1da9e0a2497b"
+
+[[image]]
+id = "mysql_8.4"
+ref = "public.ecr.aws/docker/library/mysql@sha256:72c368d898861f3b3a07af0e6d690400f44f048799ed46822783d9224cc2c86d"
+
+[[image]]
+id = "mariadb_10.6"
+ref = "public.ecr.aws/docker/library/mariadb@sha256:2b7259ea544fd0bfa1c58ac83a65042a5da5ed42a19a79323d61b50c3670eacc"
+
+[[image]]
+id = "mariadb_10.11"
+ref = "public.ecr.aws/docker/library/mariadb@sha256:6c65a843396dc6c78dd0da19eccaa0a91d25d9d26a4c2afcb75010ac3f59f5ea"
+
+[[image]]
+id = "mariadb_11.4"
+ref = "public.ecr.aws/docker/library/mariadb@sha256:d9fc02976678d4236145299c40dc267051681b33489c994f0ec4a097ce4a9521"
+
+[[image]]
+id = "mongo_4.4"
+ref = "public.ecr.aws/docker/library/mongo@sha256:7250955b2354cc6ad3548b428628e441e34625caa39dd64906e85adf369e1942"
+
+[[image]]
+id = "mongo_6"
+ref = "public.ecr.aws/docker/library/mongo@sha256:268eb517abcb8a1bb4cf5f290ec2ac37185e78bfb62e7111576bbb3d8b092456"
+
+[[image]]
+id = "mongo_7"
+ref = "public.ecr.aws/docker/library/mongo@sha256:e634fcaae4d0915b365fb88c076dd33c851ed61a611c7ee9816aba6d6b5159cd"
+
+[[image]]
+id = "mongo_8"
+ref = "public.ecr.aws/docker/library/mongo@sha256:03c33634f52626f197bba89ad16e6482ed12425d9588249660bf2f64be8e553c"
+
+[[image]]
+id = "redis_6"
+ref = "public.ecr.aws/docker/library/redis@sha256:13d6d1e01c742fa698d8de5e8b2b8f9942499da0e222332ae6622704b4e5454c"
+
+[[image]]
+id = "redis_7"
+ref = "public.ecr.aws/docker/library/redis@sha256:a7aad82554197a54c653388bfded882a59d6b4a02468484bc31bae6772dcc42c"
+
+[[image]]
+id = "redis_7-alpine"
+ref = "public.ecr.aws/docker/library/redis@sha256:1cf73a2f04808e55a8bd2f5706c2aa0ebb0f71938f93deb7af79f48311cd5cb9"
+
+[[image]]
+id = "memcached_1.6"
+ref = "public.ecr.aws/docker/library/memcached@sha256:a433b62b243c3c5be2ce9ec535e4f6d07444fde28af84a4d6231136eb711e8ed"
+
+[[image]]
+id = "cassandra_4.1"
+ref = "public.ecr.aws/docker/library/cassandra@sha256:57b251cede6ebb8402c9cfc8ee8931438086ce2640a5657e80ecebc9f4cf3bbd"
+
+[[image]]
+id = "cassandra_5.0"
+ref = "public.ecr.aws/docker/library/cassandra@sha256:63c4034619780ec20badc8e2f8c6113cb25eb3cb1d7990a2251ff4cf6a59d35b"
+
+[[image]]
+id = "rabbitmq_3.12-management"
+ref = "public.ecr.aws/docker/library/rabbitmq@sha256:b8ce508521a7361caa281bb1d1327e5c26b9d488e056de80a7ef725953820ccb"
+
+[[image]]
+id = "rabbitmq_3.13"
+ref = "public.ecr.aws/docker/library/rabbitmq@sha256:d5c647e05eebc9d42ddcd242375a55eaf5e88d2403bbdeb79a96744c532a29ba"
+
+[[image]]
+id = "rabbitmq_4.0"
+ref = "public.ecr.aws/docker/library/rabbitmq@sha256:4f44c3c18fe6147732779faf6797f04c933b930430ff62f342431076888461f3"
+
+[[image]]
+id = "influxdb_2.7"
+ref = "public.ecr.aws/docker/library/influxdb@sha256:7ee90806d2b078a1d70a8ce3f454698997d992427f369ce7f2df11689de80644"
+
+[[image]]
+id = "neo4j_5"
+ref = "public.ecr.aws/docker/library/neo4j@sha256:fe8607113c4177fbd2466bf2c30f1ebab5b9530594e86487c58c98e113145192"
+
+[[image]]
+id = "couchdb_3"
+ref = "public.ecr.aws/docker/library/couchdb@sha256:b7e093419252f0bb3ef41afcacfcf1e0cc7e8d0854871d7545ff57191c906689"
+
+[[image]]
+id = "solr_9"
+ref = "public.ecr.aws/docker/library/solr@sha256:fd5264b4a931b37bff9437fa0e38649b5997ad147e2549f54eb83708c95f6fcc"
+
+[[image]]
+id = "zookeeper_3.9"
+ref = "public.ecr.aws/docker/library/zookeeper@sha256:732d1ba0e4033aa2750b786580a237f3274a5dd6945877e1cf21f98642fde4d9"
+
+[[image]]
+id = "wordpress_6"
+ref = "public.ecr.aws/docker/library/wordpress@sha256:85c24b4b92dc7fcea65317d2be635643189d0d8ad4bba65d79a660fd018fe246"
+
+[[image]]
+id = "wordpress_6-php8.2-apache"
+ref = "public.ecr.aws/docker/library/wordpress@sha256:8148e0aad813a051d5da808ac1cf3546e0fd4a64fb52c93b8078143ec827fdf4"
+
+[[image]]
+id = "drupal_10"
+ref = "public.ecr.aws/docker/library/drupal@sha256:0071823943dd1936d650e5a73d33202810c8c645988a44354085ad9bbb877e1e"
+
+[[image]]
+id = "joomla_5"
+ref = "public.ecr.aws/docker/library/joomla@sha256:f96e5ffa3d7c268e69d78902b779986345e828926a6c2bdb38c333871125cb7e"
+
+[[image]]
+id = "nextcloud_29"
+ref = "public.ecr.aws/docker/library/nextcloud@sha256:fdd160489f15f07aa6e352d8c628bf09c945d5199e9fa27eaf104b04177beaf6"
+
+[[image]]
+id = "ghost_5"
+ref = "public.ecr.aws/docker/library/ghost@sha256:db4c990b507f9063e9e1428ea59867bf39f5ebad42246eb1b17cf00ed8b4ac0b"
+
+[[image]]
+id = "matomo_5"
+ref = "public.ecr.aws/docker/library/matomo@sha256:58b15e160a51042497d23a917adc8e7e00dfebdcd946ee4ab35a49afed9cb3ee"
+
+[[image]]
+id = "redmine_5"
+ref = "public.ecr.aws/docker/library/redmine@sha256:536f29c9c573e8e5049478953c126d1e90a041c4d91aecbbf9eaceabcdb648be"
+
+[[image]]
+id = "mediawiki_1.42"
+ref = "public.ecr.aws/docker/library/mediawiki@sha256:05f5f1689627cd52ddb1b2f4c6bba9f78d486ca4a52568b4efe1837aef0d445c"
+
+[[image]]
+id = "phpmyadmin_5"
+ref = "public.ecr.aws/docker/library/phpmyadmin@sha256:e97b771515ecfb8f23cc6e0e11f4718cb76d7a72df7c414f2c20f92e70ee62ed"
+
+[[image]]
+id = "adminer_4"
+ref = "public.ecr.aws/docker/library/adminer@sha256:c641103725c7f99a3e7c7f5008324bc081ff9bdee3a746b1e3ffd3b80e83ed91"
+
+[[image]]
+id = "odoo_17"
+ref = "public.ecr.aws/docker/library/odoo@sha256:94afce4bda54095b67f1040e3e12847776d22ad8591d977f480dabb7dc9a4a04"
+
+[[image]]
+id = "sonarqube_lts-community"
+ref = "public.ecr.aws/docker/library/sonarqube@sha256:a6f6e13d2805751f22bbd8f31e18f104fcc87aec14b4ccfb588c5b916c56ee07"
+
+[[image]]
+id = "registry_2"
+ref = "public.ecr.aws/docker/library/registry@sha256:46faa9a1ae6813194b53921a370f2f4f8c5e1aae228a89bceafef5847a6a3278"
+
+[[image]]
+id = "busybox_1.36"
+ref = "public.ecr.aws/docker/library/busybox@sha256:b7f3d86d6e84fc17718c48bcde1450807faa2d56704205c697b4bd5df7b9e29f"
+
+[[image]]
+id = "docker_27"
+ref = "public.ecr.aws/docker/library/docker@sha256:f649ef046008ca7f926a2571c32b0ac22e5c59eb61b959617f9acc2a4c638cf5"
+
+[[image]]
+id = "kong_3.7"
+ref = "public.ecr.aws/docker/library/kong@sha256:c38f27046d3966189c15c9652c80ef8740f287dbe7a49dabc6fa9a47e4a7440a"
+
+[[image]]
+id = "nats_2.10"
+ref = "public.ecr.aws/docker/library/nats@sha256:c5b47eee3ccfeeeaac9635ea601fe9229dc947871ab36d1f73ca2f08eaa465a6"
+
+[[image]]
+id = "elasticsearch_8.15.0"
+ref = "public.ecr.aws/docker/library/elasticsearch@sha256:c8f7d9e06b89dd28ff16f952bdfe08d9bb38cb2d0a1db1ac93076567433ad5c9"
+
+[[image]]
+id = "logstash_8.15.0"
+ref = "public.ecr.aws/docker/library/logstash@sha256:cb8913653069e7e0c0bdfa9100c9982fd89b0d706100285f554e1865df9bb186"
+
+[[image]]
+id = "kibana_8.15.0"
+ref = "public.ecr.aws/docker/library/kibana@sha256:916b2ce57c053333cb4f649e170e688d85a248cbaec23ddfc69dc72a8d3a9323"
+
+[[image]]
+id = "docker.io_jenkins_jenkins_lts"
+ref = "docker.io/jenkins/jenkins@sha256:19db581de85e7ce6a1ad89e55a0318d1114e4f103d2dc25493a235ff2b26d044"
+
+[[image]]
+id = "docker.io_gitea_gitea_1.22"
+ref = "docker.io/gitea/gitea@sha256:dfc61e347c8b582df918f4556401bf2cecdfbdb56c5282ae9488dd76fca3e41c"
+
+[[image]]
+id = "docker.io_grafana_grafana_11.2.0"
+ref = "docker.io/grafana/grafana@sha256:37a5d8860aef847dfa09f5f8947f010f6479f98cf7820b5186f9c6314b44be60"
+
+[[image]]
+id = "quay.io_prometheus_prometheus_v2.53.0"
+ref = "quay.io/prometheus/prometheus@sha256:b8e8cec4bfdfda676f4334f4f2aab9d8758f51d76ac41fc35224f6ae79b79f54"
+
+[[image]]
+id = "quay.io_keycloak_keycloak_26.0"
+ref = "quay.io/keycloak/keycloak@sha256:ecd43971114b0c764f8a3288dddab73f98cb473daccc4feaffe4dc14adeaf866"
+
+[[image]]
+id = "docker.io_hashicorp_vault_1.17"
+ref = "docker.io/hashicorp/vault@sha256:c675841048daf201dd95251a1132595f296a2843654c2ea5fba24c277f57e9fd"
+
+[[image]]
+id = "docker.io_hashicorp_consul_1.19"
+ref = "docker.io/hashicorp/consul@sha256:1863b76110b65b9b40c355a3082db89fba499a454c931c3365ad12aa54b9d2ef"
+
+[[image]]
+id = "quay.io_coreos_etcd_v3.5.15"
+ref = "quay.io/coreos/etcd@sha256:63ca0fa512664b8351bfa6175e88bea0beeff9857326f973227d47a3181ae602"
+
+[[image]]
+id = "docker.io_apache_airflow_2.10.2"
+ref = "docker.io/apache/airflow@sha256:2918ecce79a7927dcaaacbdf13cb7034d6913b8a2753f09efc24475df7bf8c0e"
+
+[[image]]
+id = "docker.io_apache_superset_4.0.2"
+ref = "docker.io/apache/superset@sha256:21e01d0d3b9cc479bf5355684ecd8722e3b16fdfa78a1f3fda61cbb827958d76"
+
+[[image]]
+id = "docker.io_portainer_portainer-ce_2.21.1"
+ref = "docker.io/portainer/portainer-ce@sha256:113a8fc3b1094bd1c57a7a4906b7d03a92b7de12788c83541d2880c64f85beef"
+
+[[image]]
+id = "docker.io_gitlab_gitlab-runner_latest"
+ref = "docker.io/gitlab/gitlab-runner@sha256:fb8318ad61d51ca1544846493b33adb804187afbc035730a4fa3fc53678ce99a"
+
