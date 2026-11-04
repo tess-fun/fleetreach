@@ -17,6 +17,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   someone else pushed to. `--close-obsolete` closes requests the plan no longer wants, only
   in repos it scanned.
 - `fix apply --max-prs`, `--canary` and `--stop-after-failures` limit a rollout.
+- **Gradle builds without a lockfile are scanned.** They were skipped before. Version catalogs
+  and literal declarations resolve through the POM resolver, with the highest version winning,
+  and the result is always marked partial. Against real Gradle, 163 of 173 packages matched on
+  Spring PetClinic, 17 of 18 on Aeron and 71 of 109 on the Airflow Java SDK.
+- Releases add static musl builds for Linux x86-64 and ARM64, and a Windows ARM64 build. The
+  install script picks musl on Alpine.
 - `pnpm-lock.yaml` version 5 is read, and a `catalog:` dependency is proven to use the version
   its importer records. Across 39 real lockfiles, the package sets match `pnpm list`, `yarn list`,
   `yarn info` and `bun pm ls` on 35; the other four are explained in

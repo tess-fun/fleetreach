@@ -566,6 +566,10 @@ fn scope_rank(scope: &str) -> u8 {
 }
 
 /// (dependency, depth, parent node, scope, inherited exclusions, root module index)
+/// Group, artifact, type and classifier: what mediation compares.
+type MgmtKey = (String, String, String, String);
+type Pins = BTreeMap<MgmtKey, String>;
+
 type Queue = VecDeque<(Dep, usize, String, String, Vec<(String, String)>, usize)>;
 
 /// Queue an artifact's own dependencies in the scope they inherit (Maven's table): optional
@@ -613,7 +617,6 @@ fn enqueue_children(
 ///
 /// When `dir/pom.xml` cannot be read or parsed: failing closed.
 pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String> {
-    const ROOT: &str = "(root)";
     let mut r = Resolver {
         source,
         cache: BTreeMap::new(),
@@ -642,6 +645,84 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
         .map(|m| ((m.group.clone(), m.artifact.clone()), m.clone()))
         .collect();
 
+    let (packages, graph) = walk(&mut r, &modules, &local, &Pins::new(), None);
+    Ok(Resolution {
+        packages,
+        graph,
+        missing: r.missing.into_iter().collect(),
+    })
+}
+
+/// Resolve one POM text the way Gradle does: every version requested anywhere competes and the
+/// highest wins. Each pass pins the winners, which can bring in new requests, until nothing
+/// rises.
+///
+/// # Errors
+///
+/// When `xml` cannot be parsed.
+pub(crate) fn resolve_gradle_module(
+    xml: &str,
+    source: &dyn PomSource,
+) -> Result<Resolution, String> {
+    const MAX_PASSES: usize = 32;
+    let mut r = Resolver {
+        source,
+        cache: BTreeMap::new(),
+        missing: BTreeSet::new(),
+    };
+    let modules = vec![r.effective(xml, None, 0)?];
+    let local = BTreeMap::new();
+    let mut pins = Pins::new();
+    for _ in 0..MAX_PASSES {
+        let mut requests = Pins::new();
+        let (packages, graph) = walk(&mut r, &modules, &local, &pins, Some(&mut requests));
+        let before = pins.len();
+        let mut raised = false;
+        for (key, version) in requests {
+            raised |= raise(&mut pins, key, &version);
+        }
+        if !raised && before == pins.len() {
+            return Ok(Resolution {
+                packages,
+                graph,
+                missing: r.missing.into_iter().collect(),
+            });
+        }
+    }
+    let (packages, graph) = walk(&mut r, &modules, &local, &pins, None);
+    r.missing
+        .insert("version conflicts did not settle".to_string());
+    Ok(Resolution {
+        packages,
+        graph,
+        missing: r.missing.into_iter().collect(),
+    })
+}
+
+/// Keep the higher of `version` and what `pins` holds for `key`. True if it rose.
+fn raise(pins: &mut Pins, key: MgmtKey, version: &str) -> bool {
+    let Some(new) = parse_maven_version(version) else {
+        return false;
+    };
+    match pins.get(&key).and_then(|v| parse_maven_version(v)) {
+        Some(old) if old >= new => false,
+        _ => {
+            pins.insert(key, version.to_string());
+            true
+        }
+    }
+}
+
+/// Walk the dependency tree from `modules`. `pins` fix an artifact's version wherever it
+/// appears; `requests`, when given, collects the highest version each artifact was asked for.
+fn walk(
+    r: &mut Resolver<'_>,
+    modules: &[Effective],
+    local: &BTreeMap<(String, String), Effective>,
+    pins: &Pins,
+    mut requests: Option<&mut Pins>,
+) -> (Vec<ResolvedDep>, DepGraph) {
+    const ROOT: &str = "(root)";
     let mut graph = DepGraph::new(ROOT);
     // Mediation is per group, artifact, type and classifier, as in Maven.
     let mut selected: BTreeMap<(String, String, String, String), ResolvedDep> = BTreeMap::new();
@@ -672,6 +753,17 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
         let key = dep.mgmt_key();
         let name = format!("{}:{}", dep.group, dep.artifact);
         graph.add_edges(&parent, [name.clone()]);
+        if let Some(requests) = requests.as_deref_mut() {
+            let managed = modules[root_ix].mgmt.get(&key);
+            for version in [
+                dep.version.as_ref(),
+                managed.and_then(|m| m.version.as_ref()),
+            ] {
+                if let Some(v) = version.filter(|v| !v.starts_with(['[', '('])) {
+                    raise(requests, key.clone(), v);
+                }
+            }
+        }
         if let Some(existing) = selected.get_mut(&key) {
             // Nearest wins for the version; the scope widens to the broadest path
             // (compile > runtime > provided > test), and a widened artifact's own
@@ -694,8 +786,10 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
         let managed = (depth > 0)
             .then(|| modules[root_ix].mgmt.get(&dep.mgmt_key()))
             .flatten();
-        let declared = managed
-            .and_then(|m| m.version.clone())
+        let declared = pins
+            .get(&key)
+            .cloned()
+            .or_else(|| managed.and_then(|m| m.version.clone()))
             .or(dep.version.clone());
         let Some(declared) = declared else {
             r.missing
@@ -727,14 +821,11 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
         let Some(eff) = eff else { continue };
         enqueue_children(&eff, &scope, &exclusions, depth, &name, root_ix, &mut queue);
     }
-    Ok(Resolution {
-        packages: order
-            .into_iter()
-            .filter_map(|k| selected.remove(&k))
-            .collect(),
-        graph,
-        missing: r.missing.into_iter().collect(),
-    })
+    let packages = order
+        .into_iter()
+        .filter_map(|k| selected.remove(&k))
+        .collect();
+    (packages, graph)
 }
 
 #[cfg(test)]

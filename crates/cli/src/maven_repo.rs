@@ -19,7 +19,7 @@ const CENTRAL: &str = "https://repo.maven.apache.org/maven2";
 pub struct FetchArgs {
     #[arg(
         long,
-        help = "resolve pom.xml with POMs fetched when they are not in ~/.m2, from the mirror of Maven Central that settings.xml names, else Maven Central (sends each artifact's coordinates there); without it, only local repositories are used"
+        help = "resolve pom.xml and Gradle builds with POMs fetched when they are not in ~/.m2, from the mirror of Maven Central that settings.xml names, else Maven Central (sends each artifact's coordinates there); without it, only local repositories are used"
     )]
     pub maven_fetch: bool,
     #[arg(

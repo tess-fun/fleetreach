@@ -66,7 +66,7 @@ Options:
           add supply-chain signals as warnings: install scripts, non-registry sources, unexpected registries, missing checksums, third-party GitHub Actions on movable tags
 
       --maven-fetch
-          resolve pom.xml with POMs fetched when they are not in ~/.m2, from the mirror of Maven Central that settings.xml names, else Maven Central (sends each artifact's coordinates there); without it, only local repositories are used
+          resolve pom.xml and Gradle builds with POMs fetched when they are not in ~/.m2, from the mirror of Maven Central that settings.xml names, else Maven Central (sends each artifact's coordinates there); without it, only local repositories are used
 
       --maven-settings <FILE>
           the Maven settings.xml whose mirror --maven-fetch uses (default: ~/.m2/settings.xml when present)

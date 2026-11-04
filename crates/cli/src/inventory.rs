@@ -169,6 +169,20 @@ fn unit_inventory(unit: &ScanUnit, maven: Option<&Remote>) -> Result<Vec<SourceI
                     "gradle.lockfile",
                     packages,
                 ))
+            } else if crate::orchestrate::is_gradle_without_lock(dir) {
+                let (resolution, reason) = crate::orchestrate::resolve_gradle(dir, maven);
+                let packages = resolution
+                    .packages
+                    .iter()
+                    .map(|p| Package::new(p.name.clone(), p.version.clone(), p.direct, p.dev))
+                    .collect();
+                one(SourceInventory::new(
+                    Ecosystem::Maven,
+                    crate::orchestrate::GRADLE_SOURCE,
+                    packages,
+                )
+                .with_graph(&resolution.graph)
+                .with_gap(Coverage::Partial, reason))
             } else {
                 one(pom(dir, maven)?)
             }

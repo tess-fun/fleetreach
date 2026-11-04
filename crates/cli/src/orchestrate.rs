@@ -1574,7 +1574,11 @@ fn dir_ecosystems(dir: &Path, files: &BTreeSet<String>, is_root: bool) -> Vec<Ec
     if has("mix.lock") {
         found.push(Ecosystem::Hex);
     }
-    if has("gradle.lockfile") || (is_root && has("pom.xml")) {
+    // Below the root a `build.gradle` is a subproject unless a settings file makes it a build.
+    let gradle = has("settings.gradle")
+        || has("settings.gradle.kts")
+        || (is_root && fleetreach_maven::has_gradle_build(dir));
+    if has("gradle.lockfile") || (is_root && has("pom.xml")) || gradle {
         found.push(Ecosystem::Maven);
     }
     found
@@ -1961,6 +1965,56 @@ fn whole<E>(scan: Result<TierCScan, E>) -> Result<(TierCScan, Vec<Gap>), E> {
     scan.map(|scan| (scan, Vec::new()))
 }
 
+pub(crate) const GRADLE_SOURCE: &str = "build.gradle";
+
+/// A Gradle build with neither a `gradle.lockfile` nor a `pom.xml` to read instead.
+pub(crate) fn is_gradle_without_lock(dir: &Path) -> bool {
+    !dir.join("gradle.lockfile").is_file()
+        && !dir.join("pom.xml").is_file()
+        && fleetreach_maven::has_gradle_build(dir)
+}
+
+/// Resolve a Gradle build from its catalog and literal declarations, with the coverage note it
+/// always carries: plugins can add dependencies nothing short of Gradle can see.
+pub(crate) fn resolve_gradle(
+    dir: &Path,
+    remote: Option<&crate::maven_repo::Remote>,
+) -> (fleetreach_maven::Resolution, String) {
+    let local = crate::maven_repo::local();
+    let mut sources: Vec<&dyn fleetreach_maven::PomSource> = vec![&local];
+    if let Some(remote) = remote {
+        sources.push(remote);
+    }
+    let resolution = fleetreach_maven::resolve_gradle(dir, &fleetreach_maven::Chain(sources));
+    let mut reason = "read without running Gradle, so plugins can add dependencies not listed \
+                      here; `gradle dependencies --write-locks` gives the exact set"
+        .to_string();
+    if !resolution.missing.is_empty() {
+        let shown: Vec<&str> = resolution
+            .missing
+            .iter()
+            .take(5)
+            .map(String::as_str)
+            .collect();
+        let more = resolution.missing.len().saturating_sub(shown.len());
+        reason.push_str(&format!(
+            "; {} item(s) not resolved: {}",
+            resolution.missing.len(),
+            shown.join("; ")
+        ));
+        if more > 0 {
+            reason.push_str(&format!(" and {more} more"));
+        }
+        if remote.is_none() {
+            reason.push_str(
+                "; pass --maven-fetch to fetch missing POMs from your settings.xml mirror or \
+                 Maven Central (sends their coordinates)",
+            );
+        }
+    }
+    (resolution, reason)
+}
+
 /// Scan a Maven (Java) repo with the toolchain-free Tier-C matcher: read `gradle.lockfile` or
 /// `pom.xml` and match each dependency against the preloaded OSV DB. Builds nothing, so it
 /// needs no consent and no sandbox. `maven_db` is the once-loaded DB: `None` means no `file://`
@@ -1976,6 +2030,19 @@ fn scan_maven_repo(
         Ok(db) => db,
         Err(reason) => return errored(reason),
     };
+    if is_gradle_without_lock(&repo.path) {
+        let (resolution, reason) = resolve_gradle(&repo.path, remote);
+        let scan = fleetreach_maven::scan_resolution(&resolution, db, &repo.id);
+        return RepoResult::scanned(&repo.id, scan.findings, Vec::new())
+            .with_skipped(scan.skipped_unparseable)
+            .with_coverage(CoverageGap {
+                repo: repo.id.clone(),
+                source: GRADLE_SOURCE.to_string(),
+                ecosystem: Ecosystem::Maven,
+                level: Coverage::Partial,
+                reason,
+            });
+    }
     // `gradle.lockfile` is the resolved closure. A `pom.xml` is resolved like Maven would
     // (parents, BOMs, mediation) from local repositories, plus Maven Central with
     // `--maven-fetch`; whatever cannot be resolved is named as partial coverage. A POM that

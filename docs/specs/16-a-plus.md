@@ -547,6 +547,11 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Effort**: L. **Release**: 1.6.0 + 1.7.0.
 - **Proof**: `gradle dependencies` and `uv pip compile` vs fleetreach on 50 repos each;
   `mvn dependency:list` across the 13 OSS monorepos.
+- **Result (1.6.0, Gradle)**: three real Java builds so far, not 50, resolved by Gradle with an
+  init script over the four classpaths: PetClinic 163 of 173, Aeron 17 of 18, Airflow Java SDK
+  71 of 109. Misses are Gradle module metadata (`-jvm` artifacts, BOM nodes) and a Kotlin version
+  set by a convention plugin. Android builds need the Android SDK and Google's repository and
+  are untested. Reading `.module` files is the next step.
 
 #### 10. Container / OS packages (- to A+)
 

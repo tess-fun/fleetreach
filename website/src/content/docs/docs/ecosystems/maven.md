@@ -7,7 +7,7 @@ sidebar:
 
 | | |
 |---|---|
-| Reads | `gradle.lockfile`, else `pom.xml` (resolved) |
+| Reads | `gradle.lockfile`, else `pom.xml` (resolved), else Gradle build files and `gradle/libs.versions.toml` |
 | Advisory data | osv.dev `Maven` export |
 | Version rules | Maven `ComparableVersion` |
 
@@ -49,3 +49,23 @@ $ fleetreach scan -c ecosystems/maven.toml -f packages
 └───────┴────────┴────────────┴────────────┴──────────┴──────────┴─────────┴─────────────────────────────────────────────────────┘
 ```
 <!-- /run -->
+
+## Gradle without a lockfile
+
+A build with no `gradle.lockfile` is read, never run. fleetreach takes the version catalog and
+the literal declarations in every `*.gradle` and `*.gradle.kts`, then resolves them through the
+POM resolver with Gradle's rule that the highest requested version wins. Each build file is
+resolved alone, so two subprojects on different versions both show. Spring Boot's BOM and the
+Kotlin plugin's standard library are added when those plugins are applied.
+
+The result is always marked partial, because a build script is a program. A helper call, an
+undefined variable or a dynamic version such as `1.+` is named in the coverage note. Catalog
+entries no build file names, and anything in `buildSrc` or `build-logic`, count as development
+only. Variants that only Gradle module metadata describes, such as the `-jvm` artifacts of Kotlin
+multiplatform libraries, are not followed. Against real Gradle, 163 of 173 packages matched on
+Spring PetClinic, 17 of 18 on Aeron, and 71 of 109 on the Kotlin-heavy Airflow Java SDK. For the
+exact set, commit a lockfile:
+
+```sh
+gradle dependencies --write-locks
+```

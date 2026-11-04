@@ -98,7 +98,7 @@ Exit codes are the CI contract: `0` clean, `1` findings, `2` something could not
 | Go | `go.mod` (osv.dev, or `govulncheck`) |
 | npm | `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock` |
 | Python | `uv.lock`, `poetry.lock`, `Pipfile.lock`, `pylock.toml`, `requirements*.txt` |
-| Java | `gradle.lockfile`, `pom.xml` (resolved like Maven, without Maven) |
+| Java | `gradle.lockfile`, `pom.xml` (resolved like Maven, without Maven), Gradle builds and version catalogs (read, not run) |
 | Ruby, PHP, .NET | `Gemfile.lock`, `composer.lock`, NuGet lock and project files |
 | GitHub Actions | `.github/workflows/*.yml` |
 | Swift, Elixir, Julia | `Package.resolved`, `mix.lock`, `Manifest.toml` |
