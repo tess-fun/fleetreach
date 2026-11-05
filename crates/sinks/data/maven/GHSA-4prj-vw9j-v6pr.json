@@ -17,12 +17,13 @@
       "method": "handleDynamicMethodInvocation"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/apache/struts/commit/76eb8f38a33ad0f1f48464ee1311559c8d52dd6d"
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). The flawed line only runs with dynamic method calls on; the mapper defaults to off and a code scan cannot see the setting, so reaching the sink does not mean exposure",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). The flawed line only runs with dynamic method calls on; the mapper defaults to off and a code scan cannot see the setting, so reaching the sink does not mean exposure. Struts creates the mapper from struts-plugin.xml and calls it itself, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

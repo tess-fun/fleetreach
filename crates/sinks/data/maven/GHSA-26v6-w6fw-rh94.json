@@ -41,6 +41,7 @@
       "method": "readRequest"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/apache/camel/commit/c703479f5880a099c38f2fd5e63c7d9f0567e5ff",
@@ -135,7 +136,7 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). Camel finds these components by URI scheme, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

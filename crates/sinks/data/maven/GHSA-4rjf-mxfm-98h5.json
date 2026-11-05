@@ -17,6 +17,7 @@
       "method": "findObjByEventTimeClassTypeAndId"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/apache/ranger/commit/8618870d1b4acfae4114dd247a362cfa8493ab9e",
@@ -35,7 +36,7 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). ranger is a parent POM and Central has no release of either artifact below 0.6.0, so this record cannot match a Central artifact",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). ranger is a parent POM and Central has no release of either artifact below 0.6.0, so this record cannot match a Central artifact. The DAO is reached through Spring wiring and REST resources, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

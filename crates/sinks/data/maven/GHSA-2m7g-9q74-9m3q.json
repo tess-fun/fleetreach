@@ -20,6 +20,7 @@
       "method": "ignoreSSLCertificate"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/apache/beam/commit/a7dd23d95d2d214b4110781b5a28802bd43b834b"
@@ -47,7 +48,7 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). A Beam runner runs the reader and WriteFn, DoFn methods through their annotations, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"
