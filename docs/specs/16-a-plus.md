@@ -1,6 +1,6 @@
 # Spec 16: A+ on every matrix row by 1.8.0
 
-Status: in progress (1.6.0: everything on the list implemented and unreleased except E3; E2 gates missed, 40 pilot records reviewed; 1.7.0: rpm images implemented) · Written 2026-11-02 after the 1.5.0 release, revised the same day
+Status: in progress (1.6.0: the list implemented and released, E3 moved to 1.7.0; E2 gates missed, 40 pilot records reviewed; 1.7.0: rpm images released early in 1.6.0) · Written 2026-11-02 after the 1.5.0 release, revised the same day
 (three releases instead of two; a path to A+ researched for every row) · Supersedes the
 "out of scope" parts of [spec 14](14-out-of-scope.md) for containers, curated research,
 hosted triage and malware analysis (user decisions of 2026-11-02, not re-argued here)
@@ -367,8 +367,9 @@ on; keep each release about 8 weeks.
 - Containers phase 1: deb and apk families from image tarballs and rootfs dirs (Debian,
   Ubuntu, Alpine, Wolfi, Chainguard, MinimOS, Alpaquita, distroless), comparators validated.
 - Sink pipeline phase 1 and the JVM experiments: jar and package diffs, method
-  normalization, twin intersection, fix-commit diffs; E2 (precision on a labelled 100) and
-  E3 (suppression yield on 50 services). Decision recorded.
+  normalization, twin intersection, fix-commit diffs; E2 (precision on a labelled 100).
+  Decision recorded. E3 moved to 1.7.0 on 2026-11-05: it tests the JVM reachability that
+  lands there and needs records reached by name marked first, and nothing in 1.6.0 uses it.
 - Curated research phase 1: CVE 5.x records, vendor CSAF (Red Hat first), local advisory
   overlays, `db quality`.
 - Triage files and `fleetreach triage`.
@@ -387,6 +388,7 @@ on; keep each release about 8 weeks.
 - Containers phase 2: rpm family (SQLite, BDB, NDB readers), Red Hat and SUSE CSAF VEX for
   unfixed statuses, direct feeds for Amazon Linux, Oracle, Photon, Bottlerocket, OS
   end-of-life.
+- E3 (suppression yield on 50 services), after a field marks records reached by name.
 - JVM function-level reachability (if E2/E3 pass), and the sink data published as an open
   feed.
 - `fleetreach serve` (UI over history and triage files).
@@ -413,7 +415,7 @@ Dependency graph:
 containers ph1 (deb/apk) ──► ph2 (rpm, CSAF statuses, direct feeds) ──► ph3 (registry, layers, Trivy diff)
                                 ▲
 vendor CSAF (curated ph1) ──────┘
-sink pipeline + E2/E3 (1.6) ──► JVM reach + sinks feed (1.7) ──► JS/TS, Python, .NET reach (1.8)
+sink pipeline + E2 (1.6) ──► E3, JVM reach + sinks feed (1.7) ──► JS/TS, Python, .NET reach (1.8)
                             └─► curated ph2 ranges (1.7) ──► auto-curated feed (1.8)
 triage files (1.6) ──► serve (1.7) ──► tickets, SSO (1.8)
                    └─► VEX from triage decisions (1.7)
@@ -445,7 +447,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: warm run byte-identical to cold run on both testbeds (refactor-verification
   harness); benchmark reproducible from a script in the repo.
 
-    **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/scancache.rs`,
+    **Status: implemented 2026-11-04, released in 1.6.0** (`crates/cli/src/scancache.rs`,
     `scripts/benchmark.py`, opt-in `scan --incremental`). Differs from the work above in two
     ways. It caches a repo's matched results only, not parsed sources: reparsing is not where
     the time goes once advisory data is reused. And the key is the binary, the advisory data per
@@ -472,7 +474,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Effort**: S. **Release**: 1.6.0. **Proof**: the proposed strategy is what `npm install
   --package-lock-only` and `cargo update -p` accept on the fix-test corpus.
 
-  **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/fix_constraints.rs`, new
+  **Status: implemented 2026-11-04, released in 1.6.0** (`crates/cli/src/fix_constraints.rs`, new
   `manifest-bump` strategy). Over real locks and published versions, 531 npm and 600 Cargo
   edits: the strategy agreed with `npm update`, `npm install --package-lock-only` and `cargo
   update --precise` on all but 28, each explained and none a wrong call by the ranges
@@ -500,7 +502,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: live listings on test orgs (Gitea and Forgejo in Docker; Bitbucket and Azure
   free tiers) checked against the forge's own count, as was done for GitLab.
 
-  **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/forges.rs`, kinds `gitea`,
+  **Status: implemented 2026-11-04, released in 1.6.0** (`crates/cli/src/forges.rs`, kinds `gitea`,
   `forgejo`, `bitbucket`, `bitbucket-server`, `azure`; `fleet sync` inventory diff, recorded
   in `inventory.jsonl`; `SSL_CERT_FILE`). Gitea 1.24 and Forgejo 11 in Docker behind a private
   CA: 120 of 120 repos with a read-scoped token, private repos cloned, 80 without a token, one
@@ -632,7 +634,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     as an opt-in, Trivy's default). An unknown distro or release is a coverage gap. Language
     packages inside the image go through the existing feeders; files owned by an OS package
     are not reported twice (Trivy's rule).
-    **Status: implemented, unreleased** (crate `fleetreach-os`). Comparators: 0 differences
+    **Status: implemented, released in 1.6.0** (crate `fleetreach-os`). Comparators: 0 differences
     over 619,997 dpkg and 619,999 apk pairs from the exports (apk validity agrees on all
     42,587 distinct versions). Installed sets equal `dpkg-query -W` / `apk info -v` on 8 real
     images, and findings equal an independent real-tool evaluation of the exports on 11.
@@ -650,7 +652,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     `os_packages`, ten minutes each in a Linux container: 26.4 million runs, no panic, hang
     or memory blow-up. All four run in CI's short fuzz job. They do not build on this Mac
     (no C++ headers in the Command Line Tools for libFuzzer), so run them in `rust:1.90`.
-    **Java archives and gems in images: implemented 2026-11-03, unreleased**
+    **Java archives and gems in images: implemented 2026-11-03, released in 1.6.0**
     (`fleetreach_os::jar`). Evidence in order: `pom.properties`, file name with the group
     settled against the advisory data, OSGi manifest; anything else is a coverage gap. On
     five images (Tomcat 9.0.50, Jenkins 2.346.1, Elasticsearch 7.10.1, Spring PetClinic,
@@ -665,7 +667,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     since the OSV Red Hat export holds only fixes. Direct feeds for distros osv.dev lacks:
     Amazon Linux (ALAS), Oracle Linux (OVAL), Photon (CVE metadata), Bottlerocket. OS
     end-of-life warnings from endoflife.date data, bundled for offline use.
-    **Status: rpm images implemented 2026-11-02, unreleased** (`fleetreach_os::rpmdb`,
+    **Status: rpm images implemented 2026-11-02, released in 1.6.0** (`fleetreach_os::rpmdb`,
     `RpmVersion`, wired into `scan --image`). Pure-Rust readers for all three databases, no
     new dependency: SQLite is a read-only b-tree walker (overflow chains, interior pages, the
     write-ahead log applied up to its last valid commit frame); Berkeley DB reads only pages
@@ -683,7 +685,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     `/usr/lib/sysimage/rpm/rpmdb.sqlite` while its real database is `/var/lib/rpm`; both
     locations are read, the empty one gives way, and two that disagree are a gap (simpler and
     as safe as evaluating the `%_dbpath` macro).
-    **Status: direct feeds implemented 2026-11-03, unreleased** (`fleetreach_os::feeds`,
+    **Status: direct feeds implemented 2026-11-03, released in 1.6.0** (`fleetreach_os::feeds`,
     fetched by distro sync). Amazon Linux 2 and 2023 (`updateinfo.xml` from the core
     repository's mirror list and `repomd.xml`), Oracle Linux 7 to 10 (OVAL, decoded by
     `bzip2-rs`, pure Rust and MIT/Apache; the `bzip2` crate's pure-Rust backend carries the
@@ -708,7 +710,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     CentOS and Fedora are gaps; RHEL module streams in the OSV data are not told apart (the
     OSV Red Hat records carry no stream); the rpm comparison against Grype. (Module streams
     and the Grype comparison since done, below.)
-    **Status: RHEL module streams implemented 2026-11-03, unreleased.** osv.dev's Red Hat,
+    **Status: RHEL module streams implemented 2026-11-03, released in 1.6.0.** osv.dev's Red Hat,
     AlmaLinux and Rocky records carry no stream (82,869 of Red Hat's 638,319 affected
     entries have module-build fixes); the stream comes from the summary's `name:stream` words
     when the entry's fix is a module build (1 word on 71%, several on 26%, none on 3%, which
@@ -726,7 +728,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     that `dnf upgrade` would not install (checked with `check-update`), Rocky's republished
     records and alias-merged ids. UBI 8 (no updateinfo): 171 other-stream pairs gone, 27 Red
     Hat open statuses back, Grype v0.121.1 751 of 751. The 22-image Grype set is unchanged.
-    **Status: OS end-of-life warnings implemented 2026-11-03, unreleased**
+    **Status: OS end-of-life warnings implemented 2026-11-03, released in 1.6.0**
     (`fleetreach_os::eol`). A bundled endoflife.date snapshot (`crates/os/data/eol.tsv`, 250
     releases of 16 products, MIT data, refreshed by `scripts/update-eol.py`); os-release maps
     to a product (CentOS 8 Stream told apart by its name) and release (exact `VERSION_ID`,
@@ -735,7 +737,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     the 24 rpm images: flagged Amazon Linux 2 (both), CentOS 7, Fedora 41, Leap 15.5 and
     15.6, SLES 15.6 (LTSS until 2028-12-31); Grype v0.121.1 flags only Amazon Linux 2 and
     Fedora 41. Not covered by endoflife.date: Azure Linux, openEuler, Bottlerocket.
-    **Status: CBL-Mariner 2.0 OVAL implemented 2026-11-03, unreleased.** Microsoft's OSV for
+    **Status: CBL-Mariner 2.0 OVAL implemented 2026-11-03, released in 1.6.0.** Microsoft's OSV for
     Mariner 2 stopped in April 2026 (every record `modified` 2026-04), its OVAL on 2026-05-06;
     both look final. Against the OVAL, osv.dev lacks 269 pairs and lists 153 fixes as open, and
     has 1,485 pairs the OVAL does not, so the OVAL is an overlay (`Azure Linux:2::oval`, one
@@ -749,14 +751,14 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     111; 70 extras are 55 OVAL pairs (Grype lacks `openssl` CVE-2022-4304, which the OVAL lists
     below `-21`, and subpackages of hits) and 15 from Microsoft's OSV records. Current image:
     the 2 pairs osv.dev missed now match. Azure Linux 3 needs no overlay: its OSV is daily.
-    **Status: Fedora implemented 2026-11-03, unreleased.** Fedora publishes nothing to osv.dev;
+    **Status: Fedora implemented 2026-11-03, released in 1.6.0.** Fedora publishes nothing to osv.dev;
     the vendor feed is the updates repository's `updateinfo.xml.zst` (Bodhi's FEDORA ids),
     `type="security"` only, CVEs from the Bugzilla reference titles, falling back to
     `archives.fedoraproject.org` on a 404. Releases 41 and later (older ones ship xz, and are
     past their end of life), so Fedora 40 and older stay a gap. Validated on a Fedora 43 GA
     image: 26 of 26 advisories and 51 of 51 advisory and package pairs equal to `dnf
     updateinfo list --security`; a current Fedora 41 image 0 and 0.
-    **Status: CentOS Linux implemented 2026-11-03, unreleased.** CentOS 6, 7 and 8 match Red
+    **Status: CentOS Linux implemented 2026-11-03, released in 1.6.0.** CentOS 6, 7 and 8 match Red
     Hat's records for the release they rebuilt (6 and 7 `server`, 8 BaseOS, AppStream, CRB)
     plus Red Hat's VEX opens (as the rebuilds borrow them), binaries by name, namespace
     `centos`. osv.dev's Red Hat records have no issue date (`published` is the import date),
@@ -775,7 +777,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     calls them fixed). Every fixed status on both images checked independently against the
     Red Hat fix versions and the snapshot (296 of 296). CentOS Stream stays a gap (built
     ahead of RHEL).
-    **Status: Bottlerocket implemented 2026-11-03, unreleased.** Feed
+    **Status: Bottlerocket implemented 2026-11-03, released in 1.6.0.** Feed
     `advisories.bottlerocket.aws/updateinfo.xml.gz` (1,841 advisories, 190 KB) converted by the
     updateinfo converter into one `Bottlerocket` ecosystem; packages from
     `usr/share/bottlerocket/application-inventory.json` (no rpm database). **Found**: (1) the
@@ -789,7 +791,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     aws-k8s-1.33 1.66.0 and 1.68.1 (root images from the TUF repository, sha256-checked):
     equal to the feed evaluated with `rpm.labelCompare` (330 and 0); Trivy 0.73.0 200 of 200
     reported, 130 extra = kernel BRSAs of 2026-10-26 missing from Trivy's vuln-list.
-    **Status: Red Hat CSAF statuses implemented 2026-11-03, unreleased.** The CSAF index
+    **Status: Red Hat CSAF statuses implemented 2026-11-03, released in 1.6.0.** The CSAF index
     (`csaf:redhat`, 415 MB archive, about 7 minutes and 6.8 GB RSS to index, so never
     started by a scan) is derived on first use into `Red Hat:enterprise_linux:N::vex`
     exports (about 20 s, cached under the index's size and mtime). It is a distro
@@ -811,7 +813,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     entries and no source fixes for binaries. (3) Purl versions are percent-encoded
     (`module%2Bel8`), and rpm's order treats `%` as a separator: decoded on index and on
     derive.
-    **Status: SUSE CSAF statuses implemented 2026-11-03, unreleased.** `csaf:suse` (526 MB
+    **Status: SUSE CSAF statuses implemented 2026-11-03, released in 1.6.0.** `csaf:suse` (526 MB
     `.tar.bz2`, 19 GB of JSON over 73,700 documents; about 14 minutes and 10.4 GB RSS to
     index into 61,548 records, 207 MB) derives into `<osv ecosystem>::vex` exports per
     product (`openSUSE:Leap 15.6::vex`, `SUSE:Linux Enterprise Server 15 SP6-LTSS::vex`);
@@ -867,7 +869,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     config credentials); per-layer attribution and base-image detection from image history;
     base-image rollup and rebuild advice across the fleet; VEX discovered from OCI
     referrers (Trivy 0.73.0 parity); the published differential.
-    **Status: layers and base images implemented 2026-11-03, unreleased.** The image reader
+    **Status: layers and base images implemented 2026-11-03, released in 1.6.0.** The image reader
     re-reads the package database after each layer that changes it, so a package's layer is
     the first with that name and version unbroken to the top, with nothing held back per
     layer. Language packages take the layer that wrote their file. `Occurrence::InRepo.layer`
@@ -881,7 +883,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     (the other 29 are jars inside `.hpi` plugins in layer 5 that Trivy does not read; it lists
     the same names from `jenkins-plugin-manager.jar` in layer 7). Two BuildKit images on
     `tomcat:9.0.50-jdk11` rolled up as one base of 10 layers, 123 findings counted once.
-    **Status: registry pull implemented 2026-11-03, unreleased** (`crates/cli/src/registry.rs`,
+    **Status: registry pull implemented 2026-11-03, released in 1.6.0** (`crates/cli/src/registry.rs`,
     `--image docker://<ref>`, `ref` in `[[image]]`). Pulls into a content-addressed cache
     (`~/.cache/fleetreach/images`, layouts as hard links) read by the existing OCI layout code,
     so a pulled image and a saved one take one path. A tag's digest is computed from the
@@ -893,7 +895,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     plain HTTP (localhost excepted). Tested on Docker Hub, gcr.io, ghcr.io, quay.io and
     mcr.microsoft.com anonymously and a local `registry:2` with a Basic login; the same image
     pulled and `docker save`d gives 23 of 23 identical findings with identical layers.
-    **VEX from OCI referrers implemented 2026-11-03, unreleased.** `--vex-oci` reads OCI 1.1
+    **VEX from OCI referrers implemented 2026-11-03, released in 1.6.0.** `--vex-oci` reads OCI 1.1
     referrers, the referrers tag, and cosign's `.att` tag, on the platform manifest and the
     index. Trivy applies the first document with no signature check; fleetreach reads all of
     them, applies one only when `--vex-oci-key` verifies it (or `--vex-oci-unsigned` is given),
@@ -932,7 +934,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: a week of daily incremental syncs byte-identical to full downloads; bundle
   import plus `--offline` scan identical to the online scan.
 
-    **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/osvdelta.rs`, `snapshot.rs`).
+    **Status: implemented 2026-11-04, released in 1.6.0** (`crates/cli/src/osvdelta.rs`, `snapshot.rs`).
     Measured on the bucket: all 14 exports' listings match their zips on ids and `modified`,
     and a `<id>.json` is byte-identical to its zip entry. The local state is read from the zip,
     not saved from a listing, because a listing newer than the zip would hide a change for good.
@@ -1026,7 +1028,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   corpus of known-reachable CVE reproducers (vul4j-style); suppression yield published per
   ecosystem (Endor claims up to 97% noise reduction; fleetreach publishes its measured
   number, whatever it is).
-- **Research gate**: E2 decides whether the sink data is good enough (1.6.0); E3 decides
+- **Research gate**: E2 decides whether the sink data is good enough (1.6.0); E3 (1.7.0) decides
   whether JVM suppression is worth shipping or JVM ships witnesses only. A miss is
   published with its number, as for Python's 3%.
 - **E2 outcome (2026-11-02)**: jar diffs alone MISSED (14 of 100 at 90% precision against a
@@ -1035,7 +1037,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   2026-11-02): sinks become reviewed, curated records (pipeline proposes, a person accepts);
   unreviewed sinks are witnesses only; the proof is coverage of reviewed records. See "E2b
   result".
-- **Curated sink records (built 2026-11-02, unreleased)**: `crates/sinks` holds the record
+- **Curated sink records (built 2026-11-02, crate not published)**: `crates/sinks` holds the record
   format (`fleetreach-sinks/1`, fail-closed loader), a Java source reader, and `sinkpropose`
   (fix commits to a `proposed` record, from a local clone or fetched files). On the pilot the
   Rust proposer is right for 24 of 40 (sinks at least 90% precise, or no sinks where none
@@ -1053,7 +1055,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: on 20 real repos per ecosystem, every chain's first hop points at a real import
   line (checked by script); positive-only asserted in tests.
 
-  **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/import_reach.rs`,
+  **Status: implemented 2026-11-04, released in 1.6.0** (`crates/cli/src/import_reach.rs`,
   `reachability.import_site`, SARIF `codeFlows`). `docs/differential/import_chains.py`, with
   patterns of its own: 7,561 chains over 132 repos (20 to 24 with chains per ecosystem) and every
   first hop is an import line. On a scan of 119 of those repos 509 of 709 findings in these ecosystems
@@ -1089,7 +1091,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: `cargo tree -e normal` vs `-e dev,build`; `mvn dependency:list` scopes; `bundle
   list --without`.
 
-  **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/scope.rs`,
+  **Status: implemented 2026-11-04, released in 1.6.0** (`crates/cli/src/scope.rs`,
   `fleetreach_nuget::build_only`, `--fail-on-dev`, `[settings.gate.scope] dev`, guide "Gate on
   what ships"). `docs/differential/scope_oracle.py`, no package the tool ships called dev
   anywhere: `cargo tree` on 39 repos, 975 of 1,243 dev-only packages caught, the rest build
@@ -1152,7 +1154,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: detected licenses vs ScanCode Toolkit on 2,000 packages; Cargo vs cargo-deny;
   NOTICE files vs `cargo about` and `license-checker`.
 
-  **Status: 1.6.0 part implemented 2026-11-04, unreleased** (`crates/cli/src/licensetext.rs`,
+  **Status: 1.6.0 part implemented 2026-11-04, released in 1.6.0** (`crates/cli/src/licensetext.rs`,
   `licensefetch.rs`, `licenses --detect --download`, `[settings.licenses] mismatch`). Against
   ScanCode 32.5.0: 1,964 of 2,000 packages from local caches and 1,435 of 1,500 from downloads
   agreed exactly, 2 disagreed, neither a real difference. Against cargo-deny 2,013 of 2,015
@@ -1174,7 +1176,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: 200 flagged packages checked against the registries; offline without cache is a
   gap, never clean.
 
-  **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/health.rs`, `scan --health`,
+  **Status: implemented 2026-11-04, released in 1.6.0** (`crates/cli/src/health.rs`, `scan --health`,
   `[settings.health] min_scorecard`). `docs/differential/health_oracle.py`, by another route
   than the code reads: 220 of 220 flagged packages and 183 of 183 clean ones agreed, across all
   nine registries. Archived matched `gh api` on 76 of 76 repos. Differences from the plan:
@@ -1199,7 +1201,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   means failure.
 - **Effort**: M. **Release**: 1.6.0. **Proof**: fixture PRs per ecosystem.
 
-  **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/attribute.rs`, exact-version
+  **Status: implemented 2026-11-04, released in 1.6.0** (`crates/cli/src/attribute.rs`, exact-version
   check in `lockline.rs`; expiry shipped earlier). `docs/differential/pr_attribution.py` makes
   17 fixture PRs across all 12 ecosystems and each lockfile format, 11 from real repos and 6
   (Cargo, Go, Maven, Swift, Actions, Julia) from small written fixtures. Each names the
@@ -1236,7 +1238,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: SBOMs from Syft, Trivy, cdxgen, Microsoft sbom-tool, GitHub dependency graph
   and spdx-tools in every format: identical component sets across formats of one run.
 - **Status: XML, tag-value, discovery, release assets and staleness implemented 2026-11-04,
-  unreleased** (`crates/cli/src/sbom_input.rs`, `release_sboms` in `sources.rs`).
+  released in 1.6.0** (`crates/cli/src/sbom_input.rs`, `release_sboms` in `sources.rs`).
   `docs/differential/sbom_formats.py` over six repos (Rust, Go, npm, PHP, Python, Ruby) and three
   GitHub exports: 75 documents from Syft, Trivy, cdxgen, sbom-tool and GitHub, with spdx-tools
   and cyclonedx-cli conversions, 0 format differences, 0 purls lost against a separate read of
@@ -1244,7 +1246,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   differ. `pkg:golang` and `pkg:cargo` route to the matchers: `docs/differential/sbom_vs_lockfile.py`
   over gitea, caddy, meilisearch, deno, zed and calcit, 547 findings shared with the lockfile scan
   across Syft and Trivy, 0 extra, 9 missing, all packages Trivy did not list. Release assets fetched from GitHub (cosign, Trivy) and a private repo on Gitea 1.24
-  in Docker. OS purls implemented 2026-11-05, unreleased (`crates/os/src/purl.rs`):
+  in Docker. OS purls implemented 2026-11-05, released in 1.6.0 (`crates/os/src/purl.rs`):
   `docs/differential/sbom_os.py` over 27 images, Syft and Trivy, CycloneDX and SPDX, 108 documents:
   OS findings identical to the image's own scan in 104; the 4 others are SPDX documents of images
   with module builds, which carry no stream label and say so in a coverage gap. **Left**: SPDX 3
