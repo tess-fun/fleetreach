@@ -33,7 +33,7 @@ use fleetreach_scan::{scan_lockfile, AdvisoryDb};
 // Open a local advisory-db clone (always available). With the `network`
 // feature, `AdvisoryDb::fetch()` clones the default DB from GitHub instead.
 let db = AdvisoryDb::open(Path::new("advisory-db"))?;
-let scan = scan_lockfile(&db, &RepoId("app".into()), Path::new("Cargo.lock"))?;
+let scan = scan_lockfile(&db, None, &RepoId("app".into()), Path::new("Cargo.lock"))?;
 for vuln in &scan.vulnerabilities {
     println!("{}  {}", vuln.advisory_id, vuln.title);
 }
