@@ -15,6 +15,10 @@ another advisory's range starts above it.
 **One batch target.** The target is the lowest version that is safe for all the package's
 advisories at once, and never lower than any advisory's own fix.
 
+**Advisories the fleet has not met.** The queue only knows advisories some repo has, so a
+target can carry one that starts above every installed version. `fix plan` checks each target
+against the full OSV export and moves it past those.
+
 **Older lines.** When a repo is on an older major line that has its own fix (`4.17.21` on
 4.x while the newest is 5.x), that line's fix is listed as an alternative, so the repo gets
 a lock bump instead of a breaking upgrade.

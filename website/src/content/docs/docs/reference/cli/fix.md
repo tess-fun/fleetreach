@@ -35,6 +35,7 @@ Options:
   -c, --config <CONFIG>  fleet.toml the report was scanned from [default: ./fleet.toml]
       --report <REPORT>  The saved report (`fleetreach scan -f json > report.json`)
       --allow-breaking   Plan semver-major (and 0.x minor) bumps too; they are blocked otherwise
+      --osv-dir <DIR>    Directory of OSV exports, to keep targets clear of advisories of their own
   -h, --help             Print help
 ```
 

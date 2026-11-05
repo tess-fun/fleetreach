@@ -82,6 +82,12 @@ impl CratesDb {
         self
     }
 
+    /// The advisories on one crate.
+    #[must_use]
+    pub fn advisories_for(&self, name: &str) -> &[Advisory] {
+        self.db.advisories_for(name)
+    }
+
     /// Every `(crate, advisory)` pair, in key order (for `db quality`).
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Advisory)> {
         self.db.iter()

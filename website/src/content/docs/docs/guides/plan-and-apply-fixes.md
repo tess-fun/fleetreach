@@ -85,6 +85,24 @@ repos get a low-risk bump on their line instead of a blocked breaking one. Every
 a campaign id that is the same across repos and runs, so one fix rolled out to ten repos is
 one campaign.
 
+### Targets with advisories of their own
+
+The queue picks a target from the findings in your report, so it only knows the advisories some
+repo already has. A target can carry one that starts above everything you run: `lodash` 4.17.15
+is clear of GHSA-f23m-r3pf-42rh, while the target 4.18.0 is not. `fix plan` reads the same OSV
+exports a scan does (`--osv-dir`, `FLEETREACH_OSV_DIR`, `[settings.osv] dir`, or the default
+cache, never syncing) and moves the target to the lowest fix that clears the edit's advisories
+and adds none:
+
+- The move is listed in `risk_reasons`, as `4.18.0 has GHSA-f23m-r3pf-42rh`.
+- A move to a new major needs `--allow-breaking`, like any other.
+- With no clear version published, the edit is `blocked`.
+
+This covers npm, Cargo, PyPI, RubyGems, Packagist, NuGet and Maven, and only the package
+itself. What a target brings in with it, and Go and GitHub Actions targets, stay with the
+re-scan in `fix apply`. So does a `fixed` version the registry never published. Without an
+export, `fix plan` warns and the target stands.
+
 ### What each repo's ranges allow
 
 For npm's `package-lock.json` and for Cargo, the plan reads the checkouts in `fleet.toml` and

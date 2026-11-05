@@ -40,7 +40,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cli::fail;
 use crate::config::{Config, Repo};
-use crate::{fix_constraints, fix_managers, sources};
+use crate::{fix_constraints, fix_managers, fix_targets, osvdb, sources};
 
 /// The plan file format.
 const PLAN_SCHEMA: &str = "fleetreach-fix-plan/1";
@@ -130,6 +130,9 @@ pub struct FixPlanArgs {
     /// Plan semver-major (and 0.x minor) bumps too; they are blocked otherwise
     #[arg(long)]
     allow_breaking: bool,
+    /// Directory of OSV exports, to keep targets clear of advisories of their own
+    #[arg(long, value_name = "DIR")]
+    osv_dir: Option<PathBuf>,
 }
 
 #[derive(Args)]
@@ -402,7 +405,12 @@ pub fn build_plan(report: &FleetReport, allow_breaking: bool) -> Plan {
     }
 }
 
-fn campaign_id(ecosystem: Ecosystem, package: &str, to: &str, advisories: &[String]) -> String {
+pub(crate) fn campaign_id(
+    ecosystem: Ecosystem,
+    package: &str,
+    to: &str,
+    advisories: &[String],
+) -> String {
     use sha2::{Digest, Sha256};
     let key = format!(
         "{}\u{1f}{package}\u{1f}{to}\u{1f}{}",
@@ -423,6 +431,32 @@ fn ecosystem_name(ecosystem: Ecosystem) -> String {
         .unwrap_or_default()
 }
 
+/// Moves targets off advisories of their own, from the exports a scan would read. Never syncs:
+/// `fix plan` stays offline, and a target left unchecked still meets the re-scan.
+fn check_targets(plan: &mut Plan, args: &FixPlanArgs, config: &Config) -> usize {
+    let opts = osvdb::Options {
+        dir: args
+            .osv_dir
+            .clone()
+            .or_else(|| std::env::var_os(osvdb::DIR_ENV).map(PathBuf::from))
+            .or_else(|| config.osv.dir.clone()),
+        cache: osvdb::default_cache_dir(),
+        sync: false,
+        refresh: config.osv.refresh.unwrap_or(osvdb::DEFAULT_REFRESH),
+        quiet: true,
+    };
+    let needed = fix_targets::needed(&plan.edits);
+    let (sources, mut warnings) = osvdb::resolve_all(&needed, &BTreeMap::new(), &opts);
+    let exports = sources.into_iter().map(|(eco, s)| (eco, s.path)).collect();
+    let overlay = config.osv.advisories.as_deref();
+    let (moved, more) = fix_targets::check(&mut plan.edits, &exports, overlay, args.allow_breaking);
+    warnings.extend(more);
+    for warning in warnings {
+        eprintln!("warning: {warning}");
+    }
+    moved
+}
+
 fn run_plan(args: &FixPlanArgs) -> u8 {
     let config = match Config::load(&args.config) {
         Ok(config) => config,
@@ -436,6 +470,7 @@ fn run_plan(args: &FixPlanArgs) -> u8 {
         Err(e) => return fail(&format!("report `{}`: {e}", args.report.display())),
     };
     let mut plan = build_plan(&report, args.allow_breaking);
+    let moved = check_targets(&mut plan, args, &config);
     let mut repos = config.repos.clone();
     match sources::materialize(&config, false, true) {
         Ok(m) => repos.extend(m.repos),
@@ -460,6 +495,9 @@ fn run_plan(args: &FixPlanArgs) -> u8 {
                 count(Strategy::ManifestBump),
                 count(Strategy::Blocked)
             );
+            if moved > 0 {
+                eprintln!("{moved} target(s) moved or blocked for advisories of their own");
+            }
             0
         }
         Err(e) => fail(&e.to_string()),

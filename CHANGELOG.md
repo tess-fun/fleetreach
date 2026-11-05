@@ -13,6 +13,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `manifest-bump` edit: `fix apply` raises the range, an exact pin included, then updates the
   lock. A target a published package leaves out, peer ranges included, is blocked and names the
   package to update first, rather than failing in `fix apply`.
+- **`fix plan` keeps targets clear of advisories of their own.** The queue only knows the
+  advisories some repo already has, so a target could carry one that starts above every installed
+  version, and the re-scan then refused the bump. The plan now reads the OSV exports (`--osv-dir`,
+  or wherever a scan finds them) and moves the target to the lowest fix that adds nothing. This
+  also restores Maven's four-part fixes such as `3.41.2.2`, which the plan had cut to a version
+  that does not exist.
 - **`scan --reachability` builds witness chains for Ruby, PHP, .NET, Java and Kotlin, Elixir and
   Swift.** A chain starts at the import line in your source and follows the lockfile, for example
   `imported at app/models/user.rb:3 via loofah → nokogiri`. Positive-only, like Python's. JSON

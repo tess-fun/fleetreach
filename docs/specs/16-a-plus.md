@@ -457,8 +457,13 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   (`docs/differential/fix_constraints.py`). The npm range evaluator matches npm's `semver` on
   32,303 pairs. Eight fixture repos through `fix plan` and `fix apply` all pass `npm ci` or
   `cargo metadata --locked`, and a restored range fails both. Not read: `overrides`, pnpm and
-  yarn locks, and a target's own requirements. A target can itself carry an advisory that begins
-  after the installed version, which the re-scan refuses: 4 of those 8 fixtures.
+  yarn locks, and a target's own requirements.
+
+  A target can itself carry an advisory that begins after the installed version, so `fix plan`
+  moves it past those from the OSV exports (`crates/cli/src/fix_targets.rs`). That took the
+  fixtures from 4 verified of 8 to 7; the last is `express`, whose target brings in a vulnerable
+  `qs`, which needs the registry. Over two real fleets 41 edits moved, 25 of 26 distinct targets
+  are published, and the other is a `fixed` bound (`tinymce` 7.9.4) that npm never had.
 
 #### 4. Repo discovery (A- to A+)
 
