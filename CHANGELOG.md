@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-05
+
 ### Added
 
 - **SBOM input matches OS packages.** `pkg:deb`, `pkg:apk` and `pkg:rpm` components go to the same
@@ -1272,7 +1274,8 @@ Initial release. Fleet-wide Rust dependency advisory audit built on `rustsec`.
   targets on the two untrusted-byte surfaces (`fleet.toml`, lockfile content);
   black-box tests over the compiled binary's exit-code and stream contract.
 
-[Unreleased]: https://github.com/tess-fun/fleetreach/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/tess-fun/fleetreach/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/tess-fun/fleetreach/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/tess-fun/fleetreach/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/tess-fun/fleetreach/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/tess-fun/fleetreach/compare/v1.2.0...v1.3.0
