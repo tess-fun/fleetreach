@@ -140,6 +140,9 @@ fn read_json(path: &Path) -> Option<Value> {
     serde_json::from_slice(&fleetreach_core::repofile::read(path).ok()?).ok()
 }
 
+/// node-semver's limit on a version number, JavaScript's largest exact integer.
+const MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;
+
 /// One comparator of an npm range.
 type Comparator = (Op, Version);
 
@@ -176,7 +179,10 @@ impl Partial {
             } else if part.len() > 1 && part.starts_with('0') {
                 return None;
             } else {
-                let number = part.parse().ok()?;
+                let number: u64 = part.parse().ok()?;
+                if number > MAX_SAFE_INTEGER {
+                    return None;
+                }
                 *slot = (!wild).then_some(number);
             }
         }
