@@ -12,7 +12,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
-use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use spdx::detection::scan::{ScanMode, Scanner};
 use spdx::detection::{LicenseEntry, Store, TextData};
@@ -107,6 +106,31 @@ pub fn is_license_file(name: &str) -> bool {
     )
 }
 
+/// One store entry: a text, and the ids that share it.
+fn entry((text, ids): &(&str, Vec<&str>)) -> (String, LicenseEntry) {
+    let current = |id: &&&str| spdx::license_id(id).is_some_and(|l| !l.is_deprecated());
+    let name = ids.iter().find(current).map_or("", |id| id).to_string();
+    let mut entry = LicenseEntry::new(TextData::new(*text).without_text());
+    // Most copies stop here, before how to apply the license: without that
+    // form Apache-2.0 is nearer Pixar's Apache-derived text than its own.
+    if let Some((terms, _)) = text.split_once(END_OF_TERMS) {
+        entry.alternates.push(TextData::new(terms).without_text());
+    }
+    for (id, from, to) in PARTS {
+        if family(&name) == *id {
+            if let Some(part) = part_of(text, from, to) {
+                entry.alternates.push(TextData::new(part).without_text());
+            }
+        }
+    }
+    entry.aliases = ids
+        .iter()
+        .filter(|id| **id != name)
+        .map(ToString::to_string)
+        .collect();
+    (name, entry)
+}
+
 /// The matcher, its store built once from the texts in the `spdx` crate.
 pub struct Detector {
     store: OnceLock<Store>,
@@ -140,33 +164,21 @@ impl Detector {
                 ids.iter()
                     .any(|id| spdx::license_id(id).is_some_and(|l| !l.is_deprecated()))
             });
-            let entries: Vec<(String, LicenseEntry)> = by_text
-                .into_par_iter()
-                .map(|(text, ids)| {
-                    let current =
-                        |id: &&&str| spdx::license_id(id).is_some_and(|l| !l.is_deprecated());
-                    let name = ids.iter().find(current).map_or("", |id| id).to_string();
-                    let mut entry = LicenseEntry::new(TextData::new(text).without_text());
-                    // Most copies stop here, before how to apply the license: without that
-                    // form Apache-2.0 is nearer Pixar's Apache-derived text than its own.
-                    if let Some((terms, _)) = text.split_once(END_OF_TERMS) {
-                        entry.alternates.push(TextData::new(terms).without_text());
-                    }
-                    for (id, from, to) in PARTS {
-                        if family(&name) == *id {
-                            if let Some(part) = part_of(text, from, to) {
-                                entry.alternates.push(TextData::new(part).without_text());
-                            }
-                        }
-                    }
-                    entry.aliases = ids
-                        .iter()
-                        .filter(|id| **id != name)
-                        .map(ToString::to_string)
-                        .collect();
-                    (name, entry)
-                })
-                .collect();
+            // Plain threads, not rayon: this runs under `get_or_init` on a rayon worker, which
+            // would steal a job waiting on this same cell while it waits, and deadlock.
+            let texts: Vec<(&str, Vec<&str>)> = by_text.into_iter().collect();
+            let threads = std::thread::available_parallelism().map_or(4, usize::from);
+            let chunk = texts.len().div_ceil(threads).max(1);
+            let entries: Vec<(String, LicenseEntry)> = std::thread::scope(|scope| {
+                let workers: Vec<_> = texts
+                    .chunks(chunk)
+                    .map(|part| scope.spawn(|| part.iter().map(entry).collect::<Vec<_>>()))
+                    .collect();
+                let joined = workers.into_iter().map(|worker| worker.join());
+                joined
+                    .flat_map(|built| built.unwrap_or_else(|e| std::panic::resume_unwind(e)))
+                    .collect()
+            });
             let mut store = Store::new();
             for (name, entry) in entries {
                 store.insert_entry(name, entry);
@@ -323,6 +335,19 @@ mod tests {
         THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, \
         WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN \
         CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n";
+
+    #[test]
+    fn building_the_store_from_rayon_workers_does_not_deadlock() {
+        use rayon::prelude::*;
+        // Every worker wants the store at once. Built with rayon, one stole a job waiting on
+        // the cell it was filling.
+        let detector = Detector::new();
+        let found: Vec<BTreeSet<String>> = (0..64)
+            .into_par_iter()
+            .map(|n| detector.text(&format!("{n} not any license text at all")))
+            .collect();
+        assert_eq!(found.len(), 64);
+    }
 
     #[test]
     fn license_files_are_told_from_the_rest() {
