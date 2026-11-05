@@ -1222,7 +1222,11 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   differ. `pkg:golang` and `pkg:cargo` route to the matchers: `docs/differential/sbom_vs_lockfile.py`
   over gitea, caddy, meilisearch, deno, zed and calcit, 547 findings shared with the lockfile scan
   across Syft and Trivy, 0 extra, 9 missing, all packages Trivy did not list. Release assets fetched from GitHub (cosign, Trivy) and a private repo on Gitea 1.24
-  in Docker. **Left**: SPDX 3 and OS purls (1.7.0); SPDX as YAML, RDF or XML is refused; GitLab release
+  in Docker. OS purls implemented 2026-11-05, unreleased (`crates/os/src/purl.rs`):
+  `docs/differential/sbom_os.py` over 27 images, Syft and Trivy, CycloneDX and SPDX, 108 documents:
+  OS findings identical to the image's own scan in 104; the 4 others are SPDX documents of images
+  with module builds, which carry no stream label and say so in a coverage gap. **Left**: SPDX 3
+  (1.7.0); SPDX as YAML, RDF or XML is refused; GitLab release
   assets are links and are not fetched; staleness says nothing in a shallow clone.
 
 ### Operating model

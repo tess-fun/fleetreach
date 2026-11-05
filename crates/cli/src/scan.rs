@@ -639,7 +639,8 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
             }
         }
     }
-    let feeds = Feeds::resolve(args, &config, &images)?;
+    let sbom_os = crate::orchestrate::sbom_inspections(&config);
+    let feeds = Feeds::resolve(args, &config, &images, &sbom_os)?;
     let store = args
         .incremental
         .then(|| osvdb::private_subdir("scan"))
@@ -659,7 +660,7 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         feeds.host.as_deref(),
         &feeds.go(args),
         &mirrors,
-        &feeds.images(args, &images),
+        &feeds.images(args, &images, &sbom_os),
     );
     let attested: Vec<crate::oci_vex::Attested> = images
         .iter_mut()
@@ -886,6 +887,7 @@ impl Feeds {
         args: &ScanArgs,
         config: &Config,
         images: &[crate::images::Prepared],
+        sbom_os: &[fleetreach_os::Inspection],
     ) -> Result<Feeds, u8> {
         // 4. Scan the fleet, plus the toolchain if rustc is detectable. With
         //    --resolve-features, also annotate findings built/phantom for the host.
@@ -974,7 +976,11 @@ impl Feeds {
         }
         // The distro exports of the images, each distro fetched on its own (never all of them:
         // some are over a gigabyte). A distro with no export errors its images in the scan.
-        let distro_ecosystems = crate::images::distro_ecosystems(images);
+        let mut distro_ecosystems = crate::images::distro_ecosystems(images);
+        let of_sboms = sbom_os.iter().filter_map(|i| i.distro.as_ref().ok());
+        distro_ecosystems.extend(of_sboms.flat_map(fleetreach_os::Distro::ecosystems));
+        distro_ecosystems.sort();
+        distro_ecosystems.dedup();
         let (distro_sources, distro_warnings, distro_missing) =
             osvdb::resolve_distros(&distro_ecosystems, &osv_opts);
         for warning in &distro_warnings {
@@ -1042,9 +1048,11 @@ impl Feeds {
         &self,
         args: &ScanArgs,
         prepared: &'a [crate::images::Prepared],
+        sboms: &'a [fleetreach_os::Inspection],
     ) -> crate::orchestrate::Images<'a> {
         crate::orchestrate::Images {
             prepared,
+            sboms,
             exports: self.distro_sources.iter().map(|s| s.path.clone()).collect(),
             frozen: self
                 .distro_sources

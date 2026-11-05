@@ -7,6 +7,10 @@ record, for the daily sync check in spec 16 row 11.
 `scan --incremental` hashes for its key. `scripts/benchmark.py` produces the numbers on the scale
 benchmark page.
 
+`sbom_os.py` scans images beside their Syft and Trivy SBOMs, in CycloneDX and SPDX, and compares
+the OS findings, so any difference is what the SBOM lost. Generate the SBOMs from the OCI layouts
+`scan_others.py` uses, named `<syft|trivy>-<image id>.<cdx|spdx>.json`.
+
 `sbom_formats.py` reads one generator run in every format that generator writes, or that
 spdx-tools and cyclonedx-cli convert it to, and compares the component sets. It also reads each
 JSON document's purls itself, so a package every format lost would show. Needs Docker, `gh` and

@@ -74,6 +74,7 @@ pub mod image;
 pub mod jar;
 pub mod lang;
 pub mod packages;
+pub mod purl;
 pub mod rpmdb;
 mod rpmver;
 pub mod rustbin;

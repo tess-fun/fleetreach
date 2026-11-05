@@ -102,9 +102,25 @@ Syft's CycloneDX has no edges from the root, so everything reads as transitive; 
 from the project, and all of them read as direct.
 
 A coverage gap says what the SBOM could not vouch for: it does not assert it is complete, it is
-older than the newest commit to a lockfile, or it lists components no matcher takes, as OS
-packages are for now. No age is claimed in a shallow clone, which has no history to compare with, and fleet
+older than the newest commit to a lockfile, or it lists components no matcher takes. No age is claimed in a shallow clone, which has no history to compare with, and fleet
 checkouts are shallow.
+
+### Scan an image's SBOM
+
+`pkg:deb`, `pkg:apk` and `pkg:rpm` components go to the same distro matchers as an
+[image](/fleetreach/docs/ecosystems/container-images/), so a Syft or Trivy SBOM of an image scans
+in full without the image. On 27 images, 108 documents gave the OS findings the image itself
+gives, apart from four SPDX documents covered below. The distro data is fetched the same way:
+`fleetreach db sync --distros <ecosystem>`, or `--osv-dir`.
+
+Three things are read from the document, and a gap says when one is missing:
+
+- **The release**, from each URL's `distro` qualifier or the operating-system component. A document
+  that names none, or lists two distributions, has its OS packages left unmatched.
+- **The source package**, which most advisories name. A document that names no source for any
+  package is matched by binary name, and will miss findings.
+- **The module stream** of a Red Hat module build. CycloneDX from Syft and Trivy carries it; SPDX
+  does not, so prefer CycloneDX for images with module builds.
 
 ### Find SBOMs by themselves
 

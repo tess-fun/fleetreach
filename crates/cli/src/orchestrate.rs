@@ -262,6 +262,8 @@ pub fn scan_fleet(
 #[derive(Default)]
 pub(crate) struct Images<'a> {
     pub(crate) prepared: &'a [crate::images::Prepared],
+    /// The OS packages the fleet's SBOMs list, which need the same distro data.
+    pub(crate) sboms: &'a [fleetreach_os::Inspection],
     /// The resolved distro exports (`all.zip` files or record directories).
     pub(crate) exports: Vec<PathBuf>,
     /// Those read as a frozen ecosystem, and which.
@@ -333,6 +335,12 @@ pub(crate) fn scan_fleet_with(
     // is byte-identical to a serial scan regardless of completion order.
     let scan_unit_with = |unit: &ScanUnit| {
         if let Some(sbom) = &unit.sbom {
+            if matches!(
+                unit.ecosystem,
+                Ecosystem::Deb | Ecosystem::Apk | Ecosystem::Rpm
+            ) {
+                return scan_sbom_os(&unit.repo.id, sbom, images, distro_db.as_ref());
+            }
             return scan_sbom_unit(db, &unit.repo, unit.ecosystem, sbom, &dbs);
         }
         if unit.alongside && dbs.ghactions.is_none() {
@@ -739,7 +747,8 @@ fn sbom_plan(repo: &Repo, paths: &[PathBuf]) -> RepoPlan {
                     input.unrouted.join(", ")
                 )));
             }
-            input.packages.keys().copied().collect()
+            let languages = input.packages.keys().copied();
+            languages.chain(input.os_ecosystem()).collect()
         }
         Err(_) => Vec::new(),
     };
@@ -762,6 +771,36 @@ fn sbom_plan(repo: &Repo, paths: &[PathBuf]) -> RepoPlan {
 }
 
 /// Scan one ecosystem's packages from an SBOM with that ecosystem's matcher.
+/// The OS packages of each SBOM the fleet's repos are scanned from, to load distro data for.
+pub(crate) fn sbom_inspections(config: &Config) -> Vec<fleetreach_os::Inspection> {
+    config
+        .repos
+        .par_iter()
+        .filter(|r| config.sboms.contains_key(&r.id) || config.discovers_sboms(&r.id))
+        .filter_map(|repo| {
+            let plan = repo_plan(config, repo);
+            let unit = plan.units.iter().find(|u| u.sbom.is_some())?;
+            unit.sbom.as_deref()?.as_ref().ok()?.os_inspection()
+        })
+        .collect()
+}
+
+fn scan_sbom_os(
+    id: &RepoId,
+    sbom: &Result<crate::sbom_input::SbomInput, String>,
+    images: &Images,
+    distro_db: Option<&Result<fleetreach_os::db::DistroDb, String>>,
+) -> RepoResult {
+    match sbom
+        .as_ref()
+        .map(crate::sbom_input::SbomInput::os_inspection)
+    {
+        Ok(Some(inspection)) => scan_os(id, &inspection, None, images, distro_db).1,
+        Ok(None) => RepoResult::errored(id, "sbom: no OS packages".to_string()),
+        Err(e) => RepoResult::errored(id, format!("sbom: {e}")),
+    }
+}
+
 fn scan_sbom_unit(
     advisories: &AdvisoryDb,
     repo: &Repo,
@@ -1036,15 +1075,18 @@ pub(crate) fn image_lang_units(repo: &Repo) -> Vec<ScanUnit> {
 fn load_distro_db(images: &Images) -> Option<Result<fleetreach_os::db::DistroDb, String>> {
     let mut wanted = fleetreach_os::db::Wanted::default();
     let mut packages = BTreeSet::new();
-    for image in images.prepared {
-        let Ok(opened) = &image.opened else { continue };
-        let Ok(distro) = &opened.inspection.distro else {
+    let opened = images
+        .prepared
+        .iter()
+        .filter_map(|i| i.opened.as_ref().ok());
+    for inspection in opened.map(|o| &o.inspection).chain(images.sboms) {
+        let Ok(distro) = &inspection.distro else {
             continue;
         };
         for eco in distro.ecosystems() {
             wanted.ecosystems.insert(eco, distro.family);
         }
-        let installed = &opened.inspection.inventory.packages;
+        let installed = &inspection.inventory.packages;
         // Source names, and binary names for distros whose advisories or vendor VEX name
         // binaries (SUSE's VEX does, its osv.dev records do not).
         packages.extend(installed.iter().map(|p| p.source.clone()));
@@ -1093,7 +1135,13 @@ fn scan_image(
         alongside: false,
     };
     let layers = &opened.layers;
-    let mut os = scan_image_os(&image.id, opened, images, distro_db);
+    let mut os = scan_os(
+        &image.id,
+        &opened.inspection,
+        Some(opened),
+        images,
+        distro_db,
+    );
     // The real binary names ride in the path: distro, source, then the binaries.
     attribute(&mut os.1, layers, |_, path| {
         layers.of_packages(path.get(2)?.split(", "))
@@ -1500,14 +1548,15 @@ fn scan_image_java(
 /// or rpm) and the result: errored when the distro's export is missing, and with coverage gaps
 /// for an unknown distro or release, an incomplete package database, image files that could
 /// not be read, and language artifacts no feeder reads.
-fn scan_image_os(
+/// The OS packages of an image (`opened`) or an SBOM, against the distro advisories.
+fn scan_os(
     id: &RepoId,
-    opened: &crate::images::Opened,
+    inspection: &fleetreach_os::Inspection,
+    opened: Option<&crate::images::Opened>,
     images: &Images,
     distro_db: Option<&Result<fleetreach_os::db::DistroDb, String>>,
 ) -> (Ecosystem, RepoResult) {
     use fleetreach_os::Family;
-    let inspection = &opened.inspection;
     let family = inspection
         .inventory
         .family
@@ -1518,6 +1567,7 @@ fn scan_image_os(
         _ => Ecosystem::Deb,
     };
     let source = match family {
+        _ if opened.is_none() => "SBOM",
         Some(Family::Deb) => "var/lib/dpkg/status",
         Some(Family::Apk) => "lib/apk/db/installed",
         Some(Family::Rpm) => "var/lib/rpm",
@@ -1536,14 +1586,14 @@ fn scan_image_os(
         .iter()
         .map(|p| gap(source, ecosystem, p.clone()))
         .collect();
-    for skipped in &opened.skipped {
+    for skipped in opened.iter().flat_map(|o| &o.skipped) {
         gaps.push(gap(
             source,
             ecosystem,
             format!("an image file was not read ({skipped}); what it lists was not scanned"),
         ));
     }
-    for (kind, n) in &opened.unread {
+    for (kind, n) in opened.iter().flat_map(|o| &o.unread) {
         let eco = if kind.contains("jar") {
             Ecosystem::Maven
         } else if *kind == fleetreach_os::lang::RUST_UNREAD {

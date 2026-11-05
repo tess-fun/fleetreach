@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **SBOM input matches OS packages.** `pkg:deb`, `pkg:apk` and `pkg:rpm` components go to the same
+  distro matchers as an image, so a Syft or Trivy image SBOM scans in full. The release comes from
+  the `distro` qualifier or the operating-system component, and each package's source from what
+  the tool wrote. A document that names no release, or several, is a coverage gap, and so is one
+  that names no source packages. SPDX has no module stream labels, so on a Red Hat module build
+  the scan says it may differ from the image.
 - **`fix plan` reads each repo's ranges before it proposes a target**, for npm's
   `package-lock.json` and for Cargo. A target your own manifest leaves out is a new
   `manifest-bump` edit: `fix apply` raises the range, an exact pin included, then updates the

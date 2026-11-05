@@ -209,15 +209,18 @@ pub fn from_rpm(p: &RpmPackage) -> Option<OsPackage> {
         source,
         source_version,
         arch: p.arch.clone(),
-        // `name:stream:version:context`: the stream is what advisories gate on.
-        module: p.modularity_label.as_deref().and_then(|l| {
-            let mut parts = l.split(':');
-            match (parts.next(), parts.next()) {
-                (Some(n), Some(s)) if !n.is_empty() && !s.is_empty() => Some(format!("{n}:{s}")),
-                _ => None,
-            }
-        }),
+        module: p.modularity_label.as_deref().and_then(module_stream),
     })
+}
+
+/// `name:stream` of a modularity label, `name:stream:version:context`: the stream is what
+/// advisories gate on.
+pub(crate) fn module_stream(label: &str) -> Option<String> {
+    let mut parts = label.split(':');
+    match (parts.next(), parts.next()) {
+        (Some(n), Some(s)) if !n.is_empty() && !s.is_empty() => Some(format!("{n}:{s}")),
+        _ => None,
+    }
 }
 
 /// Give each source rpm one epoch. A source rpm's file name has none, so [`from_rpm`] takes
@@ -226,7 +229,7 @@ pub fn from_rpm(p: &RpmPackage) -> Option<OsPackage> {
 /// `0:5.32.1-475`, older than an advisory's `4:5.32.1-473`. The epoch of a binary built at the
 /// source's own version and release is the source's; where no binary is, or they disagree,
 /// nothing changes.
-fn share_source_epoch(pkgs: &mut [OsPackage]) {
+pub(crate) fn share_source_epoch(pkgs: &mut [OsPackage]) {
     fn split(v: &str) -> (Option<&str>, &str) {
         match v.split_once(':') {
             Some((e, rest)) if !e.is_empty() && e.bytes().all(|b| b.is_ascii_digit()) => {

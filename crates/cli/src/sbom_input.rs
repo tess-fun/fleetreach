@@ -9,8 +9,11 @@
 //! without a dependency graph everything counts as transitive. Coverage is full only when a
 //! CycloneDX document asserts its root is `complete`; SPDX has no such assertion, so an SPDX
 //! input is always partial. Components without a purl, or of a type no matcher covers from an
-//! SBOM (`cargo` and `golang` are read from their lockfiles; `githubactions`; container or OS
-//! packages), are counted and named, never silently dropped.
+//! SBOM (`githubactions`, containers), are counted and named, never silently dropped.
+//!
+//! `pkg:deb`, `pkg:apk` and `pkg:rpm` components go to the distro matchers, as an image's packages
+//! do: [`fleetreach_os::purl`] reads the release and each package's source from what the
+//! document says, and a document that does not say which release is a coverage gap.
 //!
 //! XML and tag-value are turned into the JSON shape and read by the same code, so a document
 //! yields the same packages in every format. [`discover`] finds SBOMs in a repo with nothing
@@ -20,6 +23,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use fleetreach_core::{DepGraph, Ecosystem};
+use fleetreach_os::purl::{self, decode, Component, Hint, SourceHint};
+use fleetreach_os::{Family, Inspection};
 
 /// One routed package.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +46,26 @@ pub struct SbomInput {
     pub unrouted: Vec<String>,
     /// When the document says it was made, in Unix seconds.
     pub created: Option<i64>,
+    /// The OS packages it lists, for the distro matchers.
+    pub os: Vec<Component>,
+    /// Its operating-system component, name and version.
+    pub os_named: Option<(String, String)>,
+}
+
+impl SbomInput {
+    /// The ecosystem of the OS packages listed, if any.
+    pub fn os_ecosystem(&self) -> Option<Ecosystem> {
+        self.os.first().map(|c| match c.family {
+            Family::Deb => Ecosystem::Deb,
+            Family::Apk => Ecosystem::Apk,
+            Family::Rpm => Ecosystem::Rpm,
+        })
+    }
+
+    /// The OS packages listed, as an image's inspection; `None` with none listed.
+    pub fn os_inspection(&self) -> Option<Inspection> {
+        (!self.os.is_empty()).then(|| purl::inspect(&self.os, self.os_named.as_ref()))
+    }
 }
 
 /// A parsed package URL: ecosystem and the matcher's name form, and the version.
@@ -69,24 +94,6 @@ fn route(purl: &str) -> Result<(Ecosystem, String, String), String> {
         other => return Err(other.to_string()),
     };
     Ok((eco.0, eco.1, version))
-}
-
-fn decode(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 3 <= bytes.len() {
-            if let Ok(b) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
-                out.push(b);
-                i += 3;
-                continue;
-            }
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// Read an SBOM file.
@@ -150,10 +157,16 @@ fn cyclonedx_xml(text: &str) -> Result<serde_json::Value, String> {
         let nested: Vec<Value> = elements(node, "components", "component")
             .map(component)
             .collect();
+        let properties: Vec<Value> = elements(node, "properties", "property")
+            .map(|p| json!({"name": p.attribute("name"), "value": p.text().map(str::trim)}))
+            .collect();
         let mut out = json!({
             "type": node.attribute("type"),
+            "name": text_of(node, "name"),
+            "version": text_of(node, "version"),
             "purl": text_of(node, "purl"),
             "scope": text_of(node, "scope"),
+            "properties": properties,
             "components": nested,
         });
         if let Some(reference) = node.attribute("bom-ref") {
@@ -236,7 +249,7 @@ fn spdx_tag_value(text: &str) -> Result<serde_json::Value, String> {
             "SPDXVersion" => version = Some(value.to_string()),
             "Created" => created = Some(value.to_string()),
             "PackageName" => {
-                packages.push(json!({"externalRefs": []}));
+                packages.push(json!({"name": value, "externalRefs": []}));
                 in_package = true;
             }
             // Every other section opens with one of these, and has an SPDXID of its own.
@@ -249,6 +262,16 @@ fn spdx_tag_value(text: &str) -> Result<serde_json::Value, String> {
             "PrimaryPackagePurpose" if in_package => {
                 if let Some(package) = packages.last_mut() {
                     package["primaryPackagePurpose"] = Value::from(value);
+                }
+            }
+            "PackageVersion" | "PackageSourceInfo" if in_package => {
+                let key = if tag == "PackageVersion" {
+                    "versionInfo"
+                } else {
+                    "sourceInfo"
+                };
+                if let Some(package) = packages.last_mut() {
+                    package[key] = Value::from(value);
                 }
             }
             "ExternalRef" if in_package => {
@@ -329,6 +352,8 @@ impl SbomInput {
         }
         self.complete &= other.complete;
         self.unrouted.extend(other.unrouted);
+        self.os.extend(other.os);
+        self.os_named = self.os_named.or(other.os_named);
         self.created = match (self.created, other.created) {
             (Some(a), Some(b)) => Some(a.min(b)),
             _ => None,
@@ -471,10 +496,56 @@ struct Builder {
     /// ref -> (ecosystem, name, version, dev)
     by_ref: BTreeMap<String, (Ecosystem, String, String, bool)>,
     unrouted: BTreeMap<String, usize>,
+    os: Vec<Component>,
+    os_named: Option<(String, String)>,
+}
+
+/// What a CycloneDX component's properties say of an OS package: Trivy's source package, and
+/// either tool's modularity label.
+fn cyclonedx_hint(component: &serde_json::Value) -> Hint {
+    let property = |name: &str| {
+        let list = component.get("properties")?.as_array()?;
+        let found = list
+            .iter()
+            .find(|p| p.get("name").and_then(|n| n.as_str()) == Some(name))?;
+        found.get("value")?.as_str()
+    };
+    let version = property("aquasecurity:trivy:SrcVersion").map(|version| {
+        let epoch = property("aquasecurity:trivy:SrcEpoch").filter(|e| *e != "0");
+        let epoch = epoch.map(|e| format!("{e}:")).unwrap_or_default();
+        match property("aquasecurity:trivy:SrcRelease") {
+            Some(release) => format!("{epoch}{version}-{release}"),
+            None => format!("{epoch}{version}"),
+        }
+    });
+    Hint {
+        source: property("aquasecurity:trivy:SrcName").map(|name| SourceHint {
+            name: name.to_string(),
+            version,
+        }),
+        module: property("aquasecurity:trivy:Modularitylabel")
+            .or_else(|| property("syft:metadata:modularityLabel"))
+            .map(str::to_string),
+    }
+}
+
+/// The source package of an SPDX package, from Trivy's `built package from: openssl 1:3.0.7-1`.
+fn spdx_source(package: &serde_json::Value) -> Option<SourceHint> {
+    let info = package.get("sourceInfo")?.as_str()?;
+    let built = info.strip_prefix("built package from:")?.trim();
+    let (name, version) = built.split_once(' ').unwrap_or((built, ""));
+    (!name.is_empty()).then(|| SourceHint {
+        name: name.to_string(),
+        version: (!version.is_empty()).then(|| version.trim().to_string()),
+    })
 }
 
 impl Builder {
-    fn add(&mut self, reference: String, purl: Option<&str>, dev: bool) {
+    fn add(&mut self, reference: String, purl: Option<&str>, dev: bool, hint: Hint) {
+        if let Some(c) = purl.and_then(|p| purl::component(p, &hint)) {
+            self.os.push(c);
+            return;
+        }
         match purl.map(route) {
             Some(Ok((eco, name, version))) => {
                 self.by_ref.insert(reference, (eco, name, version, dev));
@@ -551,6 +622,8 @@ impl Builder {
             graph,
             complete,
             created: None,
+            os: self.os,
+            os_named: self.os_named,
             unrouted: self
                 .unrouted
                 .into_iter()
@@ -574,8 +647,11 @@ fn cyclonedx(doc: &serde_json::Value) -> SbomInput {
             let dev = c.get("scope").and_then(|v| v.as_str()) == Some("excluded");
             // Generators list the lockfile they read this way, which is no package.
             let kind = c.get("type").and_then(|v| v.as_str());
-            if !matches!(kind, Some("application" | "file")) || purl.is_some() {
-                b.add(reference, purl, dev);
+            let text = |key: &str| c.get(key).and_then(|v| v.as_str()).map(str::to_string);
+            if kind == Some("operating-system") && purl.is_none() {
+                b.os_named = b.os_named.take().or(text("name").zip(text("version")));
+            } else if !matches!(kind, Some("application" | "file")) || purl.is_some() {
+                b.add(reference, purl, dev, cyclonedx_hint(c));
             }
             walk(c.get("components"), b);
         }
@@ -679,8 +755,16 @@ fn spdx(doc: &serde_json::Value) -> SbomInput {
         // the lockfile and directory they read as packages too.
         let purpose = p.get("primaryPackagePurpose").and_then(|v| v.as_str());
         let holder = purl.is_none() && matches!(purpose, Some("APPLICATION" | "FILE" | "SOURCE"));
-        if !roots.contains(&id) && !holder {
-            b.add(id, purl, false);
+        let text = |key: &str| p.get(key).and_then(|v| v.as_str()).map(str::to_string);
+        if purl.is_none() && purpose == Some("OPERATING-SYSTEM") {
+            b.os_named = b.os_named.take().or(text("name").zip(text("versionInfo")));
+        } else if !roots.contains(&id) && !holder {
+            let source = spdx_source(p);
+            let hint = Hint {
+                source,
+                module: None,
+            };
+            b.add(id, purl, false, hint);
         }
     }
     let mut edges = Vec::new();
@@ -757,6 +841,58 @@ mod tests {
             list.collect::<Vec<_>>()
         };
         assert_eq!(edges(a), edges(b));
+    }
+
+    #[test]
+    fn os_packages_read_alike_from_every_format() {
+        let purl =
+            "pkg:rpm/rocky/openssl-libs@3.0.7-24.el9?arch=x86_64&amp;distro=rocky-9.3&amp;epoch=1";
+        let xml = format!(
+            r#"<bom xmlns="http://cyclonedx.org/schema/bom/1.6"><components>
+            <component type="operating-system"><name>rocky</name><version>9.3</version></component>
+            <component type="library" bom-ref="a"><purl>{purl}</purl><properties>
+              <property name="aquasecurity:trivy:SrcName">openssl</property>
+              <property name="aquasecurity:trivy:SrcEpoch">1</property>
+              <property name="aquasecurity:trivy:SrcVersion">3.0.7</property>
+              <property name="aquasecurity:trivy:SrcRelease">24.el9</property>
+            </properties></component></components></bom>"#
+        );
+        let purl = purl.replace("&amp;", "&");
+        let json = serde_json::json!({
+            "bomFormat": "CycloneDX",
+            "components": [
+                {"type": "operating-system", "name": "rocky", "version": "9.3"},
+                {"type": "library", "bom-ref": "a", "purl": purl, "properties": [
+                    {"name": "aquasecurity:trivy:SrcName", "value": "openssl"},
+                    {"name": "aquasecurity:trivy:SrcEpoch", "value": "1"},
+                    {"name": "aquasecurity:trivy:SrcVersion", "value": "3.0.7"},
+                    {"name": "aquasecurity:trivy:SrcRelease", "value": "24.el9"},
+                ]},
+            ],
+        });
+        let tag_value = format!(
+            "SPDXVersion: SPDX-2.3\nPackageName: rocky\nSPDXID: SPDXRef-os\nPackageVersion: 9.3\n\
+             PrimaryPackagePurpose: OPERATING-SYSTEM\nPackageName: openssl-libs\nSPDXID: SPDXRef-a\n\
+             PackageVersion: 3.0.7-24.el9\n\
+             PackageSourceInfo: built package from: openssl 1:3.0.7-24.el9\n\
+             ExternalRef: PACKAGE-MANAGER purl {purl}\n"
+        );
+        for input in [
+            parse(&xml).unwrap(),
+            parse(&json.to_string()).unwrap(),
+            parse(&tag_value).unwrap(),
+        ] {
+            assert!(input.unrouted.is_empty(), "{:?}", input.unrouted);
+            assert_eq!(input.os_ecosystem(), Some(Ecosystem::Rpm));
+            let named = ("rocky".to_string(), "9.3".to_string());
+            assert_eq!(input.os_named, Some(named));
+            let package = &input.os[0].package;
+            assert_eq!(package.version, "1:3.0.7-24.el9");
+            assert_eq!(package.source, "openssl");
+            assert_eq!(package.source_version, "1:3.0.7-24.el9");
+            let inspection = input.os_inspection().unwrap();
+            assert_eq!(inspection.distro.unwrap().ecosystem, "Rocky Linux:9");
+        }
     }
 
     #[test]
