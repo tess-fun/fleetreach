@@ -220,6 +220,27 @@ pub fn read_all(dir: &Path) -> Result<Vec<Decision>, String> {
     paths.iter().map(|p| read_decision(dir, p)).collect()
 }
 
+/// [`read_all`] for the default `triage/`, which nobody chose and may hold someone else's files:
+/// one that names no advisory is passed over with a warning. A decision that is broken still
+/// stops the scan.
+fn read_default(dir: &Path) -> Result<Vec<Decision>, String> {
+    let mut paths = Vec::new();
+    toml_files(dir, &mut paths)?;
+    paths.sort();
+    let (ours, others): (Vec<_>, Vec<_>) = paths.into_iter().partition(|path| {
+        let text = std::fs::read_to_string(path);
+        text.map_or(true, |text| text.contains("advisory"))
+    });
+    for path in others {
+        eprintln!(
+            "warning: {} is not a triage decision; set [settings.triage] dir if triage/ is \
+             not for fleetreach",
+            path.display()
+        );
+    }
+    ours.iter().map(|p| read_decision(dir, p)).collect()
+}
+
 /// A fleet's decisions, split for a scan.
 #[derive(Debug, Default)]
 pub struct Triage {
@@ -257,7 +278,9 @@ impl Triage {
             }
             return Ok(Triage::of(&[], &config.ignores, now().date()));
         }
-        let decisions = read_all(chosen).map_err(|e| format!("triage file {e}"))?;
+        let asked = dir.is_some() || config.triage.explicit;
+        let read = if asked { read_all } else { read_default };
+        let decisions = read(chosen).map_err(|e| format!("triage file {e}"))?;
         Ok(Triage::of(&decisions, &config.ignores, now().date()))
     }
 
@@ -652,6 +675,17 @@ mod tests {
             repos: Vec::new(),
             log: Vec::new(),
         }
+    }
+
+    #[test]
+    fn a_default_directory_may_hold_files_that_are_not_ours() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("rota.toml"), "[[people]]\nname = \"a\"\n").unwrap();
+        assert!(read_default(dir.path()).unwrap().is_empty());
+        assert!(read_all(dir.path()).is_err());
+        // A decision with a mistake in it is not somebody else's file.
+        std::fs::write(dir.path().join("d.toml"), "advisory = \"X\"\n").unwrap();
+        assert!(read_default(dir.path()).is_err());
     }
 
     #[test]
