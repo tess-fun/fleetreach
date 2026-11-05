@@ -289,6 +289,10 @@ pub fn scan_lockfile(
         let reported = reported_ids(&report);
         let none = BTreeSet::new();
         for package in lockfile.packages.iter().filter(|p| from_crates_io(p)) {
+            // Walking the tree for a path costs more than all the rest of a lockfile's scan.
+            if crates.advisories_for(package.name.as_str()).is_empty() {
+                continue;
+            }
             let Ok(version) = Version::parse(&package.version.to_string()) else {
                 continue;
             };
