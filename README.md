@@ -11,8 +11,8 @@
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 
 **Fleet-wide dependency security audit.** fleetreach scans every repository in your
-organisation in one run, across 12 ecosystems, and tells you which fix clears the most of
-them, who owns it, and what changed since the last run. One binary, no server, and never a
+organisation in one run, across 12 ecosystems and container images, and tells you which fix
+clears the most of them, who owns it, and what changed since the last run. One binary, no server, and never a
 false clean.
 
 **[Documentation](https://tess-fun.github.io/fleetreach/)** ·
@@ -74,6 +74,11 @@ Exit codes are the CI contract: `0` clean, `1` findings, `2` something could not
 
 ## What it does
 
+- **Finds your repos.** Lists them from a GitHub, GitLab, Bitbucket, Azure DevOps or Gitea
+  org, or reads the ones you name.
+- **Scans container images.** OS and language packages from image archives, root filesystems
+  or a registry, ranked with the repos. Every difference from Trivy and Grype on 217 public
+  images is [explained](https://tess-fun.github.io/fleetreach/docs/concepts/image-differential/).
 - **Ranks fixes across the fleet.** Impact, blast radius (direct vs transitive) and a
   batched fix queue: one bump per package that clears every advisory it has, with a bump
   risk taken from what the fleet already runs.
@@ -82,13 +87,14 @@ Exit codes are the CI contract: `0` clean, `1` findings, `2` something could not
 - **Opens verified fixes.** `fix plan` and `fix apply` make lock-only bumps on branches,
   re-scan each one, and open pull or merge requests on GitHub or GitLab.
 - **Tracks it over time.** History with no database, SLAs, time to fix, notifications to
-  Slack or webhooks, one issue per owner, and a static HTML report.
+  Slack or webhooks, one issue per owner, and a static HTML report. Triage decisions live in
+  files you review like code.
 - **Produces the evidence.** CycloneDX 1.7 and SPDX 2.3 SBOMs, OpenVEX, SARIF for GitHub code
   scanning, and license policy checks.
 - **Proves reachability.** Import-graph witness chains for npm and Python, and a sound MIR
   call-graph analysis for Rust.
 - **Flags supply-chain risk.** Install scripts, git dependencies, tag-pinned actions,
-  typosquats, brand-new releases and known malware.
+  typosquats, brand-new releases, known malware, and registry health with `--health`.
 
 ## Ecosystems
 
@@ -102,6 +108,7 @@ Exit codes are the CI contract: `0` clean, `1` findings, `2` something could not
 | Ruby, PHP, .NET | `Gemfile.lock`, `composer.lock`, NuGet lock and project files |
 | GitHub Actions | `.github/workflows/*.yml` |
 | Swift, Elixir, Julia | `Package.resolved`, `mix.lock`, `Manifest.toml` |
+| Container images | `docker save` and OCI archives, root filesystems, `docker://` registries: dpkg, apk and rpm packages and the language packages inside |
 
 Each ecosystem uses a port of its own version comparator, checked against the real one
 (Maven's over 710,000 version pairs). Nothing is built and no package code runs, so it is
@@ -124,10 +131,10 @@ and [GitLab CI](https://tess-fun.github.io/fleetreach/docs/integrations/gitlab-c
 
 ## How it compares
 
-osv-scanner, Trivy and Grype answer "is this project vulnerable?" one target at a time, and
-also scan container images, which fleetreach does not. Dependabot and Renovate keep each repo
+osv-scanner, Trivy and Grype answer "is this project vulnerable?" one target at a time.
+Dependabot and Renovate keep each repo
 current. Dependency-Track is a server you feed SBOMs. fleetreach reads all your repositories
-directly and answers fleet questions, and works alongside each of them (it writes the SBOMs
+and images directly and answers fleet questions, and works alongside each of them (it writes the SBOMs
 for Dependency-Track and the OpenVEX that Trivy and Grype read).
 [Detailed, dated comparisons](https://tess-fun.github.io/fleetreach/compare/osv-scanner/).
 

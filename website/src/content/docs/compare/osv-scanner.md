@@ -1,6 +1,6 @@
 ---
 title: fleetreach vs osv-scanner
-description: "An honest comparison of fleetreach and Google's osv-scanner (v2.7): both read lockfiles against OSV, but osv-scanner checks one project tree and container images, while fleetreach correlates a whole fleet of repositories."
+description: "An honest comparison of fleetreach and Google's osv-scanner (v2.7): both read lockfiles against OSV, but osv-scanner checks one project tree or image, while fleetreach correlates a whole fleet of repositories and images."
 sidebar:
   order: 1
 ---
@@ -13,9 +13,9 @@ running package managers. They differ in what they are for.
 
 | | fleetreach | osv-scanner |
 |---|---|---|
-| Unit of work | a fleet: many repos, local or discovered from a GitHub, GitLab, Bitbucket, Azure DevOps or Gitea org | one directory tree (`-r` recurses) or one image |
+| Unit of work | a fleet: many repos and images, local or discovered from a GitHub, GitLab, Bitbucket, Azure DevOps or Gitea org | one directory tree (`-r` recurses) or one image |
 | Main answer | which fix clears the most repos, who owns it, what changed | which vulnerable packages this tree has |
-| Container images | no | yes (`scan image`) |
+| Container images | yes (`scan --image`), ranked with the repos | yes (`scan image`) |
 | Reachability | npm and Python import graphs; sound Rust call graph; Go via govulncheck | Go call analysis by default; Rust experimental |
 | KEV, EPSS, SSVC | yes, all three | not in its docs |
 | VEX | writes OpenVEX | planned |
@@ -26,13 +26,13 @@ running package managers. They differ in what they are for.
 | License | MIT or Apache-2.0 | Apache-2.0 |
 
 **Choose osv-scanner** to scan a single project or a container image in CI, or if you want
-Google-maintained tooling with image support.
+Google-maintained tooling.
 
 **Choose fleetreach** when the question is about many repositories at once: ranking fixes
 across them, owners, SLAs and verified fix pull requests.
 
-**Use both**: osv-scanner on images, fleetreach across the source repos. They read the same
-advisory data.
+**Use both**: osv-scanner on one project in CI, fleetreach across the fleet. They read the
+same advisory data.
 
 Sources: [osv-scanner on GitHub](https://github.com/google/osv-scanner),
 [scan source](https://google.github.io/osv-scanner/usage/scan-source),

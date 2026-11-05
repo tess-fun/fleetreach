@@ -7,7 +7,7 @@ sidebar:
 
 fleetreach is a command-line tool that audits the dependencies of many repositories at
 once and tells you which single fix clears the most of them. It reads lockfiles in 12
-ecosystems, matches them against public advisory data (RustSec and [OSV](https://osv.dev)),
+ecosystems and [container images](/fleetreach/docs/ecosystems/container-images/), matches them against public advisory data (RustSec, [OSV](https://osv.dev) and distro feeds),
 and gives one deduplicated, ranked report for the whole fleet. It is one binary: no server,
 no database to run, no SBOM pipeline to wire up.
 
@@ -58,8 +58,9 @@ $ fleetreach scan -f packages | head -n 12
 
 - **Not an advisory database.** It reads RustSec and OSV (which aggregates GitHub
   advisories, PyPA, RubyGems, Go and others), plus CISA KEV and FIRST EPSS when you ask.
-- **Not a container or OS scanner.** Pair it with [Trivy](/fleetreach/docs/integrations/trivy-and-grype/)
-  for images.
+- **Not a host or cluster scanner.** It reads [container images](/fleetreach/docs/ecosystems/container-images/),
+  not running machines. Pair it with [Trivy](/fleetreach/docs/integrations/trivy-and-grype/)
+  for VMs and Kubernetes.
 - **Not a server.** If you want a hosted portfolio, it writes the SBOMs
   [Dependency-Track](/fleetreach/docs/integrations/dependency-track/) ingests.
 

@@ -7,7 +7,7 @@ sidebar:
 
 | | |
 |---|---|
-| Reads | a `docker save` or OCI-layout tarball, an OCI-layout directory, or a root filesystem (a directory or a tarball of one) |
+| Reads | a `docker save` or OCI-layout tarball, an OCI-layout directory, a root filesystem (a directory or a tarball of one), or an image in a registry |
 | OS packages | dpkg `status` and distroless `status.d`; apk `installed`; the rpm database (SQLite, Berkeley DB or NDB); Bottlerocket's application inventory |
 | Advisory data | the osv.dev distro exports: Debian, Ubuntu (and Ubuntu Pro), Alpine, Wolfi, Chainguard, MinimOS, Alpaquita and BellSoft, Echo, CleanStart, Root, Red Hat, AlmaLinux, Rocky Linux, openSUSE, SUSE, Azure Linux, Mageia, openEuler |
 | Version rules | dpkg's (`dpkg --compare-versions`), apk-tools' (`apk version -t`) and rpm's (`rpm.vercmp`) |
@@ -36,7 +36,8 @@ output format with the rest of the fleet. Package names are `<distro>/<source pa
 
 ## How it reads an image
 
-Nothing in the image is run, and nothing is pulled: fleetreach reads the archive you give it.
+Nothing in the image is run. fleetreach reads the archive you give it, or pulls the image
+[from a registry](#images-in-a-registry) when you name one.
 Layers are merged in order with OCI whiteouts (`.wh.<name>` and the opaque `.wh..wh..opq`),
 symlinks are followed inside the image only, and every layer named by its digest is checked
 against that digest. Only the files that matter are kept in memory: the package databases,

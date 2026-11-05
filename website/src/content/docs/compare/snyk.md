@@ -20,8 +20,9 @@ differences are where it runs, what it costs and where its data comes from.
 | Prioritisation | KEV, EPSS, SSVC with repo context | risk score (EPSS, exploit maturity, reachability) |
 | Fix pull requests | yes, verified by re-scan | yes |
 | SBOM | CycloneDX and SPDX, all users | CycloneDX and SPDX, Enterprise plans |
-| Advisory data | OSV, RustSec (public) | Snyk's proprietary database |
-| Containers, code, IaC | no | yes, separate products |
+| Advisory data | OSV, RustSec, vendor feeds (public) | Snyk's proprietary database |
+| Containers | yes | yes, a separate product |
+| Code, IaC | no | yes, separate products |
 | Offline / air-gapped | yes | no |
 
 **Choose Snyk** if you want a managed platform across code, containers and infrastructure,

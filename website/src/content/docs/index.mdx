@@ -1,10 +1,10 @@
 ---
 title: fleetreach, fleet-wide dependency security audit
-description: Scan every repository in your organisation at once, across 12 ecosystems, and fix what clears the most repos first. One open-source binary, no server, fails closed.
+description: Scan every repository and container image in your organisation at once, across 12 ecosystems, and fix what clears the most repos first. One open-source binary, no server, fails closed.
 template: splash
 hero:
   title: See how far every vulnerability reaches across your fleet
-  tagline: fleetreach scans all your repositories in one run, across 12 ecosystems, and tells you which fix clears the most of them, who owns it, and what changed since yesterday. One binary. No server. Never a false clean.
+  tagline: fleetreach scans all your repositories and container images in one run, across 12 ecosystems, and tells you which fix clears the most of them, who owns it, and what changed since yesterday. One binary. No server. Never a false clean.
   actions:
     - text: Get started
       link: /fleetreach/docs/getting-started/installation/
@@ -121,7 +121,7 @@ $ fleetreach scan -f packages | head -n 9
   </Card>
 </CardGrid>
 
-## 12 ecosystems, each with its own version rules
+## 12 ecosystems and container images, each with its own version rules
 
 <CardGrid>
   <LinkCard title="Rust" description="Cargo.lock, RustSec" href="/fleetreach/docs/ecosystems/rust/" />
@@ -136,6 +136,7 @@ $ fleetreach scan -f packages | head -n 9
   <LinkCard title="Swift" description="Package.resolved" href="/fleetreach/docs/ecosystems/swift/" />
   <LinkCard title="Elixir" description="mix.lock" href="/fleetreach/docs/ecosystems/hex/" />
   <LinkCard title="Julia" description="Manifest.toml" href="/fleetreach/docs/ecosystems/julia/" />
+  <LinkCard title="Container images" description="dpkg, apk, rpm and language packages" href="/fleetreach/docs/ecosystems/container-images/" />
 </CardGrid>
 
 ## Checked against the real thing
