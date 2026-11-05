@@ -323,7 +323,7 @@ fn allowed_registry(url: &str, allowed: &[String]) -> bool {
 }
 
 fn npm(dir: &Path, allowed: &[String], hits: &mut Vec<Hit>) {
-    let Ok(text) = std::fs::read_to_string(dir.join("package-lock.json")) else {
+    let Ok(text) = fleetreach_core::repofile::read_to_string(dir.join("package-lock.json")) else {
         return;
     };
     let Ok(lock) = serde_json::from_str::<serde_json::Value>(&text) else {
@@ -388,7 +388,7 @@ fn npm(dir: &Path, allowed: &[String], hits: &mut Vec<Hit>) {
 }
 
 fn cargo(lock_path: &Path, allowed: &[String], hits: &mut Vec<Hit>) {
-    let Ok(text) = std::fs::read_to_string(lock_path) else {
+    let Ok(text) = fleetreach_core::repofile::read_to_string(lock_path) else {
         return;
     };
     let Ok(lock) = toml::from_str::<toml::Value>(&text) else {
@@ -430,7 +430,7 @@ fn cargo(lock_path: &Path, allowed: &[String], hits: &mut Vec<Hit>) {
 }
 
 fn uv(dir: &Path, allowed: &[String], hits: &mut Vec<Hit>) {
-    let Ok(text) = std::fs::read_to_string(dir.join("uv.lock")) else {
+    let Ok(text) = fleetreach_core::repofile::read_to_string(dir.join("uv.lock")) else {
         return;
     };
     let Ok(lock) = toml::from_str::<toml::Value>(&text) else {
@@ -480,7 +480,7 @@ fn actions(repo_root: &Path, hits: &mut Vec<Hit>) {
         {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(&path) else {
+        let Ok(text) = fleetreach_core::repofile::read_to_string(&path) else {
             continue;
         };
         for used in fleetreach_ghactions::used_actions(&text) {

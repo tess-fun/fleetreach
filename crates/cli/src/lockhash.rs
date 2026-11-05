@@ -21,7 +21,9 @@ type Table = BTreeMap<(String, String), Checksum>;
 pub fn annotate(inv: &mut RepoInventory, repo_root: &Path) {
     for source in &mut inv.sources {
         let dir = source_dir(repo_root, &source.source);
-        let read = |file: &str| std::fs::read_to_string(dir.join(file)).unwrap_or_default();
+        let read = |file: &str| {
+            fleetreach_core::repofile::read_to_string(dir.join(file)).unwrap_or_default()
+        };
         let table = match source.ecosystem {
             Ecosystem::Cargo => cargo(&read("Cargo.lock")),
             Ecosystem::Npm => fleetreach_npm::lock_integrity(&dir)

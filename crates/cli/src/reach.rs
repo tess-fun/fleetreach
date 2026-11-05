@@ -412,7 +412,7 @@ fn scan_source(dir: &Path, exts: &[&str], names: &[&str], pred: impl Fn(&str) ->
             ext_ok || name_ok
         })
         .any(|e| {
-            std::fs::read_to_string(e.path())
+            fleetreach_core::repofile::read_to_string(e.path())
                 .map(|text| pred(&text))
                 .unwrap_or(false)
         })

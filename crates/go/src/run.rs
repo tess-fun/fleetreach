@@ -294,7 +294,7 @@ fn run_with_timeout(mut cmd: Command, timeout: Duration) -> Result<Output, GoErr
 /// [`direct_modules`]). Best effort: a missing or unreadable manifest yields an empty
 /// set, which classifies every finding transitive rather than failing the scan.
 fn read_direct_modules(module_dir: &Path) -> BTreeSet<String> {
-    std::fs::read_to_string(module_dir.join("go.mod"))
+    fleetreach_core::repofile::read_to_string(module_dir.join("go.mod"))
         .map(|src| direct_modules(&src))
         .unwrap_or_default()
 }

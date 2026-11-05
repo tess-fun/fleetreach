@@ -229,7 +229,7 @@ fn gemfile_groups(text: &str) -> (BTreeSet<String>, BTreeSet<String>) {
 }
 
 fn gems(dir: &Path) -> DevSet {
-    let read = |name: &str| std::fs::read_to_string(dir.join(name)).ok();
+    let read = |name: &str| fleetreach_core::repofile::read_to_string(dir.join(name)).ok();
     let (Some(lock), Some(gemfile)) = (read("Gemfile.lock"), read("Gemfile")) else {
         return DevSet::None;
     };
@@ -321,7 +321,7 @@ fn mix_git_deps(lock: &str) -> BTreeSet<String> {
 /// one of those shipping, anything could sit under it, except what `mix.exs` itself declares
 /// dev-only: Mix refuses a child that needs such a dep in another environment.
 fn hex(dir: &Path) -> DevSet {
-    let Ok(lock) = std::fs::read_to_string(dir.join("mix.lock")) else {
+    let Ok(lock) = fleetreach_core::repofile::read_to_string(dir.join("mix.lock")) else {
         return DevSet::None;
     };
     let mut todo = vec![dir.join("mix.exs")];
@@ -337,7 +337,7 @@ fn hex(dir: &Path) -> DevSet {
         if !seen.insert(manifest.clone()) {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(&manifest) else {
+        let Ok(text) = fleetreach_core::repofile::read_to_string(&manifest) else {
             // `apps/` can hold other files; a path dep cannot be left unread.
             unread |= !parent.starts_with(dir.join("apps"));
             continue;
@@ -590,7 +590,7 @@ impl GoSource<'_> {
                 if !name.ends_with(".go") || name.ends_with("_test.go") {
                     continue;
                 }
-                let source = std::fs::read_to_string(&path).ok()?;
+                let source = fleetreach_core::repofile::read_to_string(&path).ok()?;
                 let ignored = source
                     .lines()
                     .take_while(|l| !l.starts_with("package "))
@@ -612,7 +612,7 @@ fn go(dir: &Path) -> DevSet {
 }
 
 fn go_with_cache(dir: &Path, cache: Option<PathBuf>) -> DevSet {
-    let Ok(text) = std::fs::read_to_string(dir.join("go.mod")) else {
+    let Ok(text) = fleetreach_core::repofile::read_to_string(dir.join("go.mod")) else {
         return DevSet::None;
     };
     let module = go_mod(&text);
@@ -639,7 +639,7 @@ fn go_with_cache(dir: &Path, cache: Option<PathBuf>) -> DevSet {
         if !entry.file_type().is_file() || !name.ends_with(".go") {
             continue;
         }
-        let Ok(source) = std::fs::read_to_string(entry.path()) else {
+        let Ok(source) = fleetreach_core::repofile::read_to_string(entry.path()) else {
             return DevSet::None;
         };
         if name.ends_with("_test.go") {
@@ -679,7 +679,7 @@ struct Member {
 }
 
 fn read_toml(path: &Path) -> Option<toml::Value> {
-    toml::from_str(&std::fs::read_to_string(path).ok()?).ok()
+    toml::from_str(&fleetreach_core::repofile::read_to_string(path).ok()?).ok()
 }
 
 fn table_names(table: Option<&toml::Value>, workspace: &toml::Value, into: &mut BTreeSet<String>) {
@@ -867,6 +867,15 @@ mod tests {
 
     fn set(names: &[&str]) -> BTreeSet<String> {
         names.iter().map(|n| n.to_string()).collect()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_manifest_linked_to_a_device_is_not_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = dir.path().join("Cargo.toml");
+        std::os::unix::fs::symlink("/dev/zero", &manifest).unwrap();
+        assert!(read_toml(&manifest).is_none());
     }
 
     #[test]

@@ -125,7 +125,8 @@ pub fn read_lockfile(dir: &Path) -> Result<(Vec<InstalledPackage>, DepGraph), Np
 }
 
 fn read_one(dir: &Path, path: &Path) -> Result<(Vec<InstalledPackage>, DepGraph), NpmError> {
-    let body = std::fs::read_to_string(path).map_err(|e| NpmError::db(path, e))?;
+    let body =
+        fleetreach_core::repofile::read_to_string(path).map_err(|e| NpmError::db(path, e))?;
     let lockfile_err = |message: String| NpmError::Lockfile {
         path: path.to_path_buf(),
         message,

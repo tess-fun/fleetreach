@@ -14,7 +14,9 @@ use crate::fix::{dirs_with, run, Edit};
 fn dirs_holding(work: &Path, lockfile: &str, holds: impl Fn(&str) -> bool) -> Vec<PathBuf> {
     dirs_with(work, lockfile)
         .into_iter()
-        .filter(|d| std::fs::read_to_string(d.join(lockfile)).is_ok_and(|t| holds(&t)))
+        .filter(|d| {
+            fleetreach_core::repofile::read_to_string(d.join(lockfile)).is_ok_and(|t| holds(&t))
+        })
         .collect()
 }
 
@@ -87,12 +89,12 @@ pub(crate) fn yarn_bump(work: &Path, edit: &Edit) -> Result<Option<String>, Stri
     let dirs = dirs_holding(work, "yarn.lock", |t| t.contains(&needle));
     for dir in &dirs {
         let path = dir.join("yarn.lock");
-        let lock = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let lock = fleetreach_core::repofile::read_to_string(&path).map_err(|e| e.to_string())?;
         if lock.contains("__metadata:") {
             // Yarn rewrites its install state even when no version moved. In a repo that
             // tracks it, that alone would read as a change.
             let state = dir.join(".yarn/install-state.gz");
-            let kept = std::fs::read(&state).ok();
+            let kept = fleetreach_core::repofile::read(&state).ok();
             run(Command::new("yarn")
                 .current_dir(dir)
                 .env("YARN_ENABLE_SCRIPTS", "0")
@@ -291,7 +293,7 @@ pub(crate) fn nuget_bump(work: &Path, edit: &Edit) -> Result<String, String> {
     });
     let mut changed = 0;
     for path in &projects {
-        let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        let text = fleetreach_core::repofile::read_to_string(path).map_err(|e| e.to_string())?;
         let ranges = msbuild_versions(&text, &edit.package, &edit.from)
             .map_err(|e| format!("{}: {e}", path.display()))?;
         if !ranges.is_empty() {
@@ -392,7 +394,7 @@ pub(crate) fn maven_bump(work: &Path, edit: &Edit) -> Result<String, String> {
     let poms = files_where(work, |name| name == "pom.xml");
     let mut texts = Vec::with_capacity(poms.len());
     for path in &poms {
-        texts.push(std::fs::read_to_string(path).map_err(|e| e.to_string())?);
+        texts.push(fleetreach_core::repofile::read_to_string(path).map_err(|e| e.to_string())?);
     }
     let at = |path: &Path, e: String| format!("{}: {e}", path.display());
     let mut properties = Vec::new();

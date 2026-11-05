@@ -137,7 +137,7 @@ fn manifest_label(root: &Path, dir: &Path, key: &str) -> String {
 }
 
 fn read_json(path: &Path) -> Option<Value> {
-    serde_json::from_slice(&std::fs::read(path).ok()?).ok()
+    serde_json::from_slice(&fleetreach_core::repofile::read(path).ok()?).ok()
 }
 
 /// One comparator of an npm range.
@@ -354,7 +354,7 @@ fn cargo_requirements(manifest: &toml::Value, package: &str, dev: bool) -> Vec<S
 }
 
 fn read_toml(path: &Path) -> Option<toml::Value> {
-    toml::from_str(&std::fs::read_to_string(path).ok()?).ok()
+    toml::from_str(&fleetreach_core::repofile::read_to_string(path).ok()?).ok()
 }
 
 /// The manifests under `dir`, by package name, and the workspace's own requirement.
@@ -544,7 +544,7 @@ pub fn raise_npm(work: &Path, edit: &Edit) -> Result<Vec<PathBuf>, String> {
         let mut changed = false;
         for (key, entry) in local {
             let path = dir.join(key).join("package.json");
-            let Ok(mut text) = std::fs::read_to_string(&path) else {
+            let Ok(mut text) = fleetreach_core::repofile::read_to_string(&path) else {
                 continue;
             };
             let before = text.clone();
@@ -675,7 +675,7 @@ pub fn raise_cargo(work: &Path, edit: &Edit) -> Result<usize, String> {
     let mut changed = 0;
     for dir in dirs_with(work, "Cargo.toml") {
         let path = dir.join("Cargo.toml");
-        let text = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let text = fleetreach_core::repofile::read_to_string(&path).map_err(|e| e.to_string())?;
         let mut doc: toml_edit::DocumentMut = text
             .parse()
             .map_err(|e: toml_edit::TomlError| e.to_string())?;

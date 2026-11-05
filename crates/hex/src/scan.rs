@@ -32,7 +32,8 @@ pub fn parse_hex_version(raw: &str) -> Option<Version> {
 /// unreadable/absent lockfile is an honest gap rather than a false-clean scan.
 pub fn scan_offline(repo_dir: &Path, db: &HexDb, repo: &RepoId) -> Result<TierCScan, HexError> {
     let lock_path = repo_dir.join("mix.lock");
-    let lock_text = std::fs::read_to_string(&lock_path).map_err(|e| HexError::db(&lock_path, e))?;
+    let lock_text = fleetreach_core::repofile::read_to_string(&lock_path)
+        .map_err(|e| HexError::db(&lock_path, e))?;
     let (installed, graph) = installed_packages(&lock_text);
 
     Ok(scan_installed(&installed, &graph, db, repo))

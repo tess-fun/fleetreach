@@ -94,7 +94,8 @@ pub(crate) fn read_dir(dir: &Path) -> Result<(Vec<InstalledPackage>, DepGraph, u
     let mut graph = DepGraph::new(ROOT);
     let mut non_registry = 0;
     for path in pylock_files(dir) {
-        let body = std::fs::read_to_string(&path).map_err(|e| PyPiError::db(&path, e))?;
+        let body = fleetreach_core::repofile::read_to_string(&path)
+            .map_err(|e| PyPiError::db(&path, e))?;
         let (pkgs, file_graph_edges, skipped) =
             parse(&body, &runtime, &dev_direct).map_err(|e| PyPiError::db(&path, e))?;
         packages.extend(pkgs);
@@ -182,7 +183,7 @@ fn closure(edges: &Edges, roots: impl Iterator<Item = String>) -> BTreeSet<Strin
 fn pyproject_direct(dir: &Path) -> (BTreeSet<String>, BTreeSet<String>) {
     let mut runtime = poetry_direct_set(dir);
     let mut dev = BTreeSet::new();
-    let Ok(body) = std::fs::read_to_string(dir.join("pyproject.toml")) else {
+    let Ok(body) = fleetreach_core::repofile::read_to_string(dir.join("pyproject.toml")) else {
         return (runtime, dev);
     };
     let Ok(value) = toml::from_str::<toml::Value>(&body) else {

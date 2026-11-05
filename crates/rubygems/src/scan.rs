@@ -32,7 +32,8 @@ pub fn scan_offline(
     repo: &RepoId,
 ) -> Result<TierCScan, RubyGemsError> {
     let lock_path = repo_dir.join("Gemfile.lock");
-    let body = std::fs::read_to_string(&lock_path).map_err(|e| RubyGemsError::db(&lock_path, e))?;
+    let body = fleetreach_core::repofile::read_to_string(&lock_path)
+        .map_err(|e| RubyGemsError::db(&lock_path, e))?;
     let installed = installed_gems(&body);
     let graph = dependency_graph(&body);
 

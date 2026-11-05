@@ -203,7 +203,7 @@ fn first_party_imports(repo_dir: &Path) -> BTreeSet<String> {
         .filter(|e| e.file_type().is_file())
     {
         if has_ext(entry.path(), SRC_EXTS) {
-            if let Ok(text) = std::fs::read_to_string(entry.path()) {
+            if let Ok(text) = fleetreach_core::repofile::read_to_string(entry.path()) {
                 for spec in import_packages(&text) {
                     set.insert(spec);
                 }
@@ -228,7 +228,7 @@ fn package_graph(node_modules: &Path) -> BTreeMap<String, BTreeSet<String>> {
             .filter(|e| e.file_type().is_file())
         {
             if has_ext(entry.path(), DEP_EXTS) {
-                if let Ok(text) = std::fs::read_to_string(entry.path()) {
+                if let Ok(text) = fleetreach_core::repofile::read_to_string(entry.path()) {
                     for spec in import_packages(&text) {
                         if spec != name {
                             deps.insert(spec);
@@ -250,7 +250,7 @@ fn package_graph(node_modules: &Path) -> BTreeMap<String, BTreeSet<String>> {
 /// executable of that name, which over-approximates (safe).
 fn command_words(repo_dir: &Path) -> BTreeSet<String> {
     let mut commands: Vec<String> = Vec::new();
-    if let Some(scripts) = std::fs::read_to_string(repo_dir.join("package.json"))
+    if let Some(scripts) = fleetreach_core::repofile::read_to_string(repo_dir.join("package.json"))
         .ok()
         .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
         .and_then(|manifest| manifest.get("scripts").and_then(|s| s.as_object()).cloned())
@@ -264,7 +264,7 @@ fn command_words(repo_dir: &Path) -> BTreeSet<String> {
     if let Ok(entries) = std::fs::read_dir(repo_dir.join(".github").join("workflows")) {
         for entry in entries.flatten() {
             if has_ext(&entry.path(), &["yml", "yaml"]) {
-                commands.extend(std::fs::read_to_string(entry.path()).ok());
+                commands.extend(fleetreach_core::repofile::read_to_string(entry.path()).ok());
             }
         }
     }
@@ -287,7 +287,8 @@ fn bin_owners(node_modules: &Path) -> BTreeMap<String, String> {
         let Some(name) = package_name_of(node_modules, &pkg_dir) else {
             continue;
         };
-        let Ok(text) = std::fs::read_to_string(pkg_dir.join("package.json")) else {
+        let Ok(text) = fleetreach_core::repofile::read_to_string(pkg_dir.join("package.json"))
+        else {
             continue;
         };
         let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&text) else {

@@ -200,7 +200,8 @@ pub(crate) fn read_project(path: &Path) -> Result<Declared, XmlError> {
 }
 
 fn read(path: &Path) -> Result<String, XmlError> {
-    std::fs::read_to_string(path).map_err(|e| XmlError(format!("{}: {e}", path.display())))
+    fleetreach_core::repofile::read_to_string(path)
+        .map_err(|e| XmlError(format!("{}: {e}", path.display())))
 }
 
 /// The nearest `name` in `dir` or an ancestor, stopping at the repository root (the first
@@ -302,7 +303,7 @@ pub fn build_only(dir: &Path) -> BuildOnly {
     let mut tests = 0usize;
     let mut shipped = BTreeSet::new();
     for project in &projects {
-        let Ok(text) = std::fs::read_to_string(project) else {
+        let Ok(text) = fleetreach_core::repofile::read_to_string(project) else {
             return BuildOnly::default();
         };
         let Ok(doc) = parse_xml(&text) else {

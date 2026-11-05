@@ -28,10 +28,10 @@ use crate::version::{parse_julia_version, to_semver, Version};
 /// TOML — failing closed, so an unreadable/absent/corrupt manifest is an honest gap.
 pub fn scan_offline(repo_dir: &Path, db: &JuliaDb, repo: &RepoId) -> Result<TierCScan, JuliaError> {
     let manifest_path = repo_dir.join("Manifest.toml");
-    let manifest =
-        std::fs::read_to_string(&manifest_path).map_err(|e| JuliaError::db(&manifest_path, e))?;
+    let manifest = fleetreach_core::repofile::read_to_string(&manifest_path)
+        .map_err(|e| JuliaError::db(&manifest_path, e))?;
     // Project.toml is optional context for the direct/transitive flag.
-    let project = std::fs::read_to_string(repo_dir.join("Project.toml")).ok();
+    let project = fleetreach_core::repofile::read_to_string(repo_dir.join("Project.toml")).ok();
     let (installed, graph) = installed_packages(&manifest, project.as_deref())
         .map_err(|e| JuliaError::db(&manifest_path, e))?;
 

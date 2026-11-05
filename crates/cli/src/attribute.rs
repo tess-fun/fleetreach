@@ -256,7 +256,8 @@ impl Checkout {
     fn at_head(&self, file: &str) -> Option<String> {
         let path = self.dir.join(file);
         let meta = std::fs::symlink_metadata(&path).ok()?;
-        meta.is_file().then(|| std::fs::read_to_string(path).ok())?
+        meta.is_file()
+            .then(|| fleetreach_core::repofile::read_to_string(path).ok())?
     }
 
     /// The file at the merge base; `None` when it did not exist there.

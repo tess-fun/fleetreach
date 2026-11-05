@@ -292,7 +292,7 @@ fn read_license_files(dir: &Path) -> Vec<(String, Vec<u8>)> {
 
 fn push_file(out: &mut Vec<(String, Vec<u8>)>, entry: &std::fs::DirEntry, name: String) {
     let small = entry.metadata().is_ok_and(|m| m.len() <= MAX_FILE);
-    if let (true, Ok(bytes)) = (small, std::fs::read(entry.path())) {
+    if let (true, Ok(bytes)) = (small, fleetreach_core::repofile::read(entry.path())) {
         out.push((name, bytes));
     }
 }

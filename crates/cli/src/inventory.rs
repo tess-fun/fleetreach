@@ -110,7 +110,8 @@ fn unit_inventory(unit: &ScanUnit, maven: Option<&Remote>) -> Result<Vec<SourceI
         }
         Ecosystem::Packagist => {
             let lock = read(dir, "composer.lock")?;
-            let manifest = std::fs::read_to_string(dir.join("composer.json")).ok();
+            let manifest =
+                fleetreach_core::repofile::read_to_string(dir.join("composer.json")).ok();
             let (installed, graph) =
                 fleetreach_packagist::installed_packages(&lock, manifest.as_deref())
                     .map_err(|e| format!("composer.lock: {e}"))?;
@@ -125,7 +126,7 @@ fn unit_inventory(unit: &ScanUnit, maven: Option<&Remote>) -> Result<Vec<SourceI
         }
         Ecosystem::Julia => {
             let manifest = read(dir, "Manifest.toml")?;
-            let project = std::fs::read_to_string(dir.join("Project.toml")).ok();
+            let project = fleetreach_core::repofile::read_to_string(dir.join("Project.toml")).ok();
             let (installed, graph) =
                 fleetreach_julia::installed_packages(&manifest, project.as_deref())
                     .map_err(|e| format!("Manifest.toml: {e}"))?;
@@ -140,7 +141,8 @@ fn unit_inventory(unit: &ScanUnit, maven: Option<&Remote>) -> Result<Vec<SourceI
         }
         Ecosystem::Swift => {
             let resolved = read(dir, "Package.resolved")?;
-            let manifest = std::fs::read_to_string(dir.join("Package.swift")).ok();
+            let manifest =
+                fleetreach_core::repofile::read_to_string(dir.join("Package.swift")).ok();
             let packages = fleetreach_swift::installed_packages(&resolved, manifest.as_deref())
                 .map_err(|e| format!("Package.resolved: {e}"))?
                 .into_iter()
@@ -295,7 +297,7 @@ fn pom(dir: &Path, maven: Option<&Remote>) -> Result<SourceInventory, String> {
 }
 
 fn read(dir: &Path, file: &str) -> Result<String, String> {
-    std::fs::read_to_string(dir.join(file)).map_err(|e| format!("{file}: {e}"))
+    fleetreach_core::repofile::read_to_string(dir.join(file)).map_err(|e| format!("{file}: {e}"))
 }
 
 fn maven_packages(installed: Vec<fleetreach_maven::InstalledPackage>) -> Vec<Package> {
@@ -371,7 +373,8 @@ fn github_actions(dir: &Path) -> Result<SourceInventory, String> {
     files.sort();
     let mut packages = Vec::new();
     for file in &files {
-        let text = std::fs::read_to_string(file).map_err(|e| format!("{}: {e}", file.display()))?;
+        let text = fleetreach_core::repofile::read_to_string(file)
+            .map_err(|e| format!("{}: {e}", file.display()))?;
         packages.extend(
             fleetreach_ghactions::used_actions(&text)
                 .into_iter()

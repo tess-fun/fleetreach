@@ -59,7 +59,7 @@ impl PomSource for LocalRepositories {
             let path = Self::dir(root, group, artifact)
                 .join(version)
                 .join(format!("{artifact}-{version}.pom"));
-            std::fs::read_to_string(path).ok()
+            fleetreach_core::repofile::read_to_string(path).ok()
         })
     }
 
@@ -68,7 +68,7 @@ impl PomSource for LocalRepositories {
             let dir = Self::dir(root, group, artifact);
             ["maven-metadata.xml", "maven-metadata-central.xml"]
                 .iter()
-                .find_map(|f| std::fs::read_to_string(dir.join(f)).ok())
+                .find_map(|f| fleetreach_core::repofile::read_to_string(dir.join(f)).ok())
         })
     }
 }
@@ -287,7 +287,7 @@ impl Resolver<'_> {
                     if path.is_dir() {
                         path = path.join("pom.xml");
                     }
-                    let text = std::fs::read_to_string(&path).ok()?;
+                    let text = fleetreach_core::repofile::read_to_string(&path).ok()?;
                     let p = parse_pom(&text).ok()?;
                     (p.artifact == *a).then_some((text, path.parent().map(Path::to_path_buf)))
                 });
@@ -631,7 +631,8 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
             continue;
         }
         let path = d.join("pom.xml");
-        let xml = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let xml = fleetreach_core::repofile::read_to_string(&path)
+            .map_err(|e| format!("{}: {e}", path.display()))?;
         let eff = r
             .effective(&xml, Some(&d), 0)
             .map_err(|e| format!("{}: {e}", path.display()))?;

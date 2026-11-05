@@ -522,7 +522,7 @@ pub(crate) fn source_dir(repo_root: &Path, source: &str) -> PathBuf {
 }
 
 fn read_json(path: &Path) -> Option<serde_json::Value> {
-    serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
+    serde_json::from_str(&fleetreach_core::repofile::read_to_string(path).ok()?).ok()
 }
 
 /// `license` (a string or `{ type }`), else legacy `licenses: [{ type }]`.
@@ -640,8 +640,10 @@ fn cargo_registry_roots(cargo_home: Option<&Path>) -> Vec<PathBuf> {
 
 /// `[package] license` of an unpacked crate (a `license-file` alone gives none).
 fn cargo_license(crate_dir: &Path) -> Option<License> {
-    let manifest: toml::Value =
-        toml::from_str(&std::fs::read_to_string(crate_dir.join("Cargo.toml")).ok()?).ok()?;
+    let manifest: toml::Value = toml::from_str(
+        &fleetreach_core::repofile::read_to_string(crate_dir.join("Cargo.toml")).ok()?,
+    )
+    .ok()?;
     let license = manifest.get("package")?.get("license")?.as_str()?;
     normalize(&[license.to_string()])
 }
@@ -695,7 +697,9 @@ fn for_each_dist(repo_root: &Path, dir: &Path, mut found: impl FnMut(&Path, &str
                     if !name.ends_with(".dist-info") {
                         continue;
                     }
-                    let Ok(meta) = std::fs::read_to_string(entry.path().join("METADATA")) else {
+                    let Ok(meta) =
+                        fleetreach_core::repofile::read_to_string(entry.path().join("METADATA"))
+                    else {
                         continue;
                     };
                     found(&entry.path(), &meta);
@@ -745,7 +749,8 @@ impl Local {
         match ecosystem {
             Ecosystem::Pypi => local.dists = python_dist_dirs(repo_root, dir),
             Ecosystem::Go => {
-                let text = std::fs::read_to_string(dir.join("go.sum")).unwrap_or_default();
+                let text = fleetreach_core::repofile::read_to_string(dir.join("go.sum"))
+                    .unwrap_or_default();
                 local.go_sums = go_sums(&text);
             }
             _ => {}
@@ -954,7 +959,7 @@ fn nuspec_license(version_dir: &Path) -> Option<License> {
         .flatten()
         .map(|e| e.path())
         .find(|p| p.extension().is_some_and(|e| e == "nuspec"))?;
-    let text = std::fs::read_to_string(nuspec).ok()?;
+    let text = fleetreach_core::repofile::read_to_string(nuspec).ok()?;
     let doc = roxmltree::Document::parse(text.trim_start_matches('\u{feff}')).ok()?;
     if let Some(node) = doc.descendants().find(|n| n.has_tag_name("license")) {
         if node.attribute("type") == Some("expression") {

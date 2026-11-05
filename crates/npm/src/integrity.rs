@@ -20,7 +20,7 @@ pub type Integrity = BTreeMap<(String, String), String>;
 pub fn lock_integrity(dir: &Path) -> Integrity {
     let mut out = Integrity::new();
     for file in crate::LOCKFILES {
-        let Ok(text) = std::fs::read_to_string(dir.join(file)) else {
+        let Ok(text) = fleetreach_core::repofile::read_to_string(dir.join(file)) else {
             continue;
         };
         match file {

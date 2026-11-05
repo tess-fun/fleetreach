@@ -96,7 +96,8 @@ fn decode(s: &str) -> String {
 /// When the file cannot be read or is in no format read here: failing closed (the repo
 /// becomes an errored gap).
 pub fn read(path: &Path) -> Result<SbomInput, String> {
-    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let text = fleetreach_core::repofile::read_to_string(path)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
     parse(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 

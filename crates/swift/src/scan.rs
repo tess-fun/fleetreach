@@ -34,9 +34,10 @@ pub fn parse_swift_version(raw: &str) -> Option<Version> {
 /// JSON — failing closed, so an unreadable/absent/corrupt lockfile is an honest gap.
 pub fn scan_offline(repo_dir: &Path, db: &SwiftDb, repo: &RepoId) -> Result<TierCScan, SwiftError> {
     let resolved_path = repo_dir.join("Package.resolved");
-    let resolved =
-        std::fs::read_to_string(&resolved_path).map_err(|e| SwiftError::db(&resolved_path, e))?;
-    let package_swift = std::fs::read_to_string(repo_dir.join("Package.swift")).ok();
+    let resolved = fleetreach_core::repofile::read_to_string(&resolved_path)
+        .map_err(|e| SwiftError::db(&resolved_path, e))?;
+    let package_swift =
+        fleetreach_core::repofile::read_to_string(repo_dir.join("Package.swift")).ok();
     let installed = installed_packages(&resolved, package_swift.as_deref())
         .map_err(|e| SwiftError::db(&resolved_path, e))?;
 

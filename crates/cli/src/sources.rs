@@ -583,6 +583,7 @@ pub fn materialize(config: &Config, sync: bool, quiet: bool) -> Result<Materiali
             }
         }
     }
+    fleetreach_core::repofile::confine(out.repos.iter().map(|r| r.path.as_path()));
     Ok(out)
 }
 

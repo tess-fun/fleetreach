@@ -132,7 +132,8 @@ pub(crate) fn read_dir(dir: &Path) -> Result<Requirements, PyPiError> {
         unresolved: Vec::new(),
     };
     for path in requirements_files(dir) {
-        let text = std::fs::read_to_string(&path).map_err(|e| PyPiError::db(&path, e))?;
+        let text = fleetreach_core::repofile::read_to_string(&path)
+            .map_err(|e| PyPiError::db(&path, e))?;
         reader.read_file(&path, &text, is_dev_file(&path), 0);
     }
     reader.finish();
@@ -289,7 +290,7 @@ impl Reader {
             self.gap(from, Coverage::Partial, reason);
             return;
         }
-        let Ok(text) = std::fs::read_to_string(&path) else {
+        let Ok(text) = fleetreach_core::repofile::read_to_string(&path) else {
             let reason = format!("{kind} {target} could not be read");
             self.gap(from, Coverage::Partial, reason);
             return;

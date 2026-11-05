@@ -172,7 +172,7 @@ impl GoDb {
             let path = db_root.join("ID").join(format!("{id}.json"));
             // Absent file → the advisory just is not in this mirror (skip). A present file
             // that fails to parse is a corrupt mirror → hard error, never a silent drop.
-            if let Ok(body) = std::fs::read_to_string(&path) {
+            if let Ok(body) = fleetreach_core::repofile::read_to_string(&path) {
                 let osv: Osv = serde_json::from_str(&body).map_err(|e| GoError::db(&path, e))?;
                 // A withdrawn advisory is a retraction and must never match.
                 if osv.withdrawn.is_none() {
@@ -212,11 +212,14 @@ impl GoDb {
                 .collect();
             paths.sort();
             for path in paths {
-                bodies.push(std::fs::read_to_string(&path).map_err(|e| GoError::db(&path, e))?);
+                bodies.push(
+                    fleetreach_core::repofile::read_to_string(&path)
+                        .map_err(|e| GoError::db(&path, e))?,
+                );
             }
         } else {
             use std::io::Read;
-            let file = std::fs::File::open(root).map_err(|e| GoError::db(root, e))?;
+            let file = fleetreach_core::repofile::open(root).map_err(|e| GoError::db(root, e))?;
             let mut archive = zip::ZipArchive::new(file).map_err(|e| GoError::db(root, e))?;
             for i in 0..archive.len() {
                 let mut entry = archive.by_index(i).map_err(|e| GoError::db(root, e))?;
@@ -285,7 +288,8 @@ pub fn scan_offline(
     repo: &RepoId,
 ) -> Result<Vec<VulnFinding>, GoError> {
     let go_mod_path = module_dir.join("go.mod");
-    let go_mod = std::fs::read_to_string(&go_mod_path).map_err(|e| GoError::db(go_mod_path, e))?;
+    let go_mod = fleetreach_core::repofile::read_to_string(&go_mod_path)
+        .map_err(|e| GoError::db(go_mod_path, e))?;
     // Parse go.mod once: the full require list drives matching, the direct set drives
     // direct/transitive classification.
     let required = required_modules(&go_mod);
@@ -566,7 +570,8 @@ fn at_or_after_introduced(version: &Version, bound: &Version) -> bool {
 /// that bounds how many per-advisory files we read to the modules actually present.
 fn load_module_index(db_root: &Path) -> Result<BTreeMap<String, Vec<String>>, GoError> {
     let path = db_root.join("index").join("modules.json");
-    let body = std::fs::read_to_string(&path).map_err(|e| GoError::db(&path, e))?;
+    let body =
+        fleetreach_core::repofile::read_to_string(&path).map_err(|e| GoError::db(&path, e))?;
     let modules: Vec<ModuleIndex> =
         serde_json::from_str(&body).map_err(|e| GoError::db(&path, e))?;
     Ok(modules

@@ -57,7 +57,7 @@ impl Store {
 
     /// The entry stored for `repo` under exactly `key`. A damaged entry is a miss.
     pub(crate) fn get<T: DeserializeOwned>(&self, repo: &Repo, key: &str) -> Option<T> {
-        let bytes = std::fs::read(self.path(repo)).ok()?;
+        let bytes = fleetreach_core::repofile::read(self.path(repo)).ok()?;
         let entry: Entry<T> = serde_json::from_slice(&bytes).ok()?;
         (entry.key == key).then_some(entry.result)
     }
@@ -263,7 +263,7 @@ fn hash_file(root: &Path, path: &Path, hasher: &mut Sha256) -> Option<()> {
             .as_bytes(),
     );
     hasher.update(b"\0");
-    match std::fs::read(path) {
+    match fleetreach_core::repofile::read(path) {
         Ok(bytes) => {
             hasher.update((bytes.len() as u64).to_le_bytes());
             hasher.update(&bytes);
@@ -317,7 +317,7 @@ fn hash_ancestor_props(root: &Path, hasher: &mut Sha256) -> Option<()> {
         names.sort();
         for name in names {
             hasher.update(name.as_bytes());
-            hasher.update(std::fs::read(dir.join(name)).ok()?);
+            hasher.update(fleetreach_core::repofile::read(dir.join(name)).ok()?);
         }
     }
     Some(())

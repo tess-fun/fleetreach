@@ -34,11 +34,12 @@ pub fn scan_offline(
     repo: &RepoId,
 ) -> Result<TierCScan, PackagistError> {
     let lock_path = repo_dir.join("composer.lock");
-    let lock_text =
-        std::fs::read_to_string(&lock_path).map_err(|e| PackagistError::db(&lock_path, e))?;
+    let lock_text = fleetreach_core::repofile::read_to_string(&lock_path)
+        .map_err(|e| PackagistError::db(&lock_path, e))?;
     // composer.json is optional context for the direct/transitive flag; a read failure just
     // leaves every package transitive (a conservative under-claim), never an error.
-    let composer_json = std::fs::read_to_string(repo_dir.join("composer.json")).ok();
+    let composer_json =
+        fleetreach_core::repofile::read_to_string(repo_dir.join("composer.json")).ok();
     let (installed, graph) = installed_packages(&lock_text, composer_json.as_deref())
         .map_err(|e| PackagistError::db(&lock_path, e))?;
 

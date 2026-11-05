@@ -48,6 +48,7 @@ pub mod inventory;
 pub mod osv;
 mod outcome;
 mod remediation;
+pub mod repofile;
 mod report;
 mod severity;
 pub mod ssvc;

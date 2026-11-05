@@ -45,7 +45,7 @@ pub fn scan_offline(
                 GhaError::db(&workflows, crate::error::DbError::Walk(e.to_string()))
             })?;
             if entry.file_type().is_file() && is_yaml(entry.path()) {
-                let text = std::fs::read_to_string(entry.path())
+                let text = fleetreach_core::repofile::read_to_string(entry.path())
                     .map_err(|e| GhaError::db(entry.path(), e))?;
                 actions.extend(used_actions(&text));
             }
@@ -55,7 +55,8 @@ pub fn scan_offline(
     for name in ["action.yml", "action.yaml"] {
         let path = repo_dir.join(name);
         if path.is_file() {
-            let text = std::fs::read_to_string(&path).map_err(|e| GhaError::db(&path, e))?;
+            let text = fleetreach_core::repofile::read_to_string(&path)
+                .map_err(|e| GhaError::db(&path, e))?;
             actions.extend(used_actions(&text));
         }
     }

@@ -776,7 +776,9 @@ impl Config {
             message: e.to_string(),
         })?;
         let base_dir = path.parent().unwrap_or_else(|| Path::new("."));
-        Self::from_str(&text, base_dir, &path.display().to_string())
+        let config = Self::from_str(&text, base_dir, &path.display().to_string())?;
+        fleetreach_core::repofile::confine(config.repos.iter().map(|r| r.path.as_path()));
+        Ok(config)
     }
 
     /// A one-repo fleet for `dir` with every default, as if a `fleet.toml` held only
@@ -794,6 +796,7 @@ impl Config {
             "[[repo]]\nid = {}\npath = \".\"\nglob = true\n",
             toml::Value::String(id)
         );
+        fleetreach_core::repofile::confine([dir.as_path()]);
         Self::from_str(&text, &dir, &dir.display().to_string())
     }
 

@@ -205,7 +205,9 @@ fn chains<'a>(
         .par_iter()
         .filter_map(|path| {
             let small = path.metadata().is_ok_and(|m| m.len() <= MAX_SOURCE);
-            let bytes = small.then(|| std::fs::read(path).ok()).flatten()?;
+            let bytes = small
+                .then(|| fleetreach_core::repofile::read(path).ok())
+                .flatten()?;
             let text = String::from_utf8_lossy(&bytes).into_owned();
             let imports = (language.imports)(&text);
             Some((path, text, imports))
@@ -614,7 +616,7 @@ fn longest_prefix(name: &str, separator: char, packages: &BTreeMap<String, Strin
 fn bundled_gems(root: &Path, packages: &BTreeMap<String, String>) -> Vec<String> {
     let mut out = BTreeSet::new();
     for path in source_files(root, &["Gemfile"]) {
-        let text = std::fs::read_to_string(path).unwrap_or_default();
+        let text = fleetreach_core::repofile::read_to_string(path).unwrap_or_default();
         for line in text.lines() {
             let Some(rest) = line.trim_start().strip_prefix("gem ") else {
                 continue;
@@ -676,7 +678,7 @@ fn composer_prefixes(root: &Path, packages: &BTreeMap<String, String>) -> BTreeM
 }
 
 fn read_json(path: &Path) -> Option<serde_json::Value> {
-    serde_json::from_slice(&std::fs::read(path).ok()?).ok()
+    serde_json::from_slice(&fleetreach_core::repofile::read(path).ok()?).ok()
 }
 
 /// Package ids, and the assemblies each `obj/project.assets.json` here says a package holds.
@@ -744,7 +746,7 @@ impl MavenIndex {
     }
 
     fn add_jar(&mut self, jar: &Path, package: &str) {
-        let Ok(file) = std::fs::File::open(jar) else {
+        let Ok(file) = fleetreach_core::repofile::open(jar) else {
             return;
         };
         let Ok(archive) = zip::ZipArchive::new(std::io::BufReader::new(file)) else {
@@ -871,7 +873,7 @@ fn swift_products(root: &Path, packages: &BTreeMap<String, String>) -> BTreeMap<
         .collect();
     let mut out = BTreeMap::new();
     for path in source_files(root, &["Package.swift"]) {
-        let text = std::fs::read_to_string(path).unwrap_or_default();
+        let text = fleetreach_core::repofile::read_to_string(path).unwrap_or_default();
         for (_, rest) in text
             .match_indices(".product(")
             .map(|(at, _)| ((), &text[at..]))

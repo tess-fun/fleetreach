@@ -158,7 +158,9 @@ type Read = (Vec<InstalledPackage>, DepGraph, Vec<SourceCoverage>);
 
 /// Read the preferred source in `repo_dir`.
 fn read_sources(repo_dir: &Path) -> Result<Read, NuGetError> {
-    let text = |path: &Path| std::fs::read_to_string(path).map_err(|e| NuGetError::db(path, e));
+    let text = |path: &Path| {
+        fleetreach_core::repofile::read_to_string(path).map_err(|e| NuGetError::db(path, e))
+    };
     let gap = |source: &str, level: Coverage, reason: String| SourceCoverage {
         source: source.to_string(),
         level,

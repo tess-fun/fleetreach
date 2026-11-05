@@ -42,7 +42,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     for name in seen_twice {
         vars.remove(&name);
     }
-    let catalog = std::fs::read_to_string(dir.join("gradle/libs.versions.toml"))
+    let catalog = fleetreach_core::repofile::read_to_string(dir.join("gradle/libs.versions.toml"))
         .ok()
         .map_or_else(Catalog::default, |text| {
             Catalog::parse(&text).unwrap_or_else(|e| {
@@ -173,7 +173,7 @@ fn build_scripts(dir: &Path, missing: &mut BTreeSet<String>) -> Vec<(String, Str
                 missing.insert(format!("{shown}: too large or too many to read"));
                 continue;
             }
-            match std::fs::read_to_string(&path) {
+            match fleetreach_core::repofile::read_to_string(&path) {
                 Ok(text) => out.push((shown, strip_comments(&text))),
                 Err(e) => {
                     missing.insert(format!("{shown}: {e}"));
@@ -186,7 +186,7 @@ fn build_scripts(dir: &Path, missing: &mut BTreeSet<String>) -> Vec<(String, Str
 }
 
 fn properties(path: &Path) -> BTreeMap<String, String> {
-    let text = std::fs::read_to_string(path).unwrap_or_default();
+    let text = fleetreach_core::repofile::read_to_string(path).unwrap_or_default();
     text.lines()
         .filter(|l| !l.trim_start().starts_with(['#', '!']))
         .filter_map(|l| l.split_once('='))

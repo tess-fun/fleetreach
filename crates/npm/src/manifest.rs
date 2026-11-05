@@ -58,7 +58,7 @@ pub(crate) fn declared(dir: &Path) -> Declared {
 }
 
 fn read(path: &Path) -> Option<PackageJson> {
-    let text = std::fs::read_to_string(path).ok()?;
+    let text = fleetreach_core::repofile::read_to_string(path).ok()?;
     serde_json::from_str(&text).ok()
 }
 

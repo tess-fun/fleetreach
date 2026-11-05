@@ -107,7 +107,7 @@ fn analyze(repo_dir: &Path) -> Analysis {
     let mut graph = DepGraph::new(ENTRY);
     let mut first_party = BTreeSet::new();
     for file in &layout.source_files {
-        if let Ok(text) = std::fs::read_to_string(file) {
+        if let Ok(text) = fleetreach_core::repofile::read_to_string(file) {
             for module in imported_modules(&text) {
                 let top = module.split('.').next().unwrap_or(&module);
                 if !layout.own_modules.contains(top) {
@@ -125,7 +125,7 @@ fn analyze(repo_dir: &Path) -> Analysis {
             let mut deps = BTreeSet::new();
             let mut loads_plugins = false;
             for file in files {
-                let Ok(text) = std::fs::read_to_string(file) else {
+                let Ok(text) = fleetreach_core::repofile::read_to_string(file) else {
                     continue;
                 };
                 for module in imported_modules(&text) {
@@ -248,10 +248,12 @@ impl ModuleIndex {
                 // `<name>-<version>`; the name's own dashes are escaped to `_` on disk.
                 let dist = normalize_name(stem.split('-').next().unwrap_or(stem));
                 let info = entry.path();
-                if let Ok(record) = std::fs::read_to_string(info.join("RECORD")) {
+                if let Ok(record) = fleetreach_core::repofile::read_to_string(info.join("RECORD")) {
                     index.add_record(site, &dist, &record);
                 }
-                if let Ok(eps) = std::fs::read_to_string(info.join("entry_points.txt")) {
+                if let Ok(eps) =
+                    fleetreach_core::repofile::read_to_string(info.join("entry_points.txt"))
+                {
                     if registers_plugin(&eps) {
                         index.plugin_providers.insert(dist.clone());
                     }

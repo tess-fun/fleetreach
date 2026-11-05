@@ -32,10 +32,12 @@ pub fn scan_offline(repo_dir: &Path, db: &MavenDb, repo: &RepoId) -> Result<Tier
     let pom = repo_dir.join("pom.xml");
 
     let installed: Vec<InstalledPackage> = if gradle.is_file() {
-        let text = std::fs::read_to_string(&gradle).map_err(|e| MavenError::db(&gradle, e))?;
+        let text = fleetreach_core::repofile::read_to_string(&gradle)
+            .map_err(|e| MavenError::db(&gradle, e))?;
         parse_gradle_lockfile(&text)
     } else {
-        let text = std::fs::read_to_string(&pom).map_err(|e| MavenError::db(&pom, e))?;
+        let text =
+            fleetreach_core::repofile::read_to_string(&pom).map_err(|e| MavenError::db(&pom, e))?;
         parse_pom_xml(&text)
     };
 

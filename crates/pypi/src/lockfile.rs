@@ -77,7 +77,8 @@ pub fn installed_packages(
     lock_path: &Path,
     repo_dir: &Path,
 ) -> Result<(Vec<InstalledPackage>, DepGraph), PyPiError> {
-    let body = std::fs::read_to_string(lock_path).map_err(|e| PyPiError::db(lock_path, e))?;
+    let body = fleetreach_core::repofile::read_to_string(lock_path)
+        .map_err(|e| PyPiError::db(lock_path, e))?;
     let (pkgs, graph) = match kind {
         LockfileKind::Uv => {
             let pkgs = parse_uv(&body).map_err(|e| PyPiError::db(lock_path, e))?;
@@ -346,7 +347,8 @@ pub fn parse_poetry(
 /// file is absent or unparseable (direct is only a hint, never a soundness gate).
 pub(crate) fn poetry_direct_set(repo_dir: &Path) -> BTreeSet<String> {
     let mut set = BTreeSet::new();
-    let Ok(body) = std::fs::read_to_string(repo_dir.join("pyproject.toml")) else {
+    let Ok(body) = fleetreach_core::repofile::read_to_string(repo_dir.join("pyproject.toml"))
+    else {
         return set;
     };
     let Ok(value) = toml::from_str::<toml::Value>(&body) else {
@@ -442,7 +444,7 @@ pub fn parse_pipfile_lock(
 /// `[packages]` and `[dev-packages]`. Empty if absent/unparseable.
 fn pipfile_direct_set(repo_dir: &Path) -> BTreeSet<String> {
     let mut set = BTreeSet::new();
-    let Ok(body) = std::fs::read_to_string(repo_dir.join("Pipfile")) else {
+    let Ok(body) = fleetreach_core::repofile::read_to_string(repo_dir.join("Pipfile")) else {
         return set;
     };
     let Ok(value) = toml::from_str::<toml::Value>(&body) else {
