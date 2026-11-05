@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Cut a new fleetreach release: bump the version, test, tag, and publish all 17
+# Cut a new fleetreach release: bump the version, test, tag, and publish all 18
 # crates to crates.io in dependency order, then push.
 #
 #   ./scripts/release.sh 1.0.1              # full release
@@ -23,7 +23,13 @@ DRY="${2:-}"
 cd "$(git rev-parse --show-toplevel)"
 
 # Publish order: dependency-topological (core/reach first, cli last).
-ORDER=(core reach scan report correlate go npm pypi rubygems packagist nuget julia swift hex ghactions maven cli)
+ORDER=(core reach scan report correlate go npm pypi rubygems packagist nuget julia swift hex ghactions maven os cli)
+# A publishable crate left out of ORDER fails cli's publish, after the others are already up.
+for m in crates/*/Cargo.toml; do
+  grep -q '^publish = false' "$m" && continue
+  c="$(basename "$(dirname "$m")")"
+  [[ " ${ORDER[*]} " == *" $c "* ]] || { echo "!! crates/$c is publishable but not in ORDER"; exit 1; }
+done
 OLD="$(sed -nE 's/^version = "([0-9][^"]*)".*/\1/p' Cargo.toml | head -1)"
 
 echo ">> fleetreach release: $OLD -> $NEW ${DRY:+(dry run)}"
@@ -68,7 +74,7 @@ if [ "$DRY" = "--dry-run" ]; then
 fi
 
 # --- confirm (irreversible) ---
-printf ">> About to TAG v%s and PUBLISH 17 crates to crates.io. This is permanent. Continue? [y/N] " "$NEW"
+printf ">> About to TAG v%s and PUBLISH ${#ORDER[@]} crates to crates.io. This is permanent. Continue? [y/N] " "$NEW"
 read -r ans; [ "$ans" = "y" ] || [ "$ans" = "Y" ] || { echo ">> aborted; reverting bump"; git checkout -- Cargo.toml Cargo.lock crates/*/Cargo.toml crates/reach-driver/Cargo.lock CHANGELOG.md; exit 1; }
 
 # --- commit + tag ---
