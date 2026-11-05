@@ -6,14 +6,19 @@
   ],
   "ecosystem": "Maven",
   "packages": [
+    "org.eclipse.jetty:jetty-http",
     "org.eclipse.jetty:jetty-server"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "org.eclipse.jetty.http.HttpParser",
       "method": "handleKnownHeaders"
+    },
+    {
+      "class": "org.eclipse.jetty.http.HttpParser",
+      "method": "parsedHeader"
     }
   ],
   "evidence": {
@@ -53,5 +58,9 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). handleKnownHeaders is the 9.1 and 9.2 name; 9.3 and 9.4 hold the same logic in parsedHeader. Jetty 8 has neither method on HttpParser, so it has no sink here",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

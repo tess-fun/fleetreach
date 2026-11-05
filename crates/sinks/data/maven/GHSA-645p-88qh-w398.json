@@ -8,18 +8,19 @@
   "packages": [
     "com.fasterxml.jackson.core:jackson-databind"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "deny-list",
   "gadgets": [
-    "org.slf4j.ext.EventData",
-    "flex.messaging.util.concurrent.AsynchBeansWorkManagerExecutor",
-    "com.sun.deploy.security.ruleset.DRSHelper",
-    "org.apache.axis2.jaxws.spi.handler.HandlerResolverImpl"
+    "org.slf4j.ext.EventData"
   ],
   "evidence": {
     "commits": [
       "https://github.com/FasterXML/jackson-databind/commit/87d29af25e82a249ea15858e2d4ecbf64091db44"
     ]
   },
-  "note": "E2b pilot label: deny-list fix; exposure needs a gadget class and polymorphic typing"
+  "note": "E2b pilot label: deny-list fix; exposure needs a gadget class and polymorphic typing. The fix blocks four classes; the other three have their own advisories",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

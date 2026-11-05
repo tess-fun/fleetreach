@@ -13,7 +13,7 @@
     "org.apache.camel:camel-jetty",
     "org.apache.camel:camel-servlet"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -135,5 +135,9 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

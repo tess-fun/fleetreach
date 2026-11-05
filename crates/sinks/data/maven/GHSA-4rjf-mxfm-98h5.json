@@ -6,9 +6,10 @@
   ],
   "ecosystem": "Maven",
   "packages": [
-    "org.apache.ranger:ranger"
+    "org.apache.ranger:ranger",
+    "org.apache.ranger:security-admin-web"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -34,5 +35,9 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). ranger is a parent POM and Central has no release of either artifact below 0.6.0, so this record cannot match a Central artifact",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

@@ -6,13 +6,18 @@
   ],
   "ecosystem": "Maven",
   "packages": [
+    "org.apache.syncope.core:syncope-core-logic",
     "org.apache.syncope:syncope-core"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "org.apache.syncope.core.logic.cocoon.XSLTTransformer",
+      "method": "createNewSAXTransformerFactory"
+    },
+    {
+      "class": "org.apache.syncope.core.logic.report.XSLTTransformer",
       "method": "createNewSAXTransformerFactory"
     }
   ],
@@ -110,5 +115,9 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). The class is in the report package up to 2.0.3 and the cocoon package from 2.0.4. The sinks cover 2.0 only: 1.2 uses the Cocoon library class, with no Syncope method to name",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

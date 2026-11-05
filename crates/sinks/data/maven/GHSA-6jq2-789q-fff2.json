@@ -8,22 +8,28 @@
   "packages": [
     "org.apache.tika:tika-core"
   ],
-  "status": "proposed",
-  "verdict": "sinks",
-  "sinks": [
-    {
-      "class": "org.apache.tika.utils.XMLReaderUtils",
-      "method": "trySetStaxSecurityManager"
-    },
-    {
-      "class": "org.apache.tika.utils.XMLReaderUtils",
-      "method": "trySetXercesSecurityManager"
-    }
-  ],
+  "status": "reviewed",
+  "verdict": "no-method-sink",
   "evidence": {
     "commits": [
       "https://github.com/apache/tika/commit/4e67928412ad56333d400f3728ecdb59d07d9d63"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.tika.utils.XMLReaderUtils",
+        "method": "trySetStaxSecurityManager",
+        "reason": "first in 1.19, after the advisory range; the fix only makes the limit configurable"
+      },
+      {
+        "class": "org.apache.tika.utils.XMLReaderUtils",
+        "method": "trySetXercesSecurityManager",
+        "reason": "first in 1.19, after the advisory range; the fix only makes the limit configurable"
+      }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). In 0.1 to 1.18 no XML parser setup limited entities at all, so no one method holds the flaw",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

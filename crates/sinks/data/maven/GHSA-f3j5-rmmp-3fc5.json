@@ -8,7 +8,7 @@
   "packages": [
     "com.fasterxml.jackson.core:jackson-databind"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "deny-list",
   "gadgets": [
     "net.sf.ehcache.hibernate.EhcacheJtaTransactionManagerLookup"
@@ -18,5 +18,9 @@
       "https://github.com/FasterXML/jackson-databind/commit/191a4cdf87b56d2ddddb77edd895ee756b7f75eb"
     ]
   },
-  "note": "E2b pilot label: deny-list fix; exposure needs a gadget class and polymorphic typing"
+  "note": "E2b pilot label: deny-list fix; exposure needs a gadget class and polymorphic typing",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

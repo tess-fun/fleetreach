@@ -8,7 +8,7 @@
   "packages": [
     "org.apache.cassandra:apache-cassandra"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "no-method-sink",
   "evidence": {
     "commits": [
@@ -27,5 +27,9 @@
       }
     ]
   },
-  "note": "E2b pilot label: Cassandra: JMX bind-all is in cassandra-env.sh, not Java"
+  "note": "E2b pilot label: Cassandra: JMX bind-all is in cassandra-env.sh, not Java",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

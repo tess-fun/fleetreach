@@ -10,7 +10,7 @@
     "org.bouncycastle:bcprov-jdk15",
     "org.bouncycastle:bcprov-jdk15on"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -38,19 +38,11 @@
       "method": "<init>"
     },
     {
-      "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$ECIESwithCipher",
-      "method": "<init>"
-    },
-    {
       "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$ECIESwithDESede",
       "method": "<init>"
     },
     {
       "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$OldECIESwithAES",
-      "method": "<init>"
-    },
-    {
-      "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$OldECIESwithCipher",
       "method": "<init>"
     },
     {
@@ -147,8 +139,22 @@
         "class": "org.bouncycastle.jce.spec.IESParameterSpec",
         "method": "<init>",
         "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$ECIESwithCipher",
+        "method": "<init>",
+        "reason": "shared base constructor; the safe CBC variants call it too"
+      },
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher$OldECIESwithCipher",
+        "method": "<init>",
+        "reason": "shared base constructor; the safe CBC variants call it too"
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). Apps reach these classes by name through Cipher.getInstance, which a static call graph cannot follow, so no sink reached proves nothing here",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

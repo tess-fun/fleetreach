@@ -8,16 +8,12 @@
   "packages": [
     "org.springframework.security.oauth:spring-security-oauth2"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "org.springframework.security.oauth2.provider.endpoint.AuthorizationEndpoint",
       "method": "approveOrDeny"
-    },
-    {
-      "class": "org.springframework.security.oauth2.provider.endpoint.AuthorizationEndpoint",
-      "method": "authorize"
     }
   ],
   "evidence": {
@@ -32,8 +28,17 @@
         "class": "org.springframework.security.oauth2.provider.endpoint.AuthorizationEndpoint",
         "method": "getAuthorizationRequestForError",
         "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "org.springframework.security.oauth2.provider.endpoint.AuthorizationEndpoint",
+        "method": "authorize",
+        "reason": "only stores the request in the session; approveOrDeny trusts it unchecked"
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). Exposure also needs a custom approval endpoint declaring AuthorizationRequest as a controller argument, which reaching the sink does not show",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

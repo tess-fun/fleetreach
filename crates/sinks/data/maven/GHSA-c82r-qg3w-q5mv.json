@@ -8,7 +8,7 @@
   "packages": [
     "org.apache.solr:solr-core"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -24,5 +24,9 @@
       "https://github.com/apache/lucene-solr/commit/e912b7cb5c68fbb87b874d41068cf5a3aea17da0"
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

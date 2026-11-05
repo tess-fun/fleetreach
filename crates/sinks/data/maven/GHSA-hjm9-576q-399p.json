@@ -8,7 +8,7 @@
   "packages": [
     "org.esigate:esigate-core"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -21,5 +21,9 @@
       "https://github.com/esigate/esigate/commit/30cad23a8f282600c9b045e1af09f6f8a65357b1"
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

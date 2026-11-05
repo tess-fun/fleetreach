@@ -6,9 +6,11 @@
   ],
   "ecosystem": "Maven",
   "packages": [
+    "org.apache.spark:spark-network-common_2.11",
+    "org.apache.spark:spark-network-common_2.12",
     "org.apache.spark:spark-parent_2.11"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -18,6 +20,14 @@
     {
       "class": "org.apache.spark.network.sasl.SaslRpcHandler",
       "method": "receive"
+    },
+    {
+      "class": "org.apache.spark.network.crypto.AuthRpcHandler",
+      "method": "receiveStream"
+    },
+    {
+      "class": "org.apache.spark.network.sasl.SaslRpcHandler",
+      "method": "receiveStream"
     }
   ],
   "evidence": {
@@ -52,11 +62,6 @@
         "reason": "proposed by the pipeline, not a sink in the E2b label"
       },
       {
-        "class": "org.apache.spark.network.crypto.AuthRpcHandler",
-        "method": "receiveStream",
-        "reason": "proposed by the pipeline, not a sink in the E2b label"
-      },
-      {
         "class": "org.apache.spark.network.sasl.SaslRpcHandler",
         "method": "<init>",
         "reason": "plumbing: only passes a new argument or renames a call"
@@ -85,13 +90,12 @@
         "class": "org.apache.spark.network.sasl.SaslRpcHandler",
         "method": "getStreamManager",
         "reason": "proposed by the pipeline, not a sink in the E2b label"
-      },
-      {
-        "class": "org.apache.spark.network.sasl.SaslRpcHandler",
-        "method": "receiveStream",
-        "reason": "proposed by the pipeline, not a sink in the E2b label"
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

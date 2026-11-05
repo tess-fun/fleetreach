@@ -9,16 +9,12 @@
     "org.apache.logging.log4j:log4j-core",
     "org.ops4j.pax.logging:pax-logging-log4j2"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "org.apache.logging.log4j.core.lookup.JndiLookup",
       "method": "lookup"
-    },
-    {
-      "class": "org.apache.logging.log4j.core.net.JndiManager$JndiManagerFactory",
-      "method": "createManager"
     },
     {
       "class": "org.apache.logging.log4j.core.net.JndiManager",
@@ -82,8 +78,17 @@
         "class": "org.apache.logging.log4j.core.pattern.MessagePatternConverter",
         "method": "newInstance",
         "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "org.apache.logging.log4j.core.net.JndiManager$JndiManagerFactory",
+        "method": "createManager",
+        "reason": "only builds the InitialContext; the unrestricted call is JndiManager.lookup"
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). JndiLookup and MessagePatternConverter load through the plugin system, which a static call graph may not follow, so no sink reached proves nothing here. formatMsgNoLookups and %m{nolookups} turn message lookups off where they exist, and a code scan cannot see either",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

@@ -8,6 +8,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **40 sink records are reviewed.** The pilot's Maven records were each decided by a person
+  against the fix diff and published jars. 19 changed, most often to name the jar that really
+  holds the class. The other 60 stay `proposed`.
 - **SBOM input matches OS packages.** `pkg:deb`, `pkg:apk` and `pkg:rpm` components go to the same
   distro matchers as an image, so a Syft or Trivy image SBOM scans in full. The release comes from
   the `distro` qualifier or the operating-system component, and each package's source from what

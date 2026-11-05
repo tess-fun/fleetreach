@@ -8,19 +8,43 @@
   "packages": [
     "org.apache.struts:struts2-core"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
-      "class": "org.apache.struts2.dispatcher.mapper.DefaultActionMapper",
-      "method": "<init>"
+      "class": "org.apache.struts2.dispatcher.mapper.DefaultActionMapper$2$2",
+      "method": "execute"
+    },
+    {
+      "class": "org.apache.struts2.dispatcher.mapper.DefaultActionMapper$2$3",
+      "method": "execute"
+    },
+    {
+      "class": "org.apache.struts2.dispatcher.mapper.DefaultActionMapper$2$4",
+      "method": "execute"
     }
   ],
   "evidence": {
     "commits": [
       "https://github.com/apache/struts/commit/3cfe34fefedcf0fdcfcb061c0aea34a715b7de63",
       "https://github.com/apache/struts/commit/630e1ba065a8215c4e9ac03bfb09be9d655c2b6e"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.struts2.dispatcher.mapper.DefaultActionMapper",
+        "method": "<init>",
+        "reason": "runs in every Struts app; the flawed code is in the anonymous handlers written inside it"
+      },
+      {
+        "class": "org.apache.struts2.dispatcher.mapper.DefaultActionMapper$2$1",
+        "method": "execute",
+        "reason": "the method: handler; the fix only reformats it and the advisory does not name it"
+      }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). Struts creates the mapper and calls these handlers itself, so no sink reached proves nothing here",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

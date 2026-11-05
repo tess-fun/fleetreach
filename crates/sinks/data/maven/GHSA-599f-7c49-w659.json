@@ -8,8 +8,8 @@
   "packages": [
     "org.apache.commons:commons-text"
   ],
-  "status": "proposed",
-  "verdict": "no-method-sink",
+  "status": "reviewed",
+  "verdict": "sinks",
   "evidence": {
     "commits": [
       "https://github.com/apache/commons-text/commit/b9b40b903e2d1f9935039803c9852439576780ea"
@@ -47,5 +47,23 @@
       }
     ]
   },
-  "note": "E2b pilot label: commons-text: the script/dns/url lookups are not in the diff"
+  "note": "The lookups the advisory names; the fix only takes them out of the defaults, so the evidence is the advisory text, not the diff",
+  "sinks": [
+    {
+      "class": "org.apache.commons.text.lookup.ScriptStringLookup",
+      "method": "lookup"
+    },
+    {
+      "class": "org.apache.commons.text.lookup.DnsStringLookup",
+      "method": "lookup"
+    },
+    {
+      "class": "org.apache.commons.text.lookup.UrlStringLookup",
+      "method": "lookup"
+    }
+  ],
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

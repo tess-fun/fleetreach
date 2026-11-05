@@ -8,7 +8,7 @@
   "packages": [
     "com.fasterxml.jackson.core:jackson-databind"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "deny-list",
   "gadgets": [
     "org.apache.ignite.cache.jta.jndi.CacheJndiTmLookup",
@@ -20,5 +20,9 @@
       "https://github.com/FasterXML/jackson-databind/commit/a424c038ba0c0d65e579e22001dec925902ac0ef"
     ]
   },
-  "note": "E2b pilot label: deny-list fix; exposure needs a gadget class and polymorphic typing"
+  "note": "E2b pilot label: deny-list fix; exposure needs a gadget class and polymorphic typing",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

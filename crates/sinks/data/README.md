@@ -12,12 +12,12 @@ that it is not.
 
 ## Status of the seed data
 
-All 100 records are `proposed`. They cover a seeded sample of high and critical Maven
-advisories that have SAP project-kb fix commits:
+The 100 records cover a seeded sample of high and critical Maven advisories that have SAP
+project-kb fix commits:
 
-- 40 carry the E2b pilot's labels, made with model assistance from each advisory's text
-  and fix diff;
-- 60 are `sinkpropose` output as it came out.
+- 40 are `reviewed`: the E2b pilot's labels, each decided by a person against the fix
+  diff and the published jars. 19 of them changed in review;
+- 60 are `proposed`: `sinkpropose` output as it came out.
 
 ## Reviewing a record
 
@@ -26,10 +26,17 @@ advisories that have SAP project-kb fix commits:
    reached only when the vulnerable feature is used. Code that only passes a new flag
    along, refactors, logging and generic setup code are not sinks.
    `evidence.excluded` lists the candidates the proposer left out, with the reason.
-3. Edit `sinks`, `gadgets`, `verdict` or `note` as needed, add a `descriptor` where only
+3. Check the names against published jars, not just the fix commit. `packages` must name
+   the artifact that holds the class, which is often not the one the advisory names, and
+   may be a POM. A fix commit shows one release line: a method can have another name or
+   package on the others, or exist only after the advisory's range.
+4. Say in `note` when reaching a sink is not the whole story: a class reached by name
+   (JCA, plugin systems, framework dispatch), so no sink reached proves nothing, or a
+   setting a code scan cannot see.
+5. Edit `sinks`, `gadgets`, `verdict` or `note` as needed, add a `descriptor` where only
    one overload is meant, then set `"status": "reviewed"` and
    `"review": {"by": "<you>", "date": "YYYY-MM-DD"}`.
-4. `cargo test -p fleetreach-sinks` checks every record; any invalid record fails it.
+6. `cargo test -p fleetreach-sinks` checks every record; any invalid record fails it.
 
 ## Proposing a new record
 

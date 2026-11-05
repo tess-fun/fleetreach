@@ -8,7 +8,7 @@
   "packages": [
     "com.fasterxml.jackson.core:jackson-databind"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "deny-list",
   "gadgets": [
     "com.mysql.cj.jdbc.admin.MiniAdmin"
@@ -18,5 +18,9 @@
       "https://github.com/FasterXML/jackson-databind/commit/dda513bd7251b4f32b7b60b1c13740e3b5a43024"
     ]
   },
-  "note": "E2b pilot label: deny-list fix; exposure needs a gadget class and polymorphic typing"
+  "note": "E2b pilot label: deny-list fix; exposure needs a gadget class and polymorphic typing",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

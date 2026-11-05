@@ -261,6 +261,28 @@ sink inside it. A reviewer confirms a 2-method set in about a minute. So:
 4. **E3** (CHA suppression yield on 50 services) runs on reviewed sinks only. The pilot's
    34 sinkable labels are the first 34 reviewed records.
 
+### Pilot review result, 2026-11-04
+
+All 40 pilot records were decided by a person, each checked against the fix diff and the
+published jars: 34 `sinks`, 4 `deny-list`, 2 `no-method-sink`. **19 of 40 changed**, so a
+label from the advisory and fix diff alone is not reliable, and the review is real work,
+not a formality. Changes by kind: `packages` in 12 records, `sinks` in 11, `verdict` in 2,
+`gadgets` in 1.
+
+- **Wrong artifact** was the commonest fault: the advisory names one jar and the class
+  ships in another (Jetty, Tomcat, Spring Data REST, Infinispan), or names a parent POM
+  (Ranger, Qpid). A reachability check keyed on the advisory's artifact would miss these.
+- **One release line**: a fix commit shows one branch. Jetty's sink has another name on
+  9.3 and 9.4, Tika's and Syncope's classes moved package, and Tika's CVE-2018-11761
+  methods exist only after the advisory's range.
+- **Too broad**: sinks that run in every use of the library (Struts' constructor, Tika's
+  OCR setters, base constructors shared with safe subclasses), and a commit's gadget list
+  copied onto one CVE of four.
+- **Open before E3**: a few records are reached by name, not by a call (Bouncy Castle's
+  JCA ciphers, Log4j plugins, Struts handlers), so no sink reached proves nothing for
+  them. Today only the record's `note` says so. E3, and anything else that uses "not
+  reached", needs that as a field the scanner reads.
+
 ### Competitors, as of Nov 2026
 
 - **Trivy v0.76.1** (2026-10-21). 2026: pylock.toml (0.70.0), CycloneDX 1.7 and Ubuntu 26.04

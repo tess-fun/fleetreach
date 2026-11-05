@@ -9,7 +9,7 @@
     "org.apache.struts:struts2-core",
     "org.apache.struts:struts2-rest-plugin"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -22,5 +22,9 @@
       "https://github.com/apache/struts/commit/76eb8f38a33ad0f1f48464ee1311559c8d52dd6d"
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). The flawed line only runs with dynamic method calls on; the mapper defaults to off and a code scan cannot see the setting, so reaching the sink does not mean exposure",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }

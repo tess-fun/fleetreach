@@ -6,9 +6,10 @@
   ],
   "ecosystem": "Maven",
   "packages": [
-    "org.apache.qpid:apache-qpid-broker-j"
+    "org.apache.qpid:apache-qpid-broker-j",
+    "org.apache.qpid:qpid-broker-plugins-amqp-0-8-protocol"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -21,5 +22,9 @@
       "https://github.com/apache/qpid-broker-j/commit/025b48f3193e2b10b1c41d2bc3bcfc9cfc238a27"
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff); awaiting human review"
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-04"
+  }
 }
