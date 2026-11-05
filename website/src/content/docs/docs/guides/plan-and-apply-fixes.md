@@ -79,8 +79,8 @@ $ fleetreach fix plan --report report.json | head -n 52
 <!-- /run -->
 
 Each edit is a `lock-bump`, a `manifest-bump`, or `blocked` with the reason: no published
-fix, a semver-major jump without `--allow-breaking`, a range in a published package, or an
-ecosystem `apply` does not handle yet. When an older line has its own complete fix, those
+fix, a semver-major jump without `--allow-breaking`, a range in a published package, an
+ecosystem `apply` does not handle yet, or a finding in an image, which has no checkout to edit. When an older line has its own complete fix, those
 repos get a low-risk bump on their line instead of a blocked breaking one. Every edit carries
 a campaign id that is the same across repos and runs, so one fix rolled out to ten repos is
 one campaign.

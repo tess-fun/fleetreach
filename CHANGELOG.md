@@ -142,6 +142,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A hostile repo can no longer hang a scan or read outside itself.** A manifest or lockfile that
+  was a symlink to `/dev/zero`, or to a file beyond the repos in the fleet, was followed. Manifests,
+  lockfiles and source files now go through one reader: it refuses what is not a regular
+  file, anything that resolves outside the repo, and files over 512 MiB.
+- **`licenses --detect` could hang.** Building the license matcher could deadlock on a busy thread
+  pool, about one run in three.
+- A file in the default `triage/` directory that names no advisory is skipped with a warning
+  instead of failing the scan. A directory you name with `--triage-dir` stays strict.
+- `fix plan` on a report with images listed lock bumps nothing could apply. An edit with no
+  checkout in `fleet.toml` is now `blocked`, and says the image takes the fix at its next build.
 - **Go findings have severities.** They all read `unknown` and so failed every `--fail-on`
   floor. The offline matcher now reads GitHub's records in the osv.dev export, and a `GO-` record
   takes the worst band of the records sharing an id with it. A Go finding under the floor no

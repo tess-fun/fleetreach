@@ -110,7 +110,7 @@ pub fn is_license_file(name: &str) -> bool {
 fn entry((text, ids): &(&str, Vec<&str>)) -> (String, LicenseEntry) {
     let current = |id: &&&str| spdx::license_id(id).is_some_and(|l| !l.is_deprecated());
     let name = ids.iter().find(current).map_or("", |id| id).to_string();
-    let mut entry = LicenseEntry::new(TextData::new(*text).without_text());
+    let mut entry = LicenseEntry::new(TextData::new(text).without_text());
     // Most copies stop here, before how to apply the license: without that
     // form Apache-2.0 is nearer Pixar's Apache-derived text than its own.
     if let Some((terms, _)) = text.split_once(END_OF_TERMS) {

@@ -457,6 +457,24 @@ fn check_targets(plan: &mut Plan, args: &FixPlanArgs, config: &Config) -> usize 
     moved
 }
 
+/// Checks each edit against the repo's manifests. A finding in an image or a repo no longer in
+/// the fleet has no checkout to edit, so its edit is blocked instead of promised.
+fn fit_to_checkouts(edits: &mut [Edit], repos: &[Repo]) {
+    for edit in edits {
+        match repos.iter().find(|r| r.id.0 == edit.repo) {
+            Some(repo) => fix_constraints::constrain(edit, &repo.path),
+            None if edit.strategy != Strategy::Blocked => {
+                edit.strategy = Strategy::Blocked;
+                edit.reason = Some(format!(
+                    "`{}` has no checkout in fleet.toml; an image takes {} {} at its next build",
+                    edit.repo, edit.package, edit.to
+                ));
+            }
+            None => {}
+        }
+    }
+}
+
 fn run_plan(args: &FixPlanArgs) -> u8 {
     let config = match Config::load(&args.config) {
         Ok(config) => config,
@@ -476,11 +494,7 @@ fn run_plan(args: &FixPlanArgs) -> u8 {
         Ok(m) => repos.extend(m.repos),
         Err(e) => return fail(&e),
     }
-    for edit in &mut plan.edits {
-        if let Some(repo) = repos.iter().find(|r| r.id.0 == edit.repo) {
-            fix_constraints::constrain(edit, &repo.path);
-        }
-    }
+    fit_to_checkouts(&mut plan.edits, &repos);
     match serde_json::to_string_pretty(&plan) {
         Ok(json) => {
             println!("{json}");
@@ -1940,6 +1954,33 @@ mod tests {
         assert_eq!((mixed.to.as_str(), mixed.breaking), ("2.1.0", true));
         assert_eq!(mixed.strategy, Strategy::Blocked);
         assert_eq!(mixed.risk, Some(fleetreach_core::Risk::High));
+    }
+
+    #[test]
+    fn an_edit_with_no_checkout_is_blocked_with_its_target_kept() {
+        let edit = |repo: &str, strategy, reason: Option<&str>| Edit {
+            campaign: "c".into(),
+            repo: repo.into(),
+            ecosystem: Ecosystem::Npm,
+            package: "lodash".into(),
+            from: vec!["4.17.15".into()],
+            to: "4.18.1".into(),
+            advisories: vec!["GHSA-A".into()],
+            breaking: false,
+            strategy,
+            reason: reason.map(String::from),
+            risk: None,
+            risk_reasons: Vec::new(),
+        };
+        let mut edits = [
+            edit("nginx", Strategy::LockBump, None),
+            edit("nginx", Strategy::Blocked, Some("no published fix")),
+        ];
+        fit_to_checkouts(&mut edits, &[]);
+        assert_eq!(edits[0].strategy, Strategy::Blocked);
+        assert_eq!(edits[0].to, "4.18.1");
+        assert!(edits[0].reason.as_deref().unwrap_or("").contains("`nginx`"));
+        assert_eq!(edits[1].reason.as_deref(), Some("no published fix"));
     }
 
     fn set(items: &[&str]) -> BTreeSet<&'static str> {
