@@ -21,6 +21,7 @@ pub mod diff;
 pub mod enrich;
 pub mod evidence;
 pub mod fix;
+pub mod fix_constraints;
 pub(crate) mod fix_managers;
 pub mod forges;
 pub mod health;

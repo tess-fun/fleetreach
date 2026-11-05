@@ -14,7 +14,7 @@ Usage: fleetreach fix <COMMAND>
 
 Commands:
   plan    Write a fix plan (JSON, stdout) from a saved `scan -f json` report
-  apply   Apply a plan's lock bumps on local branches, each verified by a re-scan
+  apply   Apply a plan's lock and manifest bumps on local branches, each verified by a re-scan
   status  List each repo's fleetreach pull or merge requests and their state (via `gh` or `glab`)
   help    Print this message or the help of the given subcommand(s)
 
@@ -40,10 +40,10 @@ Options:
 
 ## fleetreach fix apply
 
-Apply a plan's lock bumps on local branches, each verified by a re-scan
+Apply a plan's lock and manifest bumps on local branches, each verified by a re-scan
 
 ```text
-Apply a plan's lock bumps on local branches, each verified by a re-scan
+Apply a plan's lock and manifest bumps on local branches, each verified by a re-scan
 
 Usage: fleetreach fix apply [OPTIONS] <PLAN> [-- <SCAN_ARGS>...]
 

@@ -2,10 +2,12 @@
 //! phases 1 and 2).
 //!
 //! - `fix plan` reads a saved `scan -f json` report and writes one edit per repo per
-//!   remediation item: a `lock-bump` when an ecosystem's lock-only update can apply it, or
-//!   `blocked` with the reason (no published fix, a semver-major jump without
-//!   `--allow-breaking`, an ecosystem `apply` does not handle yet).
-//! - `fix apply` performs each `lock-bump` in a git worktree on a `fleetreach/<campaign>/...`
+//!   remediation item: a `lock-bump` when an ecosystem's lock-only update can apply it, a
+//!   `manifest-bump` when the repo's own range leaves the target out, or `blocked` with the
+//!   reason (no published fix, a semver-major jump without `--allow-breaking`, a range in a
+//!   published package, an ecosystem `apply` does not handle yet). The ranges are read in
+//!   [`crate::fix_constraints`].
+//! - `fix apply` performs each `lock-bump` and `manifest-bump` in a git worktree on a `fleetreach/<campaign>/...`
 //!   branch, never in the user's own work tree, with a lock-only command that runs no package
 //!   code (`cargo update --precise`, `npm update --package-lock-only --ignore-scripts`, a
 //!   text edit of a workflow `uses:` tag, `go get`, `uv lock --no-build`, and the updates in
@@ -38,7 +40,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cli::fail;
 use crate::config::{Config, Repo};
-use crate::{fix_managers, sources};
+use crate::{fix_constraints, fix_managers, sources};
 
 /// The plan file format.
 const PLAN_SCHEMA: &str = "fleetreach-fix-plan/1";
@@ -47,7 +49,7 @@ const PLAN_SCHEMA: &str = "fleetreach-fix-plan/1";
 pub enum FixCommand {
     /// Write a fix plan (JSON, stdout) from a saved `scan -f json` report.
     Plan(FixPlanArgs),
-    /// Apply a plan's lock bumps on local branches, each verified by a re-scan.
+    /// Apply a plan's lock and manifest bumps on local branches, each verified by a re-scan.
     Apply(FixApplyArgs),
     /// List each repo's fleetreach pull or merge requests and their state (via `gh` or
     /// `glab`).
@@ -190,6 +192,8 @@ pub fn run_fix(command: FixCommand) -> u8 {
 #[serde(rename_all = "kebab-case")]
 pub enum Strategy {
     LockBump,
+    /// A range in the repo's own manifest leaves the target out, so it is raised first.
+    ManifestBump,
     Blocked,
 }
 
@@ -420,10 +424,10 @@ fn ecosystem_name(ecosystem: Ecosystem) -> String {
 }
 
 fn run_plan(args: &FixPlanArgs) -> u8 {
-    // The config is loaded only to fail early on a bad one; the plan names repos by id.
-    if let Err(e) = Config::load(&args.config) {
-        return fail(&e.to_string());
-    }
+    let config = match Config::load(&args.config) {
+        Ok(config) => config,
+        Err(e) => return fail(&e.to_string()),
+    };
     let report: FleetReport = match std::fs::read_to_string(&args.report)
         .map_err(|e| e.to_string())
         .and_then(|t| serde_json::from_str(&t).map_err(|e| e.to_string()))
@@ -431,19 +435,30 @@ fn run_plan(args: &FixPlanArgs) -> u8 {
         Ok(r) => r,
         Err(e) => return fail(&format!("report `{}`: {e}", args.report.display())),
     };
-    let plan = build_plan(&report, args.allow_breaking);
+    let mut plan = build_plan(&report, args.allow_breaking);
+    let mut repos = config.repos.clone();
+    match sources::materialize(&config, false, true) {
+        Ok(m) => repos.extend(m.repos),
+        Err(e) => return fail(&e),
+    }
+    for edit in &mut plan.edits {
+        if let Some(repo) = repos.iter().find(|r| r.id.0 == edit.repo) {
+            fix_constraints::constrain(edit, &repo.path);
+        }
+    }
     match serde_json::to_string_pretty(&plan) {
         Ok(json) => {
             println!("{json}");
-            let bumps = plan
-                .edits
-                .iter()
-                .filter(|e| e.strategy == Strategy::LockBump)
-                .count();
+            let count = |strategy: Strategy| {
+                let matching = plan.edits.iter().filter(|e| e.strategy == strategy);
+                matching.count()
+            };
             eprintln!(
-                "{} edit(s): {bumps} lock bump(s), {} blocked",
+                "{} edit(s): {} lock bump(s), {} manifest bump(s), {} blocked",
                 plan.edits.len(),
-                plan.edits.len() - bumps
+                count(Strategy::LockBump),
+                count(Strategy::ManifestBump),
+                count(Strategy::Blocked)
             );
             0
         }
@@ -591,7 +606,7 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
     let mut stopped: Option<String> = None;
     for edit in edits {
         let skip = |why: &str| Applied::new(edit, Outcome::Skipped, why);
-        if edit.strategy != Strategy::LockBump {
+        if edit.strategy == Strategy::Blocked {
             results.push(skip(
                 edit.reason.as_deref().unwrap_or("blocked in the plan"),
             ));
@@ -1395,7 +1410,11 @@ fn apply_edit(work: &Path, edit: &Edit) -> Result<String, String> {
 /// The update for each lockfile a Node project may keep the package in.
 fn node_bump(work: &Path, edit: &Edit) -> Result<String, String> {
     let mut ran: Vec<String> = Vec::new();
-    ran.extend(npm_bump(work, edit)?);
+    if edit.strategy == Strategy::ManifestBump {
+        ran.push(npm_manifest_bump(work, edit)?);
+    } else {
+        ran.extend(npm_bump(work, edit)?);
+    }
     ran.extend(fix_managers::pnpm_bump(work, edit)?);
     ran.extend(fix_managers::yarn_bump(work, edit)?);
     if ran.is_empty() {
@@ -1405,6 +1424,33 @@ fn node_bump(work: &Path, edit: &Edit) -> Result<String, String> {
         ));
     }
     Ok(ran.join("; "))
+}
+
+/// Raises the range in `package.json`, then `npm install --package-lock-only` to follow it.
+fn npm_manifest_bump(work: &Path, edit: &Edit) -> Result<String, String> {
+    let dirs = fix_constraints::raise_npm(work, edit)?;
+    if dirs.is_empty() {
+        return Err(format!(
+            "no package.json range on {} to raise",
+            edit.package
+        ));
+    }
+    for dir in &dirs {
+        run(Command::new("npm").current_dir(dir).args([
+            "install",
+            "--package-lock-only",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+        ]))
+        .map_err(|e| format!("npm install: {e}"))?;
+    }
+    Ok(format!(
+        "raised {} to {} in {} dir(s), npm install --package-lock-only",
+        edit.package,
+        edit.to,
+        dirs.len()
+    ))
 }
 
 /// Directories under `root` (skipping VCS and dependency directories) holding `file`.
@@ -1431,6 +1477,10 @@ pub(crate) fn dirs_with(root: &Path, file: &str) -> Vec<PathBuf> {
 /// holds a vulnerable version. Cargo resolves the registry index only; no build scripts run.
 fn cargo_bump(work: &Path, edit: &Edit) -> Result<String, String> {
     let mut ran = Vec::new();
+    if edit.strategy == Strategy::ManifestBump {
+        let raised = fix_constraints::raise_cargo(work, edit)?;
+        ran.push(format!("raised {} in {raised} Cargo.toml", edit.package));
+    }
     for dir in dirs_with(work, "Cargo.lock") {
         let lock = std::fs::read_to_string(dir.join("Cargo.lock")).unwrap_or_default();
         for from in &edit.from {

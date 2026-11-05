@@ -106,3 +106,29 @@ It reports lines that are not imports, and imports sharing no word with their pa
 hand, which is how `laravel/pint`'s `App\` and `com.fasterxml:classmate` were found. Over 132
 public repos, 7,561 chains and no line that was not an import.
 
+## Fix constraints
+
+`fix_constraints.py` checks the ranges `fix plan` reads against the tools that enforce them:
+
+```bash
+cargo build --release -p fleetreach-cli --example fix_constraints
+E=target/release/examples/fix_constraints
+python3 -B fix_constraints.py ranges $E <npm>/node_modules/semver <root>
+python3 -B fix_constraints.py npm $E <work dir> <root> 600
+python3 -B fix_constraints.py cargo $E <work dir> <root> 600
+```
+
+`ranges` compares the npm evaluator with npm's own `semver`: 3,915 ranges, 32,303 pairs, no
+difference. `npm` and `cargo` take real locks and real published versions on three lines: a lock
+bump must then move with `npm update` or `cargo update --precise`, a manifest bump must move once
+the range is raised, and a blocked edit must stay put.
+
+| | Cases | Agree | Explained |
+|---|---|---|---|
+| npm | 531 | 515 | 16 |
+| Cargo | 600 | 588 | 12 |
+
+The explained ones are not wrong calls by the ranges: a tree that fails to resolve untouched (8),
+stale locks npm prunes (7), a deprecated target npm will not pick (1), a path dependency outside
+the copied directory (9), and a target whose own requirements conflict (3), which only the
+registry knows. Compare copies by path and not by count: npm hoists and dedupes as it updates.

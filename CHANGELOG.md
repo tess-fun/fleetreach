@@ -8,6 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`fix plan` reads each repo's ranges before it proposes a target**, for npm's
+  `package-lock.json` and for Cargo. A target your own manifest leaves out is a new
+  `manifest-bump` edit: `fix apply` raises the range, an exact pin included, then updates the
+  lock. A target a published package leaves out, peer ranges included, is blocked and names the
+  package to update first, rather than failing in `fix apply`.
 - **`scan --reachability` builds witness chains for Ruby, PHP, .NET, Java and Kotlin, Elixir and
   Swift.** A chain starts at the import line in your source and follows the lockfile, for example
   `imported at app/models/user.rb:3 via loofah → nokogiri`. Positive-only, like Python's. JSON

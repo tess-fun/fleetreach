@@ -78,15 +78,36 @@ $ fleetreach fix plan --report report.json | head -n 52
 ```
 <!-- /run -->
 
-Each edit is a `lock-bump` or `blocked` with the reason: no published fix, a semver-major
-jump without `--allow-breaking`, or an ecosystem `apply` does not handle yet. When an older
-line has its own complete fix, those repos get a low-risk bump on their line instead of a
-blocked breaking one. Every edit carries a campaign id that is the same across repos and
-runs, so one fix rolled out to ten repos is one campaign.
+Each edit is a `lock-bump`, a `manifest-bump`, or `blocked` with the reason: no published
+fix, a semver-major jump without `--allow-breaking`, a range in a published package, or an
+ecosystem `apply` does not handle yet. When an older line has its own complete fix, those
+repos get a low-risk bump on their line instead of a blocked breaking one. Every edit carries
+a campaign id that is the same across repos and runs, so one fix rolled out to ten repos is
+one campaign.
+
+### What each repo's ranges allow
+
+For npm's `package-lock.json` and for Cargo, the plan reads the checkouts in `fleet.toml` and
+looks at every range that reaches a vulnerable copy of the package, peer ranges included:
+
+| The target is left out by | Strategy |
+|---------------------------|----------|
+| nothing | `lock-bump` |
+| a range in your own `package.json` or `Cargo.toml`, an exact pin included | `manifest-bump` |
+| a range in a published package | `blocked`, naming the package to update first |
+
+A manifest bump raises the range and keeps its kind: `^1.2.3` becomes `^2.0.0`, `~1.2.3`
+becomes `~1.3.0`, and an exact pin stays exact. It also covers `[workspace.dependencies]`.
+A range on another line of the package is left alone.
+
+Some ranges say nothing, and those edits stay lock bumps: a git url or a tag, a Cargo
+dependency whose manifest is not in the local registry, and any pnpm or yarn lock, which do
+not keep these ranges. `overrides` are not read either. `fix apply` still runs the package
+manager and re-scans, so the worst case is an edit that does not verify.
 
 ## 2. Apply
 
-`fix apply` never touches your work tree. For each lock bump it creates a git worktree from
+`fix apply` never touches your work tree. For each bump it creates a git worktree from
 the repo's `HEAD`, or from the remote's default branch with `--push` or `--open-pr`, and runs
 an update that executes no package code:
 

@@ -450,6 +450,16 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Effort**: S. **Release**: 1.6.0. **Proof**: the proposed strategy is what `npm install
   --package-lock-only` and `cargo update -p` accept on the fix-test corpus.
 
+  **Status: implemented 2026-11-04, unreleased** (`crates/cli/src/fix_constraints.rs`, new
+  `manifest-bump` strategy). Over real locks and published versions, 531 npm and 600 Cargo
+  edits: the strategy agreed with `npm update`, `npm install --package-lock-only` and `cargo
+  update --precise` on all but 28, each explained and none a wrong call by the ranges
+  (`docs/differential/fix_constraints.py`). The npm range evaluator matches npm's `semver` on
+  32,303 pairs. Eight fixture repos through `fix plan` and `fix apply` all pass `npm ci` or
+  `cargo metadata --locked`, and a restored range fails both. Not read: `overrides`, pnpm and
+  yarn locks, and a target's own requirements. A target can itself carry an advisory that begins
+  after the installed version, which the re-scan refuses: 4 of those 8 fixtures.
+
 #### 4. Repo discovery (A- to A+)
 
 - **A+**: GitHub (+GHES), GitLab (+self-managed), Bitbucket Cloud and Data Center, Azure
