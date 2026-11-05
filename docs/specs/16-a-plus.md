@@ -1,6 +1,6 @@
 # Spec 16: A+ on every matrix row by 1.8.0
 
-Status: in progress (1.6.0: E2 jar-diff and commit-first runs done, both gates missed; 1.7.0: rpm images implemented) · Written 2026-11-02 after the 1.5.0 release, revised the same day
+Status: in progress (1.6.0: everything on the list implemented and unreleased except E3; E2 gates missed, 40 pilot records reviewed; 1.7.0: rpm images implemented) · Written 2026-11-02 after the 1.5.0 release, revised the same day
 (three releases instead of two; a path to A+ researched for every row) · Supersedes the
 "out of scope" parts of [spec 14](14-out-of-scope.md) for containers, curated research,
 hosted triage and malware analysis (user decisions of 2026-11-02, not re-argued here)

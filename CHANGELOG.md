@@ -8,9 +8,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **40 sink records are reviewed.** The pilot's Maven records were each decided by a person
-  against the fix diff and published jars. 19 changed, most often to name the jar that really
-  holds the class. The other 60 stay `proposed`.
 - **SBOM input matches OS packages.** `pkg:deb`, `pkg:apk` and `pkg:rpm` components go to the same
   distro matchers as an image, so a Syft or Trivy image SBOM scans in full. The release comes from
   the `distro` qualifier or the operating-system component, and each package's source from what
@@ -148,82 +145,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   hiding its finding, and the scan fails while the finding is open, as for triage decisions.
 - `[[settings.context.tag_rules]]` sets SSVC exposure and impact from repo tags and forge
   topics. The report's `context[].set_by` names the rule behind each value.
-
-### Fixed
-
-- **A hostile repo can no longer hang a scan or read outside itself.** A manifest or lockfile that
-  was a symlink to `/dev/zero`, or to a file beyond the repos in the fleet, was followed. Manifests,
-  lockfiles and source files now go through one reader: it refuses what is not a regular
-  file, anything that resolves outside the repo, and files over 512 MiB.
-- **`licenses --detect` could hang.** Building the license matcher could deadlock on a busy thread
-  pool, about one run in three.
-- A file in the default `triage/` directory that names no advisory is skipped with a warning
-  instead of failing the scan. A directory you name with `--triage-dir` stays strict.
-- `fix plan` on a report with images listed lock bumps nothing could apply. An edit with no
-  checkout in `fleet.toml` is now `blocked`, and says the image takes the fix at its next build.
-- **Go findings have severities.** They all read `unknown` and so failed every `--fail-on`
-  floor. The offline matcher now reads GitHub's records in the osv.dev export, and a `GO-` record
-  takes the worst band of the records sharing an id with it. A Go finding under the floor no
-  longer fails it. What nothing rates stays `unknown` and still fails, as do all findings from
-  govulncheck or a vuln.go.dev mirror, which carry no severity.
-- A repo scanned from `sbom =` with no lockfile of the same ecosystem errored, because the
-  advisory data for what the SBOM held was never loaded.
-
-- Dependency paths for RubyGems now go through gems from `GIT` and `PATH` sources.
-- A pnpm `file:` or tarball dependency no longer appears as a package with a path for a version.
-- **`fix apply` could destroy a verified branch.** A re-run that failed its baseline scan
-  deleted the branch. Branches now move only after a commit, and an unverified result goes
-  on `fleetreach-unverified/*`, never over a verified branch.
-- Human VEX statements (`[[settings.ignore]]`, `[[settings.vex_assertion]]`) named every package
-  as `pkg:cargo`, so a statement on an npm or PyPI package matched nothing in other tools.
-- **Rust scans missed the advisories only GitHub carries.** RustSec has no record of about 650
-  live crates.io advisories (`rustix`, `deno`, `surrealdb` among them), so `Cargo.lock` files
-  and Rust binaries read clean of them. The osv.dev crates.io export is now synced and matched
-  beside RustSec, and `--crates-vuln-db` points at a copy. A package RustSec already reported
-  an advisory for keeps RustSec's finding, so nothing is reported twice; where GitHub's range
-  or crate list is wider than RustSec's the package is reported, and what RustSec withdrew
-  stays withdrawn. Checked on 600 real lockfiles: every row added is one Trivy and Grype both
-  report, and an independent evaluation of the records agrees row for row.
-
-- **Debian, Ubuntu and Alpine advisories were two years old.** Sync preferred osv.dev's
-  per-release exports (`Debian:12/all.zip`), which still download but stopped changing in
-  October 2024, so every later CVE was missed. Sync now fetches the whole distribution's
-  export, and a scan warns when an export has not changed for a year. Found by the Trivy and
-  Grype differential.
-- Debian 7 to 11 lost the CVEs they left open when they left the security tracker. Their
-  frozen osv.dev exports are now read too, wherever the maintained export says nothing about a
-  CVE; `db sync --distros Debian:11` fetches both, `--max-db-age` does not apply to a frozen
-  export, and the image's coverage gap says the data stops in October 2024.
-- **Root's patched images could read as clean when they were not.** Root numbers its builds
-  on one counter under two spellings, `.root.io.N` and `.aikido.N`, and dpkg sorts `aikido`
-  below `root`, so a package at `root.io.2` counted as past a fix at `root.io.3`. Versions now
-  compare by the counter. Packages Root renames (`rootio-coreutils`) now get Debian's and
-  Alpine's records, records filed under either name are found, Root's apk builds
-  (`-r00072`) are recognized, and Root's fix is shown for packages it has not rebuilt. Found
-  on Root's public images: every Root row Trivy reports is now reported too.
-- A registry that rate limits a pull (429) is now waited for and tried again.
-- Files of third-party OS packages in images (`docker-ce-cli`, `mongodb-database-tools`) were
-  skipped as if a distribution's advisories covered them. They are skipped now only when a
-  distribution's records know the package, on dpkg, rpm and apk images.
-- Ubuntu Pro's records were read only for `+esm` images; on any LTS they now speak about CVEs
-  the release's own records never mention.
-- CentOS 6 images have no `os-release` and were not matched; they are now read from
-  `/etc/centos-release`, and RHEL's from `/etc/redhat-release`. CentOS stays affected by a Red
-  Hat fix made after it stopped.
-- Red Hat's Extended Life Support records are read for RHEL 6 and 7, and RHEL 10's records,
-  which go by minor release, are read at all. A Red Hat record naming only the source package
-  now applies to binaries it does not list.
-- A Ubuntu or Debian notice no longer joins the CVEs it covers into one finding that takes the
-  first one's status. A finding's title no longer names another release's status, and one
-  GitHub record naming packages in two ecosystems stays two findings.
-- Alpine ranges whose lower bound is above their fix hid open CVEs; the bound is dropped.
-- Go records from GitHub in osv.dev's Go export were dropped, and `+incompatible` versions missed
-  `last_affected` bounds.
-- A `package.json` marked `"private": true` is not matched as a registry package.
-- A retired Debian release now reports a coverage gap, where its CVEs went silently unreported.
-
-### Added
-
 - **Triage files** (spec 16, row 6). One decision per finding, in
   `triage/<advisory>/<ecosystem>-<package>.toml` beside `fleet.toml`: state (`affected`,
   `in_triage`, `accepted_risk`, `false_positive`, `not_affected`, `fixed`), assignee, expiry,
@@ -430,6 +351,79 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Additive APIs: `load_with_overlay` and `iter` on every OSV feeder database, and
   `osv::load_with_overlay` / `osv::read_overlay` in `fleetreach_core`. `OsvSettings` gains an
   `advisories` field.
+
+### Fixed
+
+- **A hostile repo can no longer hang a scan or read outside itself.** A manifest or lockfile that
+  was a symlink to `/dev/zero`, or to a file beyond the repos in the fleet, was followed. Manifests,
+  lockfiles and source files now go through one reader: it refuses what is not a regular
+  file, anything that resolves outside the repo, and files over 512 MiB.
+- **`licenses --detect` could hang.** Building the license matcher could deadlock on a busy thread
+  pool, about one run in three.
+- A file in the default `triage/` directory that names no advisory is skipped with a warning
+  instead of failing the scan. A directory you name with `--triage-dir` stays strict.
+- `fix plan` on a report with images listed lock bumps nothing could apply. An edit with no
+  checkout in `fleet.toml` is now `blocked`, and says the image takes the fix at its next build.
+- **Go findings have severities.** They all read `unknown` and so failed every `--fail-on`
+  floor. The offline matcher now reads GitHub's records in the osv.dev export, and a `GO-` record
+  takes the worst band of the records sharing an id with it. A Go finding under the floor no
+  longer fails it. What nothing rates stays `unknown` and still fails, as do all findings from
+  govulncheck or a vuln.go.dev mirror, which carry no severity.
+- A repo scanned from `sbom =` with no lockfile of the same ecosystem errored, because the
+  advisory data for what the SBOM held was never loaded.
+
+- Dependency paths for RubyGems now go through gems from `GIT` and `PATH` sources.
+- A pnpm `file:` or tarball dependency no longer appears as a package with a path for a version.
+- **`fix apply` could destroy a verified branch.** A re-run that failed its baseline scan
+  deleted the branch. Branches now move only after a commit, and an unverified result goes
+  on `fleetreach-unverified/*`, never over a verified branch.
+- Human VEX statements (`[[settings.ignore]]`, `[[settings.vex_assertion]]`) named every package
+  as `pkg:cargo`, so a statement on an npm or PyPI package matched nothing in other tools.
+- **Rust scans missed the advisories only GitHub carries.** RustSec has no record of about 650
+  live crates.io advisories (`rustix`, `deno`, `surrealdb` among them), so `Cargo.lock` files
+  and Rust binaries read clean of them. The osv.dev crates.io export is now synced and matched
+  beside RustSec, and `--crates-vuln-db` points at a copy. A package RustSec already reported
+  an advisory for keeps RustSec's finding, so nothing is reported twice; where GitHub's range
+  or crate list is wider than RustSec's the package is reported, and what RustSec withdrew
+  stays withdrawn. Checked on 600 real lockfiles: every row added is one Trivy and Grype both
+  report, and an independent evaluation of the records agrees row for row.
+
+- **Debian, Ubuntu and Alpine advisories were two years old.** Sync preferred osv.dev's
+  per-release exports (`Debian:12/all.zip`), which still download but stopped changing in
+  October 2024, so every later CVE was missed. Sync now fetches the whole distribution's
+  export, and a scan warns when an export has not changed for a year. Found by the Trivy and
+  Grype differential.
+- Debian 7 to 11 lost the CVEs they left open when they left the security tracker. Their
+  frozen osv.dev exports are now read too, wherever the maintained export says nothing about a
+  CVE; `db sync --distros Debian:11` fetches both, `--max-db-age` does not apply to a frozen
+  export, and the image's coverage gap says the data stops in October 2024.
+- **Root's patched images could read as clean when they were not.** Root numbers its builds
+  on one counter under two spellings, `.root.io.N` and `.aikido.N`, and dpkg sorts `aikido`
+  below `root`, so a package at `root.io.2` counted as past a fix at `root.io.3`. Versions now
+  compare by the counter. Packages Root renames (`rootio-coreutils`) now get Debian's and
+  Alpine's records, records filed under either name are found, Root's apk builds
+  (`-r00072`) are recognized, and Root's fix is shown for packages it has not rebuilt. Found
+  on Root's public images: every Root row Trivy reports is now reported too.
+- A registry that rate limits a pull (429) is now waited for and tried again.
+- Files of third-party OS packages in images (`docker-ce-cli`, `mongodb-database-tools`) were
+  skipped as if a distribution's advisories covered them. They are skipped now only when a
+  distribution's records know the package, on dpkg, rpm and apk images.
+- Ubuntu Pro's records were read only for `+esm` images; on any LTS they now speak about CVEs
+  the release's own records never mention.
+- CentOS 6 images have no `os-release` and were not matched; they are now read from
+  `/etc/centos-release`, and RHEL's from `/etc/redhat-release`. CentOS stays affected by a Red
+  Hat fix made after it stopped.
+- Red Hat's Extended Life Support records are read for RHEL 6 and 7, and RHEL 10's records,
+  which go by minor release, are read at all. A Red Hat record naming only the source package
+  now applies to binaries it does not list.
+- A Ubuntu or Debian notice no longer joins the CVEs it covers into one finding that takes the
+  first one's status. A finding's title no longer names another release's status, and one
+  GitHub record naming packages in two ecosystems stays two findings.
+- Alpine ranges whose lower bound is above their fix hid open CVEs; the bound is dropped.
+- Go records from GitHub in osv.dev's Go export were dropped, and `+incompatible` versions missed
+  `last_affected` bounds.
+- A `package.json` marked `"private": true` is not matched as a registry package.
+- A retired Debian release now reports a coverage gap, where its CVEs went silently unreported.
 
 ### Compatibility
 
