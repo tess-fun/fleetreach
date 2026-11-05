@@ -30,9 +30,10 @@ project-kb fix commits:
    the artifact that holds the class, which is often not the one the advisory names, and
    may be a POM. A fix commit shows one release line: a method can have another name or
    package on the others, or exist only after the advisory's range.
-4. Say in `note` when reaching a sink is not the whole story: a class reached by name
-   (JCA, plugin systems, framework dispatch), so no sink reached proves nothing, or a
-   setting a code scan cannot see.
+4. Set `"reached_by_name": true` when applications reach the sinks through a name, not a
+   call (JCA, plugin systems, framework dispatch), and say how in `note`. No sink reached
+   then proves nothing, and the record can only say "reached". Say in `note` too when
+   reaching a sink is not the whole story, such as a setting a code scan cannot see.
 5. Edit `sinks`, `gadgets`, `verdict` or `note` as needed, add a `descriptor` where only
    one overload is meant, then set `"status": "reviewed"` and
    `"review": {"by": "<you>", "date": "YYYY-MM-DD"}`.

@@ -31,6 +31,14 @@ fn main() {
                     count(status, Verdict::NoMethodSink),
                 );
             }
+            println!(
+                "  {} of {} reviewed can support \"not reached\"",
+                set.records
+                    .values()
+                    .filter(|r| r.supports_not_reached())
+                    .count(),
+                set.reviewed().count(),
+            );
         }
         Err(e) => {
             eprintln!("error: {e}");

@@ -17,6 +17,11 @@
 //! - `no-method-sink`: the flaw is not in any method (configuration, scripts) or not in the
 //!   fix; the note says why.
 //!
+//! Reaching a sink is one question and not reaching one another: `reached_by_name` marks a
+//! record whose sinks run through a name a call graph cannot follow (JCA, plugin systems,
+//! framework dispatch). Such a record can say "reached", and [`SinkRecord::supports_not_reached`]
+//! is the one check a scanner makes before it says "not reached".
+//!
 //! [`load_dir`] is fail-closed: an unknown field, a malformed name, a duplicate id, or a
 //! reviewed record without a reviewer is an error for the whole directory, since a sink set
 //! that is silently partly read could support a wrong "not reached".
@@ -53,6 +58,10 @@ pub struct SinkRecord {
     /// For `verdict = "deny-list"`: the gadget classes the fix denies.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gadgets: Vec<String>,
+    /// For `verdict = "sinks"`: applications reach these sinks through a name, not a call, so
+    /// finding no path to one proves nothing. The note says how.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub reached_by_name: bool,
     /// What the record was derived from.
     #[serde(default, skip_serializing_if = "Evidence::is_empty")]
     pub evidence: Evidence,
@@ -145,7 +154,18 @@ pub enum RecordError {
     Invalid { path: String, message: String },
 }
 
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
 impl SinkRecord {
+    /// Whether finding no path to this record's sinks may be read as "not reached". Only a
+    /// person's sink list qualifies, and only when a call graph can see its sinks.
+    #[must_use]
+    pub fn supports_not_reached(&self) -> bool {
+        self.status == Status::Reviewed && self.verdict == Verdict::Sinks && !self.reached_by_name
+    }
+
     /// Every rule a record must satisfy on its own.
     pub fn validate(&self) -> Result<(), String> {
         if self.schema != SCHEMA {
@@ -207,6 +227,12 @@ impl SinkRecord {
         }
         if self.verdict != Verdict::DenyList && !self.gadgets.is_empty() {
             return Err("only verdict `deny-list` lists gadgets".into());
+        }
+        if self.reached_by_name && self.verdict != Verdict::Sinks {
+            return Err("only verdict `sinks` can be reached by name".into());
+        }
+        if self.reached_by_name && self.note.as_deref().is_none_or(str::is_empty) {
+            return Err("`reached_by_name` needs a note saying how".into());
         }
         match (&self.status, &self.review) {
             (Status::Reviewed, None) => return Err("a reviewed record needs `review`".into()),
@@ -427,6 +453,7 @@ mod tests {
                 descriptor: None,
             }],
             gadgets: vec![],
+            reached_by_name: false,
             evidence: Evidence::default(),
             review: None,
             note: None,
@@ -469,6 +496,34 @@ mod tests {
         r.verdict = Verdict::NoMethodSink;
         r.gadgets.clear();
         assert!(r.validate().unwrap_err().contains("note"));
+    }
+
+    #[test]
+    fn only_reviewed_sinks_a_call_graph_can_see_support_not_reached() {
+        let mut r = record();
+        assert!(!r.supports_not_reached());
+        r.status = Status::Reviewed;
+        assert!(r.supports_not_reached());
+        r.reached_by_name = true;
+        assert!(!r.supports_not_reached());
+        r.reached_by_name = false;
+        r.sinks.clear();
+        r.gadgets = vec!["org.slf4j.ext.EventData".into()];
+        r.verdict = Verdict::DenyList;
+        assert!(!r.supports_not_reached());
+    }
+
+    #[test]
+    fn reached_by_name_needs_sinks_and_a_note() {
+        let mut r = record();
+        r.reached_by_name = true;
+        assert!(r.validate().unwrap_err().contains("note"));
+        r.note = Some("loaded through the plugin system".into());
+        assert_eq!(r.validate(), Ok(()));
+        r.sinks.clear();
+        r.gadgets = vec!["org.slf4j.ext.EventData".into()];
+        r.verdict = Verdict::DenyList;
+        assert!(r.validate().unwrap_err().contains("reached by name"));
     }
 
     #[test]

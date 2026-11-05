@@ -24,6 +24,7 @@
       "method": "execute"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/apache/struts/commit/3cfe34fefedcf0fdcfcb061c0aea34a715b7de63",

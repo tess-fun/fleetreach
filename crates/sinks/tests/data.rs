@@ -21,3 +21,18 @@ fn shipped_records_are_valid() {
         }
     }
 }
+
+// A reviewer's "proves nothing" and the field a scanner reads must not drift apart: a note
+// alone would leave `supports_not_reached` true on a record that cannot support it.
+#[test]
+fn notes_and_reached_by_name_agree() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
+    let set = load_dir(&dir).unwrap_or_else(|e| panic!("{e}"));
+    for r in set.reviewed() {
+        let said = r
+            .note
+            .as_deref()
+            .is_some_and(|n| n.contains("no sink reached proves nothing"));
+        assert_eq!(said, r.reached_by_name, "{}", r.id);
+    }
+}

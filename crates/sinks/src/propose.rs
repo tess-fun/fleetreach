@@ -158,6 +158,7 @@ pub fn propose(advisory: &Advisory, files: &[FileChange]) -> SinkRecord {
         verdict,
         sinks,
         gadgets,
+        reached_by_name: false,
         evidence: Evidence {
             commits: advisory.commits.clone(),
             excluded,

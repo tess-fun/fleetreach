@@ -278,10 +278,15 @@ not a formality. Changes by kind: `packages` in 12 records, `sinks` in 11, `verd
 - **Too broad**: sinks that run in every use of the library (Struts' constructor, Tika's
   OCR setters, base constructors shared with safe subclasses), and a commit's gadget list
   copied onto one CVE of four.
-- **Open before E3**: a few records are reached by name, not by a call (Bouncy Castle's
+- **Reached by name**: a few records are reached by name, not by a call (Bouncy Castle's
   JCA ciphers, Log4j plugins, Struts handlers), so no sink reached proves nothing for
-  them. Today only the record's `note` says so. E3, and anything else that uses "not
-  reached", needs that as a field the scanner reads.
+  them. `reached_by_name` now says so, and `SinkRecord::supports_not_reached` is the check a
+  scanner makes. The three records whose reviewed notes said so carry it. **Open before E3**:
+  the other reviewed records were not reviewed for this, and many sinks sit behind framework
+  dispatch (Spring MVC, JAX-RS, Camel URIs, Solr plugins), so each needs a person's decision.
+  Also open: some sinks do not exist on every listed version (Jetty 8, Syncope 1.2, Infinispan
+  9.1.7), so a scanner must read "sink class absent from the installed jar" as unknown, never
+  as not reached.
 
 ### Competitors, as of Nov 2026
 
