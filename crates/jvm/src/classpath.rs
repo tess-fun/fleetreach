@@ -1,0 +1,440 @@
+//! Read a service's classes and resources from jars, wars, fat jars and class directories.
+
+use std::collections::{BTreeMap, HashMap};
+use std::io::{Cursor, Read, Seek};
+use std::path::{Path, PathBuf};
+
+use cafebabe::attributes::{Annotation, AnnotationElementValue, AttributeData, AttributeInfo};
+use cafebabe::bytecode::Opcode;
+use cafebabe::constant_pool::{
+    BootstrapArgument, LiteralConstant, Loadable, MethodHandle, ReferenceKind,
+};
+use cafebabe::descriptors::FieldType;
+use cafebabe::{ClassAccessFlags, MethodAccessFlags, ParseOptions};
+
+use crate::model::{CallKind, Class, Interner, Method, Op, Role, Sym};
+
+/// A jar entry larger than this is refused: a hostile archive must not exhaust memory.
+const MAX_ENTRY: u64 = 256 * 1024 * 1024;
+/// Text resources larger than this are not searched for class names.
+const MAX_TEXT: u64 = 4 * 1024 * 1024;
+/// Entries read from one input, nested jars included.
+const MAX_ENTRIES: usize = 2_000_000;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("{path}: {message}")]
+    Read { path: String, message: String },
+}
+
+/// One input: a jar, a war, a Spring Boot fat jar, or a directory of classes.
+#[derive(Debug, Clone)]
+pub struct Input {
+    pub path: PathBuf,
+    pub role: Role,
+}
+
+/// What was read.
+#[derive(Debug, Default, Clone)]
+pub struct ClassPath {
+    pub names: Interner,
+    pub classes: Vec<Class>,
+    pub by_name: HashMap<Sym, usize>,
+    /// Class names found in text resources, with the first resource that named each.
+    pub named_in_resources: BTreeMap<String, String>,
+    /// `Main-Class` and `Start-Class` of the inputs' manifests, dotted.
+    pub main_classes: Vec<String>,
+    /// Entries that could not be read. Any of these makes "not reached" unsafe.
+    pub unread: Vec<String>,
+    tokens: BTreeMap<String, String>,
+}
+
+impl ClassPath {
+    /// The class a dotted name gives. A nested class can be spelled with dots throughout, as
+    /// Spring Boot's own `spring.factories` does.
+    #[must_use]
+    pub fn class_named(&self, name: &str) -> Option<usize> {
+        let mut path = name.replace('.', "/");
+        loop {
+            if let Some(i) = self.names.get(&path).and_then(|s| self.by_name.get(&s)) {
+                return Some(*i);
+            }
+            let dot = path.rfind('/')?;
+            path.replace_range(dot..=dot, "$");
+        }
+    }
+}
+
+/// Read every input. The first definition of a class wins, as on a real class path.
+pub fn load(inputs: &[Input]) -> Result<ClassPath, Error> {
+    let mut cp = ClassPath::default();
+    for input in inputs {
+        let err = |message: String| Error::Read {
+            path: input.path.display().to_string(),
+            message,
+        };
+        if input.path.is_dir() {
+            read_dir(&input.path, input.role, &mut cp).map_err(err)?;
+        } else {
+            let file = std::fs::File::open(&input.path).map_err(|e| err(e.to_string()))?;
+            let label = input.path.display().to_string();
+            read_archive(file, &label, input.role, true, &mut cp).map_err(err)?;
+        }
+    }
+    let tokens = std::mem::take(&mut cp.tokens);
+    for (token, origin) in tokens {
+        if cp.class_named(&token).is_some() {
+            cp.named_in_resources.insert(token, origin);
+        }
+    }
+    Ok(cp)
+}
+
+fn read_dir(dir: &Path, role: Role, cp: &mut ClassPath) -> Result<(), String> {
+    for entry in std::fs::read_dir(dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let kind = entry.file_type().map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if kind.is_dir() {
+            read_dir(&path, role, cp)?;
+        } else if kind.is_file() {
+            let label = path.display().to_string();
+            if label.ends_with(".class") {
+                let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+                add_class(&bytes, &label, role, cp);
+            } else if is_text_resource(&label) {
+                let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+                scan_text(&bytes, &label, cp);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn read_archive<R: Read + Seek>(
+    reader: R,
+    label: &str,
+    role: Role,
+    outer: bool,
+    cp: &mut ClassPath,
+) -> Result<(), String> {
+    let mut zip = zip::ZipArchive::new(reader).map_err(|e| e.to_string())?;
+    if zip.len() > MAX_ENTRIES {
+        return Err(format!("{} entries", zip.len()));
+    }
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
+        let name = entry.name().map_err(|e| e.to_string())?.to_string();
+        let size = entry.size();
+        let is_class = name.ends_with(".class");
+        let is_jar = outer
+            && name.ends_with(".jar")
+            && (name.starts_with("BOOT-INF/lib/") || name.starts_with("WEB-INF/lib/"));
+        let is_manifest = name == "META-INF/MANIFEST.MF";
+        let is_text = is_text_resource(&name) && size <= MAX_TEXT;
+        if !(is_class || is_jar || is_manifest || is_text) {
+            continue;
+        }
+        // Overlays for newer JDKs repeat classes; the base version is the one that counts.
+        if is_class && (name.starts_with("META-INF/") || name.ends_with("module-info.class")) {
+            continue;
+        }
+        let at = format!("{label}!{name}");
+        if size > MAX_ENTRY {
+            cp.unread.push(format!("{at}: {size} bytes"));
+            continue;
+        }
+        let mut bytes = Vec::with_capacity(usize::try_from(size).unwrap_or(0));
+        if let Err(e) = entry.by_ref().take(MAX_ENTRY).read_to_end(&mut bytes) {
+            cp.unread.push(format!("{at}: {e}"));
+            continue;
+        }
+        if is_class {
+            // A fat jar's own code sits under these prefixes; its libraries are nested jars.
+            let own = name.starts_with("BOOT-INF/classes/") || name.starts_with("WEB-INF/classes/");
+            // The launcher a fat jar carries at its root is no more the service than a library.
+            let launcher = name.starts_with("org/springframework/boot/loader/");
+            let role = match (own, launcher) {
+                (true, _) => Role::App,
+                (false, true) => Role::Dependency,
+                (false, false) => role,
+            };
+            add_class(&bytes, &at, role, cp);
+        } else if is_jar {
+            if let Err(e) = read_archive(Cursor::new(bytes), &at, Role::Dependency, false, cp) {
+                cp.unread.push(format!("{at}: {e}"));
+            }
+        } else if is_manifest {
+            if outer {
+                read_manifest(&bytes, cp);
+            }
+        } else {
+            scan_text(&bytes, &at, cp);
+        }
+    }
+    Ok(())
+}
+
+fn read_manifest(bytes: &[u8], cp: &mut ClassPath) {
+    for line in String::from_utf8_lossy(bytes).lines() {
+        for key in ["Main-Class:", "Start-Class:"] {
+            if let Some(value) = line.strip_prefix(key) {
+                cp.main_classes.push(value.trim().to_string());
+            }
+        }
+    }
+}
+
+/// Files that name classes for something to load: XML and properties anywhere, and everything
+/// under `META-INF/services` or `META-INF/spring`, Camel's component files included.
+fn is_text_resource(name: &str) -> bool {
+    if name.contains("META-INF/maven/") || name.contains("META-INF/native-image/") {
+        return false;
+    }
+    name.ends_with(".xml")
+        || name.ends_with(".properties")
+        || name.ends_with(".factories")
+        || name.ends_with(".imports")
+        || (name.contains("META-INF/services/") && !name.ends_with('/'))
+        || (name.contains("META-INF/spring/") && !name.ends_with('/'))
+}
+
+/// Remember every dotted word; [`load`] keeps those that turn out to be classes.
+fn scan_text(bytes: &[u8], origin: &str, cp: &mut ClassPath) {
+    let text = String::from_utf8_lossy(bytes);
+    for word in text.split(|c: char| !(c.is_alphanumeric() || matches!(c, '.' | '_' | '$'))) {
+        let word = word.trim_matches('.');
+        if word.contains('.') && !cp.tokens.contains_key(word) {
+            cp.tokens.insert(word.to_string(), origin.to_string());
+        }
+    }
+    // A services file is named after the interface it fills, which is no reason to load that.
+}
+
+fn add_class(bytes: &[u8], at: &str, role: Role, cp: &mut ClassPath) {
+    match parse(bytes, role, &mut cp.names) {
+        Ok(class) => {
+            let name = class.name;
+            if let std::collections::hash_map::Entry::Vacant(slot) = cp.by_name.entry(name) {
+                slot.insert(cp.classes.len());
+                cp.classes.push(class);
+            }
+        }
+        Err(e) => cp.unread.push(format!("{at}: {e}")),
+    }
+}
+
+fn parse(bytes: &[u8], role: Role, names: &mut Interner) -> Result<Class, String> {
+    let file = cafebabe::parse_class_with_options(bytes, &ParseOptions::default())
+        .map_err(|e| e.to_string())?;
+    let bootstraps = file.attributes.iter().find_map(|a| match &a.data {
+        AttributeData::BootstrapMethods(b) => Some(b),
+        _ => None,
+    });
+    let mut methods = Vec::with_capacity(file.methods.len());
+    for m in &file.methods {
+        let flags = m.access_flags;
+        let mut method = Method {
+            name: names.intern(&m.name),
+            desc: names.intern(&m.descriptor.to_string()),
+            is_static: flags.contains(MethodAccessFlags::STATIC),
+            is_abstract: flags.contains(MethodAccessFlags::ABSTRACT),
+            is_private: flags.contains(MethodAccessFlags::PRIVATE),
+            ..Method::default()
+        };
+        read_annotations(
+            &m.attributes,
+            names,
+            &mut method.annotations,
+            &mut method.annotation_refs,
+        );
+        for attribute in &m.attributes {
+            if let AttributeData::AnnotationDefault(value) = &attribute.data {
+                read_value(value, names, &mut method.annotation_refs);
+            }
+            if let AttributeData::Code(code) = &attribute.data {
+                let Some(bytecode) = &code.bytecode else {
+                    return Err(format!("{}: unparsed code", m.name));
+                };
+                for (_, op) in &bytecode.opcodes {
+                    read_op(op, bootstraps.map(Vec::as_slice), names, &mut method.ops);
+                }
+            }
+        }
+        methods.push(method);
+    }
+    let mut annotations = Vec::new();
+    let mut annotation_refs = Vec::new();
+    read_annotations(
+        &file.attributes,
+        names,
+        &mut annotations,
+        &mut annotation_refs,
+    );
+    for field in &file.fields {
+        let mut types = Vec::new();
+        read_annotations(&field.attributes, names, &mut types, &mut annotation_refs);
+    }
+    let flags = file.access_flags;
+    Ok(Class {
+        name: names.intern(&file.this_class.to_string()),
+        superclass: file
+            .super_class
+            .as_ref()
+            .map(|s| names.intern(&s.to_string())),
+        interfaces: file
+            .interfaces
+            .iter()
+            .map(|i| names.intern(&i.to_string()))
+            .collect(),
+        is_interface: flags.contains(ClassAccessFlags::INTERFACE),
+        is_abstract: flags.contains(ClassAccessFlags::ABSTRACT),
+        role,
+        methods,
+        annotations,
+        annotation_refs,
+    })
+}
+
+fn read_annotations(
+    attributes: &[AttributeInfo<'_>],
+    names: &mut Interner,
+    types: &mut Vec<Sym>,
+    refs: &mut Vec<Sym>,
+) {
+    for attribute in attributes {
+        let list = match &attribute.data {
+            AttributeData::RuntimeVisibleAnnotations(l)
+            | AttributeData::RuntimeInvisibleAnnotations(l) => l,
+            _ => continue,
+        };
+        for annotation in list {
+            read_annotation(annotation, names, types, refs);
+        }
+    }
+}
+
+fn read_annotation(
+    annotation: &Annotation<'_>,
+    names: &mut Interner,
+    types: &mut Vec<Sym>,
+    refs: &mut Vec<Sym>,
+) {
+    if let FieldType::Object(name) = &annotation.type_descriptor.field_type {
+        types.push(names.intern(&name.to_string()));
+    }
+    for element in &annotation.elements {
+        read_value(&element.value, names, refs);
+    }
+}
+
+fn read_value(value: &AnnotationElementValue<'_>, names: &mut Interner, refs: &mut Vec<Sym>) {
+    match value {
+        AnnotationElementValue::ClassLiteral { class_name } => {
+            let name = class_name
+                .strip_prefix('L')
+                .and_then(|n| n.strip_suffix(';'))
+                .unwrap_or(class_name);
+            refs.push(names.intern(name));
+        }
+        AnnotationElementValue::EnumConstant { type_name, .. } => {
+            if let FieldType::Object(name) = &type_name.field_type {
+                refs.push(names.intern(&name.to_string()));
+            }
+        }
+        AnnotationElementValue::StringConstant(s) if s.contains('.') => {
+            refs.push(names.intern(&s.replace('.', "/")));
+        }
+        AnnotationElementValue::ArrayValue(values) => {
+            for v in values {
+                read_value(v, names, refs);
+            }
+        }
+        AnnotationElementValue::AnnotationValue(nested) => {
+            let mut ignored = Vec::new();
+            read_annotation(nested, names, &mut ignored, refs);
+        }
+        _ => {}
+    }
+}
+
+fn read_op(
+    op: &Opcode<'_>,
+    bootstraps: Option<&[cafebabe::attributes::BootstrapMethodEntry<'_>]>,
+    names: &mut Interner,
+    ops: &mut Vec<Op>,
+) {
+    let mut call = |kind, m: &cafebabe::constant_pool::MemberRef<'_>, ops: &mut Vec<Op>| {
+        ops.push(Op::Call {
+            kind,
+            class: names.intern(&m.class_name),
+            name: names.intern(&m.name_and_type.name),
+            desc: names.intern(&m.name_and_type.descriptor),
+        });
+    };
+    match op {
+        Opcode::Invokestatic(m) => call(CallKind::Static, m, ops),
+        Opcode::Invokespecial(m) => call(CallKind::Special, m, ops),
+        Opcode::Invokevirtual(m) | Opcode::Invokeinterface(m, _) => {
+            call(CallKind::Virtual, m, ops);
+        }
+        Opcode::New(class) => ops.push(Op::New(names.intern(class))),
+        Opcode::Getstatic(m) | Opcode::Putstatic(m) => {
+            ops.push(Op::Touch(names.intern(&m.class_name)));
+        }
+        Opcode::Ldc(l) | Opcode::LdcW(l) => match l {
+            Loadable::LiteralConstant(LiteralConstant::String(s)) if s.contains('.') => {
+                ops.push(Op::Text(names.intern(&s.replace('.', "/"))));
+            }
+            Loadable::ClassInfo(c) => ops.push(Op::ClassConst(names.intern(c))),
+            Loadable::MethodHandle(h) => read_handle(h, names, ops),
+            _ => {}
+        },
+        Opcode::Invokedynamic(indy) => {
+            let entry = bootstraps.and_then(|b| b.get(usize::from(indy.attr_index)));
+            let mut resolved = false;
+            if let Some(entry) = entry {
+                let factory = entry.method.class_name.as_ref();
+                resolved = matches!(
+                    factory,
+                    "java/lang/invoke/LambdaMetafactory"
+                        | "java/lang/invoke/StringConcatFactory"
+                        | "java/lang/runtime/ObjectMethods"
+                );
+                for argument in &entry.arguments {
+                    if let BootstrapArgument::MethodHandle(h) = argument {
+                        read_handle(h, names, ops);
+                    }
+                }
+            }
+            if !resolved {
+                ops.push(Op::OpenDynamic);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// A method handle constant or a lambda's body: treated as a call where it appears.
+fn read_handle(h: &MethodHandle<'_>, names: &mut Interner, ops: &mut Vec<Op>) {
+    let class = names.intern(&h.class_name);
+    let kind = match h.kind {
+        ReferenceKind::InvokeStatic => CallKind::Static,
+        ReferenceKind::InvokeSpecial => CallKind::Special,
+        ReferenceKind::NewInvokeSpecial => {
+            ops.push(Op::New(class));
+            CallKind::Special
+        }
+        ReferenceKind::InvokeVirtual | ReferenceKind::InvokeInterface => CallKind::Virtual,
+        ReferenceKind::GetField
+        | ReferenceKind::GetStatic
+        | ReferenceKind::PutField
+        | ReferenceKind::PutStatic => return,
+    };
+    ops.push(Op::Call {
+        kind,
+        class,
+        name: names.intern(&h.member_ref.name),
+        desc: names.intern(&h.member_ref.descriptor),
+    });
+}

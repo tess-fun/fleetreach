@@ -1017,6 +1017,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fleetreach-jvm"
+version = "1.6.0"
+dependencies = [
+ "cafebabe",
+ "fleetreach-sinks",
+ "thiserror",
+ "zip",
+]
+
+[[package]]
 name = "fleetreach-maven"
 version = "1.6.0"
 dependencies = [
