@@ -21,6 +21,7 @@
       "method": "evaluate"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/apache/activemq/commit/b9696ac80bb496b52d05c3884f81b0746d9af9e2"
@@ -53,7 +54,7 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). ActiveMQ loads the evaluator by class name, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

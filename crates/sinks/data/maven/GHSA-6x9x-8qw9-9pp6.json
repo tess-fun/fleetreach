@@ -21,6 +21,7 @@
       "method": "parsedHeader"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/eclipse/jetty.project/commit/a285deea42fcab60d9edcf994e458c238a348b55"
@@ -58,7 +59,7 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). handleKnownHeaders is the 9.1 and 9.2 name; 9.3 and 9.4 hold the same logic in parsedHeader. Jetty 8 has neither method on HttpParser, so it has no sink here",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). handleKnownHeaders is the 9.1 and 9.2 name; 9.3 and 9.4 hold the same logic in parsedHeader. Jetty 8 has neither method on HttpParser, so it has no sink here. Spring Boot starts Jetty through auto-configuration loaded by name, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"
