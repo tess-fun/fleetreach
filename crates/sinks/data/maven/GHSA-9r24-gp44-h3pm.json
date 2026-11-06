@@ -21,6 +21,7 @@
       "method": "processHeaderConfig"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/apache/tika/commit/b2d3932b847a171a85e356aa230af461a0f80d91",
@@ -96,7 +97,7 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). The advisory limits this to tika-server, so the sink is where headers become config; an app passing untrusted input to the Tesseract setters itself is outside it. The class moved to the resource package in 1.8",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). The advisory limits this to tika-server, so the sink is where headers become config; an app passing untrusted input to the Tesseract setters itself is outside it. The class moved to the resource package in 1.8. JAX-RS calls these resources by annotation, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

@@ -16,12 +16,13 @@
       "method": "validateHMAC"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/apache/tapestry-5/commit/cdcf49c0a2b36ffc7a004d54405bb4357870c4b2"
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). Tapestry's IoC container binds the service behind a generated proxy, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

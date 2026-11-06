@@ -17,12 +17,13 @@
       "method": "readHeaders"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/netty/netty/commit/ac76a24ff6d3cd0f59a2833c2f83eb82184ecaeb"
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). Spring WebFlux starts Netty through auto-configuration loaded by name, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

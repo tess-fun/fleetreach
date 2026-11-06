@@ -21,13 +21,14 @@
       "method": "evaluateValueFromTarget"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/spring-projects/spring-data-rest/commit/824e51a1304bbc8334ac0b96ffaef588177e6ccd",
       "https://github.com/spring-projects/spring-data-rest/commit/8f269e28fe8038a6c60f31a1c36cfda04795ab45"
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). The class is in 2.5.0, 2.6.8 and 3.0.0 but not at this path in 2.3.0 or 2.4.0",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). The class is in 2.5.0, 2.6.8 and 3.0.0 but not at this path in 2.3.0 or 2.4.0. Spring MVC calls the resolver that applies the patch, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

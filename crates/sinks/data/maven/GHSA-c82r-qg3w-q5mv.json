@@ -16,6 +16,7 @@
       "method": "getRemotePublicKey"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/apache/lucene-solr/commit/2f5ecbcf9ed7a3a4fd37b5c55860ad8eace1beae",
@@ -24,7 +25,7 @@
       "https://github.com/apache/lucene-solr/commit/e912b7cb5c68fbb87b874d41068cf5a3aea17da0"
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). The dispatch filter comes from web.xml, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"
