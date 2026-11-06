@@ -16,6 +16,7 @@
       "method": "handleRequest"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/undertow-io/undertow/commit/5fa7ac68c0e4251c93056d9982db5e794e04ebfa"
@@ -28,7 +29,7 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). Spring Boot starts Undertow through auto-configuration loaded by name, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

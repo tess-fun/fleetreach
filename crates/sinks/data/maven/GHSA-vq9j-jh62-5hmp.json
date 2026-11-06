@@ -16,6 +16,7 @@
       "method": "createSchemaFactory"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/apache/camel/commit/2c6964ae94d8f9a9c9a32e5ae5a0b794e8b8d3be",
@@ -25,7 +26,7 @@
       "https://github.com/apache/camel/commit/8afc5d1757795fde715902067360af5d90f046da"
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). Camel finds this component by URI scheme, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

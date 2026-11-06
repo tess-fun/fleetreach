@@ -19,6 +19,8 @@ project-kb fix commits:
   diff and the published jars. 19 of them changed in review;
 - 60 are `proposed`: `sinkpropose` output as it came out.
 
+Of the 34 reviewed `sinks` records, 27 are `reached_by_name`, so 7 can support "not reached".
+
 ## Reviewing a record
 
 1. Read the advisory and the fix commits in `evidence.commits`.

@@ -21,6 +21,7 @@
       "method": "createNewSAXTransformerFactory"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/apache/syncope/commit/ad31479c1c543ac7d26b8c882aa14f6c00c1fd0a",
@@ -115,7 +116,7 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). The class is in the report package up to 2.0.3 and the cocoon package from 2.0.4. The sinks cover 2.0 only: 1.2 uses the Cocoon library class, with no Syncope method to name",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). The class is in the report package up to 2.0.3 and the cocoon package from 2.0.4. The sinks cover 2.0 only: 1.2 uses the Cocoon library class, with no Syncope method to name. Spring wiring and REST resources reach ReportLogic, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

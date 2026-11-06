@@ -281,10 +281,15 @@ not a formality. Changes by kind: `packages` in 12 records, `sinks` in 11, `verd
 - **Reached by name**: a few records are reached by name, not by a call (Bouncy Castle's
   JCA ciphers, Log4j plugins, Struts handlers), so no sink reached proves nothing for
   them. `reached_by_name` now says so, and `SinkRecord::supports_not_reached` is the check a
-  scanner makes. The three records whose reviewed notes said so carry it. **Open before E3**:
-  the other reviewed records were not reviewed for this, and many sinks sit behind framework
-  dispatch (Spring MVC, JAX-RS, Camel URIs, Solr plugins), so each needs a person's decision.
-  Also open: some sinks do not exist on every listed version (Jetty 8, Syncope 1.2, Infinispan
+  scanner makes. A second review on 2026-11-06 asked this of all 34 `sinks` records, read
+  against the planned roots (`main`, servlet and Spring annotations, `META-INF/services`):
+  **27 are reached by name, 7 can support "not reached"** (Tomcat WebSocket, Commons Text,
+  MINA, Qpid, Ignite, Infinispan, Spark). A server counts as by name when a common way of
+  running it has no app call into it (Spring Boot auto-configuration), even though embedded
+  use is a plain call. Causes: framework dispatch (Spring MVC, JAX-RS, JSF, `web.xml`), Spring
+  Boot auto-configuration, Camel URIs and other name-based factories. This caps E3: wider
+  roots would free more records than more review would. Reads came from class references in
+  one version per record and knowledge of the frameworks, not traced bytecode. Also open: some sinks do not exist on every listed version (Jetty 8, Syncope 1.2, Infinispan
   9.1.7), so a scanner must read "sink class absent from the installed jar" as unknown, never
   as not reached.
 
