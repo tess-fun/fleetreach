@@ -293,6 +293,33 @@ not a formality. Changes by kind: `packages` in 12 records, `sinks` in 11, `verd
   9.1.7), so a scanner must read "sink class absent from the installed jar" as unknown, never
   as not reached.
 
+### E3 result: suppression yield on 63 real Java services, 2026-11-06 (number published, gate open)
+
+Run on 63 public service images (Keycloak, Jenkins, Solr, Kafka, Trino, Nexus and others), with
+jars read as data and `crates/jvm`'s RTA graph, not CHA: CHA reached 98% of code classes in
+PetClinic, so "reached" said nothing. Harness and corpus: `docs/differential/e3/`. Advisory
+data from 2026-11-03.
+
+- **The graph holds.** Against what the JVM ran on five Spring services (touched methods), at
+  most 0.05% of methods were outside it (18 of 39,904 on PetClinic, 0 to 2 on the others), and
+  it reaches about 62% of all methods. These runs start the service and hit a few pages, so
+  they show a floor, not soundness. The vul4j-style corpus in Proof is still to do.
+- **Yield today: 3 of 7,827 Maven findings set aside (0.04%).** 3,848 are high or critical.
+  All three are Commons Text (Solr, DolphinScheduler, Presto); in the two checked, the
+  interpolator itself is not reached.
+- **Records are the limit, not the graph.** Only 6 findings have a reviewed `sinks` record: 3
+  not reached, 2 reached, 1 sink absent. 3 of 6 says nothing at that size. 7,720 findings
+  (98.6%) have no record at all.
+- **The pilot does not match the field.** The corpus has 1,197 distinct advisories, and the
+  top 34 by frequency cover 20% of findings, the top 100 42%, the top 200 63%, the top 500 87%.
+  The pilot's records came from project-kb, so few of them are those.
+- **No sink data needed: 4.0% of findings sit in a jar the graph never touches** (293 of 7,404
+  placed, 55 services; median 1.6% per service, 35% at most, on Logstash). Close to Python's
+  3%. Not a suppression rule yet: a jar counts as touched by any one method.
+- **By-name flags**: no finding on the corpus depends on one, and every by-name sink tested
+  on the five apps was reached, so clearing flags adds nothing yet. Only Spring apps were
+  tested; Struts, JSF and Camel roots have no runtime check.
+
 ### Competitors, as of Nov 2026
 
 - **Trivy v0.76.1** (2026-10-21). 2026: pylock.toml (0.70.0), CycloneDX 1.7 and Ubuntu 26.04
@@ -398,7 +425,8 @@ on; keep each release about 8 weeks.
 - Containers phase 2: rpm family (SQLite, BDB, NDB readers), Red Hat and SUSE CSAF VEX for
   unfixed statuses, direct feeds for Amazon Linux, Oracle, Photon, Bottlerocket, OS
   end-of-life.
-- E3 (suppression yield on 50 services), after a field marks records reached by name.
+- E3 (suppression yield on 50 services), after a field marks records reached by name. Run
+  2026-11-06 on 63 services: 0.04%, limited by record coverage; see "E3 result".
 - JVM function-level reachability (if E2/E3 pass), and the sink data published as an open
   feed.
 - `fleetreach serve` (UI over history and triage files).
