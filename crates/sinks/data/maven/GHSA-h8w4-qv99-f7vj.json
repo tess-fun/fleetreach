@@ -16,6 +16,7 @@
       "method": "approveOrDeny"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/spring-projects/spring-security-oauth/commit/4082ec7ae3d39198a47b5c803ccb20dacefb0b09",
@@ -36,7 +37,7 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). Exposure also needs a custom approval endpoint declaring AuthorizationRequest as a controller argument, which reaching the sink does not show",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). Exposure also needs a custom approval endpoint declaring AuthorizationRequest as a controller argument, which reaching the sink does not show. Spring MVC calls this endpoint by annotation, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

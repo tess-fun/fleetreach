@@ -16,6 +16,7 @@
       "method": "<init>"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/elastic/elasticsearch/commit/f5cfb2a1869d1a52930cbd3138278a6e2c1b22e6"
@@ -28,7 +29,7 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). Guice builds the repository from a registered class, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"
