@@ -78,7 +78,10 @@ pub fn load(inputs: &[Input]) -> Result<ClassPath, Error> {
         } else {
             let file = std::fs::File::open(&input.path).map_err(|e| err(e.to_string()))?;
             let label = input.path.display().to_string();
-            read_archive(file, &label, input.role, true, &mut cp).map_err(err)?;
+            // One archive this reader rejects is a gap in the read, not the end of it.
+            if let Err(e) = read_archive(file, &label, input.role, true, &mut cp) {
+                cp.unread.push(format!("{label}: {e}"));
+            }
         }
     }
     let tokens = std::mem::take(&mut cp.tokens);
@@ -437,4 +440,25 @@ fn read_handle(h: &MethodHandle<'_>, names: &mut Interner, ops: &mut Vec<Op>) {
         name: names.intern(&h.member_ref.name),
         desc: names.intern(&h.member_ref.descriptor),
     });
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_archive_the_reader_rejects_is_a_gap_not_a_failure() {
+        let dir = std::env::temp_dir().join(format!("jvm-classpath-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("broken.jar");
+        std::fs::write(&path, b"not a zip").unwrap();
+        let input = Input {
+            path,
+            role: Role::Dependency,
+        };
+        let cp = load(&[input]).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(cp.unread.len(), 1);
+    }
 }

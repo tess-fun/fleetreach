@@ -2,7 +2,10 @@
 //!
 //! `cargo run -p fleetreach-jvm --example jvmreach -- RECORDS APP.jar [DEP.jar ...]`
 //!
-//! The first jar is the service; a Spring Boot fat jar needs nothing else.
+//! The first jar is the service; a Spring Boot fat jar needs nothing else. With `JVMREACH_APP`
+//! set to comma-separated class name prefixes, those classes are the service instead, for
+//! services shipped as a directory of jars. `JVMREACH_E3=file` writes one line per record:
+//! id, verdict, verdict if the record were not marked reached by name, entry root.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -36,7 +39,17 @@ fn main() {
         role: Role::Dependency,
     }));
     let cp = match load(&inputs) {
-        Ok(cp) => cp,
+        Ok(mut cp) => {
+            if let Ok(prefixes) = std::env::var("JVMREACH_APP") {
+                let prefixes: Vec<&str> = prefixes.split(',').collect();
+                for i in 0..cp.classes.len() {
+                    let name = cp.names.name(cp.classes[i].name);
+                    let app = prefixes.iter().any(|p| name.starts_with(p));
+                    cp.classes[i].role = if app { Role::App } else { Role::Dependency };
+                }
+            }
+            cp
+        }
         Err(e) => {
             eprintln!("error: {e}");
             std::process::exit(1);
@@ -104,6 +117,34 @@ fn main() {
                     }
                 }
             }
+        }
+    }
+    if let Ok(path) = std::env::var("JVMREACH_E3") {
+        let partial = !cp.unread.is_empty();
+        let word = |v: &Verdict| match v {
+            Verdict::Reached(_) => "reached".to_string(),
+            Verdict::NotReached(_) => "not-reached".to_string(),
+            Verdict::Unknown(why) => format!("unknown-{why:?}"),
+        };
+        let mut lines = Vec::new();
+        for record in set.records.values() {
+            let verdict = judge(record, &analysis, partial);
+            let mut unflagged = record.clone();
+            unflagged.reached_by_name = false;
+            let open = judge(&unflagged, &analysis, partial);
+            let root = match &open {
+                Verdict::Reached(w) => format!("{:?}", w.root),
+                _ => String::new(),
+            };
+            lines.push(format!(
+                "{}\t{}\t{}\t{root}",
+                record.id,
+                word(&verdict),
+                word(&open)
+            ));
+        }
+        if let Err(e) = std::fs::write(&path, lines.join("\n")) {
+            eprintln!("error: {path}: {e}");
         }
     }
     let mut tally: BTreeMap<String, usize> = BTreeMap::new();
