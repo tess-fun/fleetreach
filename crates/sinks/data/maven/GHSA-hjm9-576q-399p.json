@@ -16,12 +16,13 @@
       "method": "createTransformer"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/esigate/esigate/commit/30cad23a8f282600c9b045e1af09f6f8a65357b1"
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). ESIGate loads its ESI extension by class name, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

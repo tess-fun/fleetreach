@@ -48,12 +48,13 @@
       "method": "toStatementString"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/hibernate/hibernate-orm/commit/59fede7acaaa1579b561407aefa582311f7ebe78"
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). Spring Boot starts Hibernate through auto-configuration loaded by name, so no sink reached proves nothing here. SQL comments must be on, which a code scan cannot see",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

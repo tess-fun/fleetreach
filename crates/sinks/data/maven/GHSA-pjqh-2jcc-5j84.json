@@ -16,12 +16,13 @@
       "method": "applyAuthentication"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/spring-projects/spring-ldap/commit/08e8ae289bbd1b581986c7238604a147119c1336"
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). Spring XML can name this class as a bean, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"

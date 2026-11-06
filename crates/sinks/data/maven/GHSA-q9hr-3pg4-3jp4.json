@@ -30,6 +30,7 @@
       "method": "resolveProxyClass"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/apache/activemq/commit/6f03921b31d9fefeddb0f4fa63150ed1f94a14b1",
@@ -68,7 +69,7 @@
       }
     ]
   },
-  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff)",
+  "note": "E2b pilot label (hand-labelled with model assistance from the advisory and fix diff). ActiveMQ loads wire formats by name and the JDK calls resolveClass, so no sink reached proves nothing here",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-04"
