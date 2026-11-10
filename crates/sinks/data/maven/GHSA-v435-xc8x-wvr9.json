@@ -1,0 +1,58 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-v435-xc8x-wvr9",
+  "aliases": [
+    "CVE-2024-30171"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.bouncycastle:bcprov-jdk15on",
+    "org.bouncycastle:bcprov-jdk18on",
+    "org.bouncycastle:bcprov-jdk15to18",
+    "org.bouncycastle:bctls-jdk18on"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.bouncycastle.tls.crypto.impl.jcajce.JceDefaultTlsCredentialedDecryptor",
+      "method": "safeDecryptPreMasterSecret"
+    },
+    {
+      "class": "org.bouncycastle.tls.crypto.impl.bc.BcDefaultTlsCredentialedDecryptor",
+      "method": "safeDecryptPreMasterSecret"
+    },
+    {
+      "class": "org.bouncycastle.crypto.tls.TlsRSAKeyExchange",
+      "method": "processClientKeyExchange"
+    },
+    {
+      "class": "org.bouncycastle.crypto.encodings.PKCS1Encoding",
+      "method": "decodeBlock"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/bcgit/bc-java/commit/d7d5e735abd64bf0f413f54fd9e495fc02400fb0",
+      "https://github.com/bcgit/bc-java/commit/e0569dcb1dea9d421d84fc4c5c5688fe101afa2d"
+    ],
+    "excluded": [
+      {
+        "class": "org.bouncycastle.jcajce.provider.asymmetric.rsa.CipherSpi",
+        "method": "engineDoFinal",
+        "reason": "the JCA entry; it runs PKCS1Encoding.decodeBlock, which is listed"
+      },
+      {
+        "class": "org.bouncycastle.crypto.encodings.PKCS1Encoding",
+        "method": "checkPkcs1Encoding",
+        "reason": "helper inside decodeBlock"
+      }
+    ]
+  },
+  "note": "The RSA premaster secret is decrypted in safeDecryptPreMasterSecret (bctls 1.60 to 1.77) or TlsRSAKeyExchange (the legacy TLS API in bcprov 1.60, gone by 1.70), both through PKCS1Encoding.decodeBlock (bcprov 1.60 to 1.77). Plain JCA use reaches decodeBlock only through Cipher.getInstance with the BC provider, a lookup by name, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

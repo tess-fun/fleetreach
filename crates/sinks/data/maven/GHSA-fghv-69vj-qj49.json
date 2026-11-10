@@ -1,0 +1,44 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-fghv-69vj-qj49",
+  "aliases": [
+    "CVE-2025-58056"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http.HttpObjectDecoder",
+      "method": "decode"
+    },
+    {
+      "class": "io.netty.handler.codec.http.HttpObjectDecoder$HeaderParser",
+      "method": "parse"
+    },
+    {
+      "class": "io.netty.handler.codec.http.HttpObjectDecoder$LineParser",
+      "method": "parse"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/commit/edb55fd8e0a3bcbd85881e423464f585183d1284"
+    ],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.http.HttpContentDecoder",
+        "method": "decode",
+        "reason": "in the 4.1.125 jar diff but GHSA-3p8m-j85q-pgmj"
+      }
+    ]
+  },
+  "note": "The chunk-size line ends at a bare LF in the line parser HttpObjectDecoder.decode uses; HeaderParser.parse and its LineParser override are present in 4.1.0, 4.1.100, 4.1.124 and 4.2.4. Every Netty HTTP/1 decoder runs these, so the record only clears services with no HTTP/1 codec.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-wxr5-93ph-8wr9",
+  "aliases": [
+    "CVE-2025-48734"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "commons-beanutils:commons-beanutils",
+    "org.apache.commons:commons-beanutils2"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.commons.beanutils.PropertyUtilsBean",
+      "method": "getSimpleProperty"
+    },
+    {
+      "class": "org.apache.commons.beanutils2.PropertyUtilsBean",
+      "method": "getSimpleProperty"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/commons-beanutils/commit/bd20740da25b69552ddef8523beec0837297eaf9"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.commons.beanutils.PropertyUtilsBean",
+        "method": "resetBeanIntrospectors",
+        "reason": "the fix turns on the declaringClass suppression here (absent before 1.9.2); the read happens in getSimpleProperty"
+      },
+      {
+        "class": "org.apache.commons.beanutils2.PropertyUtilsBean",
+        "method": "resetBeanIntrospectors",
+        "reason": "the fix turns on the declaringClass suppression here; the read happens in getSimpleProperty"
+      }
+    ]
+  },
+  "note": "An enum's declaringClass.classLoader is read through PropertyUtilsBean.getSimpleProperty, which getProperty, getNestedProperty and BeanUtilsBean all reach; present in 1.7.0, 1.9.4, 1.10.1 and 2.0.0-M1. Exploitable only where an outside property path reaches getProperty.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

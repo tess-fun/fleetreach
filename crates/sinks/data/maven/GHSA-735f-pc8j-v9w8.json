@@ -1,0 +1,80 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-735f-pc8j-v9w8",
+  "aliases": [
+    "CVE-2024-7254"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.google.protobuf:protobuf-java",
+    "com.google.protobuf:protobuf-javalite",
+    "com.google.protobuf:protobuf-kotlin",
+    "com.google.protobuf:protobuf-kotlin-lite"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.google.protobuf.CodedInputStream",
+      "method": "skipMessage"
+    },
+    {
+      "class": "com.google.protobuf.CodedInputStream$ArrayDecoder",
+      "method": "skipMessage"
+    },
+    {
+      "class": "com.google.protobuf.CodedInputStream$StreamDecoder",
+      "method": "skipMessage"
+    },
+    {
+      "class": "com.google.protobuf.CodedInputStream$UnsafeDirectNioDecoder",
+      "method": "skipMessage"
+    },
+    {
+      "class": "com.google.protobuf.CodedInputStream$IterableDirectByteBufferDecoder",
+      "method": "skipMessage"
+    },
+    {
+      "class": "com.google.protobuf.UnknownFieldSet$Builder",
+      "method": "mergeFieldFrom"
+    },
+    {
+      "class": "com.google.protobuf.UnknownFieldSchema",
+      "method": "mergeOneFieldFrom"
+    },
+    {
+      "class": "com.google.protobuf.ArrayDecoders",
+      "method": "decodeUnknownField"
+    },
+    {
+      "class": "com.google.protobuf.ArrayDecoders",
+      "method": "mergeGroupField"
+    },
+    {
+      "class": "com.google.protobuf.ArrayDecoders",
+      "method": "mergeMessageField"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/protocolbuffers/protobuf/commit/4728531c162f2f9e8c2ca1add713cfee2db6be3b",
+      "https://github.com/protocolbuffers/protobuf/commit/850fcce9176e2c9070614dab53537760498c926b",
+      "https://github.com/protocolbuffers/protobuf/commit/9a5f5fe752a20cbac2e722b06949ac985abdd534",
+      "https://github.com/protocolbuffers/protobuf/commit/ac9fb5b4c71b0dd80985b27684e265d1f03abf46",
+      "https://github.com/protocolbuffers/protobuf/commit/cc8b3483a5584b3301e3d43d17eb59704857ffaa",
+      "https://github.com/protocolbuffers/protobuf/commit/d6c82fc55a76481c676f541a255571e8950bb8c3"
+    ],
+    "excluded": [
+      {
+        "class": "com.google.protobuf.ArrayDecoders",
+        "method": "checkRecursionLimit",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Nested unknown groups recurse without a depth limit in skipMessage (moved from the decoder subclasses to the base class by the fix), UnknownFieldSet$Builder.mergeFieldFrom (present from 2.6.1) and, from 3.21.12, UnknownFieldSchema and ArrayDecoders. Any message parse can meet an unknown field, so the record mostly clears services that only serialize protobuf.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-355h-qmc2-wpwf",
+  "aliases": [
+    "CVE-2026-2332"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.eclipse.jetty:jetty-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.eclipse.jetty.http.HttpParser",
+      "method": "parseContent"
+    }
+  ],
+  "evidence": {
+    "commits": []
+  },
+  "note": "OSV lists no fix commit; from the advisory. Jetty reads the chunk-size line and its extensions in HttpParser.parseContent, present in 9.4.0, 9.4.58, 10.0.25, 11.0.25, 12.0.30 and 12.1.5. Every Jetty HTTP/1 server parses requests here, so the record mostly clears services that only carry jetty-http as a client dependency.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

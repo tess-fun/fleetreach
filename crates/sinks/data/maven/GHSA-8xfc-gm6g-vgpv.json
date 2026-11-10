@@ -32,13 +32,14 @@
       "method": "solveQuadraticEquation"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/bcgit/bc-java/commit/efc498ca4caa340ac2fe11f2efee06c1a294501f",
       "https://github.com/bcgit/bc-java/commit/fee80dd230e7fba132d03a34f1dd1d6aae0d0281"
     ]
   },
-  "note": "The fix caps the F2m field size, first in solveQuadraticEquation and then in buildField, where every binary curve is built. AbstractF2m is present from 1.60 to 1.77; 1.50 has only ECCurve$F2m, so its constructor and solveQuadraticEquation are listed for old lines. The classes live in bcprov; only bcprov was checked, not bc-fips. Any use of a binary curve reaches these, so the record mostly clears services that never touch EC over F2m.",
+  "note": "The fix caps the F2m field size, first in solveQuadraticEquation and then in buildField, where every binary curve is built. AbstractF2m is present from 1.60 to 1.77; 1.50 has only ECCurve$F2m, so its constructor and solveQuadraticEquation are listed for old lines. The classes live in bcprov; only bcprov was checked, not bc-fips. Any use of a binary curve reaches these, so the record mostly clears services that never touch EC over F2m. Certificates and EC keys usually reach these through CertificateFactory or KeyFactory with the BC provider, a lookup by name, so no sink reached proves nothing.",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-10"
