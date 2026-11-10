@@ -1,0 +1,34 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-m4cv-j2px-7723",
+  "aliases": [
+    "CVE-2026-42580"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http.HttpObjectDecoder",
+      "method": "getChunkSize"
+    }
+  ],
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.http.HttpChunkLineValidatingByteProcessor",
+        "method": "finish",
+        "reason": "in the jar diff but another fix shipped in the same release"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit; the advisory names the int overflow in HttpObjectDecoder.getChunkSize, present in 4.1.0, 4.1.50, 4.1.100, 4.1.131, 4.2.0 and 4.2.12. Every Netty HTTP/1 decoder runs this, so the record only clears services with no HTTP/1 codec.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

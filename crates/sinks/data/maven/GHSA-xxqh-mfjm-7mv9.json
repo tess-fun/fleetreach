@@ -1,0 +1,38 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-xxqh-mfjm-7mv9",
+  "aliases": [
+    "CVE-2026-42581"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http.HttpObjectDecoder",
+      "method": "readHeaders"
+    },
+    {
+      "class": "io.netty.handler.codec.http.HttpObjectDecoder",
+      "method": "handleTransferEncodingChunkedWithContentLength"
+    }
+  ],
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.http.ContentLengthNotAllowedException",
+        "method": "<init>",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit; from the advisory. readHeaders strips a conflicting Content-Length only for HTTP/1.1, through handleTransferEncodingChunkedWithContentLength (present from 4.1.50, absent in 4.1.0); readHeaders is present in 4.1.0, 4.1.50, 4.1.100, 4.1.131, 4.2.0 and 4.2.12. Every Netty HTTP/1 decoder runs this, so the record only clears services with no HTTP/1 codec.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-q4f6-jm68-57ww",
+  "aliases": [
+    "CVE-2026-59899"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http.HttpContentEncoder",
+      "method": "decode"
+    }
+  ],
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.http.HttpContentEncoder",
+        "method": "<init>",
+        "reason": "the fix adds a queue limit to the constructors; the queue grows in decode"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit; from the advisory and the 4.1.136 jar diff. HttpContentEncoder.decode adds each request's Accept-Encoding to an unbounded queue; present in 4.1.0, 4.1.50, 4.1.100, 4.1.131, 4.2.0 and 4.2.12. Reached only where HttpContentCompressor or another HttpContentEncoder is in the pipeline.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

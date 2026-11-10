@@ -1,0 +1,39 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-v8h7-rr48-vmmv",
+  "aliases": [
+    "CVE-2026-41417"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http.DefaultHttpRequest",
+      "method": "setUri"
+    }
+  ],
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.http.DefaultHttpRequest",
+        "method": "<init>",
+        "reason": "already validates; the gap is setUri"
+      },
+      {
+        "class": "io.netty.handler.codec.http.HttpRequestEncoder",
+        "method": "encodeInitialLine",
+        "reason": "writes the URI; its own advisory is GHSA-84h7-rjj3-6jx4"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit; the advisory names DefaultHttpRequest.setUri, which skips the constructor's start-line check; present in 4.1.0, 4.1.50, 4.1.100, 4.1.131, 4.2.0 and 4.2.12. Reached only where code changes a request URI after building it, typically a client or proxy.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
