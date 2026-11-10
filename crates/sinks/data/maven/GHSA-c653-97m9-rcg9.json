@@ -1,0 +1,49 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-c653-97m9-rcg9",
+  "aliases": [
+    "CVE-2026-50010"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-handler"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.ssl.util.SimpleTrustManagerFactory$SimpleTrustManagerFactorySpi",
+      "method": "wrapIfNeeded"
+    }
+  ],
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "io.netty.handler.ssl.util.InsecureTrustManagerFactory",
+        "method": "wrapIfNeeded",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "io.netty.handler.ssl.util.SimpleTrustManagerFactory$SimpleTrustManagerFactorySpi",
+        "method": "engineGetTrustManagers",
+        "reason": "the caller; wrapIfNeeded is the only code that builds X509TrustManagerWrapper (checked in 4.1.50, 4.1.134 and 4.2.0)"
+      },
+      {
+        "class": "io.netty.handler.ipfilter.IpSubnetFilterRule",
+        "method": "compareTo",
+        "reason": "in the jar diff but another fix shipped in the same release"
+      },
+      {
+        "class": "io.netty.handler.ssl.SslClientHelloHandler",
+        "method": "<init>",
+        "reason": "in the jar diff but another fix shipped in the same release"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit; from the advisory and the 4.1.134 to 4.1.135 jar diff. The flaw is X509TrustManagerWrapper dropping the SSLEngine, and only wrapIfNeeded wraps; it is present from 4.1.50 and absent in 4.1.0, which has no wrapper. On 4.1 hostname checks are off unless the app turns them on, so the loss bites mainly on 4.2.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

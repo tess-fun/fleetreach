@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-7g45-4rm6-3mm3",
+  "aliases": [
+    "CVE-2023-2976"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.google.guava:guava"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.google.common.io.FileBackedOutputStream",
+      "method": "update"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/google/guava/commit/feb83a1c8fd2e7670b244d5afd23cba5aca43284"
+    ],
+    "excluded": [
+      {
+        "class": "com.google.common.io.FileBackedOutputStream",
+        "method": "<init>",
+        "reason": "only stores the threshold; the temp file is made in update"
+      },
+      {
+        "class": "com.google.common.io.Files",
+        "method": "createTempDir",
+        "reason": "CVE-2020-8908, its own advisory"
+      }
+    ]
+  },
+  "note": "update creates the temp file once the in-memory threshold is passed; present in 11.0, 20.0 and 31.1-jre. Exposed only on multi-user Unix hosts or Android.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

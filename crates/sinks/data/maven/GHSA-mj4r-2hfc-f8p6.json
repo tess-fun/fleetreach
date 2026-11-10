@@ -1,0 +1,40 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-mj4r-2hfc-f8p6",
+  "aliases": [
+    "CVE-2026-42583"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec",
+    "io.netty:netty-codec-compression"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.compression.Lz4FrameDecoder",
+      "method": "decode"
+    }
+  ],
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.compression.BrotliDecoder",
+        "method": "decompress",
+        "reason": "in the jar diff but another fix shipped in the same release"
+      },
+      {
+        "class": "io.netty.handler.codec.protobuf.ProtobufVarint32FrameDecoder",
+        "method": "decode",
+        "reason": "in the jar diff but another fix shipped in the same release"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit; the advisory names Lz4FrameDecoder.decode and the 4.1.132 to 4.1.133 jar diff changes it. Present in 4.1.0 through 4.2.12, in netty-codec (4.1) and netty-codec-compression (4.2). Reached only where an Lz4FrameDecoder is in a pipeline.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-x4gw-5cx5-pgmh",
+  "aliases": [
+    "CVE-2026-45416"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-handler"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.ssl.SslClientHelloHandler",
+      "method": "decode"
+    },
+    {
+      "class": "io.netty.handler.ssl.SniHandler",
+      "method": "decode"
+    },
+    {
+      "class": "io.netty.handler.ssl.AbstractSniHandler",
+      "method": "decode"
+    }
+  ],
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "io.netty.handler.ssl.SslClientHelloHandler",
+        "method": "<init>",
+        "reason": "the fix sets default limits in the constructors; the allocation is in decode"
+      },
+      {
+        "class": "io.netty.handler.ssl.AbstractSniHandler",
+        "method": "<clinit>",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "io.netty.handler.ssl.util.SimpleTrustManagerFactory$SimpleTrustManagerFactorySpi",
+        "method": "engineGetTrustManagers",
+        "reason": "in the jar diff but another fix shipped in the same release"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit; the advisory names the eager buffer(handshakeLength) in SslClientHelloHandler.decode (4.1.50 through 4.2). Same sinks as GHSA-c4c3-7fpv-j4q5, with the old SniHandler and AbstractSniHandler decode listed for lines before SslClientHelloHandler. Reached only where an SNI handler is in the pipeline.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3p8m-j85q-pgmj",
+  "aliases": [
+    "CVE-2025-58057"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec",
+    "io.netty:netty-codec-compression"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.compression.BrotliDecoder",
+      "method": "decode"
+    },
+    {
+      "class": "io.netty.handler.codec.compression.BrotliDecoder",
+      "method": "decompress"
+    },
+    {
+      "class": "io.netty.handler.codec.compression.JZlibDecoder",
+      "method": "decode"
+    },
+    {
+      "class": "io.netty.handler.codec.compression.JdkZlibDecoder",
+      "method": "decode"
+    },
+    {
+      "class": "io.netty.handler.codec.compression.ZstdDecoder",
+      "method": "decode"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/commit/9d804c54ce962408ae6418255a83a13924f7145d"
+    ],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.compression.BrotliDecoder",
+        "method": "pull",
+        "reason": "removed by the fix; only called from decompress, which is listed"
+      },
+      {
+        "class": "io.netty.handler.codec.http.HttpContentDecoder",
+        "method": "decode",
+        "reason": "netty-codec-http and -http2 callers that run the listed decoders through an embedded channel"
+      },
+      {
+        "class": "io.netty.handler.codec.http.HttpContentDecoder",
+        "method": "decodeContent",
+        "reason": "netty-codec-http and -http2 callers that run the listed decoders through an embedded channel"
+      },
+      {
+        "class": "io.netty.handler.codec.http.HttpContentDecoder",
+        "method": "fetchDecoderOutput",
+        "reason": "netty-codec-http and -http2 callers that run the listed decoders through an embedded channel"
+      },
+      {
+        "class": "io.netty.handler.codec.http.HttpContentDecoder",
+        "method": "finishDecode",
+        "reason": "netty-codec-http and -http2 callers that run the listed decoders through an embedded channel"
+      },
+      {
+        "class": "io.netty.handler.codec.http2.DelegatingDecompressorFrameListener$Http2Decompressor",
+        "method": "<init>",
+        "reason": "netty-codec-http and -http2 callers that run the listed decoders through an embedded channel"
+      },
+      {
+        "class": "io.netty.handler.codec.http2.DelegatingDecompressorFrameListener$Http2Decompressor",
+        "method": "decompressor",
+        "reason": "netty-codec-http and -http2 callers that run the listed decoders through an embedded channel"
+      },
+      {
+        "class": "io.netty.handler.codec.http2.DelegatingDecompressorFrameListener",
+        "method": "cleanup",
+        "reason": "netty-codec-http and -http2 callers that run the listed decoders through an embedded channel"
+      },
+      {
+        "class": "io.netty.handler.codec.http2.DelegatingDecompressorFrameListener",
+        "method": "nextReadableBuf",
+        "reason": "netty-codec-http and -http2 callers that run the listed decoders through an embedded channel"
+      },
+      {
+        "class": "io.netty.handler.codec.http2.DelegatingDecompressorFrameListener",
+        "method": "onDataRead",
+        "reason": "netty-codec-http and -http2 callers that run the listed decoders through an embedded channel"
+      },
+      {
+        "class": "io.netty.handler.codec.compression.BrotliDecoder",
+        "method": "channelReadComplete",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "The fix caps output per read in the Brotli, JZlib, JdkZlib and Zstd decoders. JZlib and JdkZlib are present from 4.1.0, Brotli from 4.1.100 (absent in 4.1.50) and Zstd from 4.1.124 (absent in 4.1.100). HTTP content decompression builds these decoders, so most HTTP servers with decompression on reach them.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
