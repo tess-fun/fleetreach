@@ -1,0 +1,54 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-cxp5-3px4-pw24",
+  "aliases": [
+    "CVE-2026-91777"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind",
+    "tools.jackson.core:jackson-databind"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.CollectionDeserializer$CollectionReferringAccumulator",
+      "method": "resolveForwardReference"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.MapDeserializer$MapReferringAccumulator",
+      "method": "resolveForwardReference"
+    },
+    {
+      "class": "tools.jackson.databind.deser.jdk.CollectionDeserializer$CollectionReferringAccumulator",
+      "method": "resolveForwardReference"
+    },
+    {
+      "class": "tools.jackson.databind.deser.jdk.MapDeserializer$MapReferringAccumulator",
+      "method": "resolveForwardReference"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/37ad9b81712cbb9fb62c2d2c1813593252a24b67"
+    ],
+    "excluded": [
+      {
+        "class": "com.fasterxml.jackson.databind.deser.std.CollectionDeserializer$CollectionReferringAccumulator",
+        "method": "add",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "com.fasterxml.jackson.databind.deser.std.MapDeserializer$MapReferringAccumulator",
+        "method": "put",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "The linear scan per resolved id is in resolveForwardReference; handleUnresolvedReference only records the pending reference. Needs @JsonIdentityInfo on the element type, which a call graph cannot see.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

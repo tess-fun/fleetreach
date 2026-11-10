@@ -1,0 +1,66 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-7hhh-6rmp-j9qf",
+  "aliases": [
+    "CVE-2026-89425"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-core",
+    "tools.jackson.core:jackson-core"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.fasterxml.jackson.core.json.UTF8DataInputJsonParser",
+      "method": "_reportInvalidToken"
+    },
+    {
+      "class": "tools.jackson.core.json.UTF8DataInputJsonParser",
+      "method": "_reportInvalidToken"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-core/commit/211cf2c5d91abbec38067f37efc1363cd4e88ee3"
+    ],
+    "excluded": [
+      {
+        "class": "com.fasterxml.jackson.core.json.ReaderBasedJsonParser",
+        "method": "_reportInvalidToken",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8DataInputJsonParser",
+        "method": "_checkMatchEnd",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8StreamJsonParser",
+        "method": "_checkMatchEnd",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8StreamJsonParser",
+        "method": "_handleUnexpectedValue",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8StreamJsonParser",
+        "method": "_reportInvalidToken",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.async.NonBlockingUtf8JsonParserBase",
+        "method": "_finishErrorToken",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  },
+  "note": "Only the DataInput parser (createParser(DataInput)) lacked the error-token cap. The fix also changed _handleUnexpectedValue, which decodes multi-byte characters correctly: a separate bug, not this one.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

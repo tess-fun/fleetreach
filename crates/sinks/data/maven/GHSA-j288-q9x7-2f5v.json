@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-j288-q9x7-2f5v",
+  "aliases": [
+    "CVE-2025-48924"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.commons:commons-lang3",
+    "commons-lang:commons-lang"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.commons.lang3.ClassUtils",
+      "method": "getClass"
+    },
+    {
+      "class": "org.apache.commons.lang.ClassUtils",
+      "method": "getClass"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/commons-lang/commit/b424803abdb2bec818e4fbcb251ce031c22aca53"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.commons.lang3.ClassUtils",
+        "method": "toCanonicalName",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "Every getClass overload ends in the recursive three-argument one. commons-lang 2.x is affected and never fixed; 2.0 has no getClass, so the sink is absent there.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

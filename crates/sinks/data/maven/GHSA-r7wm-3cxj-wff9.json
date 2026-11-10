@@ -1,0 +1,64 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-r7wm-3cxj-wff9",
+  "aliases": [
+    "CVE-2026-68494"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-core",
+    "tools.jackson.core:jackson-core"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.fasterxml.jackson.core.json.async.NonBlockingUtf8JsonParserBase",
+      "method": "_finishNumberIntegralPart"
+    },
+    {
+      "class": "com.fasterxml.jackson.core.json.async.NonBlockingUtf8JsonParserBase",
+      "method": "_startPositiveNumber"
+    },
+    {
+      "class": "com.fasterxml.jackson.core.json.async.NonBlockingUtf8JsonParserBase",
+      "method": "_startNegativeNumber"
+    },
+    {
+      "class": "com.fasterxml.jackson.core.json.async.NonBlockingJsonParser",
+      "method": "_finishNumberIntegralPart"
+    },
+    {
+      "class": "com.fasterxml.jackson.core.json.async.NonBlockingJsonParser",
+      "method": "_startPositiveNumber"
+    },
+    {
+      "class": "com.fasterxml.jackson.core.json.async.NonBlockingJsonParser",
+      "method": "_startNegativeNumber"
+    },
+    {
+      "class": "tools.jackson.core.json.async.NonBlockingUtf8JsonParserBase",
+      "method": "_finishNumberIntegralPart"
+    },
+    {
+      "class": "tools.jackson.core.json.async.NonBlockingUtf8JsonParserBase",
+      "method": "_startPositiveNumber"
+    },
+    {
+      "class": "tools.jackson.core.json.async.NonBlockingUtf8JsonParserBase",
+      "method": "_startNegativeNumber"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-core/commit/4cdd529749da396cc7edf6d4a2aad41d47902641",
+      "https://github.com/FasterXML/jackson-core/commit/050b429804dce2a7e08f0be1b0b4c3d040fdb9cd",
+      "https://github.com/FasterXML/jackson-core/commit/c5941e5aae7fd5aeac55d66933cfb82b9aabeef8"
+    ]
+  },
+  "note": "Only the non-blocking (async) parser. Before 2.14 the code lived in NonBlockingJsonParser, so both names are listed; before 2.9 there is no async parser and the sink is absent.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
