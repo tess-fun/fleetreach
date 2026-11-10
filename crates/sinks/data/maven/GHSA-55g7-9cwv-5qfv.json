@@ -1,0 +1,42 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-55g7-9cwv-5qfv",
+  "aliases": [
+    "CVE-2023-43642"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.xerial.snappy:snappy-java"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.xerial.snappy.SnappyInputStream",
+      "method": "hasNextChunk"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/xerial/snappy-java/commit/9f8c3cf74223ed0a8a834134be9c917b9f10ceb5"
+    ],
+    "excluded": [
+      {
+        "class": "org.xerial.snappy.SnappyInputStream",
+        "method": "<init>",
+        "reason": "the fix adds a chunk size limit here; building the stream reads no chunk"
+      },
+      {
+        "class": "org.xerial.snappy.SnappyOutputStream",
+        "method": "<init>",
+        "reason": "the fix adds a limit here; writing does not allocate from a length in the input"
+      }
+    ]
+  },
+  "note": "SnappyInputStream allocates a chunk buffer from the length in the stream without a bound, in hasNextChunk, present in 1.0.5 and 1.1.10.3. Parquet and Hadoop load compression codecs by class name, as older Kafka clients load snappy, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

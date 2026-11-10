@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-4wp7-92pw-q264",
+  "aliases": [
+    "CVE-2025-22233"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.springframework:spring-context"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.springframework.validation.DataBinder",
+      "method": "setDisallowedFields"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/spring-projects/spring-framework/commit/edfcc6ffb188e4614ec9b212e3208b666981851c",
+      "https://github.com/spring-projects/spring-framework/commit/ee62701f5634e904e42e218baad142cea2bcd332"
+    ],
+    "excluded": [
+      {
+        "class": "org.springframework.validation.DataBinder",
+        "method": "isAllowed",
+        "reason": "the method the fix changes, but it runs on every bind; without a disallowed list there is nothing to bypass"
+      }
+    ]
+  },
+  "note": "An incomplete fix of GHSA-4gc7-5j7h-4qph (CVE-2024-38820), so the same path: a disallowed-fields list set on DataBinder or WebDataBinder, which inherits setDisallowedFields. Present in 5.3.39 and 6.2.6.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

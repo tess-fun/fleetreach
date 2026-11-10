@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-w33c-445m-f8w7",
+  "aliases": [
+    "CVE-2023-3635"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.squareup.okio:okio",
+    "com.squareup.okio:okio-jvm"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "okio.GzipSource",
+      "method": "consumeHeader"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/square/okio/commit/81bce1a30af244550b0324597720e4799281da7b",
+      "https://github.com/square/okio/commit/b4fa875dc24950680c386e4b1c593660ce4f7839"
+    ]
+  },
+  "note": "A malformed gzip header makes GzipSource.consumeHeader throw an exception callers do not expect. Present in okio 1.17.5, 2.10.0 and okio-jvm 3.3.0; the class name is the same on every line.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

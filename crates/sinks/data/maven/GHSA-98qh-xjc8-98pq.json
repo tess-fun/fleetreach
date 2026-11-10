@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-98qh-xjc8-98pq",
+  "aliases": [
+    "BIT-postgresql-jdbc-driver-2026-42198",
+    "CVE-2026-42198"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.postgresql:postgresql"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.postgresql.jre8.sasl.ScramAuthenticator",
+      "method": "processServerFirstMessage"
+    },
+    {
+      "class": "org.postgresql.jre7.sasl.ScramAuthenticator",
+      "method": "processServerFirstMessage"
+    },
+    {
+      "class": "org.postgresql.core.v3.ScramAuthenticator",
+      "method": "handleAuthenticationSASLContinue"
+    },
+    {
+      "class": "org.postgresql.shaded.com.ongres.scram.common.ScramFunctions",
+      "method": "saltedPassword"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": []
+  },
+  "note": "The advisory has no fix commit. The server-first message sets the PBKDF2 iteration count, run in the shaded ScramFunctions.saltedPassword. The handler moved: org.postgresql.jre8.sasl in 42.2.0, org.postgresql.jre7.sasl in 42.6.0, org.postgresql.core.v3 (handleAuthenticationSASLContinue) in 42.7.10; saltedPassword is present in all three. JDBC drivers are loaded by name through DriverManager and ServiceLoader, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

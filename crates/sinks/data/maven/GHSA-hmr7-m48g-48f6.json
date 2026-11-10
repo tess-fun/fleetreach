@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-hmr7-m48g-48f6",
+  "aliases": [
+    "CVE-2023-40167"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.eclipse.jetty:jetty-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.eclipse.jetty.http.HttpParser",
+      "method": "convertContentLength"
+    },
+    {
+      "class": "org.eclipse.jetty.http.HttpParser",
+      "method": "parseHeaders"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": []
+  },
+  "note": "The advisory has no fix commit. HttpParser accepts a + sign in Content-Length. convertContentLength holds the parse in 9.4.51, 10.0.15, 11.0.15 and 12.0.0; it is absent in 9.0.0, where parseHeaders parses the value inline (parseHeaders is gone from 9.4). Standalone Jetty builds its server and connectors from XML by class name, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
