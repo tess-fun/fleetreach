@@ -1,0 +1,90 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-c4c3-7fpv-j4q5",
+  "aliases": [
+    "CVE-2026-75595"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-handler"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.ssl.SslClientHelloHandler",
+      "method": "decode"
+    },
+    {
+      "class": "io.netty.handler.ssl.SniHandler",
+      "method": "decode"
+    },
+    {
+      "class": "io.netty.handler.ssl.AbstractSniHandler",
+      "method": "decode"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/commit/1b5abc6443b63726c72cdd285af2feb7ddbb8ff7",
+      "https://github.com/netty/netty/commit/9e0519239108a69b7e9bbc5e9182ee139a0d7961"
+    ],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.http.cors.CorsHandler",
+        "method": "setVaryHeader",
+        "reason": "in the fix PRs but another change shipped in the same release"
+      },
+      {
+        "class": "io.netty.handler.codec.mqtt.MqttCodecUtil",
+        "method": "isValidClientId",
+        "reason": "in the fix PRs but another change shipped in the same release"
+      },
+      {
+        "class": "io.netty.handler.codec.mqtt.MqttCodecUtil",
+        "method": "isValidPublishTopicName",
+        "reason": "in the fix PRs but another change shipped in the same release"
+      },
+      {
+        "class": "io.netty.handler.codec.mqtt.MqttEncoder",
+        "method": "encodeConnectMessage",
+        "reason": "in the fix PRs but another change shipped in the same release"
+      },
+      {
+        "class": "io.netty.handler.codec.mqtt.MqttEncoder",
+        "method": "encodePublishMessage",
+        "reason": "in the fix PRs but another change shipped in the same release"
+      },
+      {
+        "class": "io.netty.handler.codec.sctp.SctpMessageCompletionHandler",
+        "method": "<init>",
+        "reason": "in the fix PRs but another change shipped in the same release"
+      },
+      {
+        "class": "io.netty.handler.codec.sctp.SctpMessageCompletionHandler",
+        "method": "decode",
+        "reason": "in the fix PRs but another change shipped in the same release"
+      },
+      {
+        "class": "io.netty.handler.codec.socksx.v5.Socks5ClientEncoder",
+        "method": "encodeCommandRequest",
+        "reason": "in the fix PRs but another change shipped in the same release"
+      },
+      {
+        "class": "io.netty.handler.codec.socksx.v5.Socks5ServerEncoder",
+        "method": "encodeCommandResponse",
+        "reason": "in the fix PRs but another change shipped in the same release"
+      },
+      {
+        "class": "io.netty.handler.ssl.ReferenceCountedOpenSslClientContext",
+        "method": "newSessionContext",
+        "reason": "in the fix PRs but another change shipped in the same release"
+      }
+    ]
+  },
+  "note": "The advisory names SslClientHelloHandler.decode, present from 4.1.50 through 4.2. Before that the ClientHello parse sat in SniHandler.decode (4.1.0) or AbstractSniHandler.decode, so both are listed for old lines. Only matters where per-SNI context selection is the mTLS gate.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

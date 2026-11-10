@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-558v-64gr-wgg4",
+  "aliases": [
+    "CVE-2026-59901"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec",
+    "io.netty:netty-codec-compression"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.compression.Bzip2BlockDecompressor",
+      "method": "read"
+    }
+  ],
+  "evidence": {
+    "commits": []
+  },
+  "note": "OSV lists no fix commit; the advisory names Bzip2BlockDecompressor.read and the jar diff changes it. Same class name in netty-codec (4.1) and netty-codec-compression (4.2), present in 4.1.0, 4.1.100, 4.1.135, 4.2.0 and 4.2.15. Reached only where a Bzip2Decoder is in a pipeline; the other methods in the jar diff are separate fixes.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

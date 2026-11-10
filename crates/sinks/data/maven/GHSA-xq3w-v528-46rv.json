@@ -1,0 +1,49 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-xq3w-v528-46rv",
+  "aliases": [
+    "CVE-2024-47535"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-common"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.util.internal.PlatformDependent",
+      "method": "<clinit>"
+    },
+    {
+      "class": "io.netty.util.NetUtil",
+      "method": "<clinit>"
+    },
+    {
+      "class": "io.netty.resolver.dns.ResolvConf",
+      "method": "fromFile"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/commit/fbf7a704a82e7449b48bd0bbb679f5661c6d61a3"
+    ],
+    "excluded": [
+      {
+        "class": "io.netty.util.NetUtil",
+        "method": "sysctlGetInt",
+        "reason": "reads sysctl process output on BSD and macOS, not a file an attacker can plant"
+      },
+      {
+        "class": "io.netty.util.internal.BoundedInputStream",
+        "method": "read",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "The unbounded reads are /etc/os-release and /usr/lib/os-release in PlatformDependent, /proc/sys/net/core/somaxconn in NetUtil, and /etc/resolv.conf in ResolvConf (netty-resolver-dns, from 4.1.11x). The first two run during static init in every line: inline in 4.1.42, through PlatformDependent$4.run from 4.1.60, NetUtil$1.run in 4.1.0 and NetUtil$SoMaxConnAction.run from 4.1.100. The anonymous class numbers drift, so the initializers are the sinks and any use of those classes counts as reached. Exploitable on Windows, where the attacker can create the missing file.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

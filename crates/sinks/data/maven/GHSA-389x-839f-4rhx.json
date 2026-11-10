@@ -12,12 +12,16 @@
   "verdict": "sinks",
   "sinks": [
     {
-      "class": "io.netty.util.NetUtil$SoMaxConnAction",
-      "method": "run"
+      "class": "io.netty.util.internal.PlatformDependent",
+      "method": "<clinit>"
     },
     {
-      "class": "io.netty.util.NetUtil$1",
-      "method": "run"
+      "class": "io.netty.util.NetUtil",
+      "method": "<clinit>"
+    },
+    {
+      "class": "io.netty.resolver.dns.ResolvConf",
+      "method": "fromFile"
     }
   ],
   "evidence": {
@@ -28,16 +32,16 @@
       {
         "class": "io.netty.util.internal.BoundedInputStream",
         "method": "read",
-        "reason": "first in 4.1.115 (the incomplete fix this one corrects); the read it bounds sits in the somaxconn action below"
+        "reason": "first in 4.1.115; the fix corrects its count of null bytes, and every read it bounds is covered by the sinks"
       },
       {
         "class": "io.netty.util.NetUtil",
         "method": "sysctlGetInt",
-        "reason": "reads sysctl output on BSD and macOS, not the somaxconn file"
+        "reason": "reads sysctl process output on BSD and macOS, not a file an attacker can plant"
       }
     ]
   },
-  "note": "An incomplete fix of GHSA-xq3w-v528-46rv. The /proc/sys/net/core/somaxconn read runs in NetUtil$SoMaxConnAction.run (4.1.100 on) or the anonymous NetUtil$1.run (4.1.0); later NetUtil$1 classes have no run, so listing both does no harm. Exploitable on Windows only. NetUtil's static init runs the action, so most Netty services reach it.",
+  "note": "An incomplete fix of GHSA-xq3w-v528-46rv: from 4.1.115 the same reads go through BoundedInputStream, which did not count null bytes, so the sinks are the same. The unbounded reads are /etc/os-release and /usr/lib/os-release in PlatformDependent, /proc/sys/net/core/somaxconn in NetUtil, and /etc/resolv.conf in ResolvConf (netty-resolver-dns, from 4.1.11x). The first two run during static init in every line: inline in 4.1.42, through PlatformDependent$4.run from 4.1.60, NetUtil$1.run in 4.1.0 and NetUtil$SoMaxConnAction.run from 4.1.100. The anonymous class numbers drift, so the initializers are the sinks and any use of those classes counts as reached. Exploitable on Windows, where the attacker can create the missing file.",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-10"

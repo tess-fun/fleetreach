@@ -1,0 +1,56 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-qv9r-c865-cp47",
+  "aliases": [
+    "CVE-2026-49844"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.logging.log4j:log4j-api"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.logging.log4j.message.MapMessageJsonFormatter",
+      "method": "formatDoubleArray"
+    },
+    {
+      "class": "org.apache.logging.log4j.message.MapMessageJsonFormatter",
+      "method": "formatFloatArray"
+    },
+    {
+      "class": "org.apache.logging.log4j.message.MapMessageJsonFormatter",
+      "method": "formatNumber"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/logging-log4j2/commit/19edb23e162d6c728a8c2221a240037d389ed300",
+      "https://github.com/apache/logging-log4j2/commit/feadf8eb0b4acb6ddfa4c0ab2bbc6d88b8e12d82"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.logging.log4j.message.MapMessageJsonFormatter",
+        "method": "formatDouble",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "org.apache.logging.log4j.message.MapMessageJsonFormatter",
+        "method": "formatFloat",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "org.apache.logging.log4j.message.StructuredDataMessage",
+        "method": "asXml",
+        "reason": "in the 2.25.4 to 2.25.5 jar diff but a different fix"
+      }
+    ]
+  },
+  "note": "MapMessageJsonFormatter first ships in 2.13.1, where the range starts; all three methods are present in 2.13.1, 2.20.0, 2.25.4 and 2.26.0. The usual path is JsonTemplateLayout calling MapMessage.asJson, and Log4j picks layouts by plugin name from its config, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

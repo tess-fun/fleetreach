@@ -1,0 +1,34 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3qp7-7mw8-wx86",
+  "aliases": [
+    "CVE-2026-44249"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-handler"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.ipfilter.IpSubnetFilterRule",
+      "method": "compareTo"
+    }
+  ],
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "io.netty.handler.ipfilter.IpSubnetFilterRule$Ip6SubnetFilterRule",
+        "method": "ipToInt",
+        "reason": "in the jar diff but shared by the correct matches path; the advisory's flaw is the mask in compareTo"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit; from the advisory and the 4.1.134 to 4.1.135 jar diff. compareTo(InetSocketAddress) is the binary search IpSubnetFilter uses, present from 4.1.100 (absent in 4.1.50, where only the unaffected matches path exists). The name also matches compareTo(IpSubnetFilterRule) used for sorting, which only overstates reach.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
