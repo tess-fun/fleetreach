@@ -1,0 +1,46 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-8xfc-gm6g-vgpv",
+  "aliases": [
+    "CVE-2024-29857"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.bouncycastle:bcprov-jdk15on",
+    "org.bouncycastle:bcprov-jdk18on",
+    "org.bouncycastle:bcprov-jdk15to18",
+    "org.bouncycastle:bc-fips",
+    "org.bouncycastle:bctls-jdk18on"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.bouncycastle.math.ec.ECCurve$AbstractF2m",
+      "method": "buildField"
+    },
+    {
+      "class": "org.bouncycastle.math.ec.ECCurve$AbstractF2m",
+      "method": "solveQuadraticEquation"
+    },
+    {
+      "class": "org.bouncycastle.math.ec.ECCurve$F2m",
+      "method": "<init>"
+    },
+    {
+      "class": "org.bouncycastle.math.ec.ECCurve$F2m",
+      "method": "solveQuadraticEquation"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/bcgit/bc-java/commit/efc498ca4caa340ac2fe11f2efee06c1a294501f",
+      "https://github.com/bcgit/bc-java/commit/fee80dd230e7fba132d03a34f1dd1d6aae0d0281"
+    ]
+  },
+  "note": "The fix caps the F2m field size, first in solveQuadraticEquation and then in buildField, where every binary curve is built. AbstractF2m is present from 1.60 to 1.77; 1.50 has only ECCurve$F2m, so its constructor and solveQuadraticEquation are listed for old lines. The classes live in bcprov; only bcprov was checked, not bc-fips. Any use of a binary curve reaches these, so the record mostly clears services that never touch EC over F2m.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

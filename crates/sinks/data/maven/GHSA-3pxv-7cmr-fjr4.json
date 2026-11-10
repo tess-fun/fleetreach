@@ -1,0 +1,42 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3pxv-7cmr-fjr4",
+  "aliases": [
+    "CVE-2026-34480"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.logging.log4j:log4j-core"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.logging.log4j.core.jackson.Log4jXmlObjectMapper",
+      "method": "<init>"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/logging-log4j2/pull/4077"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.logging.log4j.core.jackson.Log4jXmlObjectMapper$SanitizingWriter",
+        "method": "sanitizeXml10",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "org.apache.logging.log4j.core.config.plugins.processor.PluginProcessor",
+        "method": "process",
+        "reason": "build-time annotation processor, another change"
+      }
+    ]
+  },
+  "note": "XmlLayout builds Log4jXmlObjectMapper through JacksonFactory$XML, and the fix wraps its writer there; the class is present in 2.1, 2.17.0 and 2.25.2. XmlLogEventParser also builds one to read events, which only overstates reach. XmlLayout is chosen by plugin name in the Log4j config, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-vc5p-v9hr-52mj",
+  "aliases": [
+    "CVE-2025-68161"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.logging.log4j:log4j-core"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.logging.log4j.core.net.SslSocketManager",
+      "method": "createSocket"
+    },
+    {
+      "class": "org.apache.logging.log4j.core.net.SslSocketManager$SslSocketManagerFactory",
+      "method": "createSocket"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/logging-log4j2/commit/3b93748497e1adbbd027fda8a5e7268ec5d0d578"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.logging.log4j.core.net.ssl.SslConfiguration",
+        "method": "loadKeyManagers",
+        "reason": "config loading; the missing check is where the socket is made"
+      },
+      {
+        "class": "org.apache.logging.log4j.core.net.ssl.SslConfiguration",
+        "method": "loadTrustManagers",
+        "reason": "config loading; the missing check is where the socket is made"
+      },
+      {
+        "class": "org.apache.logging.log4j.core.appender.HttpURLConnectionManager",
+        "method": "send",
+        "reason": "in the jar diff but the advisory covers the Socket Appender only"
+      }
+    ]
+  },
+  "note": "The TLS socket for the Socket Appender is made in these two createSocket methods, present in 2.1, 2.17.0 and 2.25.2. The appender is chosen by plugin name in the Log4j config, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

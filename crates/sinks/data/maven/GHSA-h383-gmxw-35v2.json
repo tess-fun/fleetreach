@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-h383-gmxw-35v2",
+  "aliases": [
+    "CVE-2026-34479"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.logging.log4j:log4j-core"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.log4j.layout.Log4j1XmlLayout",
+      "method": "formatTo"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/logging-log4j2/pull/4078"
+    ],
+    "excluded": [
+      {
+        "class": "org.apache.logging.log4j.core.util.Transform",
+        "method": "escapeHtmlTags",
+        "reason": "shared escaping helper used by other layouts; the flaw is the layout that relies on it for XML"
+      }
+    ]
+  },
+  "note": "Log4j1XmlLayout lives in log4j-1.2-api, not the listed log4j-core; formatTo writes the event XML and is present in 2.7, 2.17.0 and 2.25.3. The layout is chosen by name, either directly or as org.apache.log4j.xml.XMLLayout through the Log4j 1 config bridge, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

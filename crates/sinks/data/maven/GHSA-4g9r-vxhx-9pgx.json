@@ -1,0 +1,43 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-4g9r-vxhx-9pgx",
+  "aliases": [
+    "CVE-2024-25710"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.commons:commons-compress"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.commons.compress.archivers.dump.DumpArchiveInputStream",
+      "method": "getNextEntry"
+    },
+    {
+      "class": "org.apache.commons.compress.archivers.dump.DumpArchiveInputStream",
+      "method": "readDirectoryEntry"
+    }
+  ],
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "org.apache.commons.compress.archivers.dump.DumpArchiveUtil",
+        "method": "getIno",
+        "reason": "helper called from the listed reader methods"
+      },
+      {
+        "class": "org.apache.commons.compress.archivers.dump.TapeInputStream",
+        "method": "resetBlockSize",
+        "reason": "helper called from the DUMP reader"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit and the 1.25.0 to 1.26.0 jar diff is a broad refactor, so the sinks are the DUMP reader's entry loop: getNextEntry and readDirectoryEntry, present in 1.3, 1.21 and 1.25.0. ArchiveStreamFactory builds a DumpArchiveInputStream when it detects or is asked for the dump format, so its create methods reach these too.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
