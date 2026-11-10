@@ -1,0 +1,34 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-5gvw-p9qm-jgwh",
+  "aliases": [
+    "CVE-2026-59889"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind",
+    "tools.jackson.core:jackson-databind"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.fasterxml.jackson.databind.deser.impl.UnwrappedPropertyHandler",
+      "method": "processUnwrapped"
+    },
+    {
+      "class": "tools.jackson.databind.deser.impl.UnwrappedPropertyHandler",
+      "method": "processUnwrapped"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/d627a8a86fcb062429282f79f3f256f181ed2c7b"
+    ]
+  },
+  "note": "Needs a property with both @JsonView and @JsonUnwrapped, read under an active view: annotations a call graph cannot see.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

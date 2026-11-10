@@ -1,0 +1,43 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-wjgm-6hv5-3cvf",
+  "aliases": [
+    "CVE-2026-19032"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind",
+    "tools.jackson.core:jackson-databind"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.fasterxml.jackson.databind.ext.NioPathDeserializer",
+      "method": "deserialize"
+    },
+    {
+      "class": "tools.jackson.databind.deser.jdk.JDKFromStringDeserializer$NioPathHelper",
+      "method": "deserialize"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/cc6756b61ed90b6b9227f670e0408d5d9bd48551",
+      "https://github.com/FasterXML/jackson-databind/commit/ce26eda3481cd796f76ba4c53ffe1da23b53f166",
+      "https://github.com/FasterXML/jackson-databind/commit/d94bb632becfe0ba96926b9909ab06d1f87aad6d"
+    ],
+    "excluded": [
+      {
+        "class": "tools.jackson.databind.deser.jdk.JDKFromStringDeserializer",
+        "method": "_deserialize",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  },
+  "note": "2.x reads Path in ext.NioPathDeserializer, 3.x in JDKFromStringDeserializer$NioPathHelper. The proposal also listed the Windows checker and findDeserializer, which the fix added or only rewired. Harmless without a side-effecting third-party FileSystemProvider.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

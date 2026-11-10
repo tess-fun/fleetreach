@@ -1,0 +1,34 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-hgj6-7826-r7m5",
+  "aliases": [
+    "CVE-2026-54514"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind",
+    "tools.jackson.core:jackson-databind"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.FromStringDeserializer$Std",
+      "method": "_deserialize"
+    },
+    {
+      "class": "tools.jackson.databind.deser.jdk.JDKFromStringDeserializer",
+      "method": "_deserialize"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/1f5a1037b1e9e05920e755cb35f198bcd46667e4"
+    ]
+  },
+  "note": "The proposed _inetSocketAddress is a helper the fix added; in every affected release the InetSocketAddress case sits inside _deserialize, which also handles URL, UUID-like and other from-string types, so \"reached\" overstates it.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

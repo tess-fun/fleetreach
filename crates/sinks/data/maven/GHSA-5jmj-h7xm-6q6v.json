@@ -1,0 +1,34 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-5jmj-h7xm-6q6v",
+  "aliases": [
+    "CVE-2026-54515"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind",
+    "tools.jackson.core:jackson-databind"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.fasterxml.jackson.databind.deser.BeanDeserializerBase",
+      "method": "createContextual"
+    },
+    {
+      "class": "tools.jackson.databind.deser.bean.BeanDeserializerBase",
+      "method": "createContextual"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/0e1b0b211f7a53baa62ba2f4c9bd006c7bf4d5fa"
+    ]
+  },
+  "note": "createContextual runs for every bean deserializer, so any bean read reaches it. The flaw needs per-property @JsonIgnoreProperties together with case-insensitive @JsonFormat, which a call graph cannot see.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
