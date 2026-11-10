@@ -1,0 +1,71 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-gwq9-9ffj-mvrv",
+  "aliases": [
+    "CVE-2026-93451"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.xerial.snappy:snappy-java"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "uncompressCharArray"
+    },
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "uncompressDoubleArray"
+    },
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "uncompressFloatArray"
+    },
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "uncompressIntArray"
+    },
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "uncompressLongArray"
+    },
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "uncompressShortArray"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/xerial/snappy-java/commit/943c6043a292568575e8347af4507d015e802c75"
+    ],
+    "excluded": [
+      {
+        "class": "org.xerial.snappy.Snappy",
+        "method": "compress",
+        "reason": "compression side; the flaw is in decompression"
+      },
+      {
+        "class": "org.xerial.snappy.Snappy",
+        "method": "rawCompress",
+        "reason": "compression side; the flaw is in decompression"
+      },
+      {
+        "class": "org.xerial.snappy.Snappy",
+        "method": "uncompress",
+        "reason": "the byte[] form sizes its result correctly; GHSA-q233-g92q-qxp6 covers its allocation"
+      },
+      {
+        "class": "org.xerial.snappy.Snappy",
+        "method": "byteLengthOf",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "The six typed-array uncompress methods size their result by dividing the declared length, then let native code write the full length; all present in 1.0.5, 1.1.8.4 and 1.1.10.8. Reached only where the app decompresses into typed arrays.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

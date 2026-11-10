@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-wg6q-6289-32hp",
+  "aliases": [
+    "CVE-2026-5588"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.bouncycastle:bcpkix-jdk15on",
+    "org.bouncycastle:bcpkix-jdk18on",
+    "org.bouncycastle:bcpkix-jdk15to18"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder$CompositeVerifier",
+      "method": "verify"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/bcgit/bc-java/commit/656bae0dbd9b1521f840521ff786e78749fe3057"
+    ]
+  },
+  "note": "The advisory names CompositeVerifier.verify, which accepts an empty signature sequence. The class is present in 1.70 and 1.83 but absent in 1.49, 1.60, 1.65 and 1.66, so lines before it have nothing to reach despite the advisory's 1.49 start. Reached only where JcaContentVerifierProviderBuilder verifies a composite signature algorithm.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

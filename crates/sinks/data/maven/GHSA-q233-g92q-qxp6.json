@@ -1,0 +1,88 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-q233-g92q-qxp6",
+  "aliases": [
+    "CVE-2026-108106"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.xerial.snappy:snappy-java"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "uncompress"
+    },
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "uncompressString"
+    },
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "uncompressCharArray"
+    },
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "uncompressDoubleArray"
+    },
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "uncompressFloatArray"
+    },
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "uncompressIntArray"
+    },
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "uncompressLongArray"
+    },
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "uncompressShortArray"
+    },
+    {
+      "class": "org.xerial.snappy.SnappyInputStream",
+      "method": "hasNextChunk"
+    },
+    {
+      "class": "org.xerial.snappy.SnappyFramedInputStream",
+      "method": "ensureBuffer"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/xerial/snappy-java/commit/943c6043a292568575e8347af4507d015e802c75"
+    ],
+    "excluded": [
+      {
+        "class": "org.xerial.snappy.Snappy",
+        "method": "compress",
+        "reason": "compression side; the flaw is in decompression"
+      },
+      {
+        "class": "org.xerial.snappy.Snappy",
+        "method": "rawCompress",
+        "reason": "compression side; the flaw is in decompression"
+      },
+      {
+        "class": "org.xerial.snappy.Snappy",
+        "method": "uncompressedLength",
+        "reason": "reads the declared length; the allocation is in the listed callers"
+      },
+      {
+        "class": "org.xerial.snappy.Snappy",
+        "method": "isValidCompressedBuffer",
+        "reason": "validation only"
+      }
+    ]
+  },
+  "note": "The advisory's entry points: Snappy.uncompress, uncompressString and the typed-array methods, SnappyInputStream (its chunk buffer is allocated in hasNextChunk) and SnappyFramedInputStream.ensureBuffer (from 1.1.x; absent in 1.0.5). The rest are present in 1.0.5, 1.1.8.4 and 1.1.10.8. Parquet and Hadoop load compression codecs by class name, as older Kafka clients load snappy, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-xqrx-qh46-34m7",
+  "aliases": [
+    "CVE-2026-116590"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.xerial.snappy:snappy-java"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.xerial.snappy.Snappy",
+      "method": "arrayCopy"
+    },
+    {
+      "class": "org.xerial.snappy.SnappyOutputStream",
+      "method": "rawWrite"
+    },
+    {
+      "class": "org.xerial.snappy.SnappyInputStream",
+      "method": "rawRead"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/xerial/snappy-java/commit/2d7ca71c087a98f1219fb2d51909f3891c3ce77b"
+    ],
+    "excluded": [
+      {
+        "class": "org.xerial.snappy.Snappy",
+        "method": "maxCompressedLength",
+        "reason": "in the fix PR but not a range check this advisory names"
+      },
+      {
+        "class": "org.xerial.snappy.Snappy",
+        "method": "checkArrayRange",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Snappy.arrayCopy passes unchecked ranges to native memcpy, and SnappyOutputStream.rawWrite and SnappyInputStream.rawRead hand it caller ranges; all present in 1.0.5, 1.1.8.4 and 1.1.10.8. The ranges come from the calling code, not the compressed data, so this needs a bug or an outside-controlled offset in the caller.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

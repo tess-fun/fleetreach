@@ -1,0 +1,44 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-6mjq-h674-j845",
+  "aliases": [
+    "CVE-2023-34462"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-handler"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.ssl.SslClientHelloHandler",
+      "method": "decode"
+    },
+    {
+      "class": "io.netty.handler.ssl.SniHandler",
+      "method": "decode"
+    },
+    {
+      "class": "io.netty.handler.ssl.AbstractSniHandler",
+      "method": "decode"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/commit/535da17e45201ae4278c0479e6162bb4127d4c32"
+    ],
+    "excluded": [
+      {
+        "class": "io.netty.handler.ssl.SniHandler",
+        "method": "<init>",
+        "reason": "the fix adds a maxClientHelloLength argument to the constructors; the allocation is in decode"
+      }
+    ]
+  },
+  "note": "The earlier form of GHSA-x4gw-5cx5-pgmh: the ClientHello buffer is sized from the record in SslClientHelloHandler.decode (4.1.93) or AbstractSniHandler.decode (4.1.30), with SniHandler.decode listed for old lines as in the other SNI records. Reached only where an SNI handler is in the pipeline.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
