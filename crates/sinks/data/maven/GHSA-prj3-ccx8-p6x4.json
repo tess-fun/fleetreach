@@ -1,0 +1,60 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-prj3-ccx8-p6x4",
+  "aliases": [
+    "CVE-2025-55163"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http2",
+    "io.grpc:grpc-netty-shaded"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http2.Http2ConnectionHandler",
+      "method": "onStreamError"
+    },
+    {
+      "class": "io.netty.handler.codec.http2.Http2ConnectionHandler",
+      "method": "resetStream"
+    },
+    {
+      "class": "io.grpc.netty.shaded.io.netty.handler.codec.http2.Http2ConnectionHandler",
+      "method": "onStreamError"
+    },
+    {
+      "class": "io.grpc.netty.shaded.io.netty.handler.codec.http2.Http2ConnectionHandler",
+      "method": "resetStream"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/commit/be53dc3c9acd9af2e20d0c3c07cd77115a594cf1",
+      "https://github.com/grpc/grpc-java/commit/6462ef9a11980e168c21d90bbc7245c728fd1a7a"
+    ],
+    "excluded": [
+      {
+        "class": "io.grpc.netty.NettyServerHandler",
+        "method": "onRstStreamRead",
+        "reason": "handles resets the client sends (Rapid Reset); MadeYouReset is resets the server sends"
+      },
+      {
+        "class": "io.grpc.netty.NettyServerHandler",
+        "method": "<init>",
+        "reason": "the gRPC fix sets the new limit there; the reset is written by the Netty handler"
+      },
+      {
+        "class": "io.netty.handler.codec.http2.Http2MaxRstFrameLimitEncoder",
+        "method": "<init>",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "MadeYouReset makes the server reset streams itself; every such reset goes through Http2ConnectionHandler.onStreamError and resetStream, present from 4.1.0 through 4.2.3 and under the io.grpc.netty.shaded prefix in grpc-netty-shaded 1.50.0 and 1.74.0. Any HTTP/2 server built on Netty reaches these.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

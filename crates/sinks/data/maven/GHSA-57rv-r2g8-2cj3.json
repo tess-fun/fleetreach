@@ -1,0 +1,43 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-57rv-r2g8-2cj3",
+  "aliases": [
+    "CVE-2026-42584"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http.HttpClientCodec$Decoder",
+      "method": "decode"
+    },
+    {
+      "class": "io.netty.handler.codec.http.HttpClientCodec$Decoder",
+      "method": "isContentAlwaysEmpty"
+    }
+  ],
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.http.HttpDecoderConfig",
+        "method": "setUseRfc9112TransferEncoding",
+        "reason": "in the jar diff but another fix shipped in the same release"
+      },
+      {
+        "class": "io.netty.handler.codec.http.HttpChunkLineValidatingByteProcessor",
+        "method": "finish",
+        "reason": "in the jar diff but another fix shipped in the same release"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit; the advisory describes the request queue poll for 1xx responses in HttpClientCodec, and the 4.1.132 to 4.1.133 jar diff changes HttpClientCodec$Decoder.isContentAlwaysEmpty; its decode is listed too since the pairing runs per decoded response. Present from 4.1.0 through 4.2.12. Only an HTTP client codec reaches it; servers do not.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

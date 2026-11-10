@@ -1,0 +1,48 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-4265-ccf5-phj5",
+  "aliases": [
+    "CVE-2024-26308"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.apache.commons:commons-compress"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.commons.compress.harmony.unpack200.Pack200UnpackerAdapter",
+      "method": "unpack"
+    },
+    {
+      "class": "org.apache.commons.compress.harmony.unpack200.Archive",
+      "method": "unpack"
+    },
+    {
+      "class": "org.apache.commons.compress.harmony.unpack200.Segment",
+      "method": "unpack"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "org.apache.commons.compress.harmony.unpack200.Pack200UnpackerAdapter",
+        "method": "newBoundedInputStream",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "org.apache.commons.compress.harmony.pack200.Archive",
+        "method": "addJarEntry",
+        "reason": "the packer side; the advisory is about unpacking"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit and the 1.25.0 to 1.26.0 jar diff is a broad refactor; the range starts at 1.21, when the Harmony unpacker was bundled. The three unpack methods are present in 1.21 and 1.25.0. Commons Compress's Pack200 loads the unpacker by class name from the java.util.jar.Pack200.Unpacker property, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
