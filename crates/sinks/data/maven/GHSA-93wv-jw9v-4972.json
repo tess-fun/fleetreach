@@ -1,0 +1,55 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-93wv-jw9v-4972",
+  "aliases": [
+    "CVE-2026-56819"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http2",
+    "io.grpc:grpc-netty-shaded"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http2.DelegatingDecompressorFrameListener",
+      "method": "onDataRead"
+    },
+    {
+      "class": "io.netty.handler.codec.http2.DelegatingDecompressorFrameListener$Http2Decompressor",
+      "method": "decompress"
+    },
+    {
+      "class": "io.grpc.netty.shaded.io.netty.handler.codec.http2.DelegatingDecompressorFrameListener",
+      "method": "onDataRead"
+    },
+    {
+      "class": "io.grpc.netty.shaded.io.netty.handler.codec.http2.DelegatingDecompressorFrameListener$Http2Decompressor",
+      "method": "decompress"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/commit/bb2ff68a1fb71cb4b0eb9a9e17b66c52aff680c6",
+      "https://github.com/netty/netty/commit/5b68c61f37aa4a3045cba624cbea239655c9003b"
+    ],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.compression.Bzip2BlockDecompressor",
+        "method": "read",
+        "reason": "a separate fix in the same merge"
+      },
+      {
+        "class": "io.netty.handler.codec.dns.DefaultDnsRecordDecoder",
+        "method": "decodeRecord",
+        "reason": "a separate fix in the same merge"
+      }
+    ]
+  },
+  "note": "The fix commits merge many advisories; only the DelegatingDecompressorFrameListener hunk is this one. Data frames on a stream whose decompressor is closed leak the retained buffer. Http2Decompressor.decompress holds the code in 4.1.130 and 4.2.6 (and grpc-netty-shaded 1.70.0); on 4.1.42 and 4.1.100 (grpc-netty-shaded 1.50.0) it is inline in onDataRead, present in all. Reached only where the app wraps its frame listener in DelegatingDecompressorFrameListener.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

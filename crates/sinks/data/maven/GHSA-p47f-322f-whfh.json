@@ -1,0 +1,45 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-p47f-322f-whfh",
+  "aliases": [
+    "CVE-2026-9828"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "ch.qos.logback:logback-core"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ch.qos.logback.classic.net.SocketNode",
+      "method": "run"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "ch.qos.logback.core.net.HardenedObjectInputStream",
+        "method": "isWhitelisted",
+        "reason": "the method the fix changes; it runs inside every hardened stream, including the receivers, which the advisory does not name"
+      },
+      {
+        "class": "ch.qos.logback.core.net.ssl.SSLParametersConfiguration",
+        "method": "configure",
+        "reason": "a separate change in the same release"
+      },
+      {
+        "class": "ch.qos.logback.core.joran.action.ConversionRuleAction",
+        "method": "validPreconditions",
+        "reason": "a separate change in the same release"
+      }
+    ]
+  },
+  "note": "The advisory has no fix commit and names SimpleSocketServer and SimpleSSLSocketServer, the same path as GHSA-jhq6-gfmj-v8fx: each connection goes to SocketNode (logback-classic), whose run reads the object stream, present in 1.1.0, 1.2.12 and 1.5.12. The allow list let through java.lang and java.util classes not explicitly blocked. The servers are started by a main method or named by class, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

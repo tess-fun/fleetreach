@@ -1,0 +1,22 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-264p-99wq-f4j6",
+  "aliases": [
+    "CVE-2024-21634"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "software.amazon.ion:ion-java",
+    "com.amazon.ion:ion-java"
+  ],
+  "status": "reviewed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": []
+  },
+  "note": "The advisory has no fix commit or vulnerable functions. The 1.10.5 release notes credit the fix without naming a change, and the method lists of 1.10.4 and 1.10.5 match in the readers and the IonValue classes, apart from one anonymous class constructor. The hashCode and clone rework came earlier, in 1.10.3. Text reading and the IonValue DOM are both affected, and no method can be named. software.amazon.ion is the old group (software.amazon.ion classes) and has no fixed release.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

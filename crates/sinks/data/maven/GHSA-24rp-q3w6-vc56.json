@@ -1,0 +1,39 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-24rp-q3w6-vc56",
+  "aliases": [
+    "BIT-postgresql-jdbc-driver-2024-1597",
+    "CVE-2024-1597"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.postgresql:postgresql"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.postgresql.core.v3.SimpleParameterList",
+      "method": "toString"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/pgjdbc/pgjdbc/commit/93b0fcb2711d9c1e3a2a03134369738a02a58b40",
+      "https://github.com/pgjdbc/pgjdbc/commit/06abfb78a627277a580d4df825f210e96a4e14ee"
+    ],
+    "excluded": [
+      {
+        "class": "org.postgresql.core.v3.SimpleParameterList",
+        "method": "quoteAndCast",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Only with preferQueryMode=simple, which the call graph cannot see. Parameters are inlined by SimpleParameterList.toString(int, boolean), present in 9.4.1212, 42.2.0 and 42.7.1; the record matches by name, so it also matches the plain toString, which the graph treats as run on any instance. JDBC drivers are loaded by name through DriverManager and ServiceLoader, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
