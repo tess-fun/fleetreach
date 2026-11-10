@@ -320,6 +320,42 @@ data from 2026-11-03.
   on the five apps was reached, so clearing flags adds nothing yet. Only Spring apps were
   tested; Struts, JSF and Camel roots have no runtime check.
 
+### E3 rerun: after the top 100 review, 2026-11-10 (gate open)
+
+The 100 most frequent advisories in the corpus were reviewed as records, 5 at a time, each
+read against the fix and the published jars across release lines: 140 reviewed records in
+all, 132 `sinks`, 4 `deny-list`, 4 `no-method-sink`. 57 of the 132 `sinks` records are
+reached by name.
+`run3.py` judged them again on the same 63 images, with the same scans and the same
+advisory data. Every image pulled.
+
+| Outcome | All findings | High or critical |
+|---|---|---|
+| Not reached, set aside | **1,050 (13.4%)** | **554 (14.4%)** |
+| Reached | 1,755 | 611 |
+| Not reached, record reached by name (unknown) | 277 | 79 |
+| Sink class absent from the jar (unknown) | 175 | 34 |
+| Partial read (unknown) | 12 | 5 |
+| Unreviewed, no-method-sink or deny-list record | 161 | 161 |
+| No record | 4,397 | 2,404 |
+| **Total** | **7,827** | **3,848** |
+
+- **Yield rose from 0.04% to 13.4%** with the graph unchanged, so records were the limit, as
+  the first run said. A third of the 3,269 findings with a `sinks` record are set aside.
+- **Per service**: median 14.7% (Pulsar), most 37% (Hazelcast), none on Flink, GoCD and
+  Kestra.
+- **Narrow sinks carry it**: 58 of the 102 records that match a finding set something aside.
+  The most were Jackson's `allowIfSubTypeIsArray` (53) and DataInput parser (49), Commons
+  Lang `ClassUtils.getClass` (42), Commons IO `XmlStreamReader` (41), and Netty's LZ4 and
+  Bzip2 decoders (38 each). Records whose sink runs in every use of a library (HTTP/2 frame
+  handling, Jackson's primitive deserializers) are reached nearly everywhere and set little
+  aside.
+- **By-name flags cost 277 findings** (3.5%) that the graph does not reach. Wider roots
+  (Spring Boot auto-configuration, `logback.xml`, JCA providers) are what would free them.
+- **Still open**: the graph's soundness is checked only as a floor on five Spring apps. The
+  13.4% holds only if the graph misses no call into a sink, and the vul4j-style corpus that
+  would test that is still to do.
+
 ### Competitors, as of Nov 2026
 
 - **Trivy v0.76.1** (2026-10-21). 2026: pylock.toml (0.70.0), CycloneDX 1.7 and Ubuntu 26.04
@@ -426,7 +462,8 @@ on; keep each release about 8 weeks.
   unfixed statuses, direct feeds for Amazon Linux, Oracle, Photon, Bottlerocket, OS
   end-of-life.
 - E3 (suppression yield on 50 services), after a field marks records reached by name. Run
-  2026-11-06 on 63 services: 0.04%, limited by record coverage; see "E3 result".
+  2026-11-06 on 63 services: 0.04%, limited by record coverage; rerun 2026-11-10 after the
+  top 100 advisories were reviewed: 13.4%; see "E3 result" and "E3 rerun".
 - JVM function-level reachability (if E2/E3 pass), and the sink data published as an open
   feed.
 - `fleetreach serve` (UI over history and triage files).
