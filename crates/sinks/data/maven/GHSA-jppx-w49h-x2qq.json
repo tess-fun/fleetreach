@@ -1,0 +1,52 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-jppx-w49h-x2qq",
+  "aliases": [
+    "CVE-2026-56745"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.spdy.SpdyHttpDecoder",
+      "method": "decode"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/commit/5b68c61f37aa4a3045cba624cbea239655c9003b",
+      "https://github.com/netty/netty/commit/bb2ff68a1fb71cb4b0eb9a9e17b66c52aff680c6"
+    ],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.http.HttpContentEncoder",
+        "method": "decode",
+        "reason": "the shared 4.1.136 fix commits bundle many codec fixes; only the SPDY method this advisory names is kept"
+      },
+      {
+        "class": "io.netty.handler.codec.stomp.StompSubframeDecoder$HeaderParser",
+        "method": "parseHeader",
+        "reason": "the shared 4.1.136 fix commits bundle many codec fixes; only the SPDY method this advisory names is kept"
+      },
+      {
+        "class": "io.netty.handler.codec.dns.DnsCodecUtil",
+        "method": "decompressDomainName",
+        "reason": "the shared 4.1.136 fix commits bundle many codec fixes; only the SPDY method this advisory names is kept"
+      },
+      {
+        "class": "io.netty.handler.codec.spdy.SpdyHttpDecoder",
+        "method": "channelInactive",
+        "reason": "removed by the fix (replaced by handlerRemoved); the leak is the RST_STREAM and maxContentLength paths in decode"
+      }
+    ]
+  },
+  "note": "SpdyHttpDecoder.decode drops the pending request from its map on RST_STREAM or oversize without releasing it, present in 4.1.0, 4.1.100, 4.1.131, 4.2.0 and 4.2.15. Reached only where a SPDY codec is in the pipeline.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

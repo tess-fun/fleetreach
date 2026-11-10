@@ -1,0 +1,52 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-mvh2-crg5-v77c",
+  "aliases": [
+    "CVE-2026-55833"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.spdy.SpdyHeaderBlockZlibDecoder",
+      "method": "decode"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/commit/5b68c61f37aa4a3045cba624cbea239655c9003b",
+      "https://github.com/netty/netty/commit/bb2ff68a1fb71cb4b0eb9a9e17b66c52aff680c6"
+    ],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.http.HttpContentEncoder",
+        "method": "decode",
+        "reason": "the shared 4.1.136 fix commits bundle many codec fixes; only the SPDY method this advisory names is kept"
+      },
+      {
+        "class": "io.netty.handler.codec.stomp.StompSubframeDecoder$HeaderParser",
+        "method": "parseHeader",
+        "reason": "the shared 4.1.136 fix commits bundle many codec fixes; only the SPDY method this advisory names is kept"
+      },
+      {
+        "class": "io.netty.handler.codec.dns.DnsCodecUtil",
+        "method": "decompressDomainName",
+        "reason": "the shared 4.1.136 fix commits bundle many codec fixes; only the SPDY method this advisory names is kept"
+      },
+      {
+        "class": "io.netty.handler.codec.spdy.SpdyHeaderBlockZlibDecoder",
+        "method": "calculateMaxDecompressedSizePerBlock",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "SpdyHeaderBlockZlibDecoder.decode keeps inflating after the header limit is hit, present in 4.1.0, 4.1.100, 4.1.131, 4.2.0 and 4.2.15. Reached only where a SPDY codec is in the pipeline.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-pwqr-wmgm-9rr8",
+  "aliases": [
+    "CVE-2026-33870"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http.HttpObjectDecoder",
+      "method": "decode"
+    },
+    {
+      "class": "io.netty.handler.codec.http.HttpObjectDecoder",
+      "method": "getChunkSize"
+    }
+  ],
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.http.HttpObjectDecoder",
+        "method": "checkChunkExtensions",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.HttpChunkLineValidatingByteProcessor",
+        "method": "process",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http.HttpObjectDecoder",
+        "method": "readTrailingHeaders",
+        "reason": "in the jar diff but trailer handling, not the chunk line"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit; from the advisory and the 4.1.131 to 4.1.132 jar diff. The chunk-size line, extensions included, is read in HttpObjectDecoder.decode and parsed by getChunkSize, both present from 4.1.0 through 4.2.15. Every Netty HTTP/1 decoder runs these, so the record only clears services with no HTTP/1 codec.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
