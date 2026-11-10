@@ -1,0 +1,45 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-wjxj-5m7g-mg7q",
+  "aliases": [
+    "CVE-2023-33202"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.bouncycastle:bcprov-jdk15on",
+    "org.bouncycastle:bcprov-ext-jdk15on",
+    "org.bouncycastle:bcprov-jdk18on",
+    "org.bouncycastle:bcprov-jdk15to18",
+    "org.bouncycastle:bcpkix-jdk18on"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.bouncycastle.asn1.ASN1Set",
+      "method": "toDERObject"
+    },
+    {
+      "class": "org.bouncycastle.asn1.ASN1Set",
+      "method": "sort"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/bcgit/bc-java/commit/0c576892862ed41894f49a8f639112e8d66d229c"
+    ],
+    "excluded": [
+      {
+        "class": "org.bouncycastle.openssl.PEMParser",
+        "method": "readObject",
+        "reason": "the entry the advisory names; the fix is in ASN1Set, which other parsers reach too"
+      }
+    ]
+  },
+  "note": "The advisory names PEMParser, but the fix changes how ASN1Set sorts for DER encoding, so the sinks are ASN1Set.toDERObject and sort, present in 1.50, 1.60, 1.70, 1.72 and 1.78. Certificates are usually parsed through CertificateFactory or a CertStore with the BC provider, a lookup by name, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

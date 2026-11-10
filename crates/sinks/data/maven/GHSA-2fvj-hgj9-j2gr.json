@@ -1,0 +1,48 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2fvj-hgj9-j2gr",
+  "aliases": [
+    "CVE-2026-10050"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.eclipse.jetty:jetty-security",
+    "org.eclipse.jetty.ee8:jetty-ee8-security",
+    "org.eclipse.jetty.ee9:jetty-ee9-security"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.eclipse.jetty.security.authentication.DigestAuthenticator$Digest",
+      "method": "check"
+    },
+    {
+      "class": "org.eclipse.jetty.ee9.security.authentication.DigestAuthenticator$Digest",
+      "method": "check"
+    },
+    {
+      "class": "org.eclipse.jetty.ee8.security.authentication.DigestAuthenticator$Digest",
+      "method": "check"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/jetty/jetty.project/commit/4bcdbc7db387ce9e20e2c7571a7250280466221d",
+      "https://github.com/jetty/jetty.project/commit/d0bb829ccecbf19e3ad3d32f2649b2800f01222d"
+    ],
+    "excluded": [
+      {
+        "class": "org.eclipse.jetty.security.authentication.DigestAuthenticator$Digest",
+        "method": "toString",
+        "reason": "not part of the hash check"
+      }
+    ]
+  },
+  "note": "The advisory text describes the client's DigestAuthentication.apply, but the listed packages and the fix cover the server's DigestAuthenticator$Digest.check, which hashes with ISO-8859-1; present in 9.4.0, 10.0.24, 11.0.24 and 12.0.35, plus the ee8 and ee9 copies. The jetty-client copy is not listed, so findings on it are not this record's. Reached only where DIGEST auth is configured; standalone Jetty sets that up from XML, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-hr8g-6v94-x4m9",
+  "aliases": [
+    "CVE-2023-33201"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.bouncycastle:bcprov-jdk15on",
+    "org.bouncycastle:bcprov-ext-jdk15on",
+    "org.bouncycastle:bcprov-jdk18on",
+    "org.bouncycastle:bcprov-jdk15to18"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.bouncycastle.jce.provider.X509LDAPCertStoreSpi",
+      "method": "search"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/bcgit/bc-java/commit/ccf93ca736b89250ff4ce079a5aa56f5cbf0ebbd",
+      "https://github.com/bcgit/bc-java/commit/e8c409a8389c815ea3fda5e8b94c92fdfe583bcc"
+    ]
+  },
+  "note": "X509LDAPCertStoreSpi.search builds the LDAP filter from the X.500 name without escaping; present in 1.50 through 1.78. The store is reached as CertStore.getInstance(\"LDAP\", provider), a lookup by name, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

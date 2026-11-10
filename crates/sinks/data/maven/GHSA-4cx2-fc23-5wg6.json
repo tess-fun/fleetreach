@@ -1,0 +1,36 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-4cx2-fc23-5wg6",
+  "aliases": [
+    "CVE-2025-8916"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.bouncycastle:bcpkix-jdk15on",
+    "org.bouncycastle:bcpkix-jdk18on",
+    "org.bouncycastle:bcpkix-jdk15to18"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.bouncycastle.x509.PKIXCertPathReviewer",
+      "method": "checkNameConstraints"
+    },
+    {
+      "class": "org.bouncycastle.pkix.jcajce.PKIXCertPathReviewer",
+      "method": "checkNameConstraints"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/bcgit/bc-java/commit/310b30a4fbf36d13f6cc201ffa7771715641e67e",
+      "https://github.com/bcgit/bc-java/commit/ff444a479942d88de64004dc82c3ee32a9e9075a"
+    ]
+  },
+  "note": "The advisory names both PKIXCertPathReviewer copies: org.bouncycastle.x509 in bcprov (present in 1.50 through 1.78) and org.bouncycastle.pkix.jcajce in bcpkix (present in 1.78, absent in 1.60 and 1.70). Reached only where the app reviews a cert path with PKIXCertPathReviewer, which is called directly, not through a provider.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3wrr-7qpf-2prh",
+  "aliases": [
+    "CVE-2026-50193"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.fasterxml.jackson.databind.node.InternalNodeMapper",
+      "method": "nodeToString"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.node.InternalNodeMapper",
+      "method": "nodeToPrettyString"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/a1fa4ae4ecf5cee16da465985f135f3e81816f8c"
+    ],
+    "excluded": [
+      {
+        "class": "com.fasterxml.jackson.databind.node.InternalNodeMapper$WrapperForSerializer",
+        "method": "_serializeNonRecursive",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "com.fasterxml.jackson.databind.node.BaseJsonNode",
+        "method": "toString",
+        "reason": "the caller; listing it adds nothing since the graph runs toString on every instance"
+      }
+    ]
+  },
+  "note": "JsonNode.toString and toPrettyString go through InternalNodeMapper, which first ships in 2.10.0, where the range starts; present in 2.10.0 and 2.13.4. The call graph treats toString as run on any instance, so any service that builds a JsonNode reaches this.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
