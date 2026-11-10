@@ -1,0 +1,42 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-c69g-56f8-xwqj",
+  "aliases": [
+    "CVE-2026-59900"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http2",
+    "io.grpc:grpc-netty-shaded"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http2.HttpConversionUtil$Http2ToHttpHeaderTranslator",
+      "method": "translateHeaders"
+    },
+    {
+      "class": "io.grpc.netty.shaded.io.netty.handler.codec.http2.HttpConversionUtil$Http2ToHttpHeaderTranslator",
+      "method": "translateHeaders"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/commit/bb2ff68a1fb71cb4b0eb9a9e17b66c52aff680c6",
+      "https://github.com/netty/netty/commit/5b68c61f37aa4a3045cba624cbea239655c9003b"
+    ],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.http2.DelegatingDecompressorFrameListener$Http2Decompressor",
+        "method": "decompress",
+        "reason": "GHSA-93wv-jw9v-4972, in the same merge"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit; the hunk is in the 4.1.136 merge of many advisories. Http2ToHttpHeaderTranslator.translateHeaders copies a literal host header next to the one built from :authority. The advisory names InboundHttp2ToHttpAdapter and Http2StreamFrameToHttpObjectCodec, which translate headers through HttpConversionUtil. Present in 4.1.42, 4.1.100, 4.1.131 and 4.2.6, and under the io.grpc.netty.shaded prefix in grpc-netty-shaded 1.50.0 and 1.70.0. Reached only where the app translates HTTP/2 to HTTP/1.x objects.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

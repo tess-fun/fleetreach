@@ -1,0 +1,52 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-w9fj-cfpg-grvv",
+  "aliases": [
+    "CVE-2026-33871"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http2",
+    "io.grpc:grpc-netty-shaded"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http2.DefaultHttp2FrameReader",
+      "method": "verifyContinuationFrame"
+    },
+    {
+      "class": "io.netty.handler.codec.http2.DefaultHttp2FrameReader$HeadersBlockBuilder",
+      "method": "addFragment"
+    },
+    {
+      "class": "io.grpc.netty.shaded.io.netty.handler.codec.http2.DefaultHttp2FrameReader",
+      "method": "verifyContinuationFrame"
+    },
+    {
+      "class": "io.grpc.netty.shaded.io.netty.handler.codec.http2.DefaultHttp2FrameReader$HeadersBlockBuilder",
+      "method": "addFragment"
+    }
+  ],
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.http2.AbstractHttp2ConnectionHandlerBuilder",
+        "method": "decoderEnforceMaxSmallContinuationFrames",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "io.netty.handler.codec.http2.DefaultHttp2FrameReader",
+        "method": "<init>",
+        "reason": "the fix adds a constructor taking the new limit"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit; these came from the 4.1.131 to 4.1.132 jar diff. Zero-byte CONTINUATION frames get past the size checks; the fix adds a limit on small CONTINUATION frames and changes verifyContinuationFrame and HeadersBlockBuilder.addFragment. Present in 4.1.42, 4.1.100, 4.1.131 and 4.2.6, and under the io.grpc.netty.shaded prefix in grpc-netty-shaded 1.50.0 and 1.70.0. Any HTTP/2 server built on Netty reaches these.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
