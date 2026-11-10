@@ -16,10 +16,11 @@
       "method": "parseContent"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": []
   },
-  "note": "OSV lists no fix commit; from the advisory. Jetty reads the chunk-size line and its extensions in HttpParser.parseContent, present in 9.4.0, 9.4.58, 10.0.25, 11.0.25, 12.0.30 and 12.1.5. Every Jetty HTTP/1 server parses requests here, so the record mostly clears services that only carry jetty-http as a client dependency.",
+  "note": "OSV lists no fix commit; from the advisory. Jetty reads the chunk-size line and its extensions in HttpParser.parseContent, present in 9.4.0, 9.4.58, 10.0.25, 11.0.25, 12.0.30 and 12.1.5. Every Jetty HTTP/1 server parses requests here, so the record mostly clears services that only carry jetty-http as a client dependency. Standalone Jetty builds its server and connectors from XML by class name, so no sink reached proves nothing.",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-10"

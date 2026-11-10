@@ -20,6 +20,7 @@
       "method": "parse"
     }
   ],
+  "reached_by_name": true,
   "evidence": {
     "commits": [
       "https://github.com/jetty/jetty.project/pull/12012"
@@ -42,7 +43,7 @@
       }
     ]
   },
-  "note": "HttpURI.parse in 9.4 and HttpURI$Mutable.parse from 10.0.0 through 12.0.11. Every Jetty server parses request URIs here, so the record mostly clears services that only carry jetty-http as a client dependency.",
+  "note": "HttpURI.parse in 9.4 and HttpURI$Mutable.parse from 10.0.0 through 12.0.11. Every Jetty server parses request URIs here, so the record mostly clears services that only carry jetty-http as a client dependency. Standalone Jetty builds its server and connectors from XML by class name, so no sink reached proves nothing.",
   "review": {
     "by": "tess-fun",
     "date": "2026-11-10"

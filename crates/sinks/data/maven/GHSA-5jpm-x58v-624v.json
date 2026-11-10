@@ -1,0 +1,45 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-5jpm-x58v-624v",
+  "aliases": [
+    "CVE-2024-29025"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http.multipart.HttpPostMultipartRequestDecoder",
+      "method": "offer"
+    },
+    {
+      "class": "io.netty.handler.codec.http.multipart.HttpPostStandardRequestDecoder",
+      "method": "offer"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/commit/0d0c6ed782d13d423586ad0c71737b2c7d02058c"
+    ],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.http.multipart.HttpPostRequestDecoder",
+        "method": "<init>",
+        "reason": "the fix adds field count and size limits to the constructors; the data piles up in offer"
+      },
+      {
+        "class": "io.netty.handler.codec.http.multipart.HttpPostMultipartRequestDecoder",
+        "method": "addHttpData",
+        "reason": "called from offer"
+      }
+    ]
+  },
+  "note": "Both POST body decoders accumulate fields and undecoded bytes without limit in offer, present in 4.1.0, 4.1.100 and 4.1.107. Reached only where the app decodes form or multipart bodies with HttpPostRequestDecoder.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

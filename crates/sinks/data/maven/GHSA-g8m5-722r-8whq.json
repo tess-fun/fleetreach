@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-g8m5-722r-8whq",
+  "aliases": [
+    "CVE-2024-8184"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.eclipse.jetty:jetty-server"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.eclipse.jetty.server.handler.ThreadLimitHandler",
+      "method": "getRemote"
+    },
+    {
+      "class": "org.eclipse.jetty.ee9.nested.ThreadLimitHandler",
+      "method": "getRemote"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/jetty/jetty.project/pull/11723"
+    ],
+    "excluded": [
+      {
+        "class": "org.eclipse.jetty.ee9.nested.ThreadLimitHandler",
+        "method": "handle",
+        "reason": "the caller; the unbounded per-remote state is made in getRemote"
+      }
+    ]
+  },
+  "note": "ThreadLimitHandler.getRemote keeps state per claimed remote address; present in 9.3.12, 9.4.55, 10.0.23, 11.0.23 and 12.0.8, plus the ee9 nested copy in 12.0.8. Reached only where a ThreadLimitHandler is installed; standalone Jetty adds handlers from XML by class name, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

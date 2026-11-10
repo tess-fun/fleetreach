@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-wjpw-4j6x-6rwh",
+  "aliases": [
+    "CVE-2025-11143"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.eclipse.jetty:jetty-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.eclipse.jetty.http.HttpURI",
+      "method": "parse"
+    },
+    {
+      "class": "org.eclipse.jetty.http.HttpURI$Mutable",
+      "method": "parse"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": []
+  },
+  "note": "OSV lists no fix commit; same parser as GHSA-qh8g-58pp-2wxh: HttpURI.parse in 9.4 and HttpURI$Mutable.parse from 10.0.0 through 12.1. Every Jetty server parses request URIs here, so the record mostly clears services that only carry jetty-http as a client dependency. Standalone Jetty builds its server and connectors from XML by class name, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

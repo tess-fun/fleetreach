@@ -1,0 +1,62 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-7p3p-8qv8-m2vh",
+  "aliases": [
+    "CVE-2026-6790"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.eclipse.jetty:jetty-server"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.eclipse.jetty.http2.server.HttpChannelOverHTTP2",
+      "method": "onRequest"
+    },
+    {
+      "class": "org.eclipse.jetty.http2.server.internal.HttpStreamOverHTTP2",
+      "method": "onRequest"
+    },
+    {
+      "class": "org.eclipse.jetty.http3.server.internal.HttpStreamOverHTTP3",
+      "method": "onRequest"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/jetty/jetty.project/commit/3e5a4daec196859b8886b6f67b1157dab47cdb6f",
+      "https://github.com/jetty/jetty.project/commit/67ba9e6b39661810123680d9c894e99a7940c73d",
+      "https://github.com/jetty/jetty.project/commit/cbca3076f7c914a232e7a8b22fa95fbf7e67a6cc"
+    ],
+    "excluded": [
+      {
+        "class": "org.eclipse.jetty.server.internal.HttpConnection$HttpStreamOverHTTP1",
+        "method": "headerComplete",
+        "reason": "the HTTP/1.1 path already checks Host against the authority"
+      },
+      {
+        "class": "org.eclipse.jetty.server.internal.HttpChannelState",
+        "method": "onRequest",
+        "reason": "runs for every protocol; the missing check is on the HTTP/2 and HTTP/3 request paths"
+      },
+      {
+        "class": "org.eclipse.jetty.client.transport.HttpConnection",
+        "method": "normalizeRequest",
+        "reason": "client side, another change in the same PRs"
+      },
+      {
+        "class": "org.eclipse.jetty.http.ComplianceUtils",
+        "method": "verify",
+        "reason": "helper the fix uses"
+      }
+    ]
+  },
+  "note": "Only HTTP/2 and HTTP/3 requests skip the Host check. Their request entry points live in the HTTP/2 and HTTP/3 server modules, not jetty-server: HttpChannelOverHTTP2.onRequest (9.4.50, 10.0.20, 11.0.20), HttpStreamOverHTTP2.onRequest (12.0.20, 12.1.5) and HttpStreamOverHTTP3.onRequest (12.0.20). Standalone Jetty adds these connectors from XML by class name, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

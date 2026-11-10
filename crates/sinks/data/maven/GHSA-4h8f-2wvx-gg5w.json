@@ -1,0 +1,38 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-4h8f-2wvx-gg5w",
+  "aliases": [
+    "CVE-2024-34447"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.bouncycastle:bcprov-jdk15on",
+    "org.bouncycastle:bcprov-jdk18on",
+    "org.bouncycastle:bcprov-jdk15to18"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.bouncycastle.jsse.provider.ProvSSLSocketDirect",
+      "method": "notifyConnected"
+    },
+    {
+      "class": "org.bouncycastle.jsse.provider.ProvSSLSocketWrap",
+      "method": "notifyConnected"
+    },
+    {
+      "class": "org.bouncycastle.jsse.provider.ProvX509TrustManager",
+      "method": "checkEndpointID"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": []
+  },
+  "note": "OSV lists no fix commit; from the advisory. The BCJSSE socket takes its peer host on connect in notifyConnected and checks it in ProvX509TrustManager.checkEndpointID; all three are in bctls, not the listed bcprov artifacts, and present in 1.61, 1.70 and 1.77. BCJSSE is installed as a JSSE provider and looked up by name, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
