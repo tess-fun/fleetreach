@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-25qh-j22f-pwp8",
+  "aliases": [
+    "CVE-2025-11226"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "ch.qos.logback:logback-core"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ch.qos.logback.core.model.processor.conditional.IfModelHandler",
+      "method": "handle"
+    },
+    {
+      "class": "ch.qos.logback.core.joran.conditional.IfAction",
+      "method": "begin"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/qos-ch/logback/commit/61f6a2544f36b3016e0efd434ee21f19269f1df7"
+    ],
+    "excluded": [
+      {
+        "class": "ch.qos.logback.core.model.processor.conditional.IfModelHandler",
+        "method": "hasNew",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "An <if condition> element in the config is compiled with Janino. IfModelHandler.handle does it from 1.3 (present in 1.3.11, 1.4.11 and 1.5.12); before that IfAction.begin (present in 1.1.0 and 1.2.12, gone from 1.3). Needs a writable config file or a planted environment variable. Logback builds its configuration from logback.xml, element by element and class by class name, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

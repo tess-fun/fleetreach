@@ -1,0 +1,42 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-pr98-23f8-jwxv",
+  "aliases": [
+    "CVE-2024-12798"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "ch.qos.logback:logback-core"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ch.qos.logback.core.boolex.JaninoEventEvaluatorBase",
+      "method": "start"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/qos-ch/logback/commit/2cb6d520df7592ef1c3a198f1b5df3c10c93e183"
+    ],
+    "excluded": [
+      {
+        "class": "ch.qos.logback.core.joran.event.SaxEventRecorder",
+        "method": "resolveEntity",
+        "reason": "CVE-2024-12801 (GHSA-6v67-2wr5-gvf4), added in the same release"
+      },
+      {
+        "class": "ch.qos.logback.classic.joran.action.ClassicEvaluatorAction",
+        "method": "defaultClassName",
+        "reason": "names JaninoEventEvaluator as the default evaluator class; the code runs in start"
+      }
+    ]
+  },
+  "note": "The fix removes the Janino evaluator. JaninoEventEvaluatorBase.start compiles the expression from the config, present in 1.1.0, 1.2.12, 1.3.11, 1.4.11 and 1.5.12. Logback builds its configuration from logback.xml, element by element and class by class name, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

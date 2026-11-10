@@ -1,0 +1,115 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-jjjh-jjxp-wpff",
+  "aliases": [
+    "CVE-2022-42003"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_deserializeWrappedValue"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_deserializeFromArray"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseBooleanPrimitive"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseBytePrimitive"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseShortPrimitive"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseIntPrimitive"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseLongPrimitive"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseFloatPrimitive"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseDoublePrimitive"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseDateFromArray"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseDate"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseBoolean"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseByte"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseShort"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseInteger"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseLong"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseFloat"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseDouble"
+    },
+    {
+      "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+      "method": "_parseString"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/2c4a601c626f7790cad9d3c322d244e182838288",
+      "https://github.com/FasterXML/jackson-databind/commit/cd090979b7ea78c75e4de8a4aed04f7e9fa8deea",
+      "https://github.com/FasterXML/jackson-databind/commit/d78d00ee7b5245b93103fef3187f70543d67ca33"
+    ],
+    "excluded": [
+      {
+        "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+        "method": "handleNestedArrayForSingle",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "com.fasterxml.jackson.databind.deser.BeanDeserializer",
+        "method": "_deserializeFromArray",
+        "reason": "CVE-2022-42004 (GHSA-rgv9-q543-rqg4), fixed in the same 2.12.7.1 release"
+      }
+    ]
+  },
+  "note": "Only with UNWRAP_SINGLE_VALUE_ARRAYS on (off by default), which the call graph cannot see, so reaching these means the service deserializes primitive values at all. The fix patches _deserializeWrappedValue, the seven _parseXxxPrimitive methods and _parseDateFromArray in StdDeserializer. On 2.5.0 the unwrap sits in the boxed _parseBoolean, _parseByte, _parseShort, _parseInteger, _parseLong, _parseFloat, _parseDouble, _parseString and _parseDate instead, so those are listed too; _parseBytePrimitive and _parseDateFromArray are absent there.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

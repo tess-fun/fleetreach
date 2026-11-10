@@ -1,0 +1,42 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-6v67-2wr5-gvf4",
+  "aliases": [
+    "CVE-2024-12801"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "ch.qos.logback:logback-core"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ch.qos.logback.core.joran.event.SaxEventRecorder",
+      "method": "recordEvents"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/qos-ch/logback/commit/5f05041cba4c4ac0a62748c5c527a2da48999f2d"
+    ],
+    "excluded": [
+      {
+        "class": "ch.qos.logback.core.joran.event.SaxEventRecorder",
+        "method": "resolveEntity",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ch.qos.logback.core.boolex.JaninoEventEvaluatorBase",
+        "method": "start",
+        "reason": "CVE-2024-12798 (GHSA-pr98-23f8-jwxv), fixed in the same release"
+      }
+    ]
+  },
+  "note": "A DOCTYPE in an XML config makes the parser fetch an external entity. SaxEventRecorder.recordEvents parses every XML config, present in 1.1.0, 1.2.12, 1.3.11, 1.4.11 and 1.5.12. Logback builds its configuration from logback.xml, element by element and class by class name, so no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
