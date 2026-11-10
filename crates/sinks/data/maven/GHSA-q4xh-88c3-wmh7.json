@@ -1,0 +1,51 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-q4xh-88c3-wmh7",
+  "aliases": [
+    "CVE-2026-68497"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind",
+    "tools.jackson.core:jackson-databind"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.fasterxml.jackson.databind.ext.CoreXMLDeserializers$Std",
+      "method": "_deserialize"
+    },
+    {
+      "class": "tools.jackson.databind.ext.CoreXMLDeserializers$Std",
+      "method": "_deserialize"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/a99b7e74c8928f43f6975773a8c862c8316178bd"
+    ],
+    "excluded": [
+      {
+        "class": "com.fasterxml.jackson.databind.deser.std.StdDeserializer",
+        "method": "_validateAgainstMaxNumberLen",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "com.fasterxml.jackson.databind.deser.std.StdKeyDeserializer",
+        "method": "_parse",
+        "reason": "in the jar diff but another fix shipped in the same release"
+      },
+      {
+        "class": "com.fasterxml.jackson.databind.deser.std.InetAddressValidator",
+        "method": "_ipStringToBytes",
+        "reason": "in the jar diff but another fix shipped in the same release"
+      }
+    ]
+  },
+  "note": "CoreXMLDeserializers$Std._deserialize hands the string to DatatypeFactory.newDuration and newXMLGregorianCalendar; present in 2.14.0, 2.18.9, 2.21.5, 3.0.0 and 3.2.1. Reached only where a bound type has a Duration or XMLGregorianCalendar property.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

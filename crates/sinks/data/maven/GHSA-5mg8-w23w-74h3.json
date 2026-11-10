@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-5mg8-w23w-74h3",
+  "aliases": [
+    "CVE-2020-8908"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.google.guava:guava"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.google.common.io.Files",
+      "method": "createTempDir"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/google/guava/commit/feb83a1c8fd2e7670b244d5afd23cba5aca43284",
+      "https://github.com/google/guava/commit/fec0dbc4634006a6162cfd4d0d09c962073ddf40"
+    ],
+    "excluded": [
+      {
+        "class": "com.google.common.io.FileBackedOutputStream",
+        "method": "<init>",
+        "reason": "CVE-2023-2976, its own advisory (GHSA-7g45-4rm6-3mm3)"
+      }
+    ]
+  },
+  "note": "The advisory names Files.createTempDir; present in 11.0 and 31.1-jre. Exposed only on multi-user Unix hosts or Android.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

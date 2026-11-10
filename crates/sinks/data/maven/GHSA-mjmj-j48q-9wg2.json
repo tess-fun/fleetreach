@@ -1,0 +1,39 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-mjmj-j48q-9wg2",
+  "aliases": [
+    "CVE-2022-1471"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.yaml:snakeyaml"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.yaml.snakeyaml.constructor.Constructor",
+      "method": "getClassForName"
+    }
+  ],
+  "evidence": {
+    "commits": [],
+    "excluded": [
+      {
+        "class": "org.yaml.snakeyaml.LoaderOptions",
+        "method": "setTagInspector",
+        "reason": "added by the fix (2.0 rejects global tags by default)"
+      },
+      {
+        "class": "org.yaml.snakeyaml.constructor.Constructor",
+        "method": "getClassForNode",
+        "reason": "the caller; getClassForName is where a global tag becomes a class"
+      }
+    ]
+  },
+  "note": "OSV lists no fix commit; from the advisory and the 1.33 to 2.0 jar diff. Any Yaml built on Constructor, including new Yaml(), which defaults to it before 2.0, resolves tags through getClassForName; present in 1.10, 1.17, 1.26 and 1.33. Yaml built on SafeConstructor never calls it.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
