@@ -1,0 +1,42 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-8c42-7qj2-3j46",
+  "aliases": [
+    "CVE-2026-59903"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http.cors.CorsHandler",
+      "method": "setVaryHeader"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/pull/17213",
+      "https://github.com/netty/netty/pull/17217"
+    ],
+    "excluded": [
+      {
+        "class": "io.netty.handler.ssl.SslClientHelloHandler",
+        "method": "decode",
+        "reason": "in the fix PRs but GHSA-c4c3-7fpv-j4q5"
+      },
+      {
+        "class": "io.netty.handler.codec.mqtt.MqttEncoder",
+        "method": "encodeConnectMessage",
+        "reason": "in the fix PRs but another change shipped in the same release"
+      }
+    ]
+  },
+  "note": "The advisory names CorsHandler.setVaryHeader, which replaces any Vary header; present in 4.1.0, 4.1.131 and 4.2.15. Reached only where a CorsHandler is in the pipeline.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-6cqp-g7gg-8hr5",
+  "aliases": [
+    "CVE-2026-56746"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http.cors.CorsHandler",
+      "method": "channelRead"
+    },
+    {
+      "class": "io.netty.handler.codec.http.cors.CorsHandler",
+      "method": "getForOrigin"
+    }
+  ],
+  "evidence": {
+    "commits": []
+  },
+  "note": "OSV lists no fix commit; the 4.1.136 jar diff bundles many codec fixes, so the sinks come from the advisory. The short-circuit decision is made in CorsHandler.channelRead from getForOrigin; channelRead is present in 4.1.0, 4.1.131 and 4.2.15, getForOrigin from 4.1.131 (absent in 4.1.0, which has one config). Reached only where a CorsHandler is in the pipeline; the bypass needs shortCircuit on.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

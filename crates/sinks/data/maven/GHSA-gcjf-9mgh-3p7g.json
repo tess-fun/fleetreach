@@ -1,0 +1,27 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-gcjf-9mgh-3p7g",
+  "aliases": [
+    "CVE-2026-59921"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http.multipart.HttpPostRequestEncoder",
+      "method": "addBodyHttpData"
+    }
+  ],
+  "evidence": {
+    "commits": []
+  },
+  "note": "OSV lists no fix commit; the 4.1.136 jar diff bundles many codec fixes, so the sinks come from the advisory. HttpPostRequestEncoder.addBodyHttpData is the only method that writes the filename into Content-Disposition (checked in 4.1.0, 4.1.131 and 4.2.15). Only a client building multipart requests reaches it.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

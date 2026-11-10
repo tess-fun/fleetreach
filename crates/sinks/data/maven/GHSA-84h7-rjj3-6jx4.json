@@ -1,0 +1,46 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-84h7-rjj3-6jx4",
+  "aliases": [
+    "CVE-2025-67735"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http.HttpRequestEncoder",
+      "method": "encodeInitialLine"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/commit/77e81f1e5944d98b3acf887d3aa443b252752e94"
+    ],
+    "excluded": [
+      {
+        "class": "io.netty.handler.codec.http.DefaultHttpRequest",
+        "method": "<init>",
+        "reason": "the fix adds URI validation here; the unescaped write is in the encoder"
+      },
+      {
+        "class": "io.netty.handler.codec.http.DefaultFullHttpRequest",
+        "method": "<init>",
+        "reason": "the fix adds URI validation here; the unescaped write is in the encoder"
+      },
+      {
+        "class": "io.netty.handler.codec.http.HttpUtil",
+        "method": "validateRequestLineTokens",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "HttpRequestEncoder.encodeInitialLine writes the request URI unescaped; present in 4.1.0, 4.1.131 and 4.2.15. Only an HTTP client encoder reaches it; servers do not.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
