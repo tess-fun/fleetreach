@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-78wr-2p64-hpwj",
+  "aliases": [
+    "CVE-2024-47554"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "commons-io:commons-io"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.apache.commons.io.input.XmlStreamReader",
+      "method": "getXmlProlog"
+    },
+    {
+      "class": "org.apache.commons.io.output.XmlStreamWriter",
+      "method": "detectEncoding"
+    }
+  ],
+  "evidence": {
+    "commits": []
+  },
+  "note": "OSV lists no fix commit; the 2.13.0 to 2.14.0 jar diff changes only the ENCODING_PATTERN regex in XmlStreamReader.<clinit>. getXmlProlog runs that regex on the input prolog; XmlStreamWriter.detectEncoding runs the same pattern (its own copy before 2.x shared it), so it is listed too. Both are present from 2.0.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

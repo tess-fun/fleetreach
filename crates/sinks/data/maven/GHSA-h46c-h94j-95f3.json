@@ -1,0 +1,150 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-h46c-h94j-95f3",
+  "aliases": [
+    "CVE-2025-52999"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-core"
+  ],
+  "status": "reviewed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-core/commit/54f78a9cff5e3bace1cf8042ac1b4c3785dc9f5e"
+    ],
+    "excluded": [
+      {
+        "class": "com.fasterxml.jackson.core.StreamReadConstraints$Builder",
+        "method": "<init>",
+        "reason": "added by the fix (StreamReadConstraints first ships in 2.15)"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.StreamReadConstraints$Builder",
+        "method": "build",
+        "reason": "added by the fix (StreamReadConstraints first ships in 2.15)"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.StreamReadConstraints",
+        "method": "<init>",
+        "reason": "added by the fix (StreamReadConstraints first ships in 2.15)"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.JsonReadContext",
+        "method": "<init>",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.ReaderBasedJsonParser",
+        "method": "_nextAfterName",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.ReaderBasedJsonParser",
+        "method": "_nextTokenNotInObject",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.ReaderBasedJsonParser",
+        "method": "nextBooleanValue",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.ReaderBasedJsonParser",
+        "method": "nextIntValue",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.ReaderBasedJsonParser",
+        "method": "nextLongValue",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.ReaderBasedJsonParser",
+        "method": "nextTextValue",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.ReaderBasedJsonParser",
+        "method": "nextToken",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8DataInputJsonParser",
+        "method": "_nextAfterName",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8DataInputJsonParser",
+        "method": "_nextTokenNotInObject",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8DataInputJsonParser",
+        "method": "nextBooleanValue",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8DataInputJsonParser",
+        "method": "nextIntValue",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8DataInputJsonParser",
+        "method": "nextLongValue",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8DataInputJsonParser",
+        "method": "nextTextValue",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8StreamJsonParser",
+        "method": "_nextAfterName",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8StreamJsonParser",
+        "method": "_nextTokenNotInObject",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8StreamJsonParser",
+        "method": "nextBooleanValue",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8StreamJsonParser",
+        "method": "nextIntValue",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8StreamJsonParser",
+        "method": "nextLongValue",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.UTF8StreamJsonParser",
+        "method": "nextTextValue",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.async.NonBlockingJsonParserBase",
+        "method": "_startArrayScope",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      },
+      {
+        "class": "com.fasterxml.jackson.core.json.async.NonBlockingJsonParserBase",
+        "method": "_startObjectScope",
+        "reason": "the token loop every parse runs; the fix adds a depth check here, so listing it would mark any JSON read"
+      }
+    ]
+  },
+  "note": "Before 2.15.0 no parser limited nesting depth, so every parse of untrusted JSON is exposed and no one method holds the flaw.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

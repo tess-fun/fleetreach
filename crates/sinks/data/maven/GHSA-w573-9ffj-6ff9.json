@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-w573-9ffj-6ff9",
+  "aliases": [
+    "CVE-2026-45536"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-transport-native-epoll",
+    "io.netty:netty-transport-native-kqueue"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.channel.unix.Socket",
+      "method": "recvFd"
+    }
+  ],
+  "evidence": {
+    "commits": []
+  },
+  "note": "OSV lists no fix commit and the fix is in the native C code, so the jar diff is empty. Socket.recvFd lives in netty-transport-native-unix-common, not the listed artifacts; it is only called by the domain socket channels in FILE_DESCRIPTORS read mode, so a TCP-only service does not reach it.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

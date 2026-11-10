@@ -1,0 +1,277 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-4gc7-5j7h-4qph",
+  "aliases": [
+    "CVE-2024-38820"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "org.springframework:spring-context",
+    "org.springframework:spring-web"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "org.springframework.validation.DataBinder",
+      "method": "setDisallowedFields"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/spring-projects/spring-framework/commit/23656aebc6c7d0f9faff1080981eb4d55eff296c"
+    ],
+    "excluded": [
+      {
+        "class": "org.springframework.validation.DataBinder",
+        "method": "isAllowed",
+        "reason": "runs on every bind; the flaw only matters once disallowed fields are set, which setDisallowedFields marks"
+      },
+      {
+        "class": "org.springframework.docs.integration.observability.config.conventions.CustomServerRequestObservationConvention",
+        "method": "getContextualName",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.http.HttpHeaders",
+        "method": "<init>",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.http.HttpHeaders",
+        "method": "setAcceptCharset",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.http.MediaTypeFactory",
+        "method": "getMediaTypes",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.http.MediaTypeFactory",
+        "method": "parseMimeTypes",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.http.client.JdkClientHttpRequest",
+        "method": "buildRequest",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.http.client.JdkClientHttpResponse",
+        "method": "adaptHeaders",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.http.client.observation.DefaultClientRequestObservationConvention",
+        "method": "getContextualName",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.http.client.reactive.JdkClientHttpResponse",
+        "method": "adaptHeaders",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.http.server.observation.DefaultServerRequestObservationConvention",
+        "method": "getContextualName",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.http.server.reactive.ServletServerHttpRequest",
+        "method": "createDefaultHttpHeaders",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.http.server.reactive.observation.DefaultServerRequestObservationConvention",
+        "method": "getContextualName",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.mock.web.MockHttpServletRequest",
+        "method": "setContentType",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.mock.web.MockHttpServletRequest",
+        "method": "updateContentTypeHeader",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.mock.web.MockHttpServletResponse",
+        "method": "setContentType",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.mock.web.MockHttpServletResponse",
+        "method": "setExplicitCharacterEncoding",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.mock.web.MockHttpServletResponse",
+        "method": "updateContentTypePropertyAndHeader",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.util.MimeType",
+        "method": "<init>",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.accept.ContentNegotiationManagerFactoryBean",
+        "method": "addMediaType",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.accept.MappingMediaTypeFileExtensionResolver",
+        "method": "<init>",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.accept.MappingMediaTypeFileExtensionResolver",
+        "method": "lookupMediaType",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.accept.PathExtensionContentNegotiationStrategy",
+        "method": "getMediaTypeKey",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.client.RestClientResponseException",
+        "method": "copyHeaders",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.filter.ForwardedHeaderFilter$ForwardedHeaderRemovingRequest",
+        "method": "headerNames",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.filter.HiddenHttpMethodFilter",
+        "method": "doFilterInternal",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.filter.reactive.HiddenHttpMethodFilter",
+        "method": "mapExchange",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.multipart.support.MultipartResolutionDelegate",
+        "method": "isMultipartContent",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.multipart.support.StandardMultipartHttpServletRequest",
+        "method": "handleParseFailure",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.reactive.accept.ParameterContentTypeResolver",
+        "method": "formatKey",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.reactive.function.client.DefaultClientRequestObservationConvention",
+        "method": "getContextualName",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.reactive.resource.CachingResourceResolver",
+        "method": "getContentCodingKey",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.reactive.resource.EncodedResourceResolver",
+        "method": "getAcceptEncoding",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.reactive.resource.ResourceWebHandler",
+        "method": "getMediaType",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.reactive.resource.ResourceWebHandler",
+        "method": "setMediaTypes",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.reactive.result.condition.AbstractNameValueExpression",
+        "method": "hashCode",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.servlet.mvc.condition.AbstractNameValueExpression",
+        "method": "hashCode",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.servlet.mvc.method.annotation.AbstractMessageConverterMethodProcessor",
+        "method": "safeExtension",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.servlet.resource.CachingResourceResolver",
+        "method": "getContentCodingKey",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.servlet.resource.EncodedResourceResolver",
+        "method": "getAcceptEncoding",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.servlet.resource.ResourceHttpRequestHandler",
+        "method": "getMediaType",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.servlet.resource.ResourceHttpRequestHandler",
+        "method": "setMediaTypes",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.servlet.view.xslt.XsltView",
+        "method": "configureResponse",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.socket.WebSocketExtension",
+        "method": "<init>",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.socket.adapter.standard.StandardToWebSocketExtensionAdapter",
+        "method": "initParameters",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.socket.client.standard.StandardWebSocketClient",
+        "method": "getPort",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.util.DisconnectedClientHelper",
+        "method": "isClientDisconnectedException",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.util.UriComponentsBuilder",
+        "method": "fromHttpUrl",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      },
+      {
+        "class": "org.springframework.web.util.UrlPathHelper",
+        "method": "removeJsessionid",
+        "reason": "same commit, unrelated toLowerCase call sites, not this advisory"
+      }
+    ]
+  },
+  "note": "DataBinder lives in spring-context; WebDataBinder in spring-web inherits setDisallowedFields, so an app call on either lands here. Present in 4.3.0, 5.3.27 and 6.1.13. Without a disallowed-fields list there is nothing to bypass, so \"not reached\" holds even though isAllowed runs on every bind.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
