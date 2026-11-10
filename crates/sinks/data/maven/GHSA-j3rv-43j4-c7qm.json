@@ -1,0 +1,34 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-j3rv-43j4-c7qm",
+  "aliases": [
+    "CVE-2026-54512"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind",
+    "tools.jackson.core:jackson-databind"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.fasterxml.jackson.databind.DatabindContext",
+      "method": "_resolveAndValidateGeneric"
+    },
+    {
+      "class": "tools.jackson.databind.DatabindContext",
+      "method": "_resolveAndValidateGeneric"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/434d6c511de7fdd9872f29157aafb6162d12d8d5"
+    ]
+  },
+  "note": "Runs only for polymorphic type ids that carry generic parameters. The proposal also named BasicPolymorphicTypeValidator.validateSubType, which every polymorphic read calls and which the fix only reuses.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

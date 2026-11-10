@@ -1,0 +1,47 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-rmj7-2vxq-3g9f",
+  "aliases": [
+    "CVE-2026-54513"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind",
+    "tools.jackson.core:jackson-databind"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator$Builder",
+      "method": "allowIfSubTypeIsArray"
+    },
+    {
+      "class": "tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator$Builder",
+      "method": "allowIfSubTypeIsArray"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/01d1692c8d0ed03e51a0e3c4f8a9e6908e4931e5",
+      "https://github.com/FasterXML/jackson-databind/commit/24529da29fdf46ff94ca38de9ebf31cd188f5e8e"
+    ],
+    "excluded": [
+      {
+        "class": "com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator$Builder",
+        "method": "build",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator$Builder",
+        "method": "build",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  },
+  "note": "The flawed matcher is the anonymous class allowIfSubTypeIsArray creates, so the call that configures it is the sink: an application that never calls it cannot hit the bypass. validateSubType and the constructor, which the proposal also named, run for every validator. The method is absent in 2.10.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

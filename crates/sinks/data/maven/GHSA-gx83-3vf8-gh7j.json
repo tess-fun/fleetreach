@@ -1,0 +1,34 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-gx83-3vf8-gh7j",
+  "aliases": [
+    "CVE-2026-83557"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.fasterxml.jackson.core:jackson-databind",
+    "tools.jackson.core:jackson-databind"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.fasterxml.jackson.databind.jsontype.DefaultBaseTypeLimitingValidator",
+      "method": "isUnsafeBaseType"
+    },
+    {
+      "class": "tools.jackson.databind.jsontype.DefaultBaseTypeLimitingValidator",
+      "method": "isUnsafeBaseType"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/FasterXML/jackson-databind/commit/eb3b7fc0f9c0d27f471550ac3316b17d1987388f"
+    ]
+  },
+  "note": "The fix only adds Comparable to the static deny set, so the proposer found no method. isUnsafeBaseType is where the set is read; it runs only when a DefaultBaseTypeLimitingValidator is in use (opt-in in 2.x, the default for @JsonTypeInfo in 3.x). Absent before 2.11.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

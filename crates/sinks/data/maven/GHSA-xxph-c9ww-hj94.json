@@ -1,0 +1,45 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-xxph-c9ww-hj94",
+  "aliases": [
+    "CVE-2026-102554"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "com.google.guava:guava"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "com.google.common.collect.CompactHashMap",
+      "method": "readObject"
+    },
+    {
+      "class": "com.google.common.collect.CompactHashSet",
+      "method": "readObject"
+    },
+    {
+      "class": "com.google.common.collect.MapMakerInternalMap$AbstractSerializationProxy",
+      "method": "readMapMaker"
+    }
+  ],
+  "reached_by_name": true,
+  "evidence": {
+    "commits": [
+      "https://github.com/google/guava/commit/b931fe9d6d5cf00bc55714ad3308d086f71850fe"
+    ],
+    "excluded": [
+      {
+        "class": "com.google.common.collect.MapMakerInternalMap$AbstractSerializationProxy",
+        "method": "readMapMaker",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  },
+  "note": "Java serialization calls readObject on whatever class the stream names, so no sink reached proves nothing. The proposal dropped readMapMaker, which the advisory names. CompactHashMap and CompactHashSet are absent in Guava 20.0 and earlier.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}

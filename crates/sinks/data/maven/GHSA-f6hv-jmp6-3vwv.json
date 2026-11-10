@@ -1,0 +1,35 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-f6hv-jmp6-3vwv",
+  "aliases": [
+    "CVE-2026-42587"
+  ],
+  "ecosystem": "Maven",
+  "packages": [
+    "io.netty:netty-codec-http",
+    "io.netty:netty-codec-http2"
+  ],
+  "status": "reviewed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "io.netty.handler.codec.http.HttpContentDecompressor",
+      "method": "newContentDecoder"
+    },
+    {
+      "class": "io.netty.handler.codec.http2.DelegatingDecompressorFrameListener",
+      "method": "newContentDecompressor"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/netty/netty/commit/0332676fd1d7",
+      "https://github.com/netty/netty/commit/46ee86bfd489"
+    ]
+  },
+  "note": "OSV lists no fix commit; these came from a commit search and the 4.1.132 to 4.1.133 jar diff. The two methods pick the decoder for each Content-Encoding, and before the br, zstd and snappy branches existed in a release there is no bypass, so \"reached\" overstates old 4.1 lines.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-10"
+  }
+}
