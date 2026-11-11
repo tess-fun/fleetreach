@@ -1,0 +1,4 @@
+#!/bin/sh
+# Surefire's test JVM (-Djvm=...): the build's java with the JaCoCo agent, so Maven's own JVM,
+# its plugins and javac's annotation processors stay out of the coverage.
+exec "$JAVA_HOME/bin/java" "-javaagent:/opt/jacoco/agent.jar=destfile=$ORACLE_DEST,append=true,includes=*" "$@"

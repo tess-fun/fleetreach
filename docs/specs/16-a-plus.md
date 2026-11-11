@@ -303,7 +303,7 @@ data from 2026-11-03.
 - **The graph holds.** Against what the JVM ran on five Spring services (touched methods), at
   most 0.05% of methods were outside it (18 of 39,904 on PetClinic, 0 to 2 on the others), and
   it reaches about 62% of all methods. These runs start the service and hit a few pages, so
-  they show a floor, not soundness. The vul4j-style corpus in Proof is still to do.
+  they show a floor, not soundness. The vul4j corpus (below, 2026-11-11) tests soundness.
 - **Yield today: 3 of 7,827 Maven findings set aside (0.04%).** 3,848 are high or critical.
   All three are Commons Text (Solr, DolphinScheduler, Presto); in the two checked, the
   interpolator itself is not reached.
@@ -352,9 +352,72 @@ advisory data. Every image pulled.
   aside.
 - **By-name flags cost 277 findings** (3.5%) that the graph does not reach. Wider roots
   (Spring Boot auto-configuration, `logback.xml`, JCA providers) are what would free them.
-- **Still open**: the graph's soundness is checked only as a floor on five Spring apps. The
-  13.4% holds only if the graph misses no call into a sink, and the vul4j-style corpus that
-  would test that is still to do.
+- **Still open**: the 13.4% holds only if the graph misses no call into a sink. The vul4j
+  corpus below tests that; the graph rules it added have not been rerun on E3 yet.
+
+### Soundness corpus: vul4j PoV runs, 2026-11-11
+
+vul4j (commit `bca934d`) has 79 Java CVEs with a proof-of-vulnerability (PoV) test. Each entry
+was checked out at its vulnerable commit, built, and its PoV tests run in a throwaway Docker
+container under the JaCoCo agent: the one place this project runs the code it judges, approved
+for this oracle only. Harness: `docs/differential/vul4j/`.
+
+The corpus tests the graph, not the sink records (vul4j overlaps only 2 of the 140 reviewed
+records):
+
+- **Sinks** are the methods the human patch changes, on the vulnerable side.
+- **Roots** are the PoV test class alone, plus any other test class or JUnit runner the run
+  executed. A TestNG suite runs every test for one PoV method, and ApacheDS's `@RunWith` runner
+  starts the LDAP server.
+- **The oracle** is every method JaCoCo saw run. Test classes and test libraries are dropped,
+  and so are methods missing from the class path the graph sees (17, from Jenkins tests that
+  load a newer slf4j out of the war).
+
+| Outcome | Cases |
+|---|---|
+| Judged | **65** |
+| A fix method ran, and every one that ran is reached | **62** |
+| A fix method ran and is not reached | **1** (VUL4J-18) |
+| The patch maps to no method (VUL4J-26, 32) | 2 |
+| Gradle build, not run | 9 |
+| No longer builds (missing SNAPSHOT, dead URL, unpinned Kotlin plugin) | 3 |
+| Dataset names a test class that does not exist | 2 |
+| **Total** | **79** |
+
+- **Sinks: 86 of 87 that ran are reached.** The miss is JSPWiki's
+  `DefaultURLConstructor.getForwardPage`: the properties file gives a short class name and
+  JSPWiki adds the package at run time. That is a by-name case, and records already have a flag
+  for those.
+- **Everything else that ran: 412 of 120,427 methods outside the graph (0.34%).** 55 of the 65
+  cases miss nothing. The rest:
+  - Jenkins 51, 56 to 58 (335): Stapler URL dispatch, Jetty's descriptor visitors (picked by
+    method name), Groovy CPS code, and Acegi wired from a Groovy script inside the war.
+  - Neo4j 62 (40): store internals, ehcache configuration and two ApacheDS syntax checkers,
+    not yet classified.
+  - Groovy call sites (22, 52) and JMockit instrumentation (77).
+- **Eleven graph rules came from the misses**, each with a unit test (`crates/jvm`):
+  - strings: a package name drives the package's classes (Bouncy Castle's
+    `$Mappings`); a name's tail (`.jffi.Provider`, jnr-ffi) drives the classes it ends;
+  - Log4j: nested classes with annotated fields only (its plugin builders);
+  - Jackson: annotated methods run on any instance, and the classes it handles drive the
+    deserializers their annotations name;
+  - JAXB-bound classes; Groovy's `dgm$N` classes;
+  - `clone` and `finalize`; Jenkins `@Indexed` and SezPoz `@Indexable`;
+  - SezPoz index files and LDIF schema files (ApacheDS) as text resources.
+  
+  Before them, Bouncy Castle alone left 282 methods unreached in VUL4J-16.
+- **The oracle traps** each cost a rerun:
+  - The agent has to run only in surefire's forked JVM (`-Djvm=` a wrapper ending in
+    `bin/java`). JAVA_TOOL_OPTIONS also instruments Maven and annotation processors, which
+    showed up as 332 false misses on VUL4J-67.
+  - The commons parent sets its own `jvm` property and its own JaCoCo agent.
+  - Maven Central rate-limits fresh containers, so the runs use a mirror.
+- **Caveats**:
+  - VUL4J-15 and 16 no longer build (a CXF plugin dependency), so their results come from the
+    first run, which also instrumented Maven's JVM. That only adds methods to check.
+  - In six cases some patched files map to no method; their other sinks are counted.
+  - A PoV runs one path, so "reached" here is a floor on what the graph must reach, not proof
+    for a path no test takes.
 
 ### Competitors, as of Nov 2026
 
@@ -1100,7 +1163,8 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: coverage of reviewed records (bar: 80% of high/critical Maven advisories have
   a reviewed sink, a deny-list rule, or a reviewed "no method-level sink" marker); unreviewed
   automatic sinks only ever produce witnesses; zero false `NotReachable` on a soundness
-  corpus of known-reachable CVE reproducers (vul4j-style); suppression yield published per
+  corpus of known-reachable CVE reproducers (vul4j: 1 by-name miss in 87 sinks that ran,
+  2026-11-11); suppression yield published per
   ecosystem (Endor claims up to 97% noise reduction; fleetreach publishes its measured
   number, whatever it is).
 - **Research gate**: E2 decides whether the sink data is good enough (1.6.0); E3 (1.7.0) decides

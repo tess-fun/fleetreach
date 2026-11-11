@@ -1,0 +1,32 @@
+<!-- Maven settings mounted into each container: Central through Google's mirror (Central
+     rate-limits fresh containers), plain-http repositories allowed for old builds, and Red Hat's
+     repository for the artifacts only it still serves. -->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
+  <mirrors>
+    <mirror>
+      <id>maven-default-http-blocker</id>
+      <mirrorOf>dummy</mirrorOf>
+      <url>http://0.0.0.0/</url>
+    </mirror>
+    <mirror>
+      <id>google-central</id>
+      <mirrorOf>central</mirrorOf>
+      <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
+    </mirror>
+  </mirrors>
+  <profiles>
+    <profile>
+      <id>redhat</id>
+      <repositories>
+        <repository>
+          <id>redhat-ga</id>
+          <url>https://maven.repository.redhat.com/ga/</url>
+          <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+      </repositories>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>redhat</activeProfile>
+  </activeProfiles>
+</settings>
