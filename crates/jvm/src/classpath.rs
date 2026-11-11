@@ -188,18 +188,25 @@ fn read_manifest(bytes: &[u8], cp: &mut ClassPath) {
     }
 }
 
-/// Files that name classes for something to load: XML and properties anywhere, and everything
-/// under `META-INF/services` or `META-INF/spring`, Camel's component files included.
+/// Files that name classes for something to load: XML and properties anywhere, everything
+/// under `META-INF/services` or `META-INF/spring` (Camel's component files included), Spring's
+/// XML namespace handlers, Log4j 2's plugin cache, and the SezPoz indexes under
+/// `META-INF/annotations` (Jenkins `@Extension`): binary files that hold class names as strings.
+/// LDIF too: ApacheDS's schema names its comparators and syntax checkers in `m-fqcn`.
 fn is_text_resource(name: &str) -> bool {
     if name.contains("META-INF/maven/") || name.contains("META-INF/native-image/") {
         return false;
     }
     name.ends_with(".xml")
         || name.ends_with(".properties")
+        || name.ends_with(".ldif")
         || name.ends_with(".factories")
         || name.ends_with(".imports")
         || (name.contains("META-INF/services/") && !name.ends_with('/'))
         || (name.contains("META-INF/spring/") && !name.ends_with('/'))
+        || name.ends_with("META-INF/spring.handlers")
+        || name.ends_with("Log4j2Plugins.dat")
+        || (name.contains("META-INF/annotations/") && !name.ends_with('/'))
 }
 
 /// Remember every dotted word; [`load`] keeps those that turn out to be classes.
@@ -209,6 +216,25 @@ fn scan_text(bytes: &[u8], origin: &str, cp: &mut ClassPath) {
         let word = word.trim_matches('.');
         if word.contains('.') && !cp.tokens.contains_key(word) {
             cp.tokens.insert(word.to_string(), origin.to_string());
+        }
+    }
+    // Log4j's plugin cache and Java serialization write each name after a two-byte length, and
+    // the bytes either side can be letters (`Borg.apache...`, `...SubversionStatuspsq`), so read
+    // every string by its length too.
+    if origin.ends_with(".dat") || origin.contains("META-INF/annotations/") {
+        for i in 0..bytes.len().saturating_sub(2) {
+            let len = usize::from(u16::from_be_bytes([bytes[i], bytes[i + 1]]));
+            let Some(name) = bytes.get(i + 2..i + 2 + len) else {
+                continue;
+            };
+            let name_like = name
+                .iter()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'$'))
+                && name.contains(&b'.');
+            if name_like {
+                let name = String::from_utf8_lossy(name).into_owned();
+                cp.tokens.entry(name).or_insert_with(|| origin.to_string());
+            }
         }
     }
     // A services file is named after the interface it fills, which is no reason to load that.
@@ -255,6 +281,17 @@ fn parse(bytes: &[u8], role: Role, names: &mut Interner) -> Result<Class, String
             if let AttributeData::AnnotationDefault(value) = &attribute.data {
                 read_value(value, names, &mut method.annotation_refs);
             }
+            // A parameter's annotation can name what handles it: Log4j's `@PluginAttribute`
+            // carries `@PluginVisitorStrategy(PluginAttributeVisitor.class)`.
+            if let AttributeData::RuntimeVisibleParameterAnnotations(params)
+            | AttributeData::RuntimeInvisibleParameterAnnotations(params) = &attribute.data
+            {
+                for annotation in params.iter().flat_map(|p| &p.annotations) {
+                    let mut types = Vec::new();
+                    read_annotation(annotation, names, &mut types, &mut method.annotation_refs);
+                    method.annotation_refs.extend(types);
+                }
+            }
             if let AttributeData::Code(code) = &attribute.data {
                 let Some(bytecode) = &code.bytecode else {
                     return Err(format!("{}: unparsed code", m.name));
@@ -277,6 +314,7 @@ fn parse(bytes: &[u8], role: Role, names: &mut Interner) -> Result<Class, String
     for field in &file.fields {
         let mut types = Vec::new();
         read_annotations(&field.attributes, names, &mut types, &mut annotation_refs);
+        annotation_refs.extend(types);
     }
     let flags = file.access_flags;
     Ok(Class {
@@ -460,5 +498,39 @@ mod tests {
         let cp = load(&[input]).unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(cp.unread.len(), 1);
+    }
+
+    #[test]
+    fn spring_handlers_and_the_log4j_plugin_cache_name_classes() {
+        assert!(is_text_resource("META-INF/spring.handlers"));
+        assert!(is_text_resource(
+            "META-INF/org/apache/logging/log4j/core/config/plugins/Log4j2Plugins.dat"
+        ));
+        assert!(!is_text_resource("META-INF/spring.schemas.bak"));
+        let mut cp = ClassPath::default();
+        scan_text(
+            b"\x00\x12org.example.Plugin\x00",
+            "x/Log4j2Plugins.dat",
+            &mut cp,
+        );
+        assert!(cp.tokens.contains_key("org.example.Plugin"));
+    }
+
+    #[test]
+    fn a_sezpoz_index_names_classes() {
+        assert!(is_text_resource("META-INF/annotations/hudson.Extension"));
+        assert!(is_text_resource(
+            "schema/ou=schema/cn=apache/ou=comparators/m-oid=1.ldif"
+        ));
+        assert!(!is_text_resource("META-INF/annotations/"));
+        let mut cp = ClassPath::default();
+        let name = "hudson.scm.SubversionStatus$DescriptorImplWithAVeryLongNameIndeedYes";
+        let mut bytes = b"\xac\xed\x00\x05t\x00".to_vec();
+        bytes.push(u8::try_from(name.len()).unwrap());
+        bytes.extend_from_slice(name.as_bytes());
+        bytes.extend_from_slice(b"psq");
+        scan_text(&bytes, "x/META-INF/annotations/hudson.Extension", &mut cp);
+        assert_eq!(bytes[6], b'D');
+        assert!(cp.tokens.contains_key(name));
     }
 }

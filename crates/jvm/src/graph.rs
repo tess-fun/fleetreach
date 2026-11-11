@@ -52,6 +52,19 @@ const ENTRY_ANNOTATIONS: &[&str] = &[
     "org/springframework/security/oauth2/provider/endpoint/FrameworkEndpoint",
     "com/google/inject/Inject",
     "com/google/inject/Provides",
+    "org/apache/camel/Converter",
+    "org/apache/camel/FallbackConverter",
+    "org/osgi/service/component/annotations/Component",
+    "org/osgi/service/component/annotations/Activate",
+    "org/osgi/service/component/annotations/Deactivate",
+    "org/osgi/service/component/annotations/Modified",
+    "org/apache/felix/scr/annotations/Component",
+    "org/apache/felix/scr/annotations/Activate",
+    "org/apache/felix/scr/annotations/Deactivate",
+    "org/apache/felix/scr/annotations/Modified",
+    // Jenkins finds what these mark through an index: `@Initializer`, `@Terminator`, `@Extension`.
+    "org/jvnet/hudson/annotation_indexer/Indexed",
+    "net/java/sezpoz/Indexable",
 ];
 
 /// The same annotations under both Java EE package roots.
@@ -87,6 +100,10 @@ const EE_ANNOTATIONS: &[&str] = &[
     "faces/convert/FacesConverter",
     "faces/validator/FacesValidator",
     "faces/component/FacesComponent",
+    // JAXB makes the bound classes itself while it reads a document.
+    "xml/bind/annotation/XmlRootElement",
+    "xml/bind/annotation/XmlType",
+    "xml/bind/annotation/XmlRegistry",
 ];
 
 /// EE annotations on a class whose every public method is called from outside the service.
@@ -103,6 +120,9 @@ const EE_ENDPOINTS: &[&str] = &[
 /// Name endings of classes generated at build time and loaded by building the name at run time:
 /// JBoss Logging's message classes, and Undertow's request parser.
 const GENERATED: &[&str] = &["_$logger", "_$bundle", "$$generated"];
+
+/// Name starts of the same: Groovy's `dgm$N` method classes, which `dgminfo` lists by number.
+const GENERATED_PREFIXES: &[&str] = &["org/codehaus/groovy/runtime/dgm$"];
 
 /// Classes only runtime-generated proxies call.
 const CALLED_BY_PROXIES: &[&str] = &[
@@ -121,6 +141,14 @@ const PROXY_CALLBACKS: &[&str] = &[
 /// `Object` methods the JDK calls on anything: `HashMap` on a key, `StringBuilder` on a value.
 const OBJECT_METHODS: &[&str] = &["hashCode", "equals", "toString"];
 
+/// Annotation packages whose method annotations make a serializer call the method on any
+/// instance, whatever its name: Jackson's `@JsonAnyGetter`, `@JsonValue`, `@JsonAnySetter`.
+const SERIALIZER_ANNOTATIONS: &[&str] = &[
+    "com/fasterxml/jackson/annotation/",
+    "com/fasterxml/jackson/databind/annotation/",
+    "org/codehaus/jackson/annotate/",
+];
+
 /// JDK types that declare no method a callback could override.
 const MARKERS: &[&str] = &[
     "java/lang/Object",
@@ -130,6 +158,28 @@ const MARKERS: &[&str] = &[
     "java/util/EventListener",
     "java/lang/annotation/Annotation",
     "java/lang/Record",
+];
+
+/// Packages the JDK or a container implements. A jar on the class path can carry these types
+/// (`xml-apis` ships `DefaultHandler`), but the parser or server calling into a subclass is
+/// still outside the graph.
+const PLATFORM: &[&str] = &[
+    "java/",
+    "javax/",
+    "jakarta/",
+    "org/xml/sax/",
+    "org/w3c/dom/",
+    "org/ietf/jgss/",
+    "org/omg/",
+];
+
+/// Private methods `ObjectInputStream` and `ObjectOutputStream` call on a serializable class.
+const SERIALIZATION_HOOKS: &[&str] = &[
+    "readObject",
+    "writeObject",
+    "readObjectNoData",
+    "readResolve",
+    "writeReplace",
 ];
 
 /// Calls that take a class or member from data a constant does not give.
@@ -217,9 +267,14 @@ struct Walk<'a> {
     callbacks: HashSet<Sym>,
     /// Annotated classes by the class they are nested in.
     nested: HashMap<Sym, Vec<u32>>,
+    /// Classes by their package, slash form with the trailing slash.
+    packages: HashMap<String, Vec<u32>>,
+    /// Classes by the last segment of their name.
+    simple: HashMap<String, Vec<u32>>,
     clinit: Option<Sym>,
     init: Option<Sym>,
     object: Option<Sym>,
+    serializable: Option<Sym>,
     reflection: HashSet<(Sym, Sym)>,
     markers: HashSet<Sym>,
     open_reflection: Vec<String>,
@@ -298,7 +353,9 @@ impl<'a> Walk<'a> {
         let mut nested: HashMap<Sym, Vec<u32>> = HashMap::new();
         for (i, c) in cp.classes.iter().enumerate() {
             let name = cp.names.name(c.name);
-            if c.annotations.is_empty() {
+            // Field annotations count: a Log4j plugin's `Builder` carries `@PluginBuilderAttribute`
+            // on its fields only, and that annotation names the visitor that fills them.
+            if c.annotations.is_empty() && c.annotation_refs.is_empty() {
                 continue;
             }
             if let Some(outer) = name.rfind('$').and_then(|d| cp.names.get(&name[..d])) {
@@ -308,9 +365,27 @@ impl<'a> Walk<'a> {
                     .push(u32::try_from(i).unwrap_or(u32::MAX));
             }
         }
+        let mut packages: HashMap<String, Vec<u32>> = HashMap::new();
+        let mut simple: HashMap<String, Vec<u32>> = HashMap::new();
+        for (i, c) in cp.classes.iter().enumerate() {
+            let name = cp.names.name(c.name);
+            let i = u32::try_from(i).unwrap_or(u32::MAX);
+            if let Some(slash) = name.rfind('/') {
+                packages
+                    .entry(name[..=slash].to_string())
+                    .or_default()
+                    .push(i);
+                simple
+                    .entry(name[slash + 1..].to_string())
+                    .or_default()
+                    .push(i);
+            }
+        }
         Walk {
             cp,
             endpoints,
+            packages,
+            simple,
             callbacks: PROXY_CALLBACKS
                 .iter()
                 .filter_map(|n| cp.names.get(n))
@@ -327,6 +402,7 @@ impl<'a> Walk<'a> {
             clinit: cp.names.get("<clinit>"),
             init: cp.names.get("<init>"),
             object: cp.names.get("java/lang/Object"),
+            serializable: cp.names.get("java/io/Serializable"),
             reflection: REFLECTION
                 .iter()
                 .filter_map(|(c, m)| Some((cp.names.get(c)?, cp.names.get(m)?)))
@@ -374,7 +450,10 @@ impl<'a> Walk<'a> {
                 self.enter(i, &Root::AppCode);
                 continue;
             }
-            if GENERATED.iter().any(|e| cp.names.name(c.name).ends_with(e)) {
+            let name = cp.names.name(c.name);
+            if GENERATED.iter().any(|e| name.ends_with(e))
+                || GENERATED_PREFIXES.iter().any(|p| name.starts_with(p))
+            {
                 self.drive(i, &Via::Root(Root::Generated));
             }
             if let Some(a) = c.annotations.iter().find(|a| self.entry_types.contains(a)) {
@@ -512,15 +591,53 @@ impl<'a> Walk<'a> {
                 self.drive(i, &Via::Root(Root::Nested));
             }
         }
+        // Jackson reads the annotations of what it handles: `@JsonDeserialize(using = ...)` on
+        // the class, a superclass or a field makes the named deserializer.
+        let mut next = Some(class);
+        while let Some(i) = next {
+            let c = self.class(i);
+            let names = &self.cp.names;
+            let jackson = c
+                .annotations
+                .iter()
+                .chain(&c.annotation_refs)
+                .chain(c.methods.iter().flat_map(|m| &m.annotations))
+                .any(|a| {
+                    let a = names.name(*a);
+                    SERIALIZER_ANNOTATIONS.iter().any(|p| a.starts_with(p))
+                });
+            if jackson {
+                let refs: Vec<Sym> = c
+                    .annotation_refs
+                    .iter()
+                    .chain(c.methods.iter().flat_map(|m| &m.annotation_refs))
+                    .copied()
+                    .collect();
+                let label = Via::Root(Root::AnnotationRef(names.name(c.name).to_string()));
+                for r in refs {
+                    if let Some(j) = self.index(r) {
+                        self.drive(j, &label);
+                    }
+                }
+            }
+            next = c.superclass.and_then(|s| self.index(s));
+        }
         let mut seen = HashSet::new();
         let outside = self.has_outside_type(class, &mut seen);
+        let mut seen = HashSet::new();
+        // A parent outside the graph may be serializable too (`HashMap`).
+        let serial = outside || self.is_serializable(class, &mut seen);
         let mut next = Some(class);
         while let Some(i) = next {
             let c = self.class(i);
             for (j, m) in c.methods.iter().enumerate() {
                 let special = Some(m.name) == self.init || Some(m.name) == self.clinit;
                 let callback = outside && !m.is_private && !m.is_static && !m.is_abstract;
-                if !special && (callback || self.called_on_any_instance(m)) {
+                let hook = serial
+                    && !m.is_static
+                    && !m.is_abstract
+                    && SERIALIZATION_HOOKS.contains(&self.cp.names.name(m.name));
+                if !special && (callback || hook || self.called_on_any_instance(m)) {
                     self.reach((i, u32::try_from(j).unwrap_or(u32::MAX)), via.clone());
                 }
             }
@@ -538,9 +655,28 @@ impl<'a> Walk<'a> {
             .chain(&c.interfaces)
             .any(|p| match self.index(*p) {
                 Some(_) if self.callbacks.contains(p) => true,
+                Some(_) if self.is_platform(*p) && !self.markers.contains(p) => true,
                 Some(i) => self.has_outside_type(i, seen),
                 None => !self.markers.contains(p) && Some(*p) != self.object,
             })
+    }
+
+    fn is_platform(&self, name: Sym) -> bool {
+        let name = self.cp.names.name(name);
+        PLATFORM.iter().any(|p| name.starts_with(p))
+    }
+
+    fn is_serializable(&self, class: u32, seen: &mut HashSet<u32>) -> bool {
+        if !seen.insert(class) {
+            return false;
+        }
+        let c = self.class(class);
+        c.superclass.iter().chain(&c.interfaces).any(|p| {
+            Some(*p) == self.serializable
+                || self
+                    .index(*p)
+                    .is_some_and(|i| self.is_serializable(i, seen))
+        })
     }
 
     /// Whether code outside the graph can call this method on any instance: a framework setting
@@ -554,7 +690,20 @@ impl<'a> Walk<'a> {
             name.strip_prefix(prefix)
                 .is_some_and(|r| r.starts_with(|c: char| c.is_ascii_uppercase()))
         };
-        OBJECT_METHODS.contains(&name) || property("get") || property("set") || property("is")
+        let serialized = m.annotations.iter().any(|a| {
+            let a = self.cp.names.name(*a);
+            SERIALIZER_ANNOTATIONS.iter().any(|p| a.starts_with(p))
+        });
+        // Utility code clones any `Cloneable` reflectively: XStream's `Cloneables`, commons-lang's
+        // `ObjectUtils.clone`.
+        // The collector runs `finalize`.
+        OBJECT_METHODS.contains(&name)
+            || name == "clone"
+            || name == "finalize"
+            || property("get")
+            || property("set")
+            || property("is")
+            || serialized
     }
 
     /// What `name desc` resolves to on `class`: up the superclasses, then the default methods of
@@ -730,6 +879,25 @@ impl<'a> Walk<'a> {
                     Op::Text(class) | Op::ClassConst(class) => {
                         if let Some(i) = self.index(class) {
                             self.drive(i, &Via::Call(id));
+                        }
+                        // A package name ending in a dot is the start of names built at run time:
+                        // Bouncy Castle's provider loads `digest.` + `SHA1` + `$Mappings`.
+                        let name = self.cp.names.name(class);
+                        if let Some(classes) = self.packages.get(name).cloned() {
+                            for i in classes {
+                                self.drive(i, &Via::Call(id));
+                            }
+                        }
+                        // One starting with a dot is the end of one: jnr-ffi loads its own
+                        // package name + `.jffi.Provider`.
+                        if name.starts_with('/') {
+                            let last = name.rsplit('/').next().unwrap_or_default();
+                            let classes = self.simple.get(last).cloned().unwrap_or_default();
+                            for i in classes {
+                                if self.cp.names.name(self.class(i).name).ends_with(name) {
+                                    self.drive(i, &Via::Call(id));
+                                }
+                            }
                         }
                     }
                     Op::OpenDynamic => self.open_dynamic += 1,
@@ -999,6 +1167,65 @@ mod tests {
     }
 
     #[test]
+    fn a_method_marked_by_an_indexed_annotation_is_an_entry() {
+        let mut f = Fixture::default();
+        let indexed = f.sym("org/jvnet/hudson/annotation_indexer/Indexed");
+        let initializer = f.sym("hudson/init/Initializer");
+        f.class("hudson/init/Initializer", &[], Role::Dependency, vec![]);
+        f.cp.classes[0].is_interface = true;
+        f.cp.classes[0].annotations.push(indexed);
+        let mut init = f.method("init", vec![]);
+        init.annotations.push(initializer);
+        f.class("lib/Uptime", &[], Role::Dependency, vec![init]);
+        let a = analyze(&f.cp);
+        assert!(a.witness("lib.Uptime", "init", None).is_some());
+    }
+
+    #[test]
+    fn a_jaxb_bean_and_a_groovy_method_class_are_made() {
+        let mut f = Fixture::default();
+        let bound = f.sym("jakarta/xml/bind/annotation/XmlType");
+        let init = f.method("<init>", vec![]);
+        f.class("lib/SignatureType", &[], Role::Dependency, vec![init]);
+        f.cp.classes[0].annotations.push(bound);
+        let init = f.method("<init>", vec![]);
+        f.class(
+            "org/codehaus/groovy/runtime/dgm$243",
+            &[],
+            Role::Dependency,
+            vec![init],
+        );
+        let init = f.method("<init>", vec![]);
+        f.class("lib/Unused", &[], Role::Dependency, vec![init]);
+        let a = analyze(&f.cp);
+        assert!(a.witness("lib.SignatureType", "<init>", None).is_some());
+        assert!(a
+            .witness("org.codehaus.groovy.runtime.dgm$243", "<init>", None)
+            .is_some());
+        assert!(a.witness("lib.Unused", "<init>", None).is_none());
+    }
+
+    #[test]
+    fn a_nested_class_with_annotated_fields_is_driven() {
+        let mut f = Fixture::default();
+        let init = f.method("<init>", vec![]);
+        f.class("lib/Plugin", &[], Role::Dependency, vec![init]);
+        f.cp.named_in_resources
+            .insert("lib.Plugin".to_string(), "Log4j2Plugins.dat".to_string());
+        let attribute = f.sym("lib/Attribute");
+        f.class("lib/Plugin$Builder", &[], Role::Dependency, vec![]);
+        f.cp.classes[1].annotation_refs.push(attribute);
+        let visitor = f.sym("lib/Visitor");
+        f.class("lib/Attribute", &[], Role::Dependency, vec![]);
+        f.cp.classes[2].is_interface = true;
+        f.cp.classes[2].annotation_refs.push(visitor);
+        let init = f.method("<init>", vec![]);
+        f.class("lib/Visitor", &[], Role::Dependency, vec![init]);
+        let a = analyze(&f.cp);
+        assert!(a.witness("lib.Visitor", "<init>", None).is_some());
+    }
+
+    #[test]
     fn a_nested_class_can_be_named_with_dots() {
         let mut f = Fixture::default();
         let init = f.method("<init>", vec![]);
@@ -1068,6 +1295,65 @@ mod tests {
     }
 
     #[test]
+    fn the_jdk_calls_the_private_serialization_hooks() {
+        let mut f = Fixture::default();
+        let target = f.sym("lib/Item");
+        f.sym("java/io/Serializable");
+        let main = f.method("main", vec![Op::New(target)]);
+        f.class("app/Main", &[], Role::App, vec![main]);
+        let mut read = f.method("readObject", vec![]);
+        read.is_private = true;
+        let mut other = f.method("helper", vec![]);
+        other.is_private = true;
+        f.class(
+            "lib/Item",
+            &["java/io/Serializable"],
+            Role::Dependency,
+            vec![read, other],
+        );
+        let a = analyze(&f.cp);
+        assert!(a.witness("lib.Item", "readObject", None).is_some());
+        assert!(a.witness("lib.Item", "helper", None).is_none());
+    }
+
+    #[test]
+    fn a_platform_type_a_jar_ships_is_still_outside() {
+        let mut f = Fixture::default();
+        let target = f.sym("lib/Recorder");
+        let main = f.method("main", vec![Op::New(target)]);
+        f.class("app/Main", &[], Role::App, vec![main]);
+        let empty = f.method("startElement", vec![]);
+        f.class(
+            "org/xml/sax/helpers/DefaultHandler",
+            &[],
+            Role::Dependency,
+            vec![empty],
+        );
+        let handler = f.sym("org/xml/sax/helpers/DefaultHandler");
+        let start = f.method("startElement", vec![]);
+        f.class("lib/Recorder", &[], Role::Dependency, vec![start]);
+        f.cp.classes[2].superclass = Some(handler);
+        let a = analyze(&f.cp);
+        assert!(a.witness("lib.Recorder", "startElement", None).is_some());
+    }
+
+    #[test]
+    fn a_method_a_framework_calls_by_annotation_is_an_entry_point() {
+        let mut f = Fixture::default();
+        let converter = f.sym("org/apache/camel/Converter");
+        let activate = f.sym("org/apache/felix/scr/annotations/Activate");
+        let mut convert = f.method("toSource", vec![]);
+        convert.annotations.push(converter);
+        f.class("lib/XmlConverter", &[], Role::Dependency, vec![convert]);
+        let mut start = f.method("activate", vec![]);
+        start.annotations.push(activate);
+        f.class("lib/Service", &[], Role::Dependency, vec![start]);
+        let a = analyze(&f.cp);
+        assert!(a.witness("lib.XmlConverter", "toSource", None).is_some());
+        assert!(a.witness("lib.Service", "activate", None).is_some());
+    }
+
+    #[test]
     fn a_string_naming_a_class_makes_an_instance() {
         let mut f = Fixture::default();
         let name = f.sym("lib/Loaded");
@@ -1080,17 +1366,95 @@ mod tests {
     }
 
     #[test]
+    fn a_package_name_string_makes_the_package_classes() {
+        let mut f = Fixture::default();
+        let package = f.sym("lib/digest/");
+        let main = f.method("main", vec![Op::Text(package)]);
+        f.class("app/Main", &[], Role::App, vec![main]);
+        let init = f.method("<init>", vec![]);
+        f.class(
+            "lib/digest/SHA1$Mappings",
+            &[],
+            Role::Dependency,
+            vec![init],
+        );
+        let init = f.method("<init>", vec![]);
+        f.class("lib/digest/sub/Other", &[], Role::Dependency, vec![init]);
+        let a = analyze(&f.cp);
+        assert!(a
+            .witness("lib.digest.SHA1$Mappings", "<init>", None)
+            .is_some());
+        assert!(a.witness("lib.digest.sub.Other", "<init>", None).is_none());
+    }
+
+    #[test]
+    fn a_string_starting_with_a_dot_makes_the_classes_it_ends() {
+        let mut f = Fixture::default();
+        let tail = f.sym("/jffi/Provider");
+        let main = f.method("main", vec![Op::Text(tail)]);
+        f.class("app/Main", &[], Role::App, vec![main]);
+        let init = f.method("<init>", vec![]);
+        f.class("lib/ffi/jffi/Provider", &[], Role::Dependency, vec![init]);
+        let init = f.method("<init>", vec![]);
+        f.class("lib/ffi/other/Provider", &[], Role::Dependency, vec![init]);
+        let a = analyze(&f.cp);
+        assert!(a.witness("lib.ffi.jffi.Provider", "<init>", None).is_some());
+        assert!(a
+            .witness("lib.ffi.other.Provider", "<init>", None)
+            .is_none());
+    }
+
+    #[test]
     fn a_property_accessor_or_object_method_runs_on_any_instance() {
         let mut f = Fixture::default();
         let made = f.sym("lib/Bean");
         let main = f.method("main", vec![Op::New(made)]);
         f.class("app/Main", &[], Role::App, vec![main]);
-        let methods = ["setPort", "hashCode", "settle"].map(|n| f.method(n, vec![]));
+        let methods =
+            ["setPort", "hashCode", "clone", "finalize", "settle"].map(|n| f.method(n, vec![]));
         f.class("lib/Bean", &[], Role::Dependency, methods.to_vec());
         let a = analyze(&f.cp);
         assert!(a.witness("lib.Bean", "setPort", None).is_some());
         assert!(a.witness("lib.Bean", "hashCode", None).is_some());
+        assert!(a.witness("lib.Bean", "clone", None).is_some());
+        assert!(a.witness("lib.Bean", "finalize", None).is_some());
         assert!(a.witness("lib.Bean", "settle", None).is_none());
+    }
+
+    #[test]
+    fn a_deserializer_a_made_class_names_is_made() {
+        let mut f = Fixture::default();
+        let made = f.sym("lib/Headers");
+        let main = f.method("main", vec![Op::New(made)]);
+        f.class("app/Main", &[], Role::App, vec![main]);
+        let using = f.sym("com/fasterxml/jackson/databind/annotation/JsonDeserialize");
+        let deserializer = f.sym("lib/HeadersDeserializer");
+        let init = f.method("<init>", vec![]);
+        f.class("lib/Headers", &[], Role::Dependency, vec![init]);
+        f.cp.classes[1].annotations.push(using);
+        f.cp.classes[1].annotation_refs.push(deserializer);
+        let init = f.method("<init>", vec![]);
+        f.class("lib/HeadersDeserializer", &[], Role::Dependency, vec![init]);
+        let a = analyze(&f.cp);
+        assert!(a
+            .witness("lib.HeadersDeserializer", "<init>", None)
+            .is_some());
+    }
+
+    #[test]
+    fn a_jackson_annotated_method_runs_on_any_instance() {
+        let mut f = Fixture::default();
+        let made = f.sym("lib/Jwt");
+        let main = f.method("main", vec![Op::New(made)]);
+        f.class("app/Main", &[], Role::App, vec![main]);
+        let any = f.sym("com/fasterxml/jackson/annotation/JsonAnyGetter");
+        let mut getter = f.method("anyGetter", vec![]);
+        getter.annotations.push(any);
+        let other = f.method("otherClaims", vec![]);
+        f.class("lib/Jwt", &[], Role::Dependency, vec![getter, other]);
+        let a = analyze(&f.cp);
+        assert!(a.witness("lib.Jwt", "anyGetter", None).is_some());
+        assert!(a.witness("lib.Jwt", "otherClaims", None).is_none());
     }
 
     #[test]

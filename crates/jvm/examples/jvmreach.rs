@@ -4,7 +4,8 @@
 //!
 //! The first jar is the service; a Spring Boot fat jar needs nothing else. With `JVMREACH_APP`
 //! set to comma-separated class name prefixes, those classes are the service instead, for
-//! services shipped as a directory of jars. `JVMREACH_E3=file` writes one line per record:
+//! services shipped as a directory of jars; a prefix ending in `=` names one class exactly.
+//! `JVMREACH_E3=file` writes one line per record:
 //! id, verdict, verdict if the record were not marked reached by name, entry root.
 
 use std::collections::BTreeMap;
@@ -44,7 +45,10 @@ fn main() {
                 let prefixes: Vec<&str> = prefixes.split(',').collect();
                 for i in 0..cp.classes.len() {
                     let name = cp.names.name(cp.classes[i].name);
-                    let app = prefixes.iter().any(|p| name.starts_with(p));
+                    let app = prefixes.iter().any(|p| match p.strip_suffix('=') {
+                        Some(exact) => name == exact,
+                        None => name.starts_with(p),
+                    });
                     cp.classes[i].role = if app { Role::App } else { Role::Dependency };
                 }
             }
