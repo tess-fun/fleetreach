@@ -46,6 +46,8 @@ pub struct ClassPath {
     pub main_classes: Vec<String>,
     /// Entries that could not be read. Any of these makes "not reached" unsafe.
     pub unread: Vec<String>,
+    /// A class defined twice with another superclass: the graph walks up both.
+    pub other_superclasses: HashMap<Sym, Vec<Sym>>,
     tokens: BTreeMap<String, String>,
 }
 
@@ -65,7 +67,8 @@ impl ClassPath {
     }
 }
 
-/// Read every input. The first definition of a class wins, as on a real class path.
+/// Read every input. A class defined twice holds what both definitions do: the graph cannot
+/// tell which one a JVM loads.
 pub fn load(inputs: &[Input]) -> Result<ClassPath, Error> {
     let mut cp = ClassPath::default();
     for input in inputs {
@@ -242,14 +245,56 @@ fn scan_text(bytes: &[u8], origin: &str, cp: &mut ClassPath) {
 
 fn add_class(bytes: &[u8], at: &str, role: Role, cp: &mut ClassPath) {
     match parse(bytes, role, &mut cp.names) {
-        Ok(class) => {
-            let name = class.name;
-            if let std::collections::hash_map::Entry::Vacant(slot) = cp.by_name.entry(name) {
+        Ok(class) => match cp.by_name.entry(class.name) {
+            std::collections::hash_map::Entry::Vacant(slot) => {
                 slot.insert(cp.classes.len());
                 cp.classes.push(class);
             }
-        }
+            std::collections::hash_map::Entry::Occupied(slot) => {
+                let first = &mut cp.classes[*slot.get()];
+                if let Some(other) = class.superclass.filter(|s| first.superclass != Some(*s)) {
+                    let others = cp.other_superclasses.entry(first.name).or_default();
+                    if !others.contains(&other) {
+                        others.push(other);
+                    }
+                }
+                merge(first, class);
+            }
+        },
         Err(e) => cp.unread.push(format!("{at}: {e}")),
+    }
+}
+
+/// Fold a second definition of a class into the first. Which one a JVM loads depends on a
+/// class path order the files do not say (a directory of jars, two wars in one image), so the
+/// graph takes what either does: every method, every call, every annotation.
+fn merge(first: &mut Class, other: Class) {
+    if other.role == Role::App {
+        first.role = Role::App;
+    }
+    first.is_abstract &= other.is_abstract;
+    for i in other.interfaces {
+        if !first.interfaces.contains(&i) {
+            first.interfaces.push(i);
+        }
+    }
+    first.annotations.extend(other.annotations);
+    first.annotation_refs.extend(other.annotation_refs);
+    for m in other.methods {
+        match first
+            .methods
+            .iter_mut()
+            .find(|f| f.name == m.name && f.desc == m.desc)
+        {
+            Some(f) => {
+                f.is_abstract &= m.is_abstract;
+                f.is_private &= m.is_private;
+                f.ops.extend(m.ops);
+                f.annotations.extend(m.annotations);
+                f.annotation_refs.extend(m.annotation_refs);
+            }
+            None => first.methods.push(m),
+        }
     }
 }
 
@@ -498,6 +543,58 @@ mod tests {
         let cp = load(&[input]).unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(cp.unread.len(), 1);
+    }
+
+    #[test]
+    fn a_class_defined_twice_keeps_what_both_definitions_call() {
+        let mut names = Interner::default();
+        let mut class = |calls: &str, extra: Option<&str>| {
+            let call = Op::Call {
+                kind: CallKind::Static,
+                class: names.intern("lib/Sink"),
+                name: names.intern(calls),
+                desc: names.intern("()V"),
+            };
+            let mut methods = vec![Method {
+                name: names.intern("run"),
+                desc: names.intern("()V"),
+                ops: vec![call],
+                ..Method::default()
+            }];
+            if let Some(extra) = extra {
+                methods.push(Method {
+                    name: names.intern(extra),
+                    desc: names.intern("()V"),
+                    ..Method::default()
+                });
+            }
+            Class {
+                name: names.intern("lib/Twice"),
+                superclass: None,
+                interfaces: vec![],
+                is_interface: false,
+                is_abstract: false,
+                role: Role::Dependency,
+                methods,
+                annotations: vec![],
+                annotation_refs: vec![],
+            }
+        };
+        let mut first = class("safe", None);
+        let mut second = class("flawed", Some("added"));
+        second.role = Role::App;
+        merge(&mut first, second);
+        assert_eq!(first.role, Role::App);
+        assert_eq!(first.methods.len(), 2);
+        let called: Vec<&str> = first.methods[0]
+            .ops
+            .iter()
+            .filter_map(|op| match op {
+                Op::Call { name, .. } => Some(names.name(*name)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(called, ["safe", "flawed"]);
     }
 
     #[test]

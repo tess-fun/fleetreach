@@ -330,8 +330,29 @@ pub fn is_gating_severity(severity: Option<Severity>) -> bool {
 
 // ---- `vex verify` witnesses (§9.2) ----
 
+/// The engine name a JVM verdict's notes carry. `vex verify` re-derives only the Rust engine,
+/// which builds the repos; a JVM verdict comes from `scan --reachability=jvm` over images.
+const JVM_ENGINE: &str = "engine=jvm-rta@";
+
+/// How many reachability `not_affected` statements came from the JVM engine.
+pub fn committed_jvm_witnesses(doc: &serde_json::Value) -> usize {
+    doc.get("statements")
+        .and_then(|s| s.as_array())
+        .map_or(0, |stmts| {
+            stmts
+                .iter()
+                .filter(|s| {
+                    s.pointer("/status_notes")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|n| n.contains("Automated Analysis") && n.contains(JVM_ENGINE))
+                })
+                .count()
+        })
+}
+
 /// The reachability `not_affected` statements `(vulnerability, subcomponent)` that
-/// `vex verify` re-derives. Phantom and human assertions are out of scope.
+/// `vex verify` re-derives. Phantom and human assertions are out of scope, and so are the JVM
+/// engine's ([`committed_jvm_witnesses`]).
 pub fn committed_reachability_witnesses(doc: &serde_json::Value) -> Vec<(String, String)> {
     fn str_at<'a>(s: &'a serde_json::Value, ptr: &str) -> &'a str {
         s.pointer(ptr).and_then(|v| v.as_str()).unwrap_or_default()
@@ -347,6 +368,7 @@ pub fn committed_reachability_witnesses(doc: &serde_json::Value) -> Vec<(String,
                 // Only machine witnesses are re-derivable; a human assertion using the
                 // same label is trust-based.
                 && str_at(s, "/status_notes").contains("Automated Analysis")
+                && !str_at(s, "/status_notes").contains(JVM_ENGINE)
         })
         .map(|s| {
             (
@@ -545,6 +567,13 @@ pub(crate) fn run_vex_verify(args: VexVerifyArgs) -> u8 {
         Err(e) => return fail(&format!("parsing `{}`: {e}", args.document.display())),
     };
 
+    let jvm = committed_jvm_witnesses(&committed);
+    if jvm > 0 && !args.quiet {
+        eprintln!(
+            "vex verify: {jvm} JVM witness(es) not re-derived here; `scan --reachability=jvm` \
+             over the same images derives them again"
+        );
+    }
     let targets = committed_reachability_witnesses(&committed);
     if targets.is_empty() {
         if !args.quiet {
@@ -784,7 +813,13 @@ mod tests {
             { "vulnerability": { "name": "RUSTSEC-U" },
               "subcomponents": [{ "@id": "pkg:cargo/baz@3.0.0" }],
               "status": "under_investigation" },
+            { "vulnerability": { "name": "GHSA-J" },
+              "subcomponents": [{ "@id": "pkg:maven/g/a@1.0.0" }],
+              "status": "not_affected",
+              "justification": "vulnerable_code_not_in_execute_path",
+              "status_notes": "role=Automated Analysis; static call-graph: no path; config=image class path; engine=jvm-rta@1.7.0" },
         ]});
+        assert_eq!(committed_jvm_witnesses(&doc), 1);
         let w = committed_reachability_witnesses(&doc);
         assert_eq!(
             w,

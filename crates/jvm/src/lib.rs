@@ -5,7 +5,8 @@
 //! [`classpath::load`] reads a service's classes, from plain jars or from the nested layout of
 //! Spring Boot fat jars and wars. [`graph::analyze`] then walks a rapid type analysis call
 //! graph from the service's entry points, and [`verdict::judge`] turns that into an answer
-//! for one curated sink record.
+//! for one curated sink record. `fleetreach scan --reachability=jvm` runs this over each
+//! container image's Java archives.
 //!
 //! The graph over-approximates on purpose. Every non-private method of the service's own
 //! classes is an entry point, so a framework this crate has never heard of cannot hide app

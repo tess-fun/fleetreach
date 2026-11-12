@@ -1,6 +1,6 @@
 ---
 title: Check reachability
-description: Find out whether vulnerable code is actually reached, with import witness chains for eight ecosystems and a sound MIR call-graph analysis for Rust.
+description: Find out whether vulnerable code is actually reached, with import witness chains for eight ecosystems, a sound MIR call-graph analysis for Rust, and JVM call graphs over container images.
 sidebar:
   order: 12
 ---
@@ -105,6 +105,39 @@ finding drops to the end of the fix queue, becomes `not_affected` in VEX and SAR
 Building Rust runs each repo's build scripts and procedural macros, which is arbitrary code
 with your privileges. It needs `--allow-untrusted-builds` and the separately built
 `fleetreach-reach-driver`. Only point it at repositories you trust, or run it in a sandbox.
+:::
+
+## JVM call graphs for container images
+
+```sh
+fleetreach scan --image app.tar --reachability=jvm --jvm-app com.example
+```
+
+fleetreach reads every Java archive in the image as data (nothing is loaded or run) and builds
+one call graph from the service's entry points. Those are the non-private methods of the
+classes in the `jvm_app` packages, or a Spring Boot fat jar's or a war's own classes, plus what
+frameworks start by name: annotations, `web.xml`, `spring.factories`, service files and the
+other resources that name classes. Each Maven finding with a reviewed sink record is then
+judged:
+
+- **reachable**, with a chain from an entry point to a method the fix changes;
+- **not reachable**, when no image it occurs in reaches a sink. This suppresses like the Rust
+  verdict: `not_affected` in VEX and SARIF, the end of the fix queue, `defer` in SSVC;
+- **unknown**, with the reason, in every other case: the record's sinks are loaded by name (a
+  JDBC driver, a JCA provider), the record is still `proposed`, the installed jars do not hold
+  the sinks, an archive or class could not be read, the occurrence is not in an image, or no
+  entry point was found.
+
+Findings with no record keep their package-level verdict. The records are curated data built
+into fleetreach: each was read against its fix and the published jars by a person.
+
+:::note[What the graph cannot see]
+Class names built at run time, reflective calls by method name, template expressions
+(`#numbers`) and code started outside the image's archives (a `-javaagent` on the command
+line) are not followed. A class defined twice, by two versions of a library, counts as both.
+Records whose sinks are typically loaded by name never say "not reachable". Measured on 79
+CVE reproducers, 86 of the 87 vulnerable methods that ran were in the graph; the one missed is
+such a by-name case.
 :::
 
 ## Go

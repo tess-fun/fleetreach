@@ -302,7 +302,8 @@ impl<'a> Walk<'a> {
         let mut subtypes: HashMap<Sym, Vec<u32>> = HashMap::new();
         for (i, c) in cp.classes.iter().enumerate() {
             let i = u32::try_from(i).unwrap_or(u32::MAX);
-            for parent in c.superclass.iter().chain(&c.interfaces) {
+            let others = cp.other_superclasses.get(&c.name).into_iter().flatten();
+            for parent in c.superclass.iter().chain(others).chain(&c.interfaces) {
                 subtypes.entry(*parent).or_default().push(i);
             }
         }
@@ -493,15 +494,13 @@ impl<'a> Walk<'a> {
 
     /// The service's own class: every non-private method it has or inherits is an entry point.
     fn enter(&mut self, class: u32, why: &Root) {
-        let mut next = Some(class);
-        while let Some(i) = next {
+        for i in self.lineage(class) {
             let c = self.class(i);
             for (j, m) in c.methods.iter().enumerate() {
                 if !m.is_private && !m.is_abstract {
                     self.root((i, u32::try_from(j).unwrap_or(u32::MAX)), why.clone());
                 }
             }
-            next = c.superclass.and_then(|s| self.index(s));
         }
         self.drive(class, &Via::Root(why.clone()));
     }
@@ -572,8 +571,11 @@ impl<'a> Walk<'a> {
             if let Some(j) = c.methods.iter().position(|m| Some(m.name) == self.clinit) {
                 self.reach((i, u32::try_from(j).unwrap_or(u32::MAX)), via.clone());
             }
-            let parents = c.superclass.iter().chain(&c.interfaces);
-            stack.extend(parents.filter_map(|p| self.index(*p)));
+            let parents = self
+                .superclasses(c)
+                .into_iter()
+                .chain(c.interfaces.iter().copied());
+            stack.extend(parents.filter_map(|p| self.index(p)));
         }
     }
 
@@ -593,8 +595,7 @@ impl<'a> Walk<'a> {
         }
         // Jackson reads the annotations of what it handles: `@JsonDeserialize(using = ...)` on
         // the class, a superclass or a field makes the named deserializer.
-        let mut next = Some(class);
-        while let Some(i) = next {
+        for i in self.lineage(class) {
             let c = self.class(i);
             let names = &self.cp.names;
             let jackson = c
@@ -620,15 +621,13 @@ impl<'a> Walk<'a> {
                     }
                 }
             }
-            next = c.superclass.and_then(|s| self.index(s));
         }
         let mut seen = HashSet::new();
         let outside = self.has_outside_type(class, &mut seen);
         let mut seen = HashSet::new();
         // A parent outside the graph may be serializable too (`HashMap`).
         let serial = outside || self.is_serializable(class, &mut seen);
-        let mut next = Some(class);
-        while let Some(i) = next {
+        for i in self.lineage(class) {
             let c = self.class(i);
             for (j, m) in c.methods.iter().enumerate() {
                 let special = Some(m.name) == self.init || Some(m.name) == self.clinit;
@@ -641,7 +640,6 @@ impl<'a> Walk<'a> {
                     self.reach((i, u32::try_from(j).unwrap_or(u32::MAX)), via.clone());
                 }
             }
-            next = c.superclass.and_then(|s| self.index(s));
         }
     }
 
@@ -650,15 +648,17 @@ impl<'a> Walk<'a> {
             return false;
         }
         let c = self.class(class);
-        c.superclass
-            .iter()
-            .chain(&c.interfaces)
-            .any(|p| match self.index(*p) {
-                Some(_) if self.callbacks.contains(p) => true,
-                Some(_) if self.is_platform(*p) && !self.markers.contains(p) => true,
-                Some(i) => self.has_outside_type(i, seen),
-                None => !self.markers.contains(p) && Some(*p) != self.object,
-            })
+        let parents: Vec<Sym> = self
+            .superclasses(c)
+            .into_iter()
+            .chain(c.interfaces.iter().copied())
+            .collect();
+        parents.iter().any(|p| match self.index(*p) {
+            Some(_) if self.callbacks.contains(p) => true,
+            Some(_) if self.is_platform(*p) && !self.markers.contains(p) => true,
+            Some(i) => self.has_outside_type(i, seen),
+            None => !self.markers.contains(p) && Some(*p) != self.object,
+        })
     }
 
     fn is_platform(&self, name: Sym) -> bool {
@@ -671,7 +671,12 @@ impl<'a> Walk<'a> {
             return false;
         }
         let c = self.class(class);
-        c.superclass.iter().chain(&c.interfaces).any(|p| {
+        let parents: Vec<Sym> = self
+            .superclasses(c)
+            .into_iter()
+            .chain(c.interfaces.iter().copied())
+            .collect();
+        parents.iter().any(|p| {
             Some(*p) == self.serializable
                 || self
                     .index(*p)
@@ -707,24 +712,72 @@ impl<'a> Walk<'a> {
     }
 
     /// What `name desc` resolves to on `class`: up the superclasses, then the default methods of
-    /// the interfaces. Every default counts, since a sub-interface can override another.
+    /// the interfaces. Every default counts, since a sub-interface can override another. A class
+    /// defined twice with two superclasses resolves up both.
     fn resolve(&self, class: u32, name: Sym, desc: Sym) -> Vec<Id> {
-        let mut next = Some(class);
-        while let Some(i) = next {
-            let c = self.class(i);
-            if let Some(j) = c
-                .methods
-                .iter()
-                .position(|m| m.name == name && m.desc == desc && !m.is_abstract)
-            {
-                return vec![(i, u32::try_from(j).unwrap_or(u32::MAX))];
-            }
-            next = c.superclass.and_then(|s| self.index(s));
-        }
         let mut found = Vec::new();
+        let mut seen = HashSet::new();
+        if self.resolve_up(class, name, desc, &mut seen, &mut found) {
+            return found;
+        }
         let mut seen = HashSet::new();
         self.default_methods(class, name, desc, &mut seen, &mut found);
         found
+    }
+
+    /// The first concrete `name desc` up each superclass chain from `class`; whether one was.
+    fn resolve_up(
+        &self,
+        class: u32,
+        name: Sym,
+        desc: Sym,
+        seen: &mut HashSet<u32>,
+        found: &mut Vec<Id>,
+    ) -> bool {
+        if !seen.insert(class) {
+            return false;
+        }
+        let c = self.class(class);
+        if let Some(j) = c
+            .methods
+            .iter()
+            .position(|m| m.name == name && m.desc == desc && !m.is_abstract)
+        {
+            found.push((class, u32::try_from(j).unwrap_or(u32::MAX)));
+            return true;
+        }
+        let mut any = false;
+        for parent in self.superclasses(c) {
+            if let Some(i) = self.index(parent) {
+                any |= self.resolve_up(i, name, desc, seen, found);
+            }
+        }
+        any
+    }
+
+    /// A class's superclass, and the other one a second definition of it gives.
+    fn superclasses(&self, c: &Class) -> Vec<Sym> {
+        let mut out: Vec<Sym> = c.superclass.into_iter().collect();
+        if let Some(more) = self.cp.other_superclasses.get(&c.name) {
+            out.extend(more);
+        }
+        out
+    }
+
+    /// `class` and every superclass up each chain, nearest first along the declared one.
+    fn lineage(&self, class: u32) -> Vec<u32> {
+        let mut out = Vec::new();
+        let mut seen = HashSet::new();
+        let mut stack = vec![class];
+        while let Some(i) = stack.pop() {
+            if !seen.insert(i) {
+                continue;
+            }
+            out.push(i);
+            let parents = self.superclasses(self.class(i));
+            stack.extend(parents.iter().rev().filter_map(|p| self.index(*p)));
+        }
+        out
     }
 
     fn default_methods(
@@ -739,8 +792,14 @@ impl<'a> Walk<'a> {
             return;
         }
         let c = self.class(class);
-        for parent in c.interfaces.iter().chain(&c.superclass) {
-            let Some(i) = self.index(*parent) else {
+        let parents: Vec<Sym> = c
+            .interfaces
+            .iter()
+            .copied()
+            .chain(self.superclasses(c))
+            .collect();
+        for parent in parents {
+            let Some(i) = self.index(parent) else {
                 continue;
             };
             let p = self.class(i);
@@ -771,7 +830,8 @@ impl<'a> Walk<'a> {
             }
             if let Some(i) = self.index(t) {
                 let p = self.class(i);
-                types.extend(p.superclass.iter().chain(&p.interfaces));
+                types.extend(self.superclasses(p));
+                types.extend(&p.interfaces);
             }
             let Some(calls) = self.sites.get(&t) else {
                 continue;
@@ -1082,6 +1142,33 @@ mod tests {
             self.cp.by_name.insert(class.name, self.cp.classes.len());
             self.cp.classes.push(class);
         }
+    }
+
+    #[test]
+    fn a_class_defined_with_two_superclasses_inherits_from_both() {
+        let mut f = Fixture::default();
+        let new = Op::New(f.sym("lib/Twice"));
+        let call = f.call(CallKind::Virtual, "lib/Twice", "flawed");
+        let main = f.method("main", vec![new, call]);
+        f.class("app/Main", &[], Role::App, vec![main]);
+        f.class("lib/Twice", &[], Role::Dependency, vec![]);
+        let safe = f.method("safe", vec![]);
+        f.class("lib/OldBase", &[], Role::Dependency, vec![safe]);
+        let flawed = f.method("flawed", vec![]);
+        f.class("lib/NewBase", &[], Role::Dependency, vec![flawed]);
+        let (twice, old, new) = (
+            f.sym("lib/Twice"),
+            f.sym("lib/OldBase"),
+            f.sym("lib/NewBase"),
+        );
+        f.cp.classes[1].superclass = Some(old);
+        assert!(analyze(&f.cp)
+            .witness("lib.NewBase", "flawed", None)
+            .is_none());
+        f.cp.other_superclasses.insert(twice, vec![new]);
+        assert!(analyze(&f.cp)
+            .witness("lib.NewBase", "flawed", None)
+            .is_some());
     }
 
     #[test]

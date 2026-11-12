@@ -31,6 +31,7 @@ pub mod history_cmd;
 pub mod images;
 pub mod import_reach;
 pub mod inventory;
+pub mod jvm_reach;
 pub mod licensefetch;
 pub mod licenses;
 pub mod licenses_cmd;

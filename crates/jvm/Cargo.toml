@@ -6,15 +6,16 @@ license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
 description = "JVM call graphs for fleetreach: reads class files and jars as data and answers which sink methods are reached."
-# Not published yet: wired into `scan --reachability` once E3 has measured it.
-publish = false
 
 [lints]
 workspace = true
 
 [dependencies]
 cafebabe = "0.9"
-fleetreach-sinks = { path = "../sinks" }
+fleetreach-sinks = { path = "../sinks", version = "1.6.0" }
 thiserror = { workspace = true }
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }

@@ -178,6 +178,10 @@ struct RawImage {
     platform: Option<String>,
     /// The osv.dev ecosystem to match against (`Debian:12`), instead of `/etc/os-release`.
     distro: Option<String>,
+    /// The Java packages that are the service's own code (`org.keycloak`), for
+    /// `--reachability=jvm`.
+    #[serde(default)]
+    jvm_app: Vec<String>,
     exposure: Option<Exposure>,
     mission_impact: Option<MissionImpact>,
     safety_impact: Option<SafetyImpact>,
@@ -639,6 +643,31 @@ pub struct Image {
     pub reference: Option<String>,
     pub platform: Option<String>,
     pub distro: Option<String>,
+    /// The service's own Java packages, slash form with a trailing slash (`org/keycloak/`).
+    pub jvm_app: Vec<String>,
+}
+
+/// A Java package as `--reachability=jvm` matches class names: `org.keycloak` (or
+/// `org/keycloak`) becomes `org/keycloak/`, so it never matches `org/keycloakx`.
+pub(crate) fn jvm_package(package: &str) -> Result<String, String> {
+    let slashed = package
+        .trim()
+        .trim_end_matches(['.', '/'])
+        .replace('.', "/");
+    let valid = !slashed.is_empty()
+        && slashed.split('/').all(|part| {
+            !part.is_empty()
+                && part
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
+        });
+    if valid {
+        Ok(format!("{slashed}/"))
+    } else {
+        Err(format!(
+            "`{package}` is not a Java package name like `org.keycloak`"
+        ))
+    }
 }
 
 /// Where the fleet's triage files live.
@@ -909,6 +938,18 @@ impl Config {
                     });
                 }
             }
+            let mut jvm_app = Vec::with_capacity(i.jvm_app.len());
+            for package in &i.jvm_app {
+                match jvm_package(package) {
+                    Ok(p) => jvm_app.push(p),
+                    Err(message) => {
+                        return Err(ConfigError::InvalidImage {
+                            image: i.id,
+                            message: format!("jvm_app: {message}"),
+                        })
+                    }
+                }
+            }
             let fields = ContextFields::from(RawContext {
                 exposure: i.exposure,
                 mission_impact: i.mission_impact,
@@ -925,6 +966,7 @@ impl Config {
                 reference: i.reference,
                 platform: i.platform,
                 distro: i.distro,
+                jvm_app,
             });
         }
 

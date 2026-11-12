@@ -35,4 +35,5 @@ bzip2-rs = "0.1"
 roxmltree = { workspace = true }
 
 [dev-dependencies]
+tempfile = "3"
 serde_json = { workspace = true }

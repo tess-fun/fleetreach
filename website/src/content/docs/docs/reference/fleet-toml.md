@@ -58,6 +58,7 @@ id       = "api"
 path     = "images/api.tar"   # docker save, OCI layout (tarball or directory), or a rootfs
 platform = "linux/arm64"      # which image of a multi-platform OCI index
 distro   = "Debian:12"        # instead of the image's /etc/os-release
+jvm_app  = ["com.example.api"] # the service's own Java packages, for --reachability=jvm
 owner    = "team-api"
 ```
 
@@ -67,6 +68,7 @@ owner    = "team-api"
 | `path` | The image: a `docker save` or OCI-layout tarball (gzip or zstd layers), an OCI-layout directory, or a root filesystem directory or tarball. |
 | `platform` | `os/arch`, to pick one image from a multi-platform index. Required when an index holds several. |
 | `distro` | An osv.dev distro ecosystem (`Debian:12`, `Ubuntu:24.04:LTS`, `Alpine:v3.20`, `Wolfi`, `Rocky Linux:9`, `Red Hat:enterprise_linux:9::baseos`, `Oracle Linux:9`, `Amazon Linux:2023`, ...), to match against instead of the detected one. |
+| `jvm_app` | Java packages (`org.keycloak`) whose classes are the service's own code: their non-private methods are where `--reachability=jvm` starts. Not needed for a Spring Boot fat jar or a war, whose own classes are found. See [Check reachability](/fleetreach/docs/guides/check-reachability/#jvm-call-graphs-for-container-images). |
 | `exposure`, `mission_impact`, `safety_impact`, `owner`, `tags` | As for `[[repo]]`. |
 
 `scan --image <path>` adds an image without a `fleet.toml` entry; its id is the file name.

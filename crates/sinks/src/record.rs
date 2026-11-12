@@ -286,36 +286,63 @@ pub fn load_dir(dir: &Path) -> Result<SinkSet, RecordError> {
     files.sort();
     let mut set = SinkSet::default();
     for path in files {
-        let err = |message: String| RecordError::Invalid {
+        let text = std::fs::read_to_string(&path).map_err(|e| RecordError::Invalid {
             path: path.display().to_string(),
-            message,
-        };
-        let text = std::fs::read_to_string(&path).map_err(|e| err(e.to_string()))?;
-        let record: SinkRecord = serde_json::from_str(&text).map_err(|e| err(e.to_string()))?;
-        record.validate().map_err(err)?;
-        let stem = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or_default();
-        if stem != record.id {
-            return Err(err(format!(
-                "the file for `{}` must be named `{}.json`",
-                record.id, record.id
-            )));
-        }
-        for name in std::iter::once(&record.id).chain(&record.aliases) {
-            if set.records.contains_key(name) || set.aliases.contains_key(name) {
-                return Err(err(format!(
-                    "`{name}` is already claimed by another record"
-                )));
-            }
-        }
-        for alias in &record.aliases {
-            set.aliases.insert(alias.clone(), record.id.clone());
-        }
-        set.records.insert(record.id.clone(), record);
+            message: e.to_string(),
+        })?;
+        add(&mut set, &path, &text)?;
     }
     Ok(set)
+}
+
+mod bundle {
+    include!(concat!(env!("OUT_DIR"), "/bundled.rs"));
+}
+
+/// The records this crate was built with, from its `data/` directory, checked as
+/// [`load_dir`] checks a directory.
+///
+/// # Errors
+///
+/// As [`load_dir`]: an invalid record refuses the whole set.
+pub fn bundled() -> Result<SinkSet, RecordError> {
+    let mut set = SinkSet::default();
+    for (path, text) in bundle::BUNDLED {
+        add(&mut set, Path::new(path), text)?;
+    }
+    Ok(set)
+}
+
+/// Check one record file and add it to `set`.
+fn add(set: &mut SinkSet, path: &Path, text: &str) -> Result<(), RecordError> {
+    let err = |message: String| RecordError::Invalid {
+        path: path.display().to_string(),
+        message,
+    };
+    let record: SinkRecord = serde_json::from_str(text).map_err(|e| err(e.to_string()))?;
+    record.validate().map_err(err)?;
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
+    if stem != record.id {
+        return Err(err(format!(
+            "the file for `{}` must be named `{}.json`",
+            record.id, record.id
+        )));
+    }
+    for name in std::iter::once(&record.id).chain(&record.aliases) {
+        if set.records.contains_key(name) || set.aliases.contains_key(name) {
+            return Err(err(format!(
+                "`{name}` is already claimed by another record"
+            )));
+        }
+    }
+    for alias in &record.aliases {
+        set.aliases.insert(alias.clone(), record.id.clone());
+    }
+    set.records.insert(record.id.clone(), record);
+    Ok(())
 }
 
 fn collect(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), RecordError> {
@@ -436,6 +463,14 @@ fn valid_descriptor(s: &str) -> bool {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+    #[test]
+    fn the_bundled_records_are_the_data_directory() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
+        let bundled = super::bundled().unwrap();
+        assert_eq!(bundled.records, load_dir(&dir).unwrap().records);
+        assert!(bundled.records.len() >= 100);
+    }
+
     use super::*;
 
     fn record() -> SinkRecord {

@@ -143,6 +143,9 @@ pub(crate) enum ReachMode {
     Heuristic,
     /// Sound call-graph reachability over the compiled crate closure.
     Static,
+    /// A call graph over each image's Java archives, read as data and judged against the
+    /// bundled sink records (no build).
+    Jvm,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]

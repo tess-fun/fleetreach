@@ -191,9 +191,16 @@ pub(crate) struct ScanArgs {
         num_args = 0..=1,
         default_missing_value = "heuristic",
         value_name = "MODE",
-        help = "reachability: bare/`heuristic` greps your source (safe, no build); `static` is a sound call-graph analysis that COMPILES each repo — running its build scripts and proc-macros (see --allow-untrusted-builds). Needs --reach-driver."
+        help = "reachability: bare/`heuristic` greps your source (safe, no build); `static` is a sound call-graph analysis that COMPILES each repo — running its build scripts and proc-macros (see --allow-untrusted-builds). Needs --reach-driver. `jvm` builds a call graph over each image's Java archives, read as data and never run, and judges its Maven findings against the bundled reviewed sink records: a finding none of whose images reaches a sink is not reachable. Name the service's own packages with `jvm_app` (or --jvm-app) unless the image runs a Spring Boot fat jar or a war."
     )]
     reachability: Option<ReachMode>,
+    #[arg(
+        long = "jvm-app",
+        value_name = "PACKAGE",
+        value_delimiter = ',',
+        help = "with --reachability=jvm, the Java packages that are the service's own code in the images named by --image (`org.keycloak`); their non-private methods are the graph's entry points. Repeatable or comma-separated; an `[[image]]` takes `jvm_app = [...]`"
+    )]
+    jvm_app: Vec<String>,
     #[arg(
         long,
         help = "drop findings proven/assumed unreachable; implies --reachability"
@@ -622,7 +629,13 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
     let triage = crate::triage::load_or_fail(&config, args.triage_dir.as_deref())?;
     let db = advisory_db(args, &config)?;
     let vex_policy = oci_vex_policy(args, &config).map_err(|e| fail(&e))?;
-    let mut images = crate::images::prepare_all(&config.images, args.offline, vex_policy.as_ref());
+    let sinks = jvm_sinks(args)?;
+    let mut images = crate::images::prepare_all(
+        &config.images,
+        args.offline,
+        vex_policy.as_ref(),
+        sinks.as_ref(),
+    );
     for image in &images {
         if let Some(why) = &image.vex_problem {
             eprintln!(
@@ -666,6 +679,7 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         .iter_mut()
         .filter_map(|image| image.attested.take())
         .collect();
+    let jvm_graphs = jvm_graphs(args, &mut images);
     // The images' temporary lockfile copies are removed here.
     drop(images);
     let fleet_packages = add_fleet_signals(args, &config, &feeds, &materialized, &mut scan)?;
@@ -687,7 +701,8 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         },
     );
     let exploitation_known = enrich_report(args, &config, &mut fleet_report);
-    assess_reachability(args, &config, &mut fleet_report)?;
+    let jvm = sinks.as_ref().map(|set| (set, &jvm_graphs));
+    assess_reachability(args, &config, &mut fleet_report, jvm)?;
     let baseline_new = apply_baseline(args, &mut fleet_report)?;
     // 5b2. Fleet evidence for upgrades (spec 13): the versions of each vulnerable package
     //      every repo runs, so the fix queue can say which bumps the fleet already survived.
@@ -814,6 +829,12 @@ fn load_fleet(args: &ScanArgs) -> Result<(Config, sources::Materialized), u8> {
                 .map_err(|e| fail(&format!("--image: {e}")))?,
             None => crate::images::from_arg(path),
         };
+        let mut image = image;
+        for package in &args.jvm_app {
+            let package = crate::config::jvm_package(package)
+                .map_err(|e| fail(&format!("--jvm-app: {e}")))?;
+            image.jvm_app.push(package);
+        }
         let taken = config.repos.iter().any(|r| r.id == image.id)
             || config.images.iter().any(|i| i.id == image.id);
         if taken {
@@ -1367,11 +1388,57 @@ fn enrich_report(args: &ScanArgs, config: &Config, fleet_report: &mut FleetRepor
     exploitation_known
 }
 
+/// The bundled sink records, with `--reachability=jvm`.
+fn jvm_sinks(args: &ScanArgs) -> Result<Option<fleetreach_sinks::record::SinkSet>, u8> {
+    if args.reachability != Some(ReachMode::Jvm) {
+        return Ok(None);
+    }
+    fleetreach_sinks::record::bundled()
+        .map(Some)
+        .map_err(|e| fail(&format!("the bundled sink records: {e}")))
+}
+
+/// Each image's JVM call graph, taken before the images are dropped.
+fn jvm_graphs(
+    args: &ScanArgs,
+    images: &mut [crate::images::Prepared],
+) -> BTreeMap<fleetreach_core::RepoId, crate::jvm_reach::GraphOutcome> {
+    if args.reachability != Some(ReachMode::Jvm) {
+        return BTreeMap::new();
+    }
+    images
+        .iter_mut()
+        .map(|image| {
+            let graph = match &mut image.opened {
+                Ok(opened) => opened
+                    .jvm
+                    .take()
+                    .unwrap_or_else(|| Err("no call graph was built".to_string())),
+                Err(e) => Err(format!("the image could not be opened: {e}")),
+            };
+            if args.verbose {
+                match &graph {
+                    Ok(g) => eprintln!("reachability(jvm): {}: {}", image.source, g.summary),
+                    Err(why) => eprintln!("reachability(jvm): {}: no graph: {why}", image.source),
+                }
+            }
+            (image.id.clone(), graph)
+        })
+        .collect()
+}
+
+/// The records and image graphs `--reachability=jvm` judges findings with.
+type JvmInputs<'a> = (
+    &'a fleetreach_sinks::record::SinkSet,
+    &'a BTreeMap<fleetreach_core::RepoId, crate::jvm_reach::GraphOutcome>,
+);
+
 /// Reachability, when asked for, and `--reachable-only`.
 fn assess_reachability(
     args: &ScanArgs,
     config: &Config,
     fleet_report: &mut FleetReport,
+    jvm: Option<JvmInputs<'_>>,
 ) -> Result<(), u8> {
     // 5a3. Reachability (opt-in). `--reachable-only` implies the heuristic when no
     //      mode is given. The static engine sets the legacy `reachable` bool too,
@@ -1381,6 +1448,11 @@ fn assess_reachability(
     });
     if let Some(mode) = reach_mode {
         match mode {
+            ReachMode::Jvm => {
+                if let Some((set, graphs)) = jvm {
+                    crate::jvm_reach::assess(fleet_report, set, graphs);
+                }
+            }
             ReachMode::Heuristic => {
                 // npm and PyPI are assessed by their import-graph engines below, which
                 // resolve first-party imports themselves, so the grep skips them.
@@ -1456,6 +1528,7 @@ fn assess_reachability(
                 let how = match mode {
                     ReachMode::Heuristic => "not found in your source (heuristic)",
                     ReachMode::Static => "proven unreachable (static)",
+                    ReachMode::Jvm => "not reached in their images' JVM call graphs",
                 };
                 eprintln!("dropped {dropped} finding(s) {how}");
             }

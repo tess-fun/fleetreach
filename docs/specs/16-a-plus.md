@@ -355,7 +355,7 @@ advisory data. Every image pulled.
 - **Still open**: the 13.4% holds only if the graph misses no call into a sink. The vul4j
   corpus below tests that, and "E3 with the vul4j rules" reruns E3 with the rules it added.
 
-### E3 with the vul4j rules, 2026-11-12 (gate open)
+### E3 with the vul4j rules, 2026-11-12 (gate passed: suppression ships)
 
 `run4.py` judged the same 63 images with the same scans, records and advisory data, using the
 graph after the eleven vul4j rules. 25 pulls failed on the first try (23 cut off mid-download,
@@ -443,6 +443,56 @@ records):
   - In six cases some patched files map to no method; their other sinks are counted.
   - A PoV runs one path, so "reached" here is a floor on what the graph must reach, not proof
     for a path no test takes.
+
+### JVM suppression in the scan, 2026-11-12
+
+`scan --reachability=jvm` ships the E3 graph (row 13). While an image is read, its Java
+archives are written to a private directory, which later layers' whiteouts and replacements
+and hard links are applied to. One graph is built per image, every bundled record
+(`fleetreach_sinks::record::bundled`) is judged against it, and the directory is removed.
+The entry points are the classes in the `[[image]]`'s `jvm_app` packages (`--jvm-app` for
+`--image`), or a fat jar's or war's own classes. A Maven finding with a record is
+`NotReachable` only if every one of its occurrences is in an analyzed image whose graph does not
+reach a sink of a reviewed, not-by-name record that names the occurrence's package. A path
+anywhere makes it `Reachable` with the chain. The rest is `Unknown` with a reason.
+VEX, SARIF, CycloneDX, SSVC and the fix queue already act on `NotReachable`. `vex verify`
+re-derives Rust witnesses only, and now says how many JVM ones it left out, instead of passing
+them as holding.
+
+One graph change came with it. A class defined twice (two versions of a library in one
+directory of jars, two wars) used to keep its first definition. Now it holds both definitions'
+methods, calls and annotations, and a second superclass is walked too. The first rule was a
+false-negative risk: a call only the second copy makes was dropped. Making the image partial
+on a second superclass, the first fix tried, cost Petclinic's whole graph for one taglibs
+class.
+
+The shipped binary, run end to end on the same 63 E3 images (fresh scans, one image at a time):
+
+| Maven findings | All | High or critical |
+|---|---|---|
+| Not reachable | **973 (12.9%)** | **521 (13.9%)** |
+| Reachable | 1,895 | 679 |
+| Unknown, with a reason | 442 | 200 |
+| No record (package level) | 4,260 | 2,338 |
+| **Total** | **7,570** | **3,738** |
+
+- **No finding is not reachable where E3 found a path.** Compared per advisory and image with
+  the E3 harness: 971 not reachable agree, 1,858 reachable agree.
+- **15 E3 set-asides were wrong** (Hive 13, Logstash 2): both images carry several copies of a
+  library, and only the merged classes show the path. Two more (`GHSA-w573`, `GHSA-rmj7`) were
+  E3 "sink absent" because the first copy lacked the sink. The merge finds it, and finds it
+  not reached.
+- **Totals differ from E3's 7,827** because the scan groups by advisory, with all its packages
+  in one finding, where E3 counted each advisory and package.
+- **Unknowns**: 169 sink absent, 129 a deny-list or no-method-sink record, 129 proposed or
+  by-name records, 10 partial (Nexus 3.40.1 holds a jar whose zip extra field the reader
+  refuses).
+- **One fix from the comparison**: two jackson-databind findings were "no occurrence to
+  judge", because the occurrence's Maven version read as fixed to the semver check. A skipped
+  occurrence can only end in a wrong "not reachable", so every occurrence is now judged.
+- Packaging: `fleetreach-sinks` and `fleetreach-jvm` are publishable (README from `lib.rs`,
+  in `release.sh` order), so the CLI can depend on them. That is two new crates.io names at
+  the next release.
 
 ### Competitors, as of Nov 2026
 
@@ -1196,6 +1246,11 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Research gate**: E2 decides whether the sink data is good enough (1.6.0); E3 (1.7.0) decides
   whether JVM suppression is worth shipping or JVM ships witnesses only. A miss is
   published with its number, as for Python's 3%.
+- **E3 outcome (2026-11-12)**: decided (user, 2026-11-12): JVM suppression ships. Measured
+  13.0% of 7,827 Maven findings set aside on 63 services (13.8% of high and critical), with 1
+  by-name miss in 87 sinks on the vulnerable-reproducer corpus. Reviewed records only, by-name
+  records never say "not reached". Built as `scan --reachability=jvm`; see "JVM suppression in
+  the scan" under Research findings.
 - **E2 outcome (2026-11-02)**: jar diffs alone MISSED (14 of 100 at 90% precision against a
   bar of 80); see "E2 result" under Research findings. Commit-first (E2b, 40 hand-labelled)
   MISSED too: 45% at best, with 15% of advisories having no sink in the fix at all. Decided (user,

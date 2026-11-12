@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`scan --reachability=jvm` sets aside Java findings no code path reaches.** fleetreach reads
+  every Java archive in each image as data, never running it, and builds one call graph from the
+  service's entry points. Those are the classes in the image's `jvm_app` packages
+  (`--jvm-app org.example` for `--image`), or a Spring Boot fat jar's or a war's own classes. A
+  Maven finding is judged against the reviewed sink records built into fleetreach. It is
+  reachable, with the chain from an entry point to a method the fix changes; not reachable,
+  when no image it occurs in reaches one, which makes it `not_affected` in VEX and SARIF; or
+  unknown, with the reason. Records whose sinks are loaded by name (JDBC drivers, JCA providers)
+  never say "not reachable", and neither do unreviewed ones. On 63 public Java service images
+  this sets aside 12.9% of Maven findings (13.9% of high and critical). On 79 CVE reproducers, 86
+  of the 87 vulnerable methods that ran were in the graph; the one missed is loaded by a name
+  built at run time.
+
+### Changed
+
+- **`vex verify` leaves JVM witnesses out and says how many.** It re-derives the Rust engine's
+  `not_affected` statements by building the repos. A JVM statement comes from scanning images,
+  so `scan --reachability=jvm` derives it again; counted as re-derived, it would pass without
+  being checked.
+
 ## [1.6.0] - 2026-11-05
 
 ### Added

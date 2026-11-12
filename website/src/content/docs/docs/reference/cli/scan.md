@@ -136,11 +136,15 @@ Options:
           a local clone of github.com/cisagov/vulnrichment, for CISA's SSVC Exploitation and Automatable per CVE (with --enrich they are fetched from GitHub instead, cached)
 
       --reachability [<MODE>]
-          reachability: bare/`heuristic` greps your source (safe, no build); `static` is a sound call-graph analysis that COMPILES each repo — running its build scripts and proc-macros (see --allow-untrusted-builds). Needs --reach-driver.
+          reachability: bare/`heuristic` greps your source (safe, no build); `static` is a sound call-graph analysis that COMPILES each repo — running its build scripts and proc-macros (see --allow-untrusted-builds). Needs --reach-driver. `jvm` builds a call graph over each image's Java archives, read as data and never run, and judges its Maven findings against the bundled reviewed sink records: a finding none of whose images reaches a sink is not reachable. Name the service's own packages with `jvm_app` (or --jvm-app) unless the image runs a Spring Boot fat jar or a war.
 
           Possible values:
           - heuristic: Grep the repo's own source for affected-function names (zero-build)
           - static:    Sound call-graph reachability over the compiled crate closure
+          - jvm:       A call graph over each image's Java archives, read as data and judged against the bundled sink records (no build)
+
+      --jvm-app <PACKAGE>
+          with --reachability=jvm, the Java packages that are the service's own code in the images named by --image (`org.keycloak`); their non-private methods are the graph's entry points. Repeatable or comma-separated; an `[[image]]` takes `jvm_app = [...]`
 
       --reachable-only
           drop findings proven/assumed unreachable; implies --reachability

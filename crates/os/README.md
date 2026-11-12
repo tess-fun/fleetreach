@@ -16,8 +16,9 @@ shared `VulnFinding` model, so image findings rank, dedupe and gate with the res
 fleet.
 
 Like the language feeders it is **toolchain-free and safe by construction**: nothing in
-the image is run, nothing is written to disk, and every layer named by digest is checked
-against it. The pieces:
+the image is run, nothing is written to disk (except the Java archives
+[`open_image_spilling`](https://docs.rs/fleetreach-os/latest/fleetreach_os/fn.open_image_spilling.html) writes to a directory the caller gives, for a JVM call graph), and
+every layer named by digest is checked against it. The pieces:
 
 - [`image`](https://docs.rs/fleetreach-os/latest/fleetreach_os/image/): layer merge with OCI whiteouts (`.wh.<name>`, `.wh..wh..opq`), symlinks
   followed inside the image, only wanted files kept in memory;

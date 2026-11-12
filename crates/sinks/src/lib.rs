@@ -11,6 +11,9 @@
 //! E2 and E2b experiments in spec 16), so sinks are curated data: [`propose`] turns a fix
 //! into a `proposed` [`record`], a person reviews it, and only reviewed records may ever
 //! support "not reached".
+//!
+//! The curated records under `data/` are built into the crate: [`record::bundled`] returns
+//! them, checked as [`record::load_dir`] checks a directory.
 
 pub mod java;
 pub mod propose;

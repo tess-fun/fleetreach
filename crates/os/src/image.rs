@@ -23,6 +23,10 @@ use sha2::{Digest, Sha256};
 use crate::error::OsError;
 use crate::tar::{self, Kind, Source};
 
+/// The most Java archive bytes one image writes out for a JVM call graph: past this, an archive
+/// is refused, which leaves the graph partial.
+const MAX_SPILL_BYTES: u64 = 32 << 30;
+
 /// Executables outside this range are not opened: a Go binary is never under a megabyte.
 const MIN_BINARY_BYTES: u64 = 1 << 16;
 const MAX_BINARY_BYTES: u64 = 2 << 30;
@@ -86,6 +90,31 @@ pub struct ImageFs {
     introduced: BTreeMap<(String, String), usize>,
     /// Whether the layer being applied changed anything a package database is made of.
     packages_changed: bool,
+    /// Where Java archives are written out, when a JVM call graph needs their classes.
+    spill: Option<Spill>,
+}
+
+/// The Java archives written out of an image, by image path, with the layer that wrote each.
+/// An entry counts only while that layer's file is still at its path: a later layer can delete
+/// or replace it.
+#[derive(Debug, Default)]
+struct Spill {
+    dir: PathBuf,
+    files: BTreeMap<String, (usize, PathBuf)>,
+    written: u64,
+    count: usize,
+    /// Archives that could not be written, as `path: reason`.
+    refused: Vec<String>,
+}
+
+/// The Java archives of an image, written out to a directory.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct JavaArchives {
+    /// Each archive still in the image, by image path, with where it was written.
+    pub files: Vec<(String, PathBuf)>,
+    /// Archives in the image that are not among `files` (too large, unwritable), as
+    /// `path: reason`. Any of these leaves a call graph partial.
+    pub missing: Vec<String>,
 }
 
 /// One layer as the image's config describes it.
@@ -477,6 +506,7 @@ impl ImageFs {
                         Node::File(None)
                     } else {
                         let data = reader.read_data(limit)?;
+                        self.spill_archive(layer, &path, &data);
                         Node::File(Some(Arc::new(kept(&path, data))))
                     }
                 }
@@ -496,6 +526,7 @@ impl ImageFs {
                     let target = normalize(&target)
                         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
                         .unwrap_or_default();
+                    self.spill_link(layer, &target, &path);
                     match self.entries.get(&target).map(|e| &e.node) {
                         Some(Node::File(data)) => Node::File(data.clone()),
                         _ => {
@@ -515,6 +546,81 @@ impl ImageFs {
         }
         self.note_packages(layer);
         Ok(())
+    }
+
+    /// Write out a wanted Java archive's content, when archives are being written.
+    fn spill_archive(&mut self, layer: usize, path: &str, data: &[u8]) {
+        let Some(spill) = self.spill.as_mut() else {
+            return;
+        };
+        if !crate::jar::is_archive(path) {
+            return;
+        }
+        let size = data.len() as u64;
+        if spill.written + size > MAX_SPILL_BYTES {
+            spill
+                .refused
+                .push(format!("{path}: past {MAX_SPILL_BYTES} bytes of archives"));
+            spill.files.remove(path);
+            return;
+        }
+        let file = spill.dir.join(format!("{:06}.jar", spill.count));
+        spill.count += 1;
+        match std::fs::write(&file, data) {
+            Ok(()) => {
+                spill.written += size;
+                spill.files.insert(path.to_string(), (layer, file));
+            }
+            Err(e) => {
+                spill.refused.push(format!("{path}: {e}"));
+                spill.files.remove(path);
+            }
+        }
+    }
+
+    /// A hard link at `path` to `target` shares the archive written for the target.
+    fn spill_link(&mut self, layer: usize, target: &str, path: &str) {
+        let Some(file) = self.live_spill(target) else {
+            return;
+        };
+        if let Some(spill) = self.spill.as_mut() {
+            spill.files.insert(path.to_string(), (layer, file));
+        }
+    }
+
+    /// The file written for the archive at `path`, if that archive is still there.
+    fn live_spill(&self, path: &str) -> Option<PathBuf> {
+        let (layer, file) = self.spill.as_ref()?.files.get(path)?;
+        match self.entries.get(path) {
+            Some(Entry {
+                layer: at,
+                node: Node::File(_),
+            }) if at == layer => Some(file.clone()),
+            _ => None,
+        }
+    }
+
+    /// The Java archives written out, when the image was opened with [`open_spilling`]: those
+    /// still in the merged image, and those that could not be written. A wanted archive too
+    /// large to read is missing too.
+    #[must_use]
+    pub fn java_archives(&self) -> JavaArchives {
+        let Some(spill) = self.spill.as_ref() else {
+            return JavaArchives::default();
+        };
+        let files = spill
+            .files
+            .keys()
+            .filter_map(|path| Some((path.clone(), self.live_spill(path)?)))
+            .collect();
+        let mut missing = spill.refused.clone();
+        missing.extend(
+            self.skipped
+                .iter()
+                .filter(|s| s.split(": ").next().is_some_and(crate::jar::is_archive))
+                .cloned(),
+        );
+        JavaArchives { files, missing }
     }
 
     /// Remember what `data`, an executable, was built from, if it says.
@@ -1016,12 +1122,48 @@ pub fn open(
     want: &dyn Fn(&str) -> bool,
     platform: Option<&str>,
 ) -> Result<ImageFs, OsError> {
+    open_with(path, want, platform, None)
+}
+
+/// [`open`], also writing every wanted Java archive into `dir` (which must exist), for a JVM
+/// call graph over the image's classes: [`ImageFs::java_archives`] lists them.
+///
+/// # Errors
+///
+/// As [`open`].
+pub fn open_spilling(
+    path: &Path,
+    want: &dyn Fn(&str) -> bool,
+    platform: Option<&str>,
+    dir: &Path,
+) -> Result<ImageFs, OsError> {
+    open_with(path, want, platform, Some(dir))
+}
+
+fn open_with(
+    path: &Path,
+    want: &dyn Fn(&str) -> bool,
+    platform: Option<&str>,
+    dir: Option<&Path>,
+) -> Result<ImageFs, OsError> {
+    let spill = || {
+        dir.map(|d| Spill {
+            dir: d.to_path_buf(),
+            ..Spill::default()
+        })
+    };
     let md = std::fs::metadata(path).map_err(|e| OsError::io(path, e))?;
     if md.is_dir() {
         if path.join("manifest.json").is_file() || path.join("index.json").is_file() {
-            return open_layers(&Archive::Dir(path.to_path_buf()), path, want, platform);
+            return open_layers(
+                &Archive::Dir(path.to_path_buf()),
+                path,
+                want,
+                platform,
+                spill(),
+            );
         }
-        return open_rootfs(path, want);
+        return open_rootfs(path, want, spill());
     }
     // A compressed archive is a compressed root filesystem tarball (a single layer).
     let mut head = [0u8; 4];
@@ -1033,13 +1175,14 @@ pub fn open(
     if !compressed {
         let archive = Archive::index_tar(path)?;
         if archive.has("manifest.json") || archive.has("index.json") {
-            return open_layers(&archive, path, want, platform);
+            return open_layers(&archive, path, want, platform, spill());
         }
     }
     // A single root filesystem tarball (`docker export`, a minirootfs).
     let f = std::fs::File::open(path).map_err(|e| OsError::io(path, e))?;
     let mut fs = ImageFs {
         layers: 1,
+        spill: spill(),
         ..ImageFs::default()
     };
     let stream = decompress(f).map_err(|e| OsError::io(path, e))?;
@@ -1053,6 +1196,7 @@ fn open_layers(
     label: &Path,
     want: &dyn Fn(&str) -> bool,
     platform: Option<&str>,
+    spill: Option<Spill>,
 ) -> Result<ImageFs, OsError> {
     let manifest = manifest_of(archive, label, platform)?;
     // The config describes the image; nothing matched depends on it, so one that cannot be
@@ -1065,6 +1209,7 @@ fn open_layers(
         .unwrap_or_default();
     let mut fs = ImageFs {
         build: Build::new(manifest.layers.len(), &config, &manifest.annotations),
+        spill,
         ..ImageFs::default()
     };
     for (i, layer) in manifest.layers.iter().enumerate() {
@@ -1122,9 +1267,14 @@ fn is_executable(_: &walkdir::DirEntry) -> bool {
     false
 }
 
-fn open_rootfs(root: &Path, want: &dyn Fn(&str) -> bool) -> Result<ImageFs, OsError> {
+fn open_rootfs(
+    root: &Path,
+    want: &dyn Fn(&str) -> bool,
+    spill: Option<Spill>,
+) -> Result<ImageFs, OsError> {
     let mut fs = ImageFs {
         layers: 1,
+        spill,
         ..ImageFs::default()
     };
     let walk = walkdir::WalkDir::new(root)
@@ -1179,7 +1329,10 @@ fn open_rootfs(root: &Path, want: &dyn Fn(&str) -> bool) -> Result<ImageFs, OsEr
                         Node::File(None)
                     }
                     _ => match std::fs::read(entry.path()) {
-                        Ok(data) => Node::File(Some(Arc::new(kept(&rel, data)))),
+                        Ok(data) => {
+                            fs.spill_archive(0, &rel, &data);
+                            Node::File(Some(Arc::new(kept(&rel, data))))
+                        }
                         Err(e) => {
                             fs.skipped.push(format!("{rel}: {e}"));
                             Node::File(None)
@@ -1216,6 +1369,80 @@ mod tests {
     fn layered(layers: &[Vec<u8>]) -> ImageFs {
         let layers: Vec<&[u8]> = layers.iter().map(Vec::as_slice).collect();
         ImageFs::from_layers(&layers, &all).unwrap()
+    }
+
+    /// `layers` applied with Java archives written into `dir`.
+    fn spilled(layers: &[Vec<u8>], dir: &Path) -> ImageFs {
+        let mut fs = ImageFs {
+            layers: layers.len(),
+            spill: Some(Spill {
+                dir: dir.to_path_buf(),
+                ..Spill::default()
+            }),
+            ..ImageFs::default()
+        };
+        for (i, layer) in layers.iter().enumerate() {
+            fs.apply_layer(i, decompress(layer.as_slice()).unwrap(), &all)
+                .unwrap();
+        }
+        fs
+    }
+
+    fn archive_text(fs: &ImageFs) -> Vec<(String, Vec<u8>)> {
+        fs.java_archives()
+            .files
+            .iter()
+            .map(|(path, file)| (path.clone(), std::fs::read(file).unwrap()))
+            .collect()
+    }
+
+    #[test]
+    fn written_archives_follow_whiteouts_replacements_and_hard_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let fs = spilled(
+            &[
+                tar(&[
+                    E::File("app/a.jar", b"a1"),
+                    E::File("app/b.jar", b"b1"),
+                    E::File("app/c.jar", b"c1"),
+                    E::File("app/notes.txt", b"x"),
+                ]),
+                tar(&[
+                    E::File("app/.wh.a.jar", b""),
+                    E::File("app/b.jar", b"b2"),
+                    E::Hardlink("lib/c.jar", "app/c.jar"),
+                ]),
+            ],
+            dir.path(),
+        );
+        assert_eq!(
+            archive_text(&fs),
+            vec![
+                ("app/b.jar".to_string(), b"b2".to_vec()),
+                ("app/c.jar".to_string(), b"c1".to_vec()),
+                ("lib/c.jar".to_string(), b"c1".to_vec()),
+            ]
+        );
+        assert!(fs.java_archives().missing.is_empty());
+    }
+
+    #[test]
+    fn an_archive_replaced_by_a_directory_is_gone() {
+        let dir = tempfile::tempdir().unwrap();
+        let fs = spilled(
+            &[
+                tar(&[E::File("app/a.jar", b"a1")]),
+                tar(&[E::Dir("app/a.jar"), E::File("app/a.jar/x", b"y")]),
+            ],
+            dir.path(),
+        );
+        assert!(fs.java_archives().files.is_empty());
+    }
+
+    #[test]
+    fn no_archives_are_written_unless_asked() {
+        let fs = layered(&[tar(&[E::File("app/a.jar", b"a1")])]);
+        assert_eq!(fs.java_archives(), JavaArchives::default());
     }
 
     #[test]

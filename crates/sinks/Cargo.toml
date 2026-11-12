@@ -6,9 +6,10 @@ license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
 description = "Vulnerable-function (sink) data for fleetreach: curated sink records, a proposer that reads fix commits, and method-level jar diffs."
-# Not published yet: the curated sink records are consumed by JVM reachability (1.7.0).
-publish = false
 
 [lints]
 workspace = true

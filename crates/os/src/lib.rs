@@ -5,8 +5,9 @@
 //! fleet.
 //!
 //! Like the language feeders it is **toolchain-free and safe by construction**: nothing in
-//! the image is run, nothing is written to disk, and every layer named by digest is checked
-//! against it. The pieces:
+//! the image is run, nothing is written to disk (except the Java archives
+//! [`open_image_spilling`] writes to a directory the caller gives, for a JVM call graph), and
+//! every layer named by digest is checked against it. The pieces:
 //!
 //! - [`image`]: layer merge with OCI whiteouts (`.wh.<name>`, `.wh..wh..opq`), symlinks
 //!   followed inside the image, only wanted files kept in memory;
@@ -104,6 +105,21 @@ pub fn open_image(
     platform: Option<&str>,
 ) -> Result<ImageFs, OsError> {
     image::open(path, &|p| packages::wanted(p) || extra(p), platform)
+}
+
+/// [`open_image`], also writing the image's Java archives into `dir` for a JVM call graph;
+/// [`ImageFs::java_archives`] lists them.
+///
+/// # Errors
+///
+/// As [`open_image`].
+pub fn open_image_spilling(
+    path: &Path,
+    extra: &dyn Fn(&str) -> bool,
+    platform: Option<&str>,
+    dir: &Path,
+) -> Result<ImageFs, OsError> {
+    image::open_spilling(path, &|p| packages::wanted(p) || extra(p), platform, dir)
 }
 
 /// What an image is: its distribution (or why it cannot be matched) and its packages.

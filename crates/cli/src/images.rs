@@ -71,6 +71,8 @@ pub(crate) struct Opened {
     pub(crate) skipped: Vec<String>,
     /// Where each package came from.
     pub(crate) layers: Layers,
+    /// The JVM call graph over the image's Java archives, with `--reachability=jvm`.
+    pub(crate) jvm: Option<crate::jvm_reach::GraphOutcome>,
     /// The image's lockfiles, written out for the language feeders; `lang_repo` points here.
     pub(crate) _files: tempfile::TempDir,
     pub(crate) lang_repo: Repo,
@@ -218,14 +220,17 @@ impl Prepared {
 }
 
 /// Open every image, in parallel, in config order.
+/// Open every image. With `jvm`, each image's Java archives are also written out and its call
+/// graph judged against those records.
 pub(crate) fn prepare_all(
     images: &[Image],
     offline: bool,
     vex: Option<&crate::oci_vex::Policy>,
+    jvm: Option<&fleetreach_sinks::record::SinkSet>,
 ) -> Vec<Prepared> {
     images
         .par_iter()
-        .map(|i| prepare(i, offline, vex))
+        .map(|i| prepare(i, offline, vex, jvm))
         .collect()
 }
 
@@ -247,7 +252,12 @@ fn attached(
     ))
 }
 
-fn prepare(image: &Image, offline: bool, vex: Option<&crate::oci_vex::Policy>) -> Prepared {
+fn prepare(
+    image: &Image,
+    offline: bool,
+    vex: Option<&crate::oci_vex::Policy>,
+    jvm: Option<&fleetreach_sinks::record::SinkSet>,
+) -> Prepared {
     let (source, pulled) = match &image.reference {
         Some(reference) => (
             reference.clone(),
@@ -279,18 +289,47 @@ fn prepare(image: &Image, offline: bool, vex: Option<&crate::oci_vex::Policy>) -
         digest,
         attested,
         vex_problem,
-        opened: pulled.and_then(|p| open(image, p.as_ref())),
+        opened: pulled.and_then(|p| open(image, p.as_ref(), jvm)),
     }
 }
 
-fn open(image: &Image, pulled: Option<&crate::registry::Pulled>) -> Result<Opened, String> {
+fn open(
+    image: &Image,
+    pulled: Option<&crate::registry::Pulled>,
+    jvm: Option<&fleetreach_sinks::record::SinkSet>,
+) -> Result<Opened, String> {
     // A pull already chose the platform: its layout holds the one image.
     let (path, platform) = match pulled {
         Some(p) => (p.layout.as_path(), None),
         None => (image.path.as_path(), image.platform.as_deref()),
     };
-    let fs = fleetreach_os::open_image(path, &fleetreach_os::lang::wanted, platform)
-        .map_err(|e| e.to_string())?;
+    let files = tempfile::Builder::new()
+        .prefix("fleetreach-image-")
+        .tempdir()
+        .map_err(|e| format!("creating a temporary directory: {e}"))?;
+    let (fs, graph) = match jvm {
+        None => (
+            fleetreach_os::open_image(path, &fleetreach_os::lang::wanted, platform)
+                .map_err(|e| e.to_string())?,
+            None,
+        ),
+        Some(set) => {
+            // The archives go in a directory of their own, removed once the graph is built.
+            let archives = tempfile::Builder::new()
+                .prefix("fleetreach-jars-")
+                .tempdir()
+                .map_err(|e| format!("creating a temporary directory: {e}"))?;
+            let fs = fleetreach_os::open_image_spilling(
+                path,
+                &fleetreach_os::lang::wanted,
+                platform,
+                archives.path(),
+            )
+            .map_err(|e| e.to_string())?;
+            let graph = crate::jvm_reach::analyze_image(&fs.java_archives(), &image.jvm_app, set);
+            (fs, Some(graph))
+        }
+    };
     let inspection = fleetreach_os::inspect(&fs, image.distro.as_deref());
     let lang = fleetreach_os::lang::collect(&fs, &inspection.inventory.owned);
     let inventory = &inspection.inventory;
@@ -320,10 +359,6 @@ fn open(image: &Image, pulled: Option<&crate::registry::Pulled>) -> Result<Opene
     let packaged_composer = owned_by(&lang.owned.composer);
     let packaged_nuget = owned_by(&lang.owned.nuget);
     let packaged_gems = owned_by(&lang.owned.gems);
-    let files = tempfile::Builder::new()
-        .prefix("fleetreach-image-")
-        .tempdir()
-        .map_err(|e| format!("creating a temporary directory: {e}"))?;
     for (path, data) in &lang.files {
         write_file(files.path(), path, data)?;
     }
@@ -392,6 +427,7 @@ fn open(image: &Image, pulled: Option<&crate::registry::Pulled>) -> Result<Opene
         unread: lang.unread,
         skipped: fs.skipped().to_vec(),
         layers,
+        jvm: graph,
         _files: files,
         lang_repo,
     })
@@ -475,6 +511,7 @@ pub(crate) fn from_arg(path: &Path) -> Image {
         reference: None,
         platform: None,
         distro: None,
+        jvm_app: Vec::new(),
     }
 }
 
@@ -487,6 +524,7 @@ pub(crate) fn from_reference(reference: &str) -> Result<Image, String> {
         reference: Some(reference.to_string()),
         platform: None,
         distro: None,
+        jvm_app: Vec::new(),
     })
 }
 
