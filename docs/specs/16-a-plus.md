@@ -353,7 +353,32 @@ advisory data. Every image pulled.
 - **By-name flags cost 277 findings** (3.5%) that the graph does not reach. Wider roots
   (Spring Boot auto-configuration, `logback.xml`, JCA providers) are what would free them.
 - **Still open**: the 13.4% holds only if the graph misses no call into a sink. The vul4j
-  corpus below tests that; the graph rules it added have not been rerun on E3 yet.
+  corpus below tests that, and "E3 with the vul4j rules" reruns E3 with the rules it added.
+
+### E3 with the vul4j rules, 2026-11-12 (gate open)
+
+`run4.py` judged the same 63 images with the same scans, records and advisory data, using the
+graph after the eleven vul4j rules. 25 pulls failed on the first try (23 cut off mid-download,
+2 refused with 403) and all came through on a one-at-a-time retry.
+
+| Outcome | All findings | High or critical |
+|---|---|---|
+| Not reached, set aside | **1,017 (13.0%)** | **531 (13.8%)** |
+| Reached | 1,926 | 675 |
+| Not reached, record reached by name (unknown) | 140 | 39 |
+| Sink class absent from the jar (unknown) | 175 | 34 |
+| Partial read (unknown) | 11 | 4 |
+| Unreviewed, no-method-sink or deny-list record | 161 | 161 |
+| No record | 4,397 | 2,404 |
+| **Total** | **7,827** | **3,848** |
+
+- **171 findings changed bucket, all toward reached.** None went from reached to not reached.
+- **33 earlier set-asides were wrong**: snappy-java's `uncompress*Array` (23) and
+  `arrayCopy`/`rawWrite` (7), Netty's native epoll transport (2) and Bouncy Castle's PKIX
+  `verify` (1). The graph now reaches them through the new rules. These are the false NotReachable verdicts that the vul4j corpus was built to find.
+- **By-name findings fell from 277 to 140**: log4j-core's socket and plugin records (60),
+  Jetty security `check` (15) and seven more records are now reached outright, not left unknown.
+- **Per service**: median 12.3%, most 37% (Hazelcast), none on Flink, GoCD and Nexus.
 
 ### Soundness corpus: vul4j PoV runs, 2026-11-11
 
@@ -526,7 +551,8 @@ on; keep each release about 8 weeks.
   end-of-life.
 - E3 (suppression yield on 50 services), after a field marks records reached by name. Run
   2026-11-06 on 63 services: 0.04%, limited by record coverage; rerun 2026-11-10 after the
-  top 100 advisories were reviewed: 13.4%; see "E3 result" and "E3 rerun".
+  top 100 advisories were reviewed: 13.4%; 2026-11-12 with the vul4j graph rules: 13.0%; see
+  "E3 result", "E3 rerun" and "E3 with the vul4j rules".
 - JVM function-level reachability (if E2/E3 pass), and the sink data published as an open
   feed.
 - `fleetreach serve` (UI over history and triage files).
