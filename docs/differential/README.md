@@ -136,3 +136,8 @@ The explained ones are not wrong calls by the ranges: a tree that fails to resol
 stale locks npm prunes (7), a deprecated target npm will not pick (1), a path dependency outside
 the copied directory (9), and a target whose own requirements conflict (3), which only the
 registry knows. Compare copies by path and not by count: npm hoists and dedupes as it updates.
+
+`vex_consumers.py` writes OpenVEX and CSAF for a fleet of image layouts with `vex_assertion`s,
+runs Trivy 0.73.0 and Grype v0.121.1 on each image with each document, and counts the
+asserted findings each tool set aside. `csaf_schema.py` checks CSAF documents against the
+CSAF 2.0 JSON schema with no dependencies (the schema, not the mandatory tests).

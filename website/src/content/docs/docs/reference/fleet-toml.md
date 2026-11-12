@@ -129,7 +129,12 @@ approved_by   = "security@acme.example"
 
 `oci = true` reads OpenVEX attached to images pulled from registries, `oci_keys` lists the cosign
 public keys to accept (relative to `fleet.toml`), and `oci_unsigned = true` accepts documents no
-key signed. See [VEX attached to images](/docs/ecosystems/container-images/#vex-attached-to-images).
+key signed. See [VEX attached to images](/fleetreach/docs/ecosystems/container-images/#vex-attached-to-images).
+
+`files` lists VEX documents (OpenVEX, CycloneDX or CSAF) that set findings aside on every run,
+beside any `--vex FILE`; `keys` lists cosign public keys one of which must have signed each of
+them. Both are relative to `fleet.toml`. See
+[Reading VEX documents](/fleetreach/docs/guides/suppress-with-openvex/#reading-vex-documents).
 
 ## `[settings.osv]`
 

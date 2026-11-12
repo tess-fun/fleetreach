@@ -81,6 +81,30 @@ impl Policy {
     }
 }
 
+impl Policy {
+    /// Whether any key was named.
+    pub(crate) fn has_keys(&self) -> bool {
+        !self.keys.is_empty()
+    }
+
+    /// The file of the key whose signature, of those given, covers `blob` itself, as
+    /// `cosign sign-blob` signs it (ECDSA P-256 over SHA-256, DER, base64).
+    pub(crate) fn blob_signer<'a>(
+        &self,
+        blob: &[u8],
+        signatures: impl IntoIterator<Item = &'a str>,
+    ) -> Option<&str> {
+        signatures.into_iter().find_map(|text| {
+            let bytes = decode_base64(text.trim())?;
+            let signature = DerSignature::try_from(bytes.as_slice()).ok()?;
+            self.keys
+                .iter()
+                .find(|(_, key)| key.verify(blob, &signature).is_ok())
+                .map(|(file, _)| file.as_str())
+        })
+    }
+}
+
 /// DSSE's pre-authentication encoding, what a signature covers.
 fn encapsulate(payload_type: &str, payload: &[u8]) -> Vec<u8> {
     let mut out = format!(
@@ -329,7 +353,7 @@ impl Product {
 }
 
 #[derive(Debug)]
-struct Statement {
+pub(crate) struct Statement {
     ids: Vec<String>,
     products: Vec<Product>,
     sets_aside: bool,
@@ -338,6 +362,8 @@ struct Statement {
     at: Option<OffsetDateTime>,
     /// The attachment it came from.
     document: String,
+    /// Who decided, as the suppression records it.
+    origin: String,
 }
 
 /// One OpenVEX document attached to an image.
@@ -361,6 +387,61 @@ impl Document {
             statements: 0,
             trusted: Vec::new(),
         }
+    }
+}
+
+/// One product of a statement read from a VEX file.
+pub(crate) struct FileProduct<'a> {
+    /// The product is the repo being decided.
+    pub(crate) this_repo: bool,
+    pub(crate) package: Option<&'a str>,
+    pub(crate) subcomponents: Vec<&'a str>,
+}
+
+/// A statement read from a VEX file, for one repo.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn file_statement(
+    ids: Vec<String>,
+    sets_aside: bool,
+    justification: Option<String>,
+    reason: String,
+    at: Option<&str>,
+    products: &[FileProduct<'_>],
+    document: &str,
+) -> Statement {
+    Statement {
+        ids,
+        products: products
+            .iter()
+            .map(|p| Product {
+                image: p.this_repo,
+                package: p.package.and_then(Purl::parse),
+                subcomponents: p.subcomponents.iter().map(|c| Purl::parse(c)).collect(),
+            })
+            .collect(),
+        sets_aside,
+        justification: justification.filter(|j| VEX_JUSTIFICATIONS.contains(&j.as_str())),
+        reason,
+        at: parse_time(at),
+        document: document.to_string(),
+        origin: format!("VEX file {document}"),
+    }
+}
+
+/// The statements of VEX files that bear on one repo, as image attestations do.
+pub(crate) fn file_attested(repo: RepoId, documents: Vec<(String, Vec<Statement>)>) -> Attested {
+    Attested {
+        repo,
+        documents: documents
+            .into_iter()
+            .map(|(path, trusted)| Document {
+                digest: path,
+                signed_by: None,
+                refused: None,
+                statements: trusted.len(),
+                trusted,
+            })
+            .collect(),
     }
 }
 
@@ -430,6 +511,7 @@ fn statement(
         reason: impact.unwrap_or_else(|| format!("VEX attestation {digest}")),
         at: parse_time(raw.timestamp.as_deref()).or(fallback),
         document: digest.to_string(),
+        origin: format!("VEX attestation {digest}"),
     })
 }
 
@@ -611,10 +693,18 @@ fn groups(v: &VulnFinding) -> Vec<Vec<&str>> {
 }
 
 impl Attested {
-    /// The statement deciding `ids` for `unit`, the latest; a tie goes to the finding.
-    fn latest(&self, ids: &[&str], unit: &[Purl], installed: &Version) -> Option<&Statement> {
-        self.documents
-            .iter()
+    /// The statement deciding `ids` for `unit`, the latest across this and `also`; a tie goes
+    /// to the finding.
+    fn latest<'a>(
+        &'a self,
+        also: Option<&'a Attested>,
+        ids: &[&str],
+        unit: &[Purl],
+        installed: &Version,
+    ) -> Option<&'a Statement> {
+        std::iter::once(self)
+            .chain(also)
+            .flat_map(|a| &a.documents)
             .flat_map(|d| &d.trusted)
             .filter(|s| s.ids.iter().any(|id| ids.contains(&id.as_str())))
             .filter(|s| s.products.iter().any(|p| p.covers(unit, installed)))
@@ -622,13 +712,14 @@ impl Attested {
     }
 
     /// The statement that sets this occurrence aside, when every part of it is covered.
-    fn decide(
-        &self,
+    fn decide<'a>(
+        &'a self,
+        also: Option<&'a Attested>,
         v: &VulnFinding,
         package: &str,
         path: &[String],
         installed: &Version,
-    ) -> Option<&Statement> {
+    ) -> Option<&'a Statement> {
         let units = units(v.ecosystem, package, path);
         if units.is_empty() {
             return None;
@@ -636,7 +727,7 @@ impl Attested {
         let mut decided = None;
         for ids in groups(v) {
             for unit in &units {
-                let statement = self.latest(&ids, unit, installed)?;
+                let statement = self.latest(also, &ids, unit, installed)?;
                 if !statement.sets_aside {
                     return None;
                 }
@@ -651,6 +742,15 @@ impl Attested {
 /// occurrences, and how many each document accounts for.
 pub(crate) fn suppressions(
     attested: &[Attested],
+    findings: &[VulnFinding],
+) -> (Vec<Suppression>, BTreeMap<String, usize>) {
+    suppressions_with(attested, None, findings)
+}
+
+/// [`suppressions`], with `everywhere`'s statements also read for every repo.
+pub(crate) fn suppressions_with(
+    attested: &[Attested],
+    everywhere: Option<&Attested>,
     findings: &[VulnFinding],
 ) -> (Vec<Suppression>, BTreeMap<String, usize>) {
     let by_repo: BTreeMap<&RepoId, &Attested> = attested.iter().map(|a| (&a.repo, a)).collect();
@@ -668,10 +768,12 @@ pub(crate) fn suppressions(
             else {
                 continue;
             };
-            let Some(image) = by_repo.get(repo) else {
-                continue;
+            let decided = match (by_repo.get(repo), everywhere) {
+                (Some(own), also) => own.decide(also, v, package, dependency_path, installed),
+                (None, Some(all)) => all.decide(None, v, package, dependency_path, installed),
+                (None, None) => None,
             };
-            if let Some(s) = image.decide(v, package, dependency_path, installed) {
+            if let Some(s) = decided {
                 *counts.entry(s.document.clone()).or_default() += 1;
                 out.push(Suppression {
                     id: v.advisory_id.clone(),
@@ -680,7 +782,7 @@ pub(crate) fn suppressions(
                     scope: None,
                     justification: s.justification.clone(),
                     reason: s.reason.clone(),
-                    approved_by: Some(format!("VEX attestation {}", s.document)),
+                    approved_by: Some(s.origin.clone()),
                     accepted_risk: false,
                 });
             }

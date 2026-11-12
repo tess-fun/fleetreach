@@ -1465,8 +1465,16 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   CycloneDX VEX. Found on the way: images had no VEX product, and OS statements named a SemVer
   version, the source package only, and our namespace only (`rocky-linux` where both tools say
   `rocky`). VEX from triage decisions already flowed (triage files are suppressions).
-  **Left**: CycloneDX and CSAF VEX input; signing through `cosign`; the CSAF schema check
-  (the validator is an npm package, not installed here).
+  **Input and signing implemented 2026-11-12** (`crates/cli/src/vex_input.rs` on the
+  `oci_vex.rs` matcher): `scan --vex FILE`, `[settings.vex] files`, `--vex-key`. Our own
+  OpenVEX, CSAF and CycloneDX documents read back to exactly the occurrences their assertions
+  set aside, on the demo fleet (2 of `time` in ledger-svc, none in payments-api) and on the
+  Alpine, Debian and Rocky images (epochs included). cosign v2.6.1 `--output-signature` and
+  v3.0.2 `--bundle` signatures verify; a changed byte is refused, as `cosign verify-blob`
+  refuses it. Schemas: cyclonedx-cli validates the separate VEX as 1.6 and 1.7;
+  `docs/differential/csaf_schema.py` checks CSAF output against the CSAF 2.0 schema (it
+  passes gocsaf's valid samples and catches five planted errors). **Left**: CSAF's mandatory
+  tests (section 6.1), which need a CSAF validator (gocsaf's or secvisogram's); not run here.
 
 #### 25. SBOM output (A- to A+)
 

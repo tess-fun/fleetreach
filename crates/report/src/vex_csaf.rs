@@ -20,6 +20,9 @@ use serde_json::{json, Value};
 
 use crate::vex::{build_statements, content_id, Statement, VexParams};
 
+/// The namespace of the product ids `x_generic_uris` carries: fleetreach's VEX product ids.
+const GENERIC_URI_NAMESPACE: &str = "https://github.com/tess-fun/fleetreach#vex-product-id";
+
 /// CSAF publisher details `-f csaf-vex` needs beyond OpenVEX's author.
 pub struct CsafParams {
     /// `document.publisher.namespace`: a URL naming the publisher (`https://acme.example`).
@@ -185,9 +188,12 @@ pub fn to_csaf_vex(
         .iter()
         .map(|(repo, id)| {
             let mut p = json!({ "name": product_name(repo), "product_id": id });
-            if repo.starts_with("pkg:") {
-                p["product_identification_helper"] = json!({ "purl": repo });
-            }
+            // The VEX product id, so a reader can tell which service this is.
+            p["product_identification_helper"] = if repo.starts_with("pkg:") {
+                json!({ "purl": repo })
+            } else {
+                json!({ "x_generic_uris": [{ "namespace": GENERIC_URI_NAMESPACE, "uri": repo }] })
+            };
             p
         })
         .collect();

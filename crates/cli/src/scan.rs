@@ -155,6 +155,20 @@ pub(crate) struct ScanArgs {
                 repository can then hide findings; implies --vex-oci"
     )]
     vex_oci_unsigned: bool,
+    #[arg(
+        long = "vex",
+        value_name = "FILE",
+        help = "set findings aside on a VEX document (OpenVEX, CycloneDX or CSAF; repeatable); \
+                adds to [settings.vex] files"
+    )]
+    vex_files: Vec<PathBuf>,
+    #[arg(
+        long,
+        value_name = "PUBLIC_KEY",
+        help = "cosign public key one of which must have signed each --vex file \
+                (`cosign sign-blob`, the signature in FILE.sig or a bundle beside it; repeatable)"
+    )]
+    vex_key: Vec<PathBuf>,
 
     // exploit-risk enrichment (CISA KEV + FIRST EPSS)
     #[arg(long, help = "enrich findings with CISA KEV + EPSS (network)")]
@@ -650,6 +664,7 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
     let triage = crate::triage::load_or_fail(&config, args.triage_dir.as_deref())?;
     let db = advisory_db(args, &config)?;
     let vex_policy = oci_vex_policy(args, &config).map_err(|e| fail(&e))?;
+    let vex_files = vex_files(args, &config).map_err(|e| fail(&e))?;
     let sinks = jvm_sinks(args)?;
     let mut images = crate::images::prepare_all(
         &config.images,
@@ -718,6 +733,7 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         scan,
         &Decisions {
             attested: &attested,
+            files: &vex_files,
             triage: &triage.suppressions,
         },
     );
@@ -1259,11 +1275,46 @@ fn oci_vex_policy(
     crate::oci_vex::Policy::load(&keys, unsigned).map(Some)
 }
 
+/// The VEX files to read, each read and checked against the named keys. A file that cannot
+/// be used is said, and its findings stand.
+fn vex_files(args: &ScanArgs, config: &Config) -> Result<Vec<crate::vex_input::VexFile>, String> {
+    let mut paths = config.vex.files.clone();
+    paths.extend(args.vex_files.iter().cloned());
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut keys = config.vex.keys.clone();
+    keys.extend(args.vex_key.iter().cloned());
+    let policy = crate::oci_vex::Policy::load(&keys, false)?;
+    let files: Vec<_> = paths
+        .iter()
+        .map(|path| crate::vex_input::load(path, &policy))
+        .collect();
+    for file in &files {
+        match &file.refused {
+            Some(why) => eprintln!("warning: VEX file {} not applied: {why}", file.path),
+            None if !args.quiet => eprintln!(
+                "read {} {} statement(s) from {}{}",
+                file.statements(),
+                file.format,
+                file.path,
+                file.signed_by
+                    .as_deref()
+                    .map(|k| format!(", signed by {k}"))
+                    .unwrap_or_default()
+            ),
+            None => {}
+        }
+    }
+    Ok(files)
+}
+
 /// The report: findings with ignores and VEX assertions applied, then phantom and dev-only
 /// findings dropped when asked.
 /// What people decided about findings, beside the fleet's config.
 struct Decisions<'a> {
     attested: &'a [crate::oci_vex::Attested],
+    files: &'a [crate::vex_input::VexFile],
     triage: &'a [Suppression],
 }
 
@@ -1317,6 +1368,16 @@ fn assemble_report(
         );
     }
     suppressions.extend(image_vex);
+    if !decisions.files.is_empty() {
+        let names = crate::vex_input::repo_names(&crate::vex::resolve_product_ids(config));
+        let (from_files, counts) =
+            crate::vex_input::suppressions(decisions.files, &names, &scan.vulnerabilities);
+        for file in decisions.files.iter().filter(|f| f.refused.is_none()) {
+            let n = counts.get(&file.path).copied().unwrap_or(0);
+            eprintln!("set aside {n} finding(s) on VEX file {}", file.path);
+        }
+        suppressions.extend(from_files);
+    }
     suppressions.extend_from_slice(decisions.triage);
     for attestation in provenance.images.iter_mut().flat_map(|i| &mut i.vex) {
         attestation.set_aside = set_aside.get(&attestation.digest).copied().unwrap_or(0);

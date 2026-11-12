@@ -113,6 +113,12 @@ Options:
       --vex-oci-unsigned
           accept attached VEX no key signed, as Trivy does: anyone who can push to the repository can then hide findings; implies --vex-oci
 
+      --vex <FILE>
+          set findings aside on a VEX document (OpenVEX, CycloneDX or CSAF; repeatable); adds to [settings.vex] files
+
+      --vex-key <PUBLIC_KEY>
+          cosign public key one of which must have signed each --vex file (`cosign sign-blob`, the signature in FILE.sig or a bundle beside it; repeatable)
+
       --enrich
           enrich findings with CISA KEV + EPSS (network)
 

@@ -41,6 +41,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`sbom --report R --separate-vex` writes a CycloneDX VEX beside each CycloneDX SBOM**, its
   findings pointing at the SBOM's components by BOM-Link and named by CVE where there is one,
   so `trivy sbom --vex` applies it.
+- **`scan --vex FILE` sets findings aside on VEX documents others wrote**: OpenVEX, CycloneDX
+  VEX and CSAF VEX, repeatable, or `[settings.vex] files` for every run. A statement about one
+  of your repos applies to that repo only; one about a package and no repo applies to that
+  package wherever it is; one about another product, such as a vendor's platform, applies
+  nowhere. The latest statement wins, and a `not_affected` with no justification or impact
+  statement makes the document unusable. fleetreach's own documents in all three formats read
+  back to exactly what their assertions set aside.
+- **`--vex-key` requires each VEX file to be signed** with `cosign sign-blob` by a named key:
+  a `.sig` beside the file (cosign 2) or a bundle (cosign 3), checked offline. A file no named
+  key signed is refused with a warning, and its findings stand.
 - **A saved JSON report keeps what a person set aside**, under `set_aside`: each advisory's
   occurrences with the reason, the label and the approver. A CycloneDX or SPDX SBOM made from
   the report shows them as not affected (an accepted risk as `exploitable`, `will_not_fix`),

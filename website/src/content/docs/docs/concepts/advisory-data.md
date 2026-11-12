@@ -30,7 +30,7 @@ release's export, like `Debian:12`, so those are whole downloads, and so is any 
 looks wrong or touches over a quarter of the records. `--force` always downloads the whole export.
 
 **Pinning.** `db snapshot` hashes every source and `--db-snapshot` refuses to run on anything
-else; see [Run offline or air-gapped](/docs/guides/run-offline-or-air-gapped/). `--db <path>
+else; see [Run offline or air-gapped](/fleetreach/docs/guides/run-offline-or-air-gapped/). `--db <path>
 --db-rev <commit>` pins RustSec alone. The report's `provenance` records what was used.
 
 **Withdrawn advisories** are skipped, and an advisory published under several ids (a

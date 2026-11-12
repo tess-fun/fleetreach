@@ -165,6 +165,56 @@ is `oracle` to Trivy and `ol` to Grype), and a consumer matches only when type, 
 name agree, so each package is named in every spelling. An epoch is the `epoch` qualifier, and
 a Debian package is also named with the epoch in its version, as Grype writes it.
 
+## Reading VEX documents
+
+`scan --vex FILE` sets findings aside on a VEX document someone else wrote: a supplier's
+statements on their package, a platform team's document for the services it runs, or a
+document fleetreach wrote earlier. It reads OpenVEX, CycloneDX VEX and CSAF VEX, and may be
+given more than once. List the ones every run should read in `fleet.toml`:
+
+```toml title="fleet.toml"
+[settings.vex]
+files = ["vex/vendor.openvex.json", "vex/platform.csaf.json"]
+```
+
+How far a statement reaches depends on what it names:
+
+- A statement whose product is one of your repos (its VEX product id,
+  `urn:fleetreach:product:<id>`, or the `repo:<id>` an SBOM names it by) applies to that repo
+  only, and the packages it names are that repo's. This is how fleetreach's own documents
+  read back: each sets aside exactly what the assertion behind it did.
+- A statement whose product is a package (`pkg:npm/foo@1.2.3`) and no repo applies to that
+  package, at that version, in every repo.
+- A statement about another product, such as a vendor's platform, holds no package of yours
+  and sets nothing aside.
+
+`not_affected` and `fixed` set findings aside (in CycloneDX, `not_affected`, `false_positive`
+and `resolved`; in CSAF, `known_not_affected`, `fixed` and `first_fixed`). For one
+vulnerability and package the latest statement wins, so a later `affected` undoes an earlier
+`not_affected`, and on a tie the finding stays. A `not_affected` statement with neither a
+justification nor an impact statement makes the whole document unusable, and a document that
+cannot be used is named in a warning and changes nothing.
+
+A finding set aside this way is under `set_aside` in the JSON report, and it becomes a
+`not_affected` statement in the VEX fleetreach writes, with the file as its approver.
+
+### Signed documents
+
+With a key, a document applies only when that key signed it. Sign with `cosign sign-blob`; a
+signature or bundle beside the file is found by its name:
+
+```sh
+cosign sign-blob --key cosign.key --output-signature fleet.vex.json.sig fleet.vex.json   # cosign 2
+cosign sign-blob --key cosign.key --bundle fleet.vex.json.sigstore.json fleet.vex.json   # cosign 3
+fleetreach scan --vex fleet.vex.json --vex-key cosign.pub
+```
+
+fleetreach checks the ECDSA P-256 signature itself, offline; it does not look the signature
+up in a transparency log. A file with no signature, or one no named key made, is refused
+with a warning. `[settings.vex] keys` names keys for every run. Keyless signatures are not
+checked. For VEX attached to images, see
+[VEX attached to images](/fleetreach/docs/ecosystems/container-images/#vex-attached-to-images).
+
 ## Ignoring a finding by hand
 
 ```toml title="fleet.toml"

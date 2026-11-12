@@ -126,6 +126,14 @@ pub fn to_cyclonedx_and_vex(
         "tools".into(),
         json!({ "components": [{ "type": "application", "name": "fleetreach", "version": tool_version }] }),
     );
+    // The SBOM's subject, so a reader knows which service the statements are about.
+    if let Some(root) = serde_json::from_str::<Value>(&sbom)?.pointer("/metadata/component") {
+        let mut root = root.clone();
+        if let Some(r) = root.as_object_mut() {
+            r.remove("properties");
+        }
+        metadata.insert("component".into(), root);
+    }
     let mut bom = Map::new();
     bom.insert("bomFormat".into(), json!("CycloneDX"));
     bom.insert("specVersion".into(), json!(spec.as_str()));

@@ -501,6 +501,12 @@ struct RawVex {
     /// Public keys whose signatures on attached VEX are accepted.
     #[serde(default)]
     oci_keys: Vec<PathBuf>,
+    /// VEX documents (OpenVEX, CycloneDX, CSAF) that set findings aside.
+    #[serde(default)]
+    files: Vec<PathBuf>,
+    /// Public keys one of which must have signed each of `files`.
+    #[serde(default)]
+    keys: Vec<PathBuf>,
     /// Accept attached VEX that no key signed.
     #[serde(default)]
     oci_unsigned: bool,
@@ -717,6 +723,10 @@ pub struct VexConfig {
     pub oci_keys: Vec<PathBuf>,
     /// Accept attached VEX that no key signed.
     pub oci_unsigned: bool,
+    /// VEX documents that set findings aside, relative to the config file.
+    pub files: Vec<PathBuf>,
+    /// Keys one of which must have signed each of `files`, relative to the config file.
+    pub keys: Vec<PathBuf>,
 }
 
 /// A validated `[[settings.vex_assertion]]` (§6, §7.2): `approved_by` + `reason`
@@ -1040,6 +1050,12 @@ impl Config {
                 .map(|key| base_dir.join(key))
                 .collect(),
             oci_unsigned: raw.settings.vex.oci_unsigned,
+            files: (raw.settings.vex.files.iter())
+                .map(|f| base_dir.join(f))
+                .collect(),
+            keys: (raw.settings.vex.keys.iter())
+                .map(|k| base_dir.join(k))
+                .collect(),
         };
 
         let mut vex_assertions = Vec::with_capacity(raw.settings.vex_assertion.len());

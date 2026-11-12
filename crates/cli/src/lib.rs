@@ -68,6 +68,7 @@ pub mod static_reach;
 pub mod triage;
 pub mod typosquat;
 pub mod vex;
+pub(crate) mod vex_input;
 pub mod vulnrichment;
 pub(crate) mod why;
 
