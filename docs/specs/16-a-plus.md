@@ -1473,8 +1473,11 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   v3.0.2 `--bundle` signatures verify; a changed byte is refused, as `cosign verify-blob`
   refuses it. Schemas: cyclonedx-cli validates the separate VEX as 1.6 and 1.7;
   `docs/differential/csaf_schema.py` checks CSAF output against the CSAF 2.0 schema (it
-  passes gocsaf's valid samples and catches five planted errors). **Left**: CSAF's mandatory
-  tests (section 6.1), which need a CSAF validator (gocsaf's or secvisogram's); not run here.
+  passes gocsaf's valid samples and catches five planted errors), and gocsaf's `csaf_validator`
+  3.5.1 agrees: both documents (demo fleet, three images) pass its schema validation and its
+  filename check when named `<tracking id>.json`. **Left**: CSAF's mandatory tests (section
+  6.1). gocsaf only runs them through a remote validator service (secvisogram's
+  csaf-validator-service, `--validator URL`), which is not run here.
 
 #### 25. SBOM output (A- to A+)
 

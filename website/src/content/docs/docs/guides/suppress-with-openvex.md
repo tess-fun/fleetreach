@@ -129,7 +129,9 @@ $ fleetreach scan -f csaf-vex --vex-author security@acme.example | jq '.vulnerab
 CSAF needs a publisher namespace, a URL that names who wrote the document. It comes from
 `--csaf-namespace`, else `[settings.vex] namespace`, else the domain of an email address given
 as `--vex-author`. `--csaf-publisher` sets the publisher category (`vendor` by default; `user`
-for a fleet assessing software it runs but did not write).
+for a fleet assessing software it runs but did not write). CSAF names a published file after its
+`document.tracking.id`, so save it as `<id>.json` (`--vex-id` sets the id; by default it is
+`fleetreach-vex-` and a content hash).
 
 A saved report keeps the findings a person set aside under `set_aside`, with the reason and the
 approver, so `--separate-vex` writes them as `not_affected` with that reason as the detail. An

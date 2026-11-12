@@ -140,4 +140,6 @@ registry knows. Compare copies by path and not by count: npm hoists and dedupes 
 `vex_consumers.py` writes OpenVEX and CSAF for a fleet of image layouts with `vex_assertion`s,
 runs Trivy 0.73.0 and Grype v0.121.1 on each image with each document, and counts the
 asserted findings each tool set aside. `csaf_schema.py` checks CSAF documents against the
-CSAF 2.0 JSON schema with no dependencies (the schema, not the mandatory tests).
+CSAF 2.0 JSON schema with no dependencies (the schema, not the mandatory tests); gocsaf's
+`csaf_validator` gives the same verdicts, and runs the mandatory tests only through a remote
+validator service.
