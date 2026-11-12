@@ -2,7 +2,10 @@
 //! policy, its violations (spec 11). Reads the same sources `scan` and `sbom` read plus
 //! local package metadata; needs no advisory DB and no network.
 //!
-//! Exit `0` when nothing is denied, `1` when a license is denied by the policy, `2` when a
+//! Copyleft conflicts with a repo's own `license` or `exposure` are found too
+//! ([`crate::license_conflicts`]); `[settings.licenses] conflicts = "deny"` makes them fail.
+//!
+//! Exit `0` when nothing is denied, `1` when a license or conflict is denied, `2` when a
 //! source could not be read or the run failed (a partial inventory is never called clean).
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -19,8 +22,10 @@ use crate::config::Config;
 use crate::inventory::repo_inventory_with;
 use rayon::prelude::*;
 
+use crate::license_conflicts::{Conflict, RepoFacts};
 use crate::licenses::{
-    annotate, decide, detect, wanted_archives, Category, Decision, Detections, Verdict,
+    annotate, decide, detect as detect_files, wanted_archives, Category, Decision, Detections,
+    Verdict,
 };
 use crate::licensetext::Detector;
 use crate::sources;
@@ -54,6 +59,11 @@ pub struct LicensesArgs {
     /// cache. Sends each such package's name and version to its registry
     #[arg(long, requires = "detect")]
     download: bool,
+    /// Write one attribution file per repo into this directory (`<repo>.NOTICE.txt`): the
+    /// license texts and NOTICE files of its runtime packages, from the files they ship.
+    /// Implies --detect
+    #[arg(long, value_name = "DIR")]
+    notice: Option<PathBuf>,
     #[command(flatten)]
     maven: crate::maven_repo::FetchArgs,
 }
@@ -73,6 +83,7 @@ struct Output<'a> {
     violations: Vec<&'a Decision>,
     warnings: Vec<&'a Decision>,
     mismatches: Vec<&'a Decision>,
+    conflicts: &'a [Conflict],
     packages: &'a [Decision],
     unread: Vec<String>,
 }
@@ -132,8 +143,10 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
             Err(e) => return fail(&e),
         }
     }
+    let detect = args.detect || args.notice.is_some();
     let mut detections = Detections::default();
-    if args.detect {
+    let mut dirs = BTreeMap::new();
+    if detect {
         for (inv, repo) in inventories.iter_mut().zip(&config.repos) {
             crate::lockhash::annotate(inv, &repo.path);
         }
@@ -162,14 +175,17 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
             eprintln!("warning: {package}: the registry's file does not match the lockfile");
         }
     }
-    if args.detect {
+    if detect {
         let detector = Detector::new();
         let per_repo: Vec<Detections> = inventories
             .par_iter_mut()
             .zip(&config.repos)
-            .map(|(inv, repo)| detect(inv, &repo.path, &cache, &detector))
+            .map(|(inv, repo)| detect_files(inv, &repo.path, &cache, &detector))
             .collect();
-        for found in per_repo {
+        for (found, repo) in per_repo.into_iter().zip(&config.repos) {
+            for ((eco, name, version), dir) in found.dirs {
+                dirs.insert((repo.id.0.clone(), eco, name, version), dir);
+            }
             detections.found.extend(found.found);
             detections.no_files += found.no_files;
         }
@@ -213,6 +229,35 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
         .iter()
         .filter(|d| !d.undeclared.is_empty())
         .collect();
+    let facts: BTreeMap<String, RepoFacts> = config
+        .repos
+        .iter()
+        .map(|r| {
+            let facts = RepoFacts {
+                license: config.repo_licenses.get(&r.id).cloned(),
+                open: crate::ssvc::exposure(&config, &r.id)
+                    == Some(fleetreach_core::ssvc::Exposure::Open),
+            };
+            (r.id.0.clone(), facts)
+        })
+        .collect();
+    let no_exceptions = BTreeMap::new();
+    let conflicts = crate::license_conflicts::find(
+        &decisions,
+        &facts,
+        config
+            .licenses
+            .as_ref()
+            .map_or(Verdict::Warn, |p| p.conflicts),
+        config
+            .licenses
+            .as_ref()
+            .map_or(&no_exceptions, |p| &p.exceptions),
+    );
+    let denied_conflicts = conflicts
+        .iter()
+        .filter(|c| c.verdict == Verdict::Deny)
+        .count();
 
     match args.format {
         LicenseFormat::Json => {
@@ -222,6 +267,7 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
                 violations: violations.clone(),
                 warnings: warnings.clone(),
                 mismatches: mismatches.clone(),
+                conflicts: &conflicts,
                 packages: &decisions,
                 unread: unread.clone(),
             };
@@ -254,6 +300,18 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
                     sanitize_cell(d.detected.as_deref().unwrap_or_default())
                 );
             }
+            for c in &conflicts {
+                println!(
+                    "conflict ({}): {} {} {}@{} ({}): {}",
+                    c.rule.label(),
+                    sanitize_cell(&c.repo),
+                    c.ecosystem,
+                    sanitize_cell(&c.package),
+                    sanitize_cell(&c.version),
+                    sanitize_cell(&c.license),
+                    sanitize_cell(&c.reason)
+                );
+            }
             for (label, list) in [("violation", &violations), ("warning", &warnings)] {
                 for d in list.iter() {
                     println!(
@@ -270,18 +328,40 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
     }
     let known = decisions.iter().filter(|d| d.license.is_some()).count();
     eprintln!(
-        "{} package(s) in {} repo(s): {known} with a known license; {} violation(s), {} warning(s){}",
+        "{} package(s) in {} repo(s): {known} with a known license; {} violation(s), {} warning(s), \
+         {} conflict(s){}",
         decisions.len(),
         inventories.len(),
         violations.len(),
         warnings.len(),
+        conflicts.len(),
         if config.licenses.is_some() {
             ""
         } else {
             " (no [settings.licenses] policy: inventory only)"
         }
     );
-    if args.detect {
+    if let Some(dir) = &args.notice {
+        let repos: Vec<String> = config.repos.iter().map(|r| r.id.0.clone()).collect();
+        match crate::notice::write_all(dir, &repos, &decisions, &dirs) {
+            Ok((missing, unknown)) => {
+                eprintln!(
+                    "notice: {} file(s) in {}; {missing} runtime package(s) with no license file \
+                     on this machine are listed in them",
+                    repos.len(),
+                    dir.display()
+                );
+                if unknown > 0 {
+                    eprintln!(
+                        "warning: {unknown} package(s) come from a license cache written before \
+                         NOTICE files were kept; run with --download to fetch them again"
+                    );
+                }
+            }
+            Err(e) => return fail(&e),
+        }
+    }
+    if detect {
         eprintln!(
             "license files: read for {} package(s), {} mismatch(es); {} package(s) have none on \
              this machine",
@@ -296,5 +376,5 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
     if !unread.is_empty() {
         return 2;
     }
-    u8::from(!violations.is_empty())
+    u8::from(!violations.is_empty() || denied_conflicts > 0)
 }

@@ -32,6 +32,8 @@ pub enum ConfigError {
     ImageMissing { image: String, path: String },
     #[error("image `{image}`: {message}")]
     InvalidImage { image: String, message: String },
+    #[error("repo `{repo}`: license {message}")]
+    InvalidRepoLicense { repo: String, message: String },
     #[error("repo id `{0}` is declared more than once")]
     DuplicateRepoId(String),
     #[error("ignore `{0}` must have a non-empty `reason`")]
@@ -161,6 +163,9 @@ struct RawRepo {
     owner: Option<String>,
     #[serde(default)]
     tags: Vec<String>,
+    /// The repo's own license: an SPDX expression, `proprietary` or `UNLICENSED`. Read by
+    /// `licenses` to find copyleft conflicts.
+    license: Option<String>,
 }
 
 /// An `[[image]]` entry: a container image scanned for its OS and language packages.
@@ -415,6 +420,9 @@ struct RawLicenses {
     mismatch: Option<String>,
     /// `"runtime"` leaves dev-only packages out of the policy; `"all"` (default) includes them.
     scope: Option<String>,
+    /// `allow`, `warn` (default) or `deny`: a copyleft conflict with a repo's `license` or
+    /// `exposure`.
+    conflicts: Option<String>,
     #[serde(default)]
     exception: Vec<RawLicenseException>,
 }
@@ -514,6 +522,8 @@ pub struct Config {
     pub signal_registries: Vec<String>,
     /// `[[image]]` entries (and `scan --image`): container images, scanned apart from repos.
     pub images: Vec<Image>,
+    /// `[[repo]] license`: the repo's own license, for copyleft conflicts.
+    pub repo_licenses: std::collections::BTreeMap<RepoId, crate::license_conflicts::RepoLicense>,
     /// `[[repo]] sbom`: repos scanned from an SBOM instead of their lockfiles.
     pub sboms: std::collections::BTreeMap<RepoId, PathBuf>,
     /// `[settings.sbom] discover`.
@@ -757,6 +767,10 @@ fn license_policy(raw: RawLicenses) -> Result<crate::licenses::Policy, ConfigErr
         Some(v) => verdict(v, "unknown")?,
         None => Verdict::Deny,
     };
+    let conflicts = match raw.conflicts.as_deref() {
+        Some(v) => verdict(v, "conflicts")?,
+        None => Verdict::Warn,
+    };
     let runtime_only = match raw.scope.as_deref() {
         None | Some("all") => false,
         Some("runtime") => true,
@@ -785,6 +799,7 @@ fn license_policy(raw: RawLicenses) -> Result<crate::licenses::Policy, ConfigErr
         mismatch,
         runtime_only,
         exceptions,
+        conflicts,
     })
 }
 
@@ -840,6 +855,7 @@ impl Config {
 
         let mut repos = Vec::with_capacity(raw.repo.len());
         let mut sboms = std::collections::BTreeMap::new();
+        let mut repo_licenses = std::collections::BTreeMap::new();
         let mut sbom_discover_repos = std::collections::BTreeMap::new();
         let mut context = std::collections::BTreeMap::new();
         let mut seen = std::collections::BTreeSet::new();
@@ -859,6 +875,16 @@ impl Config {
                     repo: r.id,
                     path: resolved.display().to_string(),
                 });
+            }
+            if let Some(license) = &r.license {
+                let parsed =
+                    crate::license_conflicts::RepoLicense::parse(license).map_err(|message| {
+                        ConfigError::InvalidRepoLicense {
+                            repo: r.id.clone(),
+                            message,
+                        }
+                    })?;
+                repo_licenses.insert(RepoId(r.id.clone()), parsed);
             }
             if let Some(sbom) = &r.sbom {
                 sboms.insert(RepoId(r.id.clone()), base_dir.join(sbom));
@@ -1284,6 +1310,7 @@ impl Config {
             licenses,
             signal_registries: raw.settings.signals.registries,
             images,
+            repo_licenses,
             sboms,
             sbom_discover: raw.settings.sbom.discover,
             sbom_discover_repos,

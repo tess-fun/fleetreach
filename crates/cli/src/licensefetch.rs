@@ -30,7 +30,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 
 use crate::health::Fetch;
-use crate::licensetext::is_license_file;
+use crate::licensetext::{is_license_file, is_notice_file};
 
 const DOWNLOADS_AT_ONCE: usize = 16;
 /// The most read out of one archive, which keeps a small file from unpacking without end.
@@ -98,6 +98,15 @@ pub struct Outcome {
 }
 
 /// Where license files are kept.
+/// The file a cache entry holds once its notice files are kept too. An entry without it was
+/// written before they were (1.6.0 kept license files only), so it is fetched again.
+const NOTICES_KEPT: &str = ".notices";
+
+/// Whether a cache entry also holds the package's notice files, if it has any.
+pub fn notices_kept(entry: &Path) -> bool {
+    entry.join(NOTICES_KEPT).is_file()
+}
+
 pub fn cache_root() -> Option<PathBuf> {
     crate::osvdb::private_subdir("license-files")
 }
@@ -127,7 +136,7 @@ enum Got {
 fn download_with(wanted: &BTreeSet<Wanted>, root: &Path, fetch: &dyn Fetch) -> Outcome {
     let mut by_key = BTreeMap::new();
     for want in wanted {
-        if let Some(key) = want.pin.key().filter(|key| !root.join(key).is_dir()) {
+        if let Some(key) = want.pin.key().filter(|key| !notices_kept(&root.join(key))) {
             by_key.entry(key).or_insert(want);
         }
     }
@@ -237,7 +246,9 @@ fn kept_name(path: &str) -> Option<String> {
     let safe = |part: &str| !matches!(part, "" | "." | "..") && !part.contains(['\\', '\0']);
     let parts: Vec<&str> = path.split('/').collect();
     match parts[..] {
-        [name] if safe(name) && is_license_file(name) => Some(name.to_string()),
+        [name] if safe(name) && (is_license_file(name) || is_notice_file(name)) => {
+            Some(name.to_string())
+        }
         [dir, name] if dir.eq_ignore_ascii_case("licenses") && safe(name) => {
             Some(format!("LICENSES/{name}"))
         }
@@ -375,9 +386,13 @@ fn keep(root: &Path, key: &str, files: &Files) -> Result<(), String> {
             }
             std::fs::write(path, bytes)?;
         }
-        Ok(())
+        std::fs::write(work.join(NOTICES_KEPT), b"")
     };
-    let written = write().and_then(|()| std::fs::rename(&work, root.join(key)));
+    let entry = root.join(key);
+    if entry.is_dir() && !notices_kept(&entry) {
+        let _ = std::fs::remove_dir_all(&entry);
+    }
+    let written = write().and_then(|()| std::fs::rename(&work, &entry));
     if written.is_err() {
         let _ = std::fs::remove_dir_all(&work);
     }
@@ -517,6 +532,7 @@ mod tests {
         let mut names: Vec<String> = std::fs::read_dir(dir)
             .unwrap()
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name != NOTICES_KEPT)
             .collect();
         names.sort();
         names
@@ -527,6 +543,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let body = gzip(&tar_of(&[
             ("demo-1.0.0/LICENSE-MIT", b"mit"),
+            ("demo-1.0.0/NOTICE", b"demo includes software by others"),
             ("demo-1.0.0/LICENSES/Apache-2.0.txt", b"apache"),
             ("demo-1.0.0/src/lib.rs", b"code"),
             ("demo-1.0.0/vendor/LICENSE", b"not the package's own"),
@@ -545,13 +562,24 @@ mod tests {
             "{:?}",
             outcome.failed
         );
-        assert_eq!(kept(root.path(), &pin), ["LICENSE-MIT", "LICENSES"]);
+        assert_eq!(
+            kept(root.path(), &pin),
+            ["LICENSE-MIT", "LICENSES", "NOTICE"]
+        );
+        assert!(notices_kept(&root.path().join(pin.key().unwrap())));
         assert!(!root.path().join("LICENSE").exists());
 
         // Offline from here: what the cache holds is not asked for again.
         fetch.asked.lock().unwrap().clear();
         assert_eq!(download_with(&wanted, root.path(), &fetch).fetched, 0);
         assert!(fetch.asked.lock().unwrap().is_empty());
+
+        // An entry from before notice files were kept is fetched again, and replaced.
+        let entry = root.path().join(pin.key().unwrap());
+        std::fs::remove_file(entry.join(".notices")).unwrap();
+        std::fs::remove_file(entry.join("NOTICE")).unwrap();
+        assert_eq!(download_with(&wanted, root.path(), &fetch).fetched, 1);
+        assert!(entry.join("NOTICE").is_file() && notices_kept(&entry));
     }
 
     #[test]
@@ -608,7 +636,8 @@ mod tests {
             ("license".to_string(), b"two".to_vec()),
         ]);
         keep(root.path(), "k", &files).unwrap();
-        assert_eq!(std::fs::read_dir(root.path().join("k")).unwrap().count(), 2);
+        // The two, and the mark that notices were kept.
+        assert_eq!(std::fs::read_dir(root.path().join("k")).unwrap().count(), 3);
     }
 
     #[test]

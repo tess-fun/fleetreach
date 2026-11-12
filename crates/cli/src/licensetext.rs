@@ -106,6 +106,49 @@ pub fn is_license_file(name: &str) -> bool {
     )
 }
 
+/// Whether `name` is an attribution notice a license asks to be passed on (Apache-2.0's
+/// `NOTICE`).
+pub fn is_notice_file(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    matches!(
+        lower.as_str(),
+        "notice"
+            | "notice.txt"
+            | "notice.md"
+            | "notices"
+            | "notices.txt"
+            | "notices.md"
+            | "thirdpartynotices"
+            | "thirdpartynotices.txt"
+            | "thirdpartynotices.md"
+            | "third-party-notices"
+            | "third-party-notices.txt"
+            | "third-party-notices.md"
+            | "third_party_notices"
+            | "third_party_notices.txt"
+            | "third_party_notices.md"
+    )
+}
+
+/// The notice files directly in `dir`.
+pub fn read_notice_files(dir: &Path) -> Vec<(String, Vec<u8>)> {
+    let mut out = Vec::new();
+    let mut names: Vec<_> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .collect();
+    names.sort_by_key(std::fs::DirEntry::file_name);
+    for entry in names {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if is_notice_file(&name) {
+            push_file(&mut out, &entry, name);
+        }
+    }
+    out
+}
+
 /// One store entry: a text, and the ids that share it.
 fn entry((text, ids): &(&str, Vec<&str>)) -> (String, LicenseEntry) {
     let current = |id: &&&str| spdx::license_id(id).is_some_and(|l| !l.is_deprecated());
@@ -255,7 +298,7 @@ impl Detector {
 
 /// The license files directly in `dir`, and in the `LICENSES` or `licenses` directory beside
 /// them (REUSE, PEP 639). Links are not followed: a package chooses what is in its directory.
-fn read_license_files(dir: &Path) -> Vec<(String, Vec<u8>)> {
+pub fn read_license_files(dir: &Path) -> Vec<(String, Vec<u8>)> {
     let mut out = Vec::new();
     let mut names: Vec<_> = std::fs::read_dir(dir)
         .into_iter()
@@ -286,6 +329,50 @@ fn read_license_files(dir: &Path) -> Vec<(String, Vec<u8>)> {
         } else if kind.is_file() && is_license_file(&name) {
             push_file(&mut out, &entry, name);
         }
+    }
+    out
+}
+
+/// License files below `dir`'s top level, by path: what code a package bundles from elsewhere
+/// usually ships (`third_party/fiat/LICENSE`). Hidden directories, `node_modules` (other
+/// packages), `target` and the top-level `licenses` directory [`read_license_files`] reads are
+/// skipped; the walk is bounded in depth and in files.
+pub fn read_nested_license_files(dir: &Path) -> Vec<(String, Vec<u8>)> {
+    const MAX_DEPTH: usize = 6;
+    const MAX_FILES: usize = 64;
+    let mut out = Vec::new();
+    let mut stack = vec![(dir.to_path_buf(), String::new(), 0usize)];
+    while let Some((path, prefix, depth)) = stack.pop() {
+        let mut entries: Vec<_> = std::fs::read_dir(&path)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .collect();
+        entries.sort_by_key(std::fs::DirEntry::file_name);
+        let mut subdirs = Vec::new();
+        for entry in entries {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            // A symlink is not followed: it can point anywhere, a parent directory included.
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            if kind.is_dir() {
+                let skip = name.starts_with('.')
+                    || name == "node_modules"
+                    || name == "target"
+                    || (depth == 0 && name.eq_ignore_ascii_case("licenses"));
+                if !skip && depth < MAX_DEPTH {
+                    subdirs.push((entry.path(), format!("{prefix}{name}/"), depth + 1));
+                }
+            } else if kind.is_file() && depth > 0 && is_license_file(&name) {
+                if out.len() >= MAX_FILES {
+                    return out;
+                }
+                push_file(&mut out, &entry, format!("{prefix}{name}"));
+            }
+        }
+        // Depth first, in name order.
+        stack.extend(subdirs.into_iter().rev());
     }
     out
 }

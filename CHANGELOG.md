@@ -20,6 +20,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   this sets aside 12.9% of Maven findings (13.9% of high and critical). On 79 CVE reproducers, 86
   of the 87 vulnerable methods that ran were in the graph; the one missed is loaded by a name
   built at run time.
+- **`licenses` finds copyleft that conflicts with the repo using it.** Give a repo
+  `license = "proprietary"` (or an SPDX expression) in `fleet.toml` and a runtime dependency is a
+  conflict when its license requires GPL, AGPL, SSPL, OSL or EUPL in proprietary or permissive
+  code, AGPL or SSPL in a repo whose exposure is `open`, or Apache-2.0 or a v3 GNU license in a
+  `GPL-2.0-only` repo. `MIT OR GPL-3.0-only` requires neither and never conflicts.
+  `[settings.licenses] conflicts` is `warn` by default; `deny` makes the run exit 1.
+- **`licenses --notice DIR` writes one attribution file per repo**: the license texts its
+  runtime packages ship, grouped where identical, their `NOTICE` files, the license files of
+  code they bundle in subdirectories, and a list of the packages whose files are not on the
+  machine. Checked against license-checker and cargo-about. The download cache now keeps `NOTICE` files;
+  an entry written by 1.6.0 is fetched again by `--download`.
 
 ### Changed
 
@@ -27,6 +38,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `not_affected` statements by building the repos. A JVM statement comes from scanning images,
   so `scan --reachability=jvm` derives it again; counted as re-derived, it would pass without
   being checked.
+
+### Fixed
+
+- **`licenses --detect` reads npm packages installed below another package.** A second version
+  sits at `node_modules/a/node_modules/b`, and only the top-level copy was looked at, so the
+  others kept their declared license unchecked. pnpm's `.pnpm` store is read the same way.
 
 ## [1.6.0] - 2026-11-05
 

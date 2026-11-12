@@ -1,6 +1,6 @@
 ---
 title: Enforce a license policy
-description: List the license of every dependency across the fleet and fail on the ones your policy denies, with SPDX expressions, categories and per-package exceptions.
+description: List the license of every dependency across the fleet, fail on the ones your policy denies, find copyleft that conflicts with a repo's own license, and write attribution files.
 sidebar:
   order: 10
 ---
@@ -60,7 +60,8 @@ ones warned.
 | notice | MIT, Apache-2.0, BSD, ISC, Zlib |
 | unencumbered | CC0, Unlicense, 0BSD |
 
-Exit codes: `0` nothing denied, `1` a license is denied, `2` a source could not be read.
+Exit codes: `0` nothing denied, `1` a license or a conflict is denied, `2` a source could not
+be read.
 `-f json` lists every package with its license, source and verdict.
 
 ## Read the license files
@@ -122,3 +123,60 @@ NuGet, whose `contentHash` skips the signature, and a Python package published a
 
 A mismatch needs a declaration to compare with. On a fresh machine, Cargo and Go packages have
 none until `--fetch` asks deps.dev for it, so add that flag to compare them as well.
+
+## Copyleft conflicts
+
+Whether GPL is a problem depends on the repo that uses it. Say what each repo is in
+`fleet.toml`:
+
+```toml title="fleet.toml"
+[[repo]]
+id       = "checkout"
+path     = "../checkout"
+license  = "proprietary"   # or an SPDX expression such as "MIT" or "GPL-2.0-only"
+exposure = "open"          # an internet-facing service
+```
+
+`licenses` then reports a runtime dependency as a conflict when its license requires (every
+way to satisfy its expression names it):
+
+| Rule | When |
+|------|------|
+| network copyleft | AGPL or SSPL in a repo whose exposure is `open`: network users are owed the source, with no binary ever shipped |
+| copyleft in proprietary code | GPL, AGPL, SSPL, OSL or EUPL in a repo whose `license` is `proprietary` |
+| copyleft in permissive code | the same in a repo whose license offers only permissive terms, such as `MIT` |
+| GPL-2.0-only incompatible | Apache-2.0, GPL-3.0, AGPL-3.0 or LGPL-3.0 in a repo that can only be `GPL-2.0-only` |
+
+```console
+conflict (copyleft in proprietary code): checkout npm gpl-dep@1.0.0 (GPL-3.0-or-later): requires GPL-3.0-or-later, and the repo is proprietary: distributing it puts it under GPL-3.0-or-later
+```
+
+`MIT OR GPL-3.0-only` requires neither, so it never conflicts. Dev-only packages are never
+shipped and never conflict, and LGPL, MPL and other weak copyleft are left out, since they bind
+the library rather than the program linking it. A repo under the same terms as its dependency
+(an AGPL service using AGPL code) has no conflict. An `exception` that allows a license for a
+package also clears conflicts over it.
+
+Exposure comes from the repo, its tag rules or `[settings.context.defaults]`, the same values
+`scan` uses for SSVC, so with SSVC on a repo with no exposure counts as `open`. Without
+`license` only the network rule can apply.
+
+`[settings.licenses] conflicts` is `warn` by default and can be `deny`, which makes the run exit
+`1`, or `allow`. Conflicts are listed under `conflicts` in `-f json`. How the dependency is used
+(linked, vendored, or run as a separate program) is not known here, so treat a conflict as a
+question for whoever owns the repo, not as a legal finding.
+
+## Write attribution files
+
+`--notice DIR` writes one `<repo>.NOTICE.txt` per repo, ready to ship with a release:
+
+```bash
+fleetreach licenses --notice dist/notices
+```
+
+Each file holds the license texts of the repo's runtime packages, read from the files they
+ship, with packages whose texts are identical grouped under one copy. `NOTICE` files, which
+Apache-2.0 asks to be passed on, are reproduced per package. A package whose files are not on
+this machine is listed at the end with its declared license, so the file never reads as
+complete when it is not. `--notice` implies `--detect`; add `--download` to fetch what is
+missing.

@@ -25,6 +25,7 @@ mission_impact = "mission-failure"
 safety_impact  = "negligible"
 owner          = "team-payments"
 tags           = ["pci", "tier-1"]
+license        = "proprietary"       # or an SPDX expression, for license conflicts
 ```
 
 | Key | Meaning |
@@ -39,6 +40,7 @@ tags           = ["pci", "tier-1"]
 | `mission_impact` | `degraded`, `mef-support-crippled`, `mef-failure` or `mission-failure`. |
 | `safety_impact` | `negligible`, `marginal`, `critical` or `catastrophic`. |
 | `owner`, `tags` | Who owns it, and free labels. |
+| `license` | The repo's own license: an SPDX expression, `proprietary` or `UNLICENSED`. `licenses` checks its dependencies against it. |
 | `vex_product_id` | The product id used in VEX statements for this repo. |
 
 **Auto-detection.** Without `ecosystem`, every ecosystem at the root (and below it, with
@@ -241,6 +243,7 @@ deny       = ["SSPL-1.0"]
 categories = { restricted = "deny", reciprocal = "warn" }
 unknown    = "deny"
 mismatch   = "warn"     # license files say more than declared, with --detect
+conflicts  = "warn"     # copyleft against a repo's license or exposure
 scope      = "runtime"
 
 [[settings.licenses.exception]]

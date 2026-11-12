@@ -269,7 +269,7 @@ fn ids(expression: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn req_id(req: &LicenseReq) -> String {
+pub(crate) fn req_id(req: &LicenseReq) -> String {
     match &req.license {
         LicenseItem::Spdx { id, .. } => id.name.to_string(),
         LicenseItem::Other(r) => r.to_string(),
@@ -309,6 +309,8 @@ pub struct Policy {
     pub runtime_only: bool,
     /// Package name -> license ids allowed for it, with the reason.
     pub exceptions: BTreeMap<String, (BTreeSet<String>, String)>,
+    /// What a copyleft conflict with a repo's own license or exposure gets.
+    pub conflicts: Verdict,
 }
 
 impl Policy {
@@ -448,14 +450,16 @@ pub fn annotate(inv: &mut RepoInventory, repo_root: &Path, cache: &LicenseCache)
         match source.ecosystem {
             Ecosystem::Npm => {
                 let lock = npm_lock_licenses(&dir);
+                let installed = npm_dirs(&dir);
                 for p in &mut source.packages {
+                    let key = (p.name.clone(), p.version.clone());
                     let found = lock
-                        .get(&(p.name.clone(), p.version.clone()))
+                        .get(&key)
                         .cloned()
                         .map(|l| (l, "package-lock.json"))
                         .or_else(|| {
-                            node_modules_license(&dir, &p.name, &p.version)
-                                .map(|l| (l, "node_modules"))
+                            let manifest = read_json(&installed.get(&key)?.join("package.json"))?;
+                            json_license(&manifest).map(|l| (l, "node_modules"))
                         });
                     set(p, found);
                 }
@@ -586,11 +590,79 @@ fn npm_lock_licenses(dir: &Path) -> BTreeMap<(String, String), License> {
     out
 }
 
-fn node_modules_license(dir: &Path, name: &str, version: &str) -> Option<License> {
-    let manifest = read_json(&dir.join("node_modules").join(name).join("package.json"))?;
-    (manifest.get("version").and_then(|v| v.as_str()) == Some(version))
-        .then(|| json_license(&manifest))
-        .flatten()
+/// Where each installed npm package is, by `(name, version)`: every copy under
+/// `node_modules`, nested ones (`a/node_modules/b`) and pnpm's `.pnpm` store included, the
+/// shallowest first. A package can be installed at several versions, and only the top-level
+/// one sits at `node_modules/<name>`.
+fn npm_dirs(dir: &Path) -> BTreeMap<(String, String), PathBuf> {
+    const MAX_DEPTH: usize = 16;
+    const MAX_PACKAGES: usize = 200_000;
+    let mut out = BTreeMap::new();
+    let mut queue = std::collections::VecDeque::from([(dir.join("node_modules"), 0usize)]);
+    let mut seen = 0usize;
+    while let Some((modules, depth)) = queue.pop_front() {
+        if depth > MAX_DEPTH || seen > MAX_PACKAGES {
+            break;
+        }
+        let Ok(entries) = std::fs::read_dir(&modules) else {
+            continue;
+        };
+        let mut names: Vec<(String, PathBuf)> = entries
+            .flatten()
+            .map(|e| (e.file_name().to_string_lossy().into_owned(), e.path()))
+            .collect();
+        names.sort();
+        for (name, path) in names {
+            if name == ".pnpm" {
+                for store in std::fs::read_dir(&path).into_iter().flatten().flatten() {
+                    queue.push_back((store.path().join("node_modules"), depth + 1));
+                }
+                continue;
+            }
+            if name.starts_with('.') {
+                continue;
+            }
+            let packages: Vec<PathBuf> = if name.starts_with('@') {
+                let mut scoped: Vec<PathBuf> = std::fs::read_dir(&path)
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                    .map(|e| e.path())
+                    .collect();
+                scoped.sort();
+                scoped
+            } else {
+                vec![path]
+            };
+            for package in packages {
+                seen += 1;
+                let Some(manifest) = read_json(&package.join("package.json")) else {
+                    continue;
+                };
+                let field = |k: &str| manifest.get(k).and_then(|v| v.as_str()).map(str::to_string);
+                // An alias (`"b": "npm:a@1"`) is installed under its own name, which the
+                // lockfile uses, while its package.json names the real package.
+                let installed_as = match package.file_name().map(|f| f.to_string_lossy()) {
+                    Some(f) if name.starts_with('@') => format!("{name}/{f}"),
+                    Some(f) => f.into_owned(),
+                    None => continue,
+                };
+                if let Some(version) = field("version") {
+                    if let Some(real) = field("name").filter(|n| *n != installed_as) {
+                        out.entry((real, version.clone()))
+                            .or_insert_with(|| package.clone());
+                    }
+                    out.entry((installed_as, version))
+                        .or_insert_with(|| package.clone());
+                }
+                let nested = package.join("node_modules");
+                if nested.is_dir() {
+                    queue.push_back((nested, depth + 1));
+                }
+            }
+        }
+    }
+    out
 }
 
 /// `name -> license` from `composer.lock` (`packages` and `packages-dev`).
@@ -732,6 +804,8 @@ fn python_dist_dirs(repo_root: &Path, dir: &Path) -> BTreeMap<(String, String), 
 #[derive(Debug, Default)]
 pub struct Detections {
     pub found: BTreeMap<(Ecosystem, String, String), Detected>,
+    /// Where each package's files were read, for its attribution notice.
+    pub dirs: BTreeMap<(Ecosystem, String, String), PathBuf>,
     /// Packages whose files are not on this machine.
     pub no_files: usize,
 }
@@ -739,6 +813,7 @@ pub struct Detections {
 /// What one source's directory says about where its packages are.
 #[derive(Default)]
 struct Local {
+    /// Installed package directories by name and version (PyPI: normalized name; npm).
     dists: BTreeMap<(String, String), PathBuf>,
     go_sums: BTreeMap<(String, String), String>,
 }
@@ -748,6 +823,7 @@ impl Local {
         let mut local = Local::default();
         match ecosystem {
             Ecosystem::Pypi => local.dists = python_dist_dirs(repo_root, dir),
+            Ecosystem::Npm => local.dists = npm_dirs(dir),
             Ecosystem::Go => {
                 let text = fleetreach_core::repofile::read_to_string(dir.join("go.sum"))
                     .unwrap_or_default();
@@ -792,12 +868,10 @@ fn package_dir(
 ) -> Option<PathBuf> {
     let existing = |path: PathBuf| path.is_dir().then_some(path);
     match ecosystem {
-        Ecosystem::Npm => {
-            let path = dir.join("node_modules").join(&p.name);
-            let manifest = read_json(&path.join("package.json"))?;
-            let version = manifest.get("version").and_then(|v| v.as_str());
-            (version == Some(p.version.as_str())).then_some(path)
-        }
+        Ecosystem::Npm => local
+            .dists
+            .get(&(p.name.clone(), p.version.clone()))
+            .cloned(),
         Ecosystem::Packagist => existing(dir.join("vendor").join(&p.name)),
         Ecosystem::Cargo => cache
             .cargo_roots
@@ -874,7 +948,8 @@ pub fn detect(
                 let path = downloads.as_deref()?.join(key);
                 path.is_dir().then_some(path)
             });
-            let Some(detected) = package.and_then(|d| detector.dir(&d)) else {
+            let Some((dir, detected)) = package.and_then(|d| Some((d.clone(), detector.dir(&d)?)))
+            else {
                 out.no_files += 1;
                 continue;
             };
@@ -884,6 +959,7 @@ pub fn detect(
                 p.license_source = p.license.as_ref().map(|_| "license file".to_string());
             }
             let key = (source.ecosystem, p.name.clone(), p.version.clone());
+            out.dirs.insert(key.clone(), dir);
             out.found.insert(key, detected);
         }
     }
@@ -1069,6 +1145,14 @@ pub struct Decision {
     pub undeclared: Vec<String>,
 }
 
+/// An ecosystem as the JSON reports name it (`cargo`, `npm`).
+pub fn ecosystem_name(ecosystem: Ecosystem) -> String {
+    serde_json::to_value(ecosystem)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_default()
+}
+
 /// Decide every package of every inventory. Without a policy everything is allowed (an
 /// inventory only).
 pub fn decide(
@@ -1079,10 +1163,7 @@ pub fn decide(
     let mut out = Vec::new();
     for inv in inventories {
         for source in &inv.sources {
-            let ecosystem = serde_json::to_value(source.ecosystem)
-                .ok()
-                .and_then(|v| v.as_str().map(str::to_string))
-                .unwrap_or_default();
+            let ecosystem = ecosystem_name(source.ecosystem);
             for p in &source.packages {
                 let license = p.license.as_deref().map(|l| {
                     normalize(&[l.to_string()]).unwrap_or(License {
@@ -1222,6 +1303,7 @@ mod tests {
                 "ring".to_string(),
                 (BTreeSet::from(["OpenSSL".to_string()]), "legal".to_string()),
             )]),
+            conflicts: Verdict::Warn,
         }
     }
 
@@ -1242,6 +1324,7 @@ mod tests {
         let key = (Ecosystem::Npm, "left-pad".to_string(), "1.0.0".to_string());
         Detections {
             found: BTreeMap::from([(key, detected)]),
+            dirs: BTreeMap::new(),
             no_files: 0,
         }
     }
@@ -1374,5 +1457,44 @@ mod tests {
         let none = "Name: x\nVersion: 2\nLicense: Copyright (c) 2019 Someone, all rights reserved and more text\n";
         assert!(metadata_license(none).is_none());
         assert_eq!(pep503("Foo_Bar.baz"), "foo-bar-baz");
+    }
+
+    #[test]
+    fn npm_packages_are_found_at_every_depth() {
+        let root = tempfile::tempdir().unwrap();
+        let put = |rel: &str, name: &str, version: &str| {
+            let dir = root.path().join(rel);
+            std::fs::create_dir_all(&dir).unwrap();
+            let manifest = format!(r#"{{"name":"{name}","version":"{version}"}}"#);
+            std::fs::write(dir.join("package.json"), manifest).unwrap();
+        };
+        put("node_modules/glob", "glob", "10.0.0");
+        put("node_modules/sucrase/node_modules/glob", "glob", "7.1.6");
+        put("node_modules/sucrase", "sucrase", "3.0.0");
+        put("node_modules/@scope/pkg", "@scope/pkg", "1.0.0");
+        put("node_modules/alias", "real", "2.0.0");
+        put(".pnpm-like/x", "x", "1.0.0");
+        put("node_modules/.pnpm/y@1.0.0/node_modules/y", "y", "1.0.0");
+        let dirs = npm_dirs(root.path());
+        let at = |name: &str, version: &str| {
+            dirs.get(&(name.to_string(), version.to_string()))
+                .map(|p| p.strip_prefix(root.path()).unwrap().display().to_string())
+        };
+        assert_eq!(at("glob", "10.0.0").as_deref(), Some("node_modules/glob"));
+        assert_eq!(
+            at("glob", "7.1.6").as_deref(),
+            Some("node_modules/sucrase/node_modules/glob")
+        );
+        assert_eq!(
+            at("@scope/pkg", "1.0.0").as_deref(),
+            Some("node_modules/@scope/pkg")
+        );
+        assert_eq!(at("alias", "2.0.0").as_deref(), Some("node_modules/alias"));
+        assert_eq!(at("real", "2.0.0").as_deref(), Some("node_modules/alias"));
+        assert_eq!(
+            at("y", "1.0.0").as_deref(),
+            Some("node_modules/.pnpm/y@1.0.0/node_modules/y")
+        );
+        assert_eq!(at("x", "1.0.0"), None, "outside node_modules");
     }
 }

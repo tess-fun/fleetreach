@@ -99,6 +99,13 @@ pub fn annotate(report: &mut FleetReport, config: &Config, inputs: Inputs) {
     });
 }
 
+/// A repo's exposure as the scan's SSVC decisions see it: its own value, then tag rules,
+/// then defaults, then `open` when SSVC is on and nothing set it (fail-closed).
+#[must_use]
+pub fn exposure(config: &Config, repo: &RepoId) -> Option<Exposure> {
+    resolve(repo, config.context.get(repo), config, enabled(config)).exposure
+}
+
 /// A repo's context with defaults applied. With SSVC enabled, anything still missing takes
 /// the most urgent value and the repo is marked `fail_closed`.
 fn resolve(

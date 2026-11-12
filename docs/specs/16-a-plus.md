@@ -1385,6 +1385,27 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   a sentence naming a license in prose and source headers are not read. NOTICE files and
   conflicts stay 1.7.0.
 
+  **Status: 1.7.0 part implemented 2026-11-12, unreleased** (`crates/cli/src/notice.rs`,
+  `license_conflicts.rs`, `licenses --notice DIR`, `[[repo]] license`, `[settings.licenses]
+  conflicts`). Attribution files against license-checker 25.0.1 (`--production`) on three
+  installed npm trees (Matomo, Plausible's assets, this repo's website; 578 packages both name):
+  every license file license-checker found is reproduced word for word, 556 packages; the other
+  19 have their license only in a README, which license-checker falls back to and fleetreach
+  lists as having no license file. The one NOTICE file matched. Against cargo-about 0.9.3
+  (`--all-features`, dev dependencies left out) on this workspace, 384 crates both name: 366 of
+  388 license texts match. The 22 others are 21 source-file headers in ring and encoding_rs,
+  which are not read, and a license *data* file inside the spdx crate that cargo-about took for
+  the crate's license. Where a crate ships no file for a license it names, cargo-about prints
+  the canonical SPDX text (30 texts); fleetreach reproduces only what is shipped and lists the 8
+  crates with no license file at all as such. The comparison found three gaps, now fixed: npm copies
+  nested below another package (`a/node_modules/b`, 11 packages) were not found, `NOTICES.md`
+  was not a notice file, and license files of bundled code in subdirectories
+  (`aws-lc/third_party/fiat/LICENSE`) were left out. Conflicts have no outside tool to agree
+  with; their rules are pinned by tests and an end-to-end fixture. Not done: a README's license
+  section is never used, and lockfile entries for other platforms (optional binaries, 80 in the
+  website) are listed as missing, since they are not installed here. Harness:
+  `docs/differential/license_notice.py`.
+
 #### 21. Unmaintained / unsound (A to A+)
 
 - **Gap**: RustSec only.
