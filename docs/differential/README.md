@@ -143,3 +143,12 @@ asserted findings each tool set aside. `csaf_schema.py` checks CSAF documents ag
 CSAF 2.0 JSON schema with no dependencies (the schema, not the mandatory tests); gocsaf's
 `csaf_validator` gives the same verdicts, and runs the mandatory tests only through a remote
 validator service.
+
+`ntia_sbomqs.py` writes a fleet's SBOMs in all four formats with `sbom --check-ntia` and runs
+sbomqs v2.1.3's NTIA 2021 profile (`compliance --ntia-2021 --json`) on each, comparing the
+document-level elements and, per component-level element, how many components lack it. On the
+demo fleet and two real repos (870 packages): 44 of 44 documents agree. sbomqs reads an SPDX 3
+purl only from `externalIdentifier` and the root only from a `describes` relationship, so
+fleetreach writes both forms. SPDX 3 output is checked with `spdx3-validate` 0.0.7 (the JSON
+schema and SHACL model; it fetches them from spdx.org, so point `SSL_CERT_FILE` at a CA bundle
+where Python has none).

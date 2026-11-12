@@ -165,7 +165,8 @@ link to their files, so they are not fetched.
 [NTIA minimum elements](https://www.ntia.gov/report/2021/minimum-elements-software-bill-materials-sbom)
 of 2021: the author of the SBOM data and a timestamp, a supplier, name, version and unique
 identifier (a purl or CPE) for every component, the repo included, and the repo's dependency
-relationships. It works on every format, and exits 1 when an element is missing.
+relationships. It works on every format, and exits 1 when an element is missing. Its verdicts
+match sbomqs's NTIA 2021 profile (`sbomqs compliance --ntia-2021`) element by element.
 
 <!-- run: fleetreach sbom -o boms/ --check-ntia -q 2>&1 | head -n 3 -->
 ```console

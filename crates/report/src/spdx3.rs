@@ -117,6 +117,12 @@ pub fn to_spdx3(
         package["name"] = json!(c.name);
         package["software_packageVersion"] = json!(c.version);
         package["software_packageUrl"] = json!(purl);
+        // The same purl as an external identifier too: readers such as sbomqs look only there.
+        package["externalIdentifier"] = json!([{
+            "type": "ExternalIdentifier",
+            "externalIdentifierType": "packageUrl",
+            "identifier": purl,
+        }]);
         package["software_primaryPurpose"] = json!("library");
         let hashes: Vec<Value> = c
             .checksums
@@ -235,6 +241,13 @@ pub fn to_spdx3(
     }
 
     let sbom_id = format!("{BASE}Sbom");
+    // The root as a `describes` relationship as well as `rootElement`, as SPDX 2 readers and
+    // sbomqs find the described package.
+    let mut describes = element("Relationship", &id("Relationship", "sbom describes"));
+    describes["from"] = json!(sbom_id);
+    describes["relationshipType"] = json!("describes");
+    describes["to"] = json!([repo_id]);
+    graph.push(describes);
     let elements: Vec<Value> = graph.iter().map(|e| e["spdxId"].clone()).collect();
     let mut sbom = element("software_Sbom", &sbom_id);
     sbom["software_sbomType"] = json!(["source"]);
@@ -646,6 +659,14 @@ mod tests {
         let doc = doc("2026-11-12T00:00:00Z");
         let express = package(&doc, "express");
         assert_eq!(express["software_packageUrl"], "pkg:npm/express@4.18.2");
+        assert_eq!(
+            express["externalIdentifier"][0]["identifier"],
+            "pkg:npm/express@4.18.2"
+        );
+        assert!(nodes(&doc, "Relationship")
+            .iter()
+            .any(|r| r["relationshipType"] == "describes"
+                && r["to"][0] == package(&doc, "acme/app")["spdxId"]));
         assert_eq!(express["verifiedUsing"][0]["algorithm"], "sha512");
         let licensed = nodes(&doc, "Relationship")
             .into_iter()

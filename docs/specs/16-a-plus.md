@@ -1493,10 +1493,14 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   `spdx3-validate` 0.0.7, which checks the SPDX 3.0.1 JSON schema and SHACL model; a document
   with a required field removed fails it. CVSS scores are strings: JSON-LD turns a fractional
   JSON number into a double's lexical form, which SHACL rejects as `xsd:decimal`. The NTIA check
-  reads the written document in all four formats and gives the same verdicts on each. **Left**:
-  the comparison with sbomqs (building it was not allowed in this session; its 2021 profile
-  is `--ntia-2021`, and it counts SPDX `PackageSupplier: NOASSERTION` as a supplier, which
-  fleetreach does not); no component has a supplier, since lockfiles name none.
+  reads the written document in all four formats and gives the same verdicts on each. Against
+  sbomqs v2.1.3 `compliance --ntia-2021` (`docs/differential/ntia_sbomqs.py`): 44 of 44
+  documents (demo fleet and two real repos, four formats) agree on every element and on how
+  many components lack each. The first run found sbomqs reads SPDX 3 purls only from
+  `externalIdentifier` and the root only from `describes`; fleetreach now writes both forms.
+  **Left**: every document here lacks suppliers, so the two checks agree on supplier only when
+  absent; sbomqs counts SPDX `PackageSupplier: NOASSERTION` as a supplier and fleetreach does
+  not (read in its source, not run). No component has a supplier, since lockfiles name none.
 
 #### 26. SBOM input (B to A+)
 
