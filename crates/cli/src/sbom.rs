@@ -11,8 +11,8 @@ use std::path::PathBuf;
 
 use clap::{Args, ValueEnum};
 use fleetreach_report::{
-    sanitize_cell, to_cyclonedx, to_cyclonedx_with_vulns, to_cyclonedx_xml, to_spdx,
-    CycloneDxVersion,
+    sanitize_cell, to_cyclonedx, to_cyclonedx_and_vex, to_cyclonedx_with_vulns, to_cyclonedx_xml,
+    to_spdx, CycloneDxVersion,
 };
 
 use fleetreach_core::inventory::RepoInventory;
@@ -41,6 +41,11 @@ pub struct SbomArgs {
     /// Embed this saved scan's findings (`fleetreach scan -f json > report.json`)
     #[arg(long)]
     report: Option<PathBuf>,
+    /// With --report and CycloneDX JSON, write the findings to `<repo-id>.vex.cdx.json` beside
+    /// each SBOM instead of embedding them: a CycloneDX VEX whose `affects` point at the
+    /// SBOM's components by BOM-Link, for tools that apply VEX to an SBOM (`trivy sbom --vex`)
+    #[arg(long, requires = "report")]
+    separate_vex: bool,
     /// List `[[source]]` entries afresh and clone or refresh their checkouts first
     #[arg(long)]
     sync: bool,
@@ -73,6 +78,9 @@ enum SpecVersion {
 }
 
 pub fn run_sbom(args: SbomArgs) -> u8 {
+    if args.separate_vex && !matches!(args.format, BomFormat::Cyclonedx) {
+        return fail("--separate-vex writes CycloneDX JSON; use it with -f cyclonedx");
+    }
     let report = match args
         .report
         .as_ref()
@@ -129,7 +137,18 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
             SpecVersion::V1_6 => CycloneDxVersion::V1_6,
             SpecVersion::V1_7 => CycloneDxVersion::V1_7,
         };
+        let file_of = |extension: &str| {
+            args.out_dir
+                .join(format!("{}.{extension}", file_stem(&repo.id.0)))
+        };
         let (bom, extension) = match (args.format, &report) {
+            (BomFormat::Cyclonedx, Some(r)) if args.separate_vex => {
+                let (bom, vex) = to_cyclonedx_and_vex(&inv, r, version, Some(&timestamp), spec)
+                    .map_err(|e| format!("{}: {e}", repo.id))?;
+                let file = file_of("vex.cdx.json");
+                std::fs::write(&file, vex).map_err(|e| format!("{}: {e}", file.display()))?;
+                (Ok(bom), "cdx.json")
+            }
             (BomFormat::Spdx, r) => (to_spdx(&inv, r.as_ref(), version, &timestamp), "spdx.json"),
             (format, r) => {
                 let bom = match r {
@@ -145,9 +164,7 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
             }
         };
         let bom = bom.map_err(|e| format!("{}: {e}", repo.id))?;
-        let file = args
-            .out_dir
-            .join(format!("{}.{extension}", file_stem(&repo.id.0)));
+        let file = file_of(extension);
         std::fs::write(&file, bom).map_err(|e| format!("{}: {e}", file.display()))?;
         Ok(Written {
             file,

@@ -401,6 +401,27 @@ pub(crate) struct ScanArgs {
         help = "prior OpenVEX document @id this one supersedes (§9.3)"
     )]
     vex_supersedes: Option<String>,
+    #[arg(
+        long,
+        value_name = "URL",
+        help = "CSAF publisher namespace for -f csaf-vex (default: settings.vex.namespace, \
+                else the domain of the author's email address)"
+    )]
+    csaf_namespace: Option<String>,
+    #[arg(
+        long,
+        value_name = "CATEGORY",
+        default_value = "vendor",
+        value_parser = ["vendor", "user", "discoverer", "coordinator", "translator", "other"],
+        help = "CSAF publisher category for -f csaf-vex"
+    )]
+    csaf_publisher: String,
+    #[arg(
+        long,
+        help = "leave advisories with no CVE id out of -f csaf-vex (Trivy 0.73 cannot read \
+                CSAF entries without one)"
+    )]
+    csaf_cve_only: bool,
 
     // diffing & inspection
     #[arg(long, help = "prior JSON report; report only findings new since it")]
@@ -1712,6 +1733,42 @@ fn render(
             match report::to_vex(fleet_report, &params) {
                 Ok(doc) => doc,
                 Err(e) => return Err(fail(&format!("serializing VEX: {e}"))),
+            }
+        }
+        Format::CsafVex => {
+            let params = match build_vex_params(args, config, fleet_report, suppressed) {
+                Ok(params) => params,
+                Err(e) => return Err(usage_fail(&e)),
+            };
+            let namespace = args
+                .csaf_namespace
+                .clone()
+                .or_else(|| config.vex.namespace.clone())
+                .or_else(|| report::namespace_from_author(&params.author));
+            let Some(namespace) =
+                namespace.filter(|n| n.starts_with("https://") || n.starts_with("http://"))
+            else {
+                return Err(usage_fail(
+                    "no CSAF publisher namespace: pass --csaf-namespace <URL>, set \
+                     settings.vex.namespace, or use an email address as the VEX author",
+                ));
+            };
+            let csaf = report::CsafParams {
+                namespace,
+                category: args.csaf_publisher.clone(),
+                cve_only: args.csaf_cve_only,
+            };
+            match report::to_csaf_vex(fleet_report, &params, &csaf) {
+                Ok((doc, left_out)) => {
+                    if left_out > 0 {
+                        eprintln!(
+                            "note: {left_out} advisory(ies) with no CVE id left out of the CSAF \
+                             document (--csaf-cve-only)"
+                        );
+                    }
+                    doc
+                }
+                Err(e) => return Err(fail(&format!("serializing CSAF VEX: {e}"))),
             }
         }
     })

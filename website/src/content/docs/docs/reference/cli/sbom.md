@@ -40,6 +40,9 @@ Options:
       --report <REPORT>
           Embed this saved scan's findings (`fleetreach scan -f json > report.json`)
 
+      --separate-vex
+          With --report and CycloneDX JSON, write the findings to `<repo-id>.vex.cdx.json` beside each SBOM instead of embedding them: a CycloneDX VEX whose `affects` point at the SBOM's components by BOM-Link, for tools that apply VEX to an SBOM (`trivy sbom --vex`)
+
       --sync
           List `[[source]]` entries afresh and clone or refresh their checkouts first
 

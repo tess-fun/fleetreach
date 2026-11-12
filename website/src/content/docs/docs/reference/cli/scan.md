@@ -32,6 +32,7 @@ Options:
           - remediation:      Remediation view: the actionable fix queue — batched dependency bumps, reachability-gated, fix-first-ordered
           - remediation-json: The remediation fix queue as JSON (the `remediation` view, machine-readable)
           - vex:              OpenVEX 0.2.0 suppression document (§14)
+          - csaf-vex:         The same statements as a CSAF 2.0 VEX document (`csaf_vex`)
           - ssvc:             SSVC view: findings grouped by deployer decision (immediate → defer), each with its decision vector. Needs repo context in fleet.toml and --enrich
           - owners:           Owners view: the remediation queue split by each repo's `owner`
           
@@ -261,6 +262,18 @@ Options:
 
       --vex-supersedes <IRI>
           prior OpenVEX document @id this one supersedes (§9.3)
+
+      --csaf-namespace <URL>
+          CSAF publisher namespace for -f csaf-vex (default: settings.vex.namespace, else the domain of the author's email address)
+
+      --csaf-publisher <CATEGORY>
+          CSAF publisher category for -f csaf-vex
+          
+          [default: vendor]
+          [possible values: vendor, user, discoverer, coordinator, translator, other]
+
+      --csaf-cve-only
+          leave advisories with no CVE id out of -f csaf-vex (Trivy 0.73 cannot read CSAF entries without one)
 
       --baseline <BASELINE>
           prior JSON report; report only findings new since it

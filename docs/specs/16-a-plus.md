@@ -1456,6 +1456,17 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   signing through `cosign` as an external tool, VEX from triage decisions.
 - **Effort**: M. **Release**: 1.7.0. **Proof**: schemas; Trivy and Grype honour both formats
   (Docker test, as for OpenVEX).
+- **Status: output implemented 2026-11-12** (`crates/report/src/vex_csaf.rs`, `to_cyclonedx_and_vex`
+  in `cyclonedx.rs`, `set_aside` in the JSON report). `-f csaf-vex` and `sbom --separate-vex`.
+  `docs/differential/vex_consumers.py` on Alpine 3.16, Debian 12 and Rocky Linux 9 images
+  (epoch packages included) and the demo's Rust service: Trivy 0.73.0 applies OpenVEX, CSAF
+  and the CycloneDX VEX (`trivy sbom`) to every asserted finding it reports; Grype v0.121.1
+  applies OpenVEX and no CSAF, by design (exact purl with its own qualifiers), and reads no
+  CycloneDX VEX. Found on the way: images had no VEX product, and OS statements named a SemVer
+  version, the source package only, and our namespace only (`rocky-linux` where both tools say
+  `rocky`). VEX from triage decisions already flowed (triage files are suppressions).
+  **Left**: CycloneDX and CSAF VEX input; signing through `cosign`; the CSAF schema check
+  (the validator is an npm package, not installed here).
 
 #### 25. SBOM output (A- to A+)
 

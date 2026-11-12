@@ -13,7 +13,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use fleetreach_core::inventory::{Checksum, RepoInventory, ROOT};
-use fleetreach_core::{Coverage, Ecosystem, FleetReport, Occurrence, Severity, VulnFinding};
+use fleetreach_core::{
+    Coverage, DepSource, Ecosystem, FleetReport, Occurrence, SetAside, Severity, VulnFinding,
+};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
@@ -72,6 +74,92 @@ pub fn to_cyclonedx_with_vulns(
     spec: CycloneDxVersion,
 ) -> Result<String, serde_json::Error> {
     render(inventory, Some(report), tool_version, timestamp, spec)
+}
+
+/// [`to_cyclonedx`] and, apart from it, a CycloneDX VEX document of `report`'s findings for
+/// this repo: a BOM with only `vulnerabilities[]`, whose `affects` refs are BOM-Links
+/// (`urn:cdx:<serial>/1#<bom-ref>`) into the SBOM. Consumers that apply VEX to an SBOM, such as
+/// Trivy, match on those links. The analysis states are the ones the embedded form writes.
+///
+/// # Errors
+///
+/// Only if serialization fails, which a `Value` tree does not.
+pub fn to_cyclonedx_and_vex(
+    inventory: &RepoInventory,
+    report: &FleetReport,
+    tool_version: &str,
+    timestamp: Option<&str>,
+    spec: CycloneDxVersion,
+) -> Result<(String, String), serde_json::Error> {
+    let sbom = render(inventory, None, tool_version, timestamp, spec)?;
+    let serial = serde_json::from_str::<Value>(&sbom)?
+        .get("serialNumber")
+        .and_then(Value::as_str)
+        .map(|s| s.trim_start_matches("urn:uuid:").to_string())
+        .unwrap_or_default();
+    let merged = merge(inventory);
+    let vulns: Vec<Value> = bom_vulns(inventory, &merged, report)
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let mut value = vulnerability_value(v, i);
+            lead_with_cve(&mut value, v.finding);
+            if let Some(Value::Array(affects)) = value.get_mut("affects") {
+                for a in affects.iter_mut() {
+                    let Some(r) = a.get("ref").and_then(Value::as_str) else {
+                        continue;
+                    };
+                    // A ref the SBOM has no component for stays a bare purl.
+                    if merged.components.contains_key(r) {
+                        a["ref"] = json!(format!("urn:cdx:{serial}/1#{r}"));
+                    }
+                }
+            }
+            value
+        })
+        .collect();
+    let mut metadata = Map::new();
+    if let Some(ts) = timestamp {
+        metadata.insert("timestamp".into(), json!(ts));
+    }
+    metadata.insert(
+        "tools".into(),
+        json!({ "components": [{ "type": "application", "name": "fleetreach", "version": tool_version }] }),
+    );
+    let mut bom = Map::new();
+    bom.insert("bomFormat".into(), json!("CycloneDX"));
+    bom.insert("specVersion".into(), json!(spec.as_str()));
+    bom.insert("version".into(), json!(1));
+    bom.insert("metadata".into(), Value::Object(metadata));
+    bom.insert("vulnerabilities".into(), Value::Array(vulns));
+    let mut hashed = bom.clone();
+    if let Some(Value::Object(meta)) = hashed.get_mut("metadata") {
+        meta.remove("timestamp");
+    }
+    let digest = Sha256::digest(serde_json::to_vec(&hashed)?);
+    bom.insert(
+        "serialNumber".into(),
+        json!(format!("urn:uuid:{}", uuid_v8(&digest))),
+    );
+    Ok((sbom, serde_json::to_string_pretty(&Value::Object(bom))?))
+}
+
+/// Name a non-CVE advisory by its CVE alias, keeping the advisory and its other aliases as
+/// references: VEX consumers (Trivy) match a statement by `id` alone and report CVEs.
+fn lead_with_cve(value: &mut Value, f: &VulnFinding) {
+    if f.advisory_id.starts_with("CVE-") {
+        return;
+    }
+    let Some(cve) = f.aliases.iter().find(|a| a.starts_with("CVE-")) else {
+        return;
+    };
+    value["id"] = json!(cve);
+    value["source"] =
+        json!({ "name": "NVD", "url": format!("https://nvd.nist.gov/vuln/detail/{cve}") });
+    let others = std::iter::once(&f.advisory_id).chain(f.aliases.iter().filter(|a| *a != cve));
+    value["references"] = others
+        .map(|a| json!({ "id": a, "source": { "name": "OSV", "url": format!("https://osv.dev/vulnerability/{a}") } }))
+        .collect();
 }
 
 /// One package of a repo, merged across the repo's sources: direct if any source says so,
@@ -177,6 +265,8 @@ pub(crate) struct BomVuln<'a> {
     pub refs: BTreeSet<String>,
     /// The SSVC outcome for this repo, when the scan made decisions.
     pub ssvc: Option<&'static str>,
+    /// The person's decision, for a finding they set aside.
+    pub set_aside: Option<&'a SetAside>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -187,6 +277,10 @@ pub(crate) enum VulnState {
     NotPresent,
     /// Sound: a static call graph proves no path to the vulnerable code.
     NotReachable,
+    /// A person said it does not apply here (`vex_assertion`, `ignore`, triage, image VEX).
+    Asserted,
+    /// A person chose to live with it: still exploitable, not to be fixed.
+    AcceptedRisk,
 }
 
 /// The findings of `report` in `inventory`'s repo, matched to the merged components by
@@ -204,8 +298,34 @@ pub(crate) fn bom_vulns<'a>(
             .or_default()
             .push((c.version.as_str(), id.as_str()));
     }
-    let mut grouped: BTreeMap<(usize, VulnState), BTreeSet<String>> = BTreeMap::new();
-    for (i, v) in report.vulnerabilities.iter().enumerate() {
+    // A component of this repo's SBOM when one matches, else the finding's own purl.
+    let reference = |v: &VulnFinding, package: &str, installed: &str, source: &DepSource| {
+        by_package
+            .get(&(v.ecosystem, package))
+            .and_then(|versions| {
+                versions
+                    .iter()
+                    .find(|(version, _)| *version == installed)
+                    .or_else(|| {
+                        versions
+                            .iter()
+                            .find(|(version, _)| same_version(version, installed))
+                    })
+            })
+            .map_or_else(
+                || purl(v.ecosystem, package, installed, source),
+                |(_, id)| (*id).to_string(),
+            )
+    };
+    // (set aside?, index, state) -> the components.
+    let mut grouped: BTreeMap<(bool, usize, VulnState), BTreeSet<String>> = BTreeMap::new();
+    let found = report
+        .vulnerabilities
+        .iter()
+        .enumerate()
+        .map(|(i, v)| (i, v, None));
+    let decided = (report.set_aside.iter().enumerate()).map(|(i, s)| (i, &s.finding, Some(s)));
+    for (i, v, decision) in found.chain(decided) {
         for occ in &v.occurrences {
             let Occurrence::InRepo {
                 repo,
@@ -220,33 +340,25 @@ pub(crate) fn bom_vulns<'a>(
             if *repo != inventory.repo {
                 continue;
             }
-            let state = match machine_status(v, occ) {
-                MachineStatus::Fixed => continue,
-                MachineStatus::NotAffected {
-                    justification: "component_not_present",
-                } => VulnState::NotPresent,
-                MachineStatus::NotAffected { .. } => VulnState::NotReachable,
-                MachineStatus::Affected => VulnState::Exploitable,
-                MachineStatus::UnderInvestigation { .. } => VulnState::InTriage,
+            let state = match (machine_status(v, occ), decision) {
+                (MachineStatus::Fixed, _) => continue,
+                (_, Some(d)) if d.accepted_risk => VulnState::AcceptedRisk,
+                (_, Some(_)) => VulnState::Asserted,
+                (
+                    MachineStatus::NotAffected {
+                        justification: "component_not_present",
+                    },
+                    None,
+                ) => VulnState::NotPresent,
+                (MachineStatus::NotAffected { .. }, None) => VulnState::NotReachable,
+                (MachineStatus::Affected, None) => VulnState::Exploitable,
+                (MachineStatus::UnderInvestigation { .. }, None) => VulnState::InTriage,
             };
-            let installed = installed.to_string();
-            let reference = by_package
-                .get(&(v.ecosystem, package.as_str()))
-                .and_then(|versions| {
-                    versions
-                        .iter()
-                        .find(|(version, _)| *version == installed)
-                        .or_else(|| {
-                            versions
-                                .iter()
-                                .find(|(version, _)| same_version(version, &installed))
-                        })
-                })
-                .map_or_else(
-                    || purl(v.ecosystem, package, &installed, source),
-                    |(_, id)| (*id).to_string(),
-                );
-            grouped.entry((i, state)).or_default().insert(reference);
+            let r = reference(v, package, &installed.to_string(), source);
+            grouped
+                .entry((decision.is_some(), i, state))
+                .or_default()
+                .insert(r);
         }
     }
     let outcome = |advisory: &str| {
@@ -261,14 +373,20 @@ pub(crate) fn bom_vulns<'a>(
     };
     let mut out: Vec<BomVuln<'a>> = grouped
         .into_iter()
-        .map(|((i, state), refs)| {
-            let finding = &report.vulnerabilities[i];
-            BomVuln {
+        .filter_map(|((decided, i, state), refs)| {
+            let (finding, set_aside) = if decided {
+                let s = report.set_aside.get(i)?;
+                (&s.finding, Some(s))
+            } else {
+                (report.vulnerabilities.get(i)?, None)
+            };
+            Some(BomVuln {
                 finding,
                 state,
                 refs,
                 ssvc: outcome(&finding.advisory_id),
-            }
+                set_aside,
+            })
         })
         .collect();
     out.sort_by(|a, b| (&a.finding.advisory_id, a.state).cmp(&(&b.finding.advisory_id, b.state)));
@@ -350,6 +468,10 @@ fn vulnerability_value(v: &BomVuln<'_>, index: usize) -> Value {
             })
             .collect();
     }
+    if let Some(decision) = v.set_aside {
+        value["analysis"] = decided_analysis(v.state, decision);
+        return value;
+    }
     let (state, justification, detail) = match v.state {
         VulnState::Exploitable => (
             "exploitable",
@@ -367,6 +489,7 @@ fn vulnerability_value(v: &BomVuln<'_>, index: usize) -> Value {
             Some("code_not_reachable"),
             "a static call graph has no path to the vulnerable code",
         ),
+        VulnState::Asserted | VulnState::AcceptedRisk => ("in_triage", None, ""),
     };
     let mut analysis = json!({ "state": state, "detail": detail });
     if let Some(j) = justification {
@@ -387,6 +510,38 @@ fn vulnerability_value(v: &BomVuln<'_>, index: usize) -> Value {
         value["properties"] = Value::Array(properties);
     }
     value
+}
+
+/// The analysis of a finding a person set aside: their reason as the detail, their label
+/// mapped to CycloneDX's justification where the two vocabularies agree.
+fn decided_analysis(state: VulnState, decision: &SetAside) -> Value {
+    let mut detail = decision.reason.clone();
+    if let Some(who) = &decision.approved_by {
+        detail = format!("{detail} (approved by {who})");
+    }
+    if state == VulnState::AcceptedRisk {
+        return json!({ "state": "exploitable", "response": ["will_not_fix"], "detail": detail });
+    }
+    let mut analysis = json!({ "state": "not_affected", "detail": detail });
+    if let Some(j) = decision
+        .justification
+        .as_deref()
+        .and_then(cyclonedx_justification)
+    {
+        analysis["justification"] = json!(j);
+    }
+    analysis
+}
+
+/// The CycloneDX justification for an OpenVEX one. `vulnerable_code_cannot_be_controlled_by_adversary`
+/// has no CycloneDX match, so it is left to the detail.
+fn cyclonedx_justification(openvex: &str) -> Option<&'static str> {
+    match openvex {
+        "component_not_present" | "vulnerable_code_not_present" => Some("code_not_present"),
+        "vulnerable_code_not_in_execute_path" => Some("code_not_reachable"),
+        "inline_mitigations_already_exist" => Some("protected_by_mitigating_control"),
+        _ => None,
+    }
 }
 
 /// CycloneDX's severity names.
@@ -768,5 +923,85 @@ mod tests {
             "{serial}"
         );
         assert_eq!(&serial[23..24], "8", "version-8 UUID: {serial}");
+    }
+
+    /// `sbom --separate-vex`: the SBOM carries no findings; the VEX points at its components
+    /// by BOM-Link, leads with a CVE, and keeps what a person set aside as not_affected.
+    #[test]
+    fn a_separate_vex_points_into_the_sbom_and_keeps_set_aside_findings() {
+        use crate::vex::tests::{finding, report};
+        // Unpatched, so neither occurrence counts as fixed.
+        let occ = |package: &str, version: &str| {
+            let mut o = crate::vex::tests::occ("acme/app", package, version, None);
+            if let Occurrence::InRepo { patched, .. } = &mut o {
+                patched.clear();
+            }
+            o
+        };
+        let mut found = finding("GHSA-hrpp-h998-j3pp", vec![occ("qs", "6.11.0")]);
+        found.ecosystem = Ecosystem::Npm;
+        found.aliases = vec!["CVE-2022-24999".to_string()];
+        let mut decided = finding("GHSA-rv95-896h-c2vc", vec![occ("express", "4.18.2")]);
+        decided.ecosystem = Ecosystem::Npm;
+        decided.aliases = vec![];
+        let mut r = report(vec![found]);
+        r.set_aside = vec![SetAside {
+            finding: decided,
+            justification: Some("vulnerable_code_not_in_execute_path".to_string()),
+            reason: "no redirects are built from input".to_string(),
+            approved_by: Some("secteam".to_string()),
+            accepted_risk: false,
+        }];
+        let (sbom, vex) = to_cyclonedx_and_vex(
+            &inventory(),
+            &r,
+            "1.2.0",
+            Some("2026-10-30T00:00:00Z"),
+            CycloneDxVersion::default(),
+        )
+        .unwrap();
+        let sbom: Value = serde_json::from_str(&sbom).unwrap();
+        let vex: Value = serde_json::from_str(&vex).unwrap();
+        assert!(sbom.get("vulnerabilities").is_none());
+        let serial = sbom["serialNumber"]
+            .as_str()
+            .unwrap()
+            .trim_start_matches("urn:uuid:");
+        assert_ne!(vex["serialNumber"], sbom["serialNumber"]);
+        let vulns = vex["vulnerabilities"].as_array().unwrap();
+        assert_eq!(vulns.len(), 2);
+        let by_id = |id: &str| vulns.iter().find(|v| v["id"] == id).unwrap();
+
+        let qs = by_id("CVE-2022-24999");
+        assert_eq!(qs["source"]["name"], "NVD");
+        assert_eq!(qs["references"][0]["id"], "GHSA-hrpp-h998-j3pp");
+        assert_eq!(qs["analysis"]["state"], "in_triage");
+        assert_eq!(
+            qs["affects"][0]["ref"],
+            format!("urn:cdx:{serial}/1#pkg:npm/qs@6.11.0")
+        );
+
+        let express = by_id("GHSA-rv95-896h-c2vc");
+        assert_eq!(express["analysis"]["state"], "not_affected");
+        assert_eq!(express["analysis"]["justification"], "code_not_reachable");
+        assert_eq!(
+            express["analysis"]["detail"],
+            "no redirects are built from input (approved by secteam)"
+        );
+
+        // An accepted risk stays exploitable, marked will_not_fix.
+        r.set_aside[0].accepted_risk = true;
+        let (_, vex) =
+            to_cyclonedx_and_vex(&inventory(), &r, "1.2.0", None, CycloneDxVersion::default())
+                .unwrap();
+        let vex: Value = serde_json::from_str(&vex).unwrap();
+        let express = vex["vulnerabilities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|v| v["id"] == "GHSA-rv95-896h-c2vc")
+            .unwrap();
+        assert_eq!(express["analysis"]["state"], "exploitable");
+        assert_eq!(express["analysis"]["response"][0], "will_not_fix");
     }
 }

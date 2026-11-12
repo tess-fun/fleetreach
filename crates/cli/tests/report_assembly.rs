@@ -415,6 +415,22 @@ fn repo_scoped_suppression_removes_only_that_repos_occurrence() {
     assert_eq!(s.justification.as_deref(), Some("component_not_present"));
     assert_eq!(s.approved_by.as_deref(), Some("secteam"));
     assert!(matches!(&s.occurrence, Occurrence::InRepo { repo, .. } if repo.0 == "a"));
+    // The saved report records it too, with the decision, so a later SBOM or VEX can say why.
+    assert_eq!(out.report.set_aside.len(), 1);
+    let record = &out.report.set_aside[0];
+    assert_eq!(record.finding.advisory_id, "RUSTSEC-SCOPED");
+    assert_eq!(record.reason, "dev only in a");
+    assert_eq!(record.approved_by.as_deref(), Some("secteam"));
+    assert!(!record.accepted_risk);
+    assert!(matches!(
+        record.finding.occurrences.as_slice(),
+        [Occurrence::InRepo { repo, .. }] if repo.0 == "a"
+    ));
+    let json = serde_json::to_value(&out.report).unwrap();
+    assert_eq!(
+        json["set_aside"][0]["justification"],
+        "component_not_present"
+    );
     // `b` still trips the gate.
     assert_eq!(exit_code(&out.report, &gate(Severity::Low, false)), 1);
 }

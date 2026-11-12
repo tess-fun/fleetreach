@@ -31,6 +31,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   code they bundle in subdirectories, and a list of the packages whose files are not on the
   machine. Checked against license-checker and cargo-about. The download cache now keeps `NOTICE` files;
   an entry written by 1.6.0 is fetched again by `--download`.
+- **`-f csaf-vex` writes the VEX statements as a CSAF 2.0 document**, of the VEX profile, for
+  tools and portals that read CSAF. Repos are products, packages are components with their
+  purls, and advisories that share a CVE share one entry. `--csaf-namespace` (or
+  `[settings.vex] namespace`, or the domain of an email author) names the publisher. Trivy
+  0.73 applies it to images and directories. Grype matches CSAF only by its own exact package
+  URLs, so use OpenVEX with Grype. `--csaf-cve-only` leaves out advisories with no CVE, which
+  Trivy 0.73 cannot read.
+- **`sbom --report R --separate-vex` writes a CycloneDX VEX beside each CycloneDX SBOM**, its
+  findings pointing at the SBOM's components by BOM-Link and named by CVE where there is one,
+  so `trivy sbom --vex` applies it.
+- **A saved JSON report keeps what a person set aside**, under `set_aside`: each advisory's
+  occurrences with the reason, the label and the approver. A CycloneDX or SPDX SBOM made from
+  the report shows them as not affected (an accepted risk as `exploitable`, `will_not_fix`),
+  where before they were left out.
 
 ### Changed
 
@@ -44,6 +58,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`licenses --detect` reads npm packages installed below another package.** A second version
   sits at `node_modules/a/node_modules/b`, and only the top-level copy was looked at, so the
   others kept their declared license unchecked. pnpm's `.pnpm` store is read the same way.
+- **VEX for images had no statements, and OS packages were named wrongly.** Images had no
+  product id, so `-f vex` said nothing about them. OS packages carried the SemVer form of their
+  version (`1.2.3-r.3`) and only the source package's name. Statements now name each binary
+  package at its installed version, an epoch as the `epoch` qualifier (and, for Debian, in the
+  version as Grype writes it), under every namespace Trivy and Grype use for the distribution
+  (`rocky` for Rocky Linux, `ol` and `oracle`, `sles` and `suse`). Checked with
+  `docs/differential/vex_consumers.py` on Alpine, Debian and Rocky Linux images: Trivy and
+  Grype set aside every asserted finding they report.
 
 ## [1.6.0] - 2026-11-05
 

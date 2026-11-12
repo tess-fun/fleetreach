@@ -45,6 +45,7 @@ fn report(vulns: Vec<VulnFinding>) -> FleetReport {
         ssvc: None,
         package_versions: Vec::new(),
         base_images: Vec::new(),
+        set_aside: Vec::new(),
     }
 }
 
@@ -369,6 +370,7 @@ fn sarif_injects_only_approved_human_assertions() {
         justification: Some("component_not_present".into()),
         impact_statement: "dev only".into(),
         approved_by: Some("secteam".into()),
+        dependency_path: vec![],
     };
     let unapproved = HumanAssertion {
         ecosystem: fleetreach_core::Ecosystem::Cargo,

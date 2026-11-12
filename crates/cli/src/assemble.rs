@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use fleetreach_core::{
     max_severity_of, BaseImage, DepScope, Ecosystem, FleetReport, ImageBase, Occurrence,
-    Provenance, RepoId, RepoOutcome, ScanStatus, Severity, Summary, VulnFinding,
+    Provenance, RepoId, RepoOutcome, ScanStatus, SetAside, Severity, Summary, VulnFinding,
 };
 
 /// Drop occurrences known to be phantom — a `Cargo.lock`-only optional dependency
@@ -286,7 +286,8 @@ pub fn assemble(
         v.severity = Severity::Critical;
     }
     let correlated = correlate(vulnerabilities, scan.warnings);
-    let (mut correlated, stale_ignores, suppressed) = apply_suppressions(correlated, suppressions);
+    let (mut correlated, stale_ignores, suppressed, set_aside) =
+        apply_suppressions(correlated, suppressions);
     if let Some(min) = min_severity {
         correlated
             .vulnerabilities
@@ -307,6 +308,7 @@ pub fn assemble(
             ssvc: None,
             package_versions: Vec::new(),
             base_images,
+            set_aside,
         },
         suppressed,
     }
@@ -409,9 +411,16 @@ pub fn exit_code(report: &FleetReport, gate: &GateConfig) -> u8 {
 fn apply_suppressions(
     mut correlated: Correlated,
     suppressions: &[Suppression],
-) -> (Correlated, Vec<String>, Vec<SuppressedOccurrence>) {
+) -> (
+    Correlated,
+    Vec<String>,
+    Vec<SuppressedOccurrence>,
+    Vec<SetAside>,
+) {
     let mut matched: BTreeSet<String> = BTreeSet::new();
     let mut suppressed: Vec<SuppressedOccurrence> = Vec::new();
+    // One record per advisory and decision, in the order they were met.
+    let mut set_aside: Vec<SetAside> = Vec::new();
 
     correlated.vulnerabilities.retain_mut(|v| {
         let mut kept: Vec<Occurrence> = Vec::with_capacity(v.occurrences.len());
@@ -419,6 +428,28 @@ fn apply_suppressions(
             match matching_suppression(suppressions, v, &occ) {
                 Some(s) => {
                     matched.insert(s.id.clone());
+                    let same = |a: &SetAside| {
+                        a.finding.ecosystem == v.ecosystem
+                            && a.finding.advisory_id == v.advisory_id
+                            && a.justification == s.justification
+                            && a.reason == s.reason
+                            && a.approved_by == s.approved_by
+                            && a.accepted_risk == s.accepted_risk
+                    };
+                    let k = set_aside.iter().position(same).unwrap_or_else(|| {
+                        // `v.occurrences` was taken above, so this copies no occurrences.
+                        set_aside.push(SetAside {
+                            finding: v.clone(),
+                            justification: s.justification.clone(),
+                            reason: s.reason.clone(),
+                            approved_by: s.approved_by.clone(),
+                            accepted_risk: s.accepted_risk,
+                        });
+                        set_aside.len().saturating_sub(1)
+                    });
+                    if let Some(record) = set_aside.get_mut(k) {
+                        record.finding.occurrences.push(occ.clone());
+                    }
                     suppressed.push(SuppressedOccurrence {
                         ecosystem: v.ecosystem,
                         advisory_id: v.advisory_id.clone(),
@@ -458,7 +489,7 @@ fn apply_suppressions(
         .filter(|id| !matched.contains(*id) && seen.insert(id))
         .map(str::to_string)
         .collect();
-    (correlated, stale, suppressed)
+    (correlated, stale, suppressed, set_aside)
 }
 
 /// The first suppression that applies to `occ` of `advisory_id`: the suppression must name

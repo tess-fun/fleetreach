@@ -493,6 +493,8 @@ struct RawVex {
     role: Option<String>,
     scope: Option<String>,
     product_id_base: Option<String>,
+    /// The publisher namespace (a URL) of CSAF VEX documents.
+    namespace: Option<String>,
     /// Read OpenVEX attached to images in registries.
     #[serde(default)]
     oci: bool,
@@ -707,6 +709,8 @@ pub struct VexConfig {
     pub role: Option<String>,
     pub scope: Option<VexScope>,
     pub product_id_base: Option<String>,
+    /// `[settings.vex] namespace`: the CSAF publisher namespace, a URL.
+    pub namespace: Option<String>,
     /// Read OpenVEX attached to images in registries.
     pub oci: bool,
     /// Keys whose signatures on attached VEX are accepted, relative to the config file.
@@ -1026,6 +1030,7 @@ impl Config {
             role: raw.settings.vex.role,
             scope,
             product_id_base: raw.settings.vex.product_id_base,
+            namespace: raw.settings.vex.namespace,
             oci: raw.settings.vex.oci,
             oci_keys: raw
                 .settings

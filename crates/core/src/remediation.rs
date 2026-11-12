@@ -706,6 +706,7 @@ mod tests {
             ssvc: None,
             package_versions: Vec::new(),
             base_images: Vec::new(),
+            set_aside: Vec::new(),
         }
     }
 

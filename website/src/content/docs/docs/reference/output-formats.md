@@ -1,6 +1,6 @@
 ---
 title: Output formats
-description: "Every fleetreach output format and view: table, JSON, SARIF, OpenVEX, CycloneDX, SPDX, HTML and the impact, blast, packages, fix-first, remediation, SSVC and owners views."
+description: "Every fleetreach output format and view: table, JSON, SARIF, OpenVEX, CSAF, CycloneDX, SPDX, HTML and the impact, blast, packages, fix-first, remediation, SSVC and owners views."
 sidebar:
   order: 3
 ---
@@ -10,9 +10,10 @@ sidebar:
 | Format | For |
 |--------|-----|
 | `table` | people (default) |
-| `json` | machines: every finding with paths, coverage and provenance; input to `diff`, `fix plan`, `sbom --report` |
+| `json` | machines: every finding with paths, coverage and provenance, and under `set_aside` the findings a person set aside with their reason; input to `diff`, `fix plan`, `sbom --report` |
 | `sarif` | GitHub code scanning (SARIF 2.1.0, stable fingerprints, suppressions) |
 | `vex` | OpenVEX 0.2.0 `not_affected` statements |
+| `csaf-vex` | the same statements as a CSAF 2.0 document of the VEX profile |
 | `impact` | advisories ranked by repos affected |
 | `blast` | impact split into direct and transitive, with a fix path |
 | `packages`, `packages-json` | vulnerable packages ranked by fleet reach |
@@ -27,6 +28,7 @@ Other commands:
 |---------|--------|
 | `sbom -f cyclonedx` | CycloneDX 1.7 JSON per repo (default); 1.6 with `--cyclonedx-version 1.6` |
 | `sbom -f cyclonedx-xml` | the same in XML |
+| `sbom --report R --separate-vex` | the CycloneDX SBOM plus a CycloneDX VEX beside it, `<repo>.vex.cdx.json` |
 | `sbom -f spdx` | SPDX 2.3 JSON per repo |
 | `report html` | one self-contained HTML page |
 | `notify -f generic` | `fleetreach-notify/1` JSON |

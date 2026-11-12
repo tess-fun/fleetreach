@@ -85,6 +85,86 @@ trivy image --vex fleet.vex.json ghcr.io/acme/payments-api:latest
 grype ghcr.io/acme/payments-api:latest --vex fleet.vex.json
 ```
 
+## CSAF and CycloneDX VEX
+
+The same statements come in two more formats, for tools and portals that read those instead:
+
+- `-f csaf-vex` writes a [CSAF 2.0](https://docs.oasis-open.org/csaf/csaf/v2.0/csaf-v2.0.html)
+  document of the VEX profile. Each repo is a product, each package a component with its
+  purl, and each component in a repo a `default_component_of` relationship. A package every
+  repo gives the same status is also named on its own, so a scan of a single directory, which
+  has no product to match, still finds it. Advisories that share a CVE share one entry.
+- `sbom --report report.json --separate-vex` writes `<repo>.vex.cdx.json` beside each
+  CycloneDX SBOM: the findings of a saved scan, pointing at the SBOM's components by
+  BOM-Link (`urn:cdx:<serial>/1#<component>`), for tools that apply VEX to an SBOM.
+
+<!-- run: fleetreach scan -f csaf-vex --vex-author security@acme.example | jq '.vulnerabilities[] | select(.cve == "CVE-2020-26235") | {product_status, flags}' -->
+```console
+$ fleetreach scan -f csaf-vex --vex-author security@acme.example | jq '.vulnerabilities[] | select(.cve == "CVE-2020-26235") | {product_status, flags}'
+{
+  "product_status": {
+    "known_not_affected": [
+      "FR-COMPONENT-5:FR-PRODUCT-6",
+      "FR-COMPONENT-6",
+      "FR-COMPONENT-6:FR-PRODUCT-6"
+    ],
+    "under_investigation": [
+      "FR-COMPONENT-5:FR-PRODUCT-9"
+    ]
+  },
+  "flags": [
+    {
+      "label": "vulnerable_code_not_in_execute_path",
+      "product_ids": [
+        "FR-COMPONENT-5:FR-PRODUCT-6",
+        "FR-COMPONENT-6",
+        "FR-COMPONENT-6:FR-PRODUCT-6"
+      ]
+    }
+  ]
+}
+```
+<!-- /run -->
+
+CSAF needs a publisher namespace, a URL that names who wrote the document. It comes from
+`--csaf-namespace`, else `[settings.vex] namespace`, else the domain of an email address given
+as `--vex-author`. `--csaf-publisher` sets the publisher category (`vendor` by default; `user`
+for a fleet assessing software it runs but did not write).
+
+A saved report keeps the findings a person set aside under `set_aside`, with the reason and the
+approver, so `--separate-vex` writes them as `not_affected` with that reason as the detail. An
+accepted risk stays `exploitable`, with the response `will_not_fix`.
+
+```sh
+fleetreach scan -f json > report.json
+fleetreach sbom --report report.json --separate-vex -o sbom/
+trivy sbom --vex sbom/ledger-svc.vex.cdx.json sbom/ledger-svc.cdx.json
+```
+
+### Which tools apply which format
+
+Checked with Trivy 0.73.0 and Grype v0.121.1 on Alpine 3.16, Debian 12 and Rocky Linux 9
+images and on the demo's Rust service (`docs/differential/vex_consumers.py`):
+
+| Format | Trivy | Grype |
+|---|---|---|
+| OpenVEX (`-f vex`) | applied | applied |
+| CSAF (`-f csaf-vex`) | applied | not applied |
+| CycloneDX (`--separate-vex`) | applied, with `trivy sbom` | does not read CycloneDX VEX |
+
+Grype matches a CSAF product only by its exact package URL, with the architecture and release
+qualifiers its own scan writes, so use OpenVEX with Grype. Trivy 0.73 stops on a CSAF entry
+that has no CVE id; `--csaf-cve-only` leaves those advisories out and says how many.
+
+### Images
+
+An image is a product too (`urn:fleetreach:product:<id>`, or under `[settings.vex] product_id_base`), and an
+OS finding names each binary package its source package built, at the version installed. Trivy
+and Grype spell some distributions differently (Rocky Linux is `rocky` to both; Oracle Linux
+is `oracle` to Trivy and `ol` to Grype), and a consumer matches only when type, namespace and
+name agree, so each package is named in every spelling. An epoch is the `epoch` qualifier, and
+a Debian package is also named with the epoch in its version, as Grype writes it.
+
 ## Ignoring a finding by hand
 
 ```toml title="fleet.toml"

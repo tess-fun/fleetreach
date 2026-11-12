@@ -124,6 +124,8 @@ approved_by   = "security@acme.example"
 ## `[settings.vex]`
 
 `author`, `role`, `scope` and `product_id_base` for VEX documents; flags (`--vex-author`) win.
+`namespace` is the CSAF publisher namespace for `-f csaf-vex`, a URL such as
+`https://acme.example` (`--csaf-namespace` wins; without either, the domain of an email author).
 
 `oci = true` reads OpenVEX attached to images pulled from registries, `oci_keys` lists the cosign
 public keys to accept (relative to `fleet.toml`), and `oci_unsigned = true` accepts documents no

@@ -22,11 +22,19 @@ use crate::static_reach;
 /// Resolve a product `@id` (§4.3) for every repo, keyed by repo id.
 pub fn resolve_product_ids(config: &Config) -> BTreeMap<String, String> {
     let base = config.vex.product_id_base.as_deref();
-    config
+    let mut ids: BTreeMap<String, String> = config
         .repos
         .iter()
         .map(|repo| (repo.id.0.clone(), resolve_product_id(repo, base)))
-        .collect()
+        .collect();
+    // Images share the repo id namespace; their findings are products of their own.
+    for image in &config.images {
+        ids.entry(image.id.0.clone()).or_insert_with(|| match base {
+            Some(base) => format!("{base}{}", image.id.0),
+            None => format!("urn:fleetreach:product:{}", image.id.0),
+        });
+    }
+    ids
 }
 
 /// Resolve a repo's product `@id` (§4.3): explicit config, else the publishable-crate
@@ -74,6 +82,7 @@ pub fn build_human_assertions(
             repo,
             package,
             installed,
+            dependency_path,
             ..
         } = &s.occurrence
         else {
@@ -103,6 +112,7 @@ pub fn build_human_assertions(
             justification: s.justification.clone(),
             impact_statement: s.impact_statement.clone(),
             approved_by: s.approved_by.clone(),
+            dependency_path: dependency_path.clone(),
         });
     }
     assertions
@@ -702,6 +712,7 @@ mod tests {
             ssvc: None,
             package_versions: Vec::new(),
             base_images: Vec::new(),
+            set_aside: Vec::new(),
         }
     }
 

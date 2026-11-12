@@ -58,6 +58,8 @@ pub fn to_spdx(
                 VulnState::InTriage => "in triage (no sound reachability verdict)",
                 VulnState::NotPresent => "not affected (not compiled into the build)",
                 VulnState::NotReachable => "not affected (no static call path)",
+                VulnState::Asserted => "not affected (set aside by a person)",
+                VulnState::AcceptedRisk => "accepted risk (set aside by a person, still affected)",
             };
             let mut comment = format!("{}: {}; severity {}", v.finding.advisory_id, state, {
                 serde_json::to_value(v.finding.severity)

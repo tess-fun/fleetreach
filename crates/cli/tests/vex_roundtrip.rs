@@ -71,6 +71,7 @@ fn empty_report() -> fleetreach_core::FleetReport {
         ssvc: None,
         package_versions: Vec::new(),
         base_images: Vec::new(),
+        set_aside: Vec::new(),
     }
 }
 
@@ -100,6 +101,7 @@ fn vex_document(vuln_id: &str, name: &str, version: &str) -> String {
             justification: Some("vulnerable_code_not_in_execute_path".into()),
             impact_statement: "round-trip test".into(),
             approved_by: Some("ci".into()),
+            dependency_path: vec![],
         }],
         only_sound: false,
         alias_rustbinary: false,

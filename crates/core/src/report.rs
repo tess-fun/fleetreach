@@ -40,6 +40,28 @@ pub struct FleetReport {
     /// clear (spec 16, row 10). Most findings first; empty (and omitted) with no such images.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub base_images: Vec<BaseImage>,
+    /// Findings a person set aside (an `ignore`, a `vex_assertion`, a triage file, VEX
+    /// attached to an image), kept out of `vulnerabilities` but recorded with the decision,
+    /// so a saved report can still say why. Empty (and omitted) when nothing was set aside.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub set_aside: Vec<SetAside>,
+}
+
+/// One advisory's occurrences set aside by one decision.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SetAside {
+    /// The advisory, its `occurrences` the ones this decision set aside.
+    pub finding: VulnFinding,
+    /// The VEX justification label, when the decision gave one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub justification: Option<String>,
+    pub reason: String,
+    /// Who approved it; absent for a plain `ignore`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approved_by: Option<String>,
+    /// A person chose to live with it: still affected, only set aside.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub accepted_risk: bool,
 }
 
 /// One image's base, as read from its config.

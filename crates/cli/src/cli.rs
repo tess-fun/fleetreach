@@ -194,6 +194,8 @@ pub(crate) enum Format {
     RemediationJson,
     /// OpenVEX 0.2.0 suppression document (§14).
     Vex,
+    /// The same statements as a CSAF 2.0 VEX document (`csaf_vex`).
+    CsafVex,
     /// SSVC view: findings grouped by deployer decision (immediate → defer), each with its
     /// decision vector. Needs repo context in fleet.toml and --enrich.
     Ssvc,

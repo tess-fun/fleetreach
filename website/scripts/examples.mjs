@@ -69,7 +69,7 @@ function actual(argv) {
   }
   if (argv[0] === "scan") out.push("--offline", "--db", "data/advisory-db");
   // The frozen advisory-db is not a git clone, so it has no commit time to date VEX by.
-  if (argv[0] === "scan" && argv.includes("vex")) out.push("--vex-timestamp", "2026-11-01T09:00:00Z");
+  if (argv[0] === "scan" && (argv.includes("vex") || argv.includes("csaf-vex"))) out.push("--vex-timestamp", "2026-11-01T09:00:00Z");
   if (argv[0] === "fix" && argv[1] === "apply") out.push("--", "--offline", "--db", "data/advisory-db");
   return out;
 }

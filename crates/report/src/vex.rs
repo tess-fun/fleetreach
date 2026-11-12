@@ -89,6 +89,9 @@ pub struct HumanAssertion {
     pub impact_statement: String,
     /// `None` for a legacy `ignore` (no approver).
     pub approved_by: Option<String>,
+    /// The occurrence's `dependency_path`, which carries an OS package's real version and
+    /// binaries (empty for anything else).
+    pub dependency_path: Vec<String>,
 }
 
 // ---- OpenVEX wire structs ----
@@ -120,34 +123,38 @@ pub struct StatementView {
 }
 
 #[derive(Serialize, PartialEq, Eq)]
-struct Statement {
-    vulnerability: Vulnerability,
-    products: Vec<Component>,
+pub(crate) struct Statement {
+    pub(crate) vulnerability: Vulnerability,
+    pub(crate) products: Vec<Component>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    subcomponents: Vec<Component>,
-    status: &'static str,
+    pub(crate) subcomponents: Vec<Component>,
+    pub(crate) status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    justification: Option<String>,
+    pub(crate) justification: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    action_statement: Option<String>,
+    pub(crate) action_statement: Option<String>,
     /// Free-text `not_affected` rationale when there's no `justification` label (§7.1).
     #[serde(skip_serializing_if = "Option::is_none")]
-    impact_statement: Option<String>,
+    pub(crate) impact_statement: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    status_notes: Option<String>,
+    pub(crate) status_notes: Option<String>,
+    /// A human assertion's reason, kept for formats that carry it beside the label (CSAF).
+    /// Not in OpenVEX, which has the label or the impact statement, never both.
+    #[serde(skip)]
+    pub(crate) reason: Option<String>,
 }
 
 #[derive(Serialize, PartialEq, Eq)]
-struct Vulnerability {
-    name: String,
+pub(crate) struct Vulnerability {
+    pub(crate) name: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    aliases: Vec<String>,
+    pub(crate) aliases: Vec<String>,
 }
 
 #[derive(Serialize, PartialEq, Eq, Clone)]
-struct Component {
+pub(crate) struct Component {
     #[serde(rename = "@id")]
-    id: String,
+    pub(crate) id: String,
 }
 
 /// Statement products: the repo first (the drift-gate key), then the crate PURL(s).
@@ -164,7 +171,7 @@ fn products_for(product_id: &str, subcomponents: &[Component]) -> Vec<Component>
 
 /// The sorted, deduped statement set (machine verdicts + human assertions), shared
 /// by [`to_vex`] and [`project`] so the document and the drift gate agree.
-fn build_statements(report: &FleetReport, params: &VexParams) -> Vec<Statement> {
+pub(crate) fn build_statements(report: &FleetReport, params: &VexParams) -> Vec<Statement> {
     let mut statements: Vec<Statement> = Vec::new();
     for v in &report.vulnerabilities {
         for occ in &v.occurrences {
@@ -237,6 +244,7 @@ fn statement_for(v: &VulnFinding, occ: &Occurrence, params: &VexParams) -> Optio
         installed,
         patched,
         source,
+        dependency_path,
         ..
     } = occ
     else {
@@ -245,13 +253,16 @@ fn statement_for(v: &VulnFinding, occ: &Occurrence, params: &VexParams) -> Optio
     };
 
     let product_id = params.product_ids.get(&repo.0)?;
-    let subcomponents = subcomponents(
-        v.ecosystem,
-        package,
-        &installed.to_string(),
-        source,
-        params.alias_rustbinary,
-    );
+    let subcomponents =
+        os_subcomponents(v.ecosystem, package, dependency_path).unwrap_or_else(|| {
+            subcomponents(
+                v.ecosystem,
+                package,
+                &installed.to_string(),
+                source,
+                params.alias_rustbinary,
+            )
+        });
     let products = products_for(product_id, &subcomponents);
     let vulnerability = Vulnerability {
         name: v.advisory_id.clone(),
@@ -309,6 +320,7 @@ fn statement_for(v: &VulnFinding, occ: &Occurrence, params: &VexParams) -> Optio
         action_statement,
         impact_statement: None,
         status_notes,
+        reason: None,
     })
 }
 
@@ -345,13 +357,20 @@ fn human_statement(assertion: &HumanAssertion, params: &VexParams) -> Statement 
         .is_none()
         .then(|| assertion.impact_statement.clone());
     // A config-authored assertion has no lockfile source; its identity is the package name.
-    let subcomponents = subcomponents(
+    let subcomponents = os_subcomponents(
         assertion.ecosystem,
         &assertion.package,
-        &assertion.version,
-        &DepSource::CratesIo,
-        params.alias_rustbinary,
-    );
+        &assertion.dependency_path,
+    )
+    .unwrap_or_else(|| {
+        subcomponents(
+            assertion.ecosystem,
+            &assertion.package,
+            &assertion.version,
+            &DepSource::CratesIo,
+            params.alias_rustbinary,
+        )
+    });
     Statement {
         vulnerability: Vulnerability {
             name: assertion.advisory_id.clone(),
@@ -364,6 +383,7 @@ fn human_statement(assertion: &HumanAssertion, params: &VexParams) -> Statement 
         action_statement: None,
         impact_statement,
         status_notes: Some(format!("role=Human Assertion; {approver_note}")),
+        reason: Some(assertion.impact_statement.clone()),
     }
 }
 
@@ -407,6 +427,92 @@ pub(crate) fn machine_status(v: &VulnFinding, occ: &Occurrence) -> MachineStatus
             reason: Some(reason.clone()),
         },
         None => MachineStatus::UnderInvestigation { reason: None },
+    }
+}
+
+/// An OS package's binary packages at their real version: the occurrence's `installed` is a
+/// SemVer rendering (`1.2.3-r.3` for apk's `1.2.3-r3`), so the OS matcher carries the true
+/// version and the binaries in `dependency_path` (`[distro, "<source> <version>", "<bin>, <bin>"]`).
+/// Scanners report binaries (`musl`, `musl-utils`), not the source package, and match a VEX
+/// statement on their purl. `None` for any other ecosystem or path shape.
+fn os_subcomponents(
+    ecosystem: Ecosystem,
+    package: &str,
+    path: &[String],
+) -> Option<Vec<Component>> {
+    if !matches!(ecosystem, Ecosystem::Deb | Ecosystem::Apk | Ecosystem::Rpm) {
+        return None;
+    }
+    let (namespace, source) = package.split_once('/')?;
+    let [_, source_at, binaries] = path else {
+        return None;
+    };
+    let version = source_at.strip_prefix(source)?.strip_prefix(' ')?;
+    let mut names: Vec<&str> = binaries
+        .split(", ")
+        .map(str::trim)
+        .filter(|b| !b.is_empty())
+        .collect();
+    if names.is_empty() {
+        names.push(source);
+    }
+    names.sort_unstable();
+    names.dedup();
+    // An epoch is the purl `epoch` qualifier, as Trivy and Grype write rpm and Trivy writes
+    // deb; Grype keeps a deb epoch in the version, so a deb package is also named that way.
+    let epoch = version
+        .split_once(':')
+        .filter(|(e, _)| !e.is_empty() && e.bytes().all(|b| b.is_ascii_digit()));
+    let forms: Vec<String> = match epoch {
+        Some((e, rest)) => {
+            let mut forms = vec![format!("{}?epoch={e}", purl_encode(rest))];
+            if ecosystem == Ecosystem::Deb {
+                forms.push(purl_encode(version));
+            }
+            forms
+        }
+        None => vec![purl_encode(version)],
+    };
+    let kind = purl_type(ecosystem);
+    let namespaces: Vec<String> = std::iter::once(namespace)
+        .chain(consumer_namespaces(namespace).iter().copied())
+        .map(purl_encode)
+        .collect();
+    let mut ids = Vec::new();
+    for name in names {
+        let name = purl_encode(name);
+        for namespace in &namespaces {
+            for at in &forms {
+                ids.push(Component {
+                    id: format!("pkg:{kind}/{namespace}/{name}@{at}"),
+                });
+            }
+        }
+    }
+    Some(ids)
+}
+
+/// The other purl namespaces scanners write for a distribution's packages. A VEX consumer
+/// matches a statement only when type, namespace and name agree, and Trivy 0.73 and Grype
+/// 0.121 spell several distributions differently from each other and from os-release
+/// (measured on the 217 images of the image differential).
+fn consumer_namespaces(namespace: &str) -> &'static [&'static str] {
+    match namespace {
+        // Trivy `alma`, Grype `almalinux`.
+        "almalinux" => &["alma"],
+        // Both `rocky`.
+        "rocky-linux" => &["rocky"],
+        // Trivy `amazon`, Grype `amzn`.
+        "amazon" => &["amzn"],
+        // Trivy `oracle`, Grype `ol`.
+        "oracle" => &["ol"],
+        // Trivy `suse`, Grype `sles`.
+        "suse" => &["sles"],
+        // Grype names the release: `opensuse-leap`, `opensuse-tumbleweed`.
+        "opensuse" => &["opensuse-leap", "opensuse-tumbleweed"],
+        // Trivy `azurelinux` and `cbl-mariner`, Grype `mariner`.
+        "azure-linux" => &["azurelinux", "cbl-mariner", "mariner"],
+        _ => &[],
     }
 }
 
@@ -557,7 +663,7 @@ fn sort_key(s: &Statement) -> (&str, &str, &str, &'static str) {
 
 /// Content-addressed `@id` (§9.1): SHA-256 over the statement set only (not
 /// provenance), so it's stable across a DB refresh. Falls back to a `urn:` IRI.
-fn content_id(statements: &[Statement], params: &VexParams) -> String {
+pub(crate) fn content_id(statements: &[Statement], params: &VexParams) -> String {
     let bytes = serde_json::to_vec(statements).unwrap_or_default();
     let digest = Sha256::digest(&bytes);
     let mut hex = String::with_capacity(64);
@@ -572,7 +678,7 @@ fn content_id(statements: &[Statement], params: &VexParams) -> String {
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use fleetreach_core::semver::{Version, VersionReq};
     use fleetreach_core::{
@@ -580,7 +686,7 @@ mod tests {
     };
     use serde_json::Value;
 
-    fn params() -> VexParams {
+    pub(crate) fn params() -> VexParams {
         let mut product_ids = BTreeMap::new();
         product_ids.insert("app".to_string(), "pkg:cargo/app@1.0.0".to_string());
         product_ids.insert("svc".to_string(), "pkg:cargo/svc@2.0.0".to_string());
@@ -601,7 +707,12 @@ mod tests {
         }
     }
 
-    fn occ(repo: &str, package: &str, version: &str, active: Option<bool>) -> Occurrence {
+    pub(crate) fn occ(
+        repo: &str,
+        package: &str,
+        version: &str,
+        active: Option<bool>,
+    ) -> Occurrence {
         Occurrence::InRepo {
             repo: RepoId(repo.to_string()),
             package: package.to_string(),
@@ -616,7 +727,7 @@ mod tests {
         }
     }
 
-    fn reach(verdict: ReachVerdict) -> Reachability {
+    pub(crate) fn reach(verdict: ReachVerdict) -> Reachability {
         Reachability {
             verdict,
             config: "x86_64-unknown-linux-gnu;default-features".to_string(),
@@ -627,7 +738,7 @@ mod tests {
         }
     }
 
-    fn finding(id: &str, occs: Vec<Occurrence>) -> VulnFinding {
+    pub(crate) fn finding(id: &str, occs: Vec<Occurrence>) -> VulnFinding {
         VulnFinding {
             advisory_id: id.to_string(),
             aliases: vec![format!("CVE-{id}")],
@@ -645,7 +756,7 @@ mod tests {
         }
     }
 
-    fn report(vulns: Vec<VulnFinding>) -> FleetReport {
+    pub(crate) fn report(vulns: Vec<VulnFinding>) -> FleetReport {
         FleetReport {
             schema_version: fleetreach_core::SCHEMA_VERSION,
             provenance: Provenance {
@@ -677,6 +788,7 @@ mod tests {
             ssvc: None,
             package_versions: Vec::new(),
             base_images: Vec::new(),
+            set_aside: Vec::new(),
         }
     }
 
@@ -998,7 +1110,11 @@ mod tests {
         assert!(statements(&doc).is_empty());
     }
 
-    fn assertion(id: &str, justification: Option<&str>, approver: Option<&str>) -> HumanAssertion {
+    pub(crate) fn assertion(
+        id: &str,
+        justification: Option<&str>,
+        approver: Option<&str>,
+    ) -> HumanAssertion {
         HumanAssertion {
             ecosystem: Ecosystem::Cargo,
             advisory_id: id.to_string(),
@@ -1009,6 +1125,7 @@ mod tests {
             justification: justification.map(str::to_string),
             impact_statement: "dev-dependency only, not in any shipped path".to_string(),
             approved_by: approver.map(str::to_string),
+            dependency_path: vec![],
         }
     }
 
@@ -1131,5 +1248,72 @@ mod tests {
             .expect("id")
             .to_string();
         assert_eq!(id_a, id_b, "@id must not churn on a DB-only change");
+    }
+
+    #[test]
+    fn os_subcomponents_carry_the_real_version_and_every_binary() {
+        let path = [
+            "alpine 3.16".to_string(),
+            "musl 1.2.3-r3".to_string(),
+            "musl-utils, musl".to_string(),
+        ];
+        let ids: Vec<String> = os_subcomponents(Ecosystem::Apk, "alpine/musl", &path)
+            .unwrap()
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                "pkg:apk/alpine/musl@1.2.3-r3",
+                "pkg:apk/alpine/musl-utils@1.2.3-r3"
+            ]
+        );
+        // No binaries listed: the source names the one package.
+        let bare = [
+            "debian 12".to_string(),
+            "zlib 1:1.2.13.dfsg-1".to_string(),
+            String::new(),
+        ];
+        let ids: Vec<String> = os_subcomponents(Ecosystem::Deb, "debian/zlib", &bare)
+            .unwrap()
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                "pkg:deb/debian/zlib@1.2.13.dfsg-1?epoch=1",
+                "pkg:deb/debian/zlib@1%3A1.2.13.dfsg-1"
+            ]
+        );
+        let rpm = [
+            "rocky 9".to_string(),
+            "openssl 1:3.0.7-24.el9".to_string(),
+            "openssl-libs".to_string(),
+        ];
+        let ids: Vec<String> = os_subcomponents(Ecosystem::Rpm, "rocky/openssl", &rpm)
+            .unwrap()
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(
+            ids,
+            ["pkg:rpm/rocky/openssl-libs@3.0.7-24.el9?epoch=1"],
+            "a namespace with no other spelling stays alone"
+        );
+        let rocky = os_subcomponents(Ecosystem::Rpm, "rocky-linux/openssl", &rpm).unwrap();
+        let ids: Vec<&str> = rocky.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            [
+                "pkg:rpm/rocky-linux/openssl-libs@3.0.7-24.el9?epoch=1",
+                "pkg:rpm/rocky/openssl-libs@3.0.7-24.el9?epoch=1"
+            ]
+        );
+        // Not an OS package, or a path of another shape: the caller falls back.
+        assert!(os_subcomponents(Ecosystem::Npm, "a/b", &path).is_none());
+        assert!(os_subcomponents(Ecosystem::Apk, "alpine/musl", &path[..2]).is_none());
+        assert!(os_subcomponents(Ecosystem::Apk, "alpine/zlib", &path).is_none());
     }
 }

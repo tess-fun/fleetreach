@@ -42,7 +42,7 @@
 //! #         summary: Summary { repos_scanned: 1, repos_errored: 0, vuln_count: 1, warn_count: 0,
 //! #             max_severity: Severity::High, stale_ignores: vec![] },
 //! #         vulnerabilities: vec![vuln], warnings: vec![], outcomes: vec![], coverage: vec![],
-//! #         context: vec![], ssvc: None, package_versions: vec![], base_images: vec![] }
+//! #         context: vec![], ssvc: None, package_versions: vec![], base_images: vec![], set_aside: vec![] }
 //! # }
 //! // Render the fleet report as a plain-text table (no color for piped output).
 //! let table = to_table(&report(), false);
@@ -70,8 +70,10 @@ mod cyclonedx_xml;
 mod spdx;
 mod ssvc;
 mod vex;
+mod vex_csaf;
 pub use cyclonedx::{
-    to_cyclonedx, to_cyclonedx_with_vulns, CycloneDxVersion, CYCLONEDX_SPEC_VERSION,
+    to_cyclonedx, to_cyclonedx_and_vex, to_cyclonedx_with_vulns, CycloneDxVersion,
+    CYCLONEDX_SPEC_VERSION,
 };
 pub use cyclonedx_xml::to_cyclonedx_xml;
 pub use spdx::{to_spdx, SPDX_VERSION};
@@ -79,6 +81,7 @@ pub use ssvc::{to_owners, to_ssvc};
 pub use vex::{
     project, purl, to_vex, HumanAssertion, StatementView, VexParams, VexScope, OPENVEX_CONTEXT,
 };
+pub use vex_csaf::{namespace_from_author, to_csaf_vex, CsafParams};
 
 /// The machine payload (§9). Pretty-printed; still clean through `jq`.
 pub fn to_json(report: &FleetReport) -> Result<String, serde_json::Error> {
