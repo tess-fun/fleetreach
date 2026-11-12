@@ -43,6 +43,7 @@ pub mod maven_repo;
 pub mod notice;
 pub mod notify;
 pub mod npm_reach;
+pub(crate) mod ntia;
 pub(crate) mod oci_vex;
 pub mod orchestrate;
 pub mod osvdb;

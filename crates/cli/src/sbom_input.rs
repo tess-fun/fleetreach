@@ -1,14 +1,15 @@
 //! SBOMs as a scan input (spec 05, phase 2): `[[repo]] sbom = "build/bom.json"` scans the
-//! packages a CycloneDX (JSON or XML, 1.4 to 1.7) or SPDX 2.x (JSON or tag-value) document
-//! lists, instead of the repo's lockfiles. Useful where fleetreach cannot read the build (Gradle without locking, Bazel,
+//! packages a CycloneDX (JSON or XML, 1.4 to 1.7), SPDX 2.x (JSON or tag-value) or SPDX 3.0
+//! (JSON-LD) document lists, instead of the repo's lockfiles. Useful where fleetreach cannot read the build (Gradle without locking, Bazel,
 //! in-house tooling) but the build already writes an SBOM.
 //!
 //! Each component is routed by its package URL to the matcher of its ecosystem, in the name
 //! form that matcher expects (`group:artifact` for Maven, `@scope/name` for npm, lowercase
 //! for NuGet and Composer). Direct dependencies are the ones the document's root depends on;
 //! without a dependency graph everything counts as transitive. Coverage is full only when a
-//! CycloneDX document asserts its root is `complete`; SPDX has no such assertion, so an SPDX
-//! input is always partial. Components without a purl, or of a type no matcher covers from an
+//! CycloneDX document asserts its root is `complete`, or an SPDX 3 document marks every
+//! dependency relationship `complete`; SPDX 2 has no such assertion, so an SPDX 2 input is
+//! always partial. Components without a purl, or of a type no matcher covers from an
 //! SBOM (`githubactions`, containers), are counted and named, never silently dropped.
 //!
 //! `pkg:deb`, `pkg:apk` and `pkg:rpm` components go to the distro matchers, as an image's packages
@@ -124,8 +125,10 @@ fn parse(text: &str) -> Result<SbomInput, String> {
         Ok(cyclonedx(doc))
     } else if doc.get("spdxVersion").is_some() {
         Ok(spdx(doc))
+    } else if is_spdx3(doc) {
+        Ok(spdx3(doc))
     } else if doc.get("@context").is_some() {
-        Err("an SPDX 3 document, which is not read yet".to_string())
+        Err("a JSON-LD document that is not SPDX 3".to_string())
     } else {
         Err("neither a CycloneDX nor an SPDX JSON document".to_string())
     }
@@ -369,6 +372,7 @@ pub fn looks_like_sbom(name: &str) -> bool {
         ".cdx.json",
         ".cdx.xml",
         ".spdx.json",
+        ".spdx3.json",
         ".spdx",
         ".bom.json",
         ".bom.xml",
@@ -797,6 +801,164 @@ fn spdx(doc: &serde_json::Value) -> SbomInput {
     input
 }
 
+/// An SPDX 3 JSON-LD document: its context is SPDX's (3.0 or 3.0.1), named alone or first.
+fn is_spdx3(doc: &serde_json::Value) -> bool {
+    let spdx = |c: &serde_json::Value| {
+        c.as_str()
+            .is_some_and(|c| c.starts_with("https://spdx.org/rdf/3."))
+    };
+    match doc.get("@context") {
+        Some(serde_json::Value::Array(list)) => list.iter().any(spdx),
+        Some(c) => spdx(c),
+        None => false,
+    }
+}
+
+/// SPDX 3.0 JSON-LD: `software_Package` elements with their purls, the SBOM's root elements as
+/// the project, `dependsOn` (and the link and optional-dependency kinds) as the graph, and a
+/// `LifecycleScopedRelationship` scoped to development or test making its targets dev. The
+/// document vouches for itself only when every dependency relationship says `complete`.
+fn spdx3(doc: &serde_json::Value) -> SbomInput {
+    let graph: Vec<&serde_json::Value> = match doc.get("@graph").and_then(|g| g.as_array()) {
+        Some(list) => list.iter().collect(),
+        None => vec![doc],
+    };
+    fn text<'a>(n: &'a serde_json::Value, key: &str) -> Option<&'a str> {
+        n.get(key).and_then(|v| v.as_str())
+    }
+    fn id_of(n: &serde_json::Value) -> Option<&str> {
+        text(n, "spdxId").or_else(|| text(n, "@id"))
+    }
+    fn kind(n: &serde_json::Value) -> Option<&str> {
+        text(n, "type").or_else(|| text(n, "@type"))
+    }
+    fn ids(n: &serde_json::Value, key: &str) -> Vec<String> {
+        match n.get(key) {
+            Some(serde_json::Value::Array(list)) => list
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect(),
+            Some(serde_json::Value::String(one)) => vec![one.clone()],
+            _ => Vec::new(),
+        }
+    }
+
+    let mut roots: BTreeSet<String> = BTreeSet::new();
+    for n in &graph {
+        if kind(n) == Some("software_Sbom") {
+            roots.extend(ids(n, "rootElement"));
+        }
+    }
+    const DEPENDENCY: [&str; 5] = [
+        "dependsOn",
+        "hasStaticLink",
+        "hasDynamicLink",
+        "hasOptionalDependency",
+        "hasProvidedDependency",
+    ];
+    let relationships: Vec<(&serde_json::Value, &str, String, Vec<String>)> = graph
+        .iter()
+        .filter(|n| kind(n).is_some_and(|k| k.ends_with("Relationship")))
+        .filter_map(|n| {
+            Some((
+                *n,
+                text(n, "relationshipType")?,
+                text(n, "from")?.to_string(),
+                ids(n, "to"),
+            ))
+        })
+        .collect();
+    for (_, rel, _, to) in &relationships {
+        if *rel == "describes" {
+            roots.extend(to.iter().cloned());
+        }
+    }
+    // A package every scoped edge to it calls development or test, and no plain edge reaches.
+    let (mut scoped_dev, mut runtime) = (BTreeSet::new(), BTreeSet::new());
+    for (n, rel, _, to) in &relationships {
+        if !DEPENDENCY.contains(rel) {
+            continue;
+        }
+        let dev = kind(n) == Some("LifecycleScopedRelationship")
+            && matches!(text(n, "scope"), Some("development" | "test"));
+        for t in to {
+            if dev {
+                scoped_dev.insert(t.clone());
+            } else {
+                runtime.insert(t.clone());
+            }
+        }
+    }
+
+    let mut b = Builder::default();
+    for p in graph.iter().filter(|n| kind(n) == Some("software_Package")) {
+        let Some(id) = id_of(p) else { continue };
+        let purl = text(p, "software_packageUrl").or_else(|| {
+            p.get("externalIdentifier")
+                .and_then(|v| v.as_array())
+                .into_iter()
+                .flatten()
+                .find(|e| text(e, "externalIdentifierType") == Some("packageUrl"))
+                .and_then(|e| text(e, "identifier"))
+        });
+        let purpose = text(p, "software_primaryPurpose");
+        let holder = purl.is_none() && matches!(purpose, Some("application" | "file" | "source"));
+        if purl.is_none() && purpose == Some("operatingSystem") {
+            let named = text(p, "name")
+                .zip(text(p, "software_packageVersion"))
+                .map(|(n, v)| (n.to_string(), v.to_string()));
+            b.os_named = b.os_named.take().or(named);
+        } else if !roots.contains(id) && !holder {
+            let source = text(p, "software_sourceInfo")
+                .and_then(|info| spdx_source(&serde_json::json!({ "sourceInfo": info })));
+            let dev = scoped_dev.contains(id) && !runtime.contains(id);
+            b.add(
+                id.to_string(),
+                purl,
+                dev,
+                Hint {
+                    source,
+                    module: None,
+                },
+            );
+        }
+    }
+
+    let mut edges = Vec::new();
+    let mut said = (0usize, 0usize);
+    for (n, rel, from, to) in &relationships {
+        let dependency = DEPENDENCY.contains(rel);
+        // Like SPDX 2's CONTAINS: a lockfile under the root, but not the root holding every package.
+        let contains = *rel == "contains" && !roots.contains(from);
+        if !(dependency || contains) {
+            continue;
+        }
+        if dependency {
+            said.0 += 1;
+            said.1 += usize::from(text(n, "completeness") == Some("complete"));
+        }
+        edges.extend(to.iter().map(|t| (from.clone(), t.clone())));
+    }
+    let root_deps: BTreeSet<String> = edges
+        .iter()
+        .filter(|(from, _)| roots.contains(from))
+        .map(|(_, to)| to.clone())
+        .collect();
+    let edges: Vec<(String, String)> = edges
+        .into_iter()
+        .filter(|(f, _)| !roots.contains(f))
+        .collect();
+    let complete = !roots.is_empty() && !root_deps.is_empty() && said.0 > 0 && said.0 == said.1;
+    let mut input = b.finish(&root_deps, &edges, complete);
+    input.created = timestamp(
+        graph
+            .iter()
+            .find(|n| kind(n) == Some("CreationInfo"))
+            .and_then(|c| text(c, "created")),
+    );
+    input
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -1027,7 +1189,9 @@ Relationship: SPDXRef-b DEPENDENCY_OF SPDXRef-a
     #[test]
     fn what_is_not_read_is_refused_and_named() {
         assert!(parse("<project/>").unwrap_err().contains("not CycloneDX"));
-        assert!(parse(r#"{"@context":"x"}"#).unwrap_err().contains("SPDX 3"));
+        assert!(parse(r#"{"@context":"x"}"#)
+            .unwrap_err()
+            .contains("not SPDX 3"));
         assert!(parse("hello: world").is_err());
         let entities = "<!DOCTYPE bom [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><bom/>";
         assert!(parse(entities).is_err());
@@ -1202,5 +1366,89 @@ Relationship: SPDXRef-b DEPENDENCY_OF SPDXRef-a
             input.graph.chain_to("urllib3"),
             vec!["(root)", "requests", "urllib3"]
         );
+    }
+
+    #[test]
+    fn spdx3_reads_roots_scopes_and_completeness() {
+        let doc = r#"{
+          "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+          "@graph": [
+            { "type": "CreationInfo", "@id": "_:c", "created": "2026-01-02T03:04:05Z" },
+            { "type": "software_Sbom", "spdxId": "x:sbom", "rootElement": ["x:root"] },
+            { "type": "software_Package", "spdxId": "x:root", "name": "app",
+              "software_primaryPurpose": "application" },
+            { "type": "software_Package", "spdxId": "x:a", "software_packageUrl": "pkg:pypi/requests@2.19.0" },
+            { "type": "software_Package", "spdxId": "x:b",
+              "externalIdentifier": [{ "type": "ExternalIdentifier",
+                "externalIdentifierType": "packageUrl", "identifier": "pkg:pypi/urllib3@1.24.1" }] },
+            { "type": "software_Package", "spdxId": "x:t", "software_packageUrl": "pkg:pypi/pytest@7.0.0" },
+            { "type": "software_Package", "spdxId": "x:n", "name": "no purl" },
+            { "type": "Relationship", "spdxId": "x:r1", "from": "x:root", "relationshipType": "dependsOn",
+              "to": ["x:a"], "completeness": "complete" },
+            { "type": "LifecycleScopedRelationship", "spdxId": "x:r2", "from": "x:root",
+              "relationshipType": "dependsOn", "to": ["x:t"], "scope": "development",
+              "completeness": "complete" },
+            { "type": "Relationship", "spdxId": "x:r3", "from": "x:a", "relationshipType": "dependsOn",
+              "to": ["x:b"], "completeness": "complete" }
+          ]
+        }"#;
+        let input = parse(doc).unwrap();
+        let pypi = &input.packages[&Ecosystem::Pypi];
+        let get = |n: &str| pypi.iter().find(|p| p.name == n).unwrap();
+        assert!(get("requests").direct && !get("requests").dev);
+        assert!(!get("urllib3").direct);
+        assert!(get("pytest").direct && get("pytest").dev);
+        assert_eq!(pypi.len(), 3);
+        assert_eq!(input.unrouted, vec!["no purl (1)".to_string()]);
+        assert!(input.complete);
+        assert_eq!(
+            input.graph.chain_to("urllib3"),
+            vec!["(root)", "requests", "urllib3"]
+        );
+        assert!(input.created.is_some());
+
+        // One incomplete edge, and the document no longer vouches for itself.
+        let partial = doc.replacen(
+            r#""completeness": "complete" }"#,
+            r#""completeness": "incomplete" }"#,
+            1,
+        );
+        assert!(!parse(&partial).unwrap().complete);
+        assert!(looks_like_sbom("app.spdx3.json"));
+    }
+
+    #[test]
+    fn our_spdx3_reads_back_like_our_cyclonedx() {
+        use fleetreach_core::inventory::{Package, RepoInventory, SourceInventory};
+        use fleetreach_core::{DepGraph, RepoId};
+        let mut graph = DepGraph::new("app");
+        graph.add_edges("app", ["express", "@types/node"]);
+        graph.add_edges("express", ["qs"]);
+        let npm = SourceInventory::new(
+            Ecosystem::Npm,
+            "package-lock.json",
+            vec![
+                Package::new("express", "4.18.2", true, false),
+                Package::new("qs", "6.11.0", false, false),
+                Package::new("@types/node", "20.0.0", true, true),
+            ],
+        )
+        .with_graph(&graph);
+        let mut inv = RepoInventory::new(RepoId("acme/app".into()));
+        inv.sources = vec![npm];
+        let t = "2026-11-12T00:00:00Z";
+        let spdx3 = parse(&fleetreach_report::to_spdx3(&inv, None, "1.7.0", t).unwrap()).unwrap();
+        let cdx = parse(
+            &fleetreach_report::to_cyclonedx(
+                &inv,
+                "1.7.0",
+                Some(t),
+                fleetreach_report::CycloneDxVersion::V1_7,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        same(&spdx3, &cdx);
+        assert!(spdx3.complete);
     }
 }

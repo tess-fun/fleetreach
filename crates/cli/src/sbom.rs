@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use clap::{Args, ValueEnum};
 use fleetreach_report::{
     sanitize_cell, to_cyclonedx, to_cyclonedx_and_vex, to_cyclonedx_with_vulns, to_cyclonedx_xml,
-    to_spdx, CycloneDxVersion,
+    to_spdx, to_spdx3, CycloneDxVersion,
 };
 
 use fleetreach_core::inventory::RepoInventory;
@@ -28,7 +28,7 @@ pub struct SbomArgs {
     /// fleet.toml naming the repos
     #[arg(short, long, default_value = "./fleet.toml")]
     config: PathBuf,
-    /// Directory to write `<repo-id>.cdx.json` (or `.cdx.xml`, `.spdx.json`) files into
+    /// Directory to write `<repo-id>.cdx.json` (or `.cdx.xml`, `.spdx.json`, `.spdx3.json`) files into
     /// (created if missing)
     #[arg(short, long)]
     out_dir: PathBuf,
@@ -46,6 +46,11 @@ pub struct SbomArgs {
     /// SBOM's components by BOM-Link, for tools that apply VEX to an SBOM (`trivy sbom --vex`)
     #[arg(long, requires = "report")]
     separate_vex: bool,
+    /// Check each SBOM as written for the NTIA minimum elements (2021): author, timestamp,
+    /// and a supplier, name, version and purl for every component, and the repo's
+    /// dependencies; exit 1 when any is missing
+    #[arg(long)]
+    check_ntia: bool,
     /// List `[[source]]` entries afresh and clone or refresh their checkouts first
     #[arg(long)]
     sync: bool,
@@ -67,6 +72,8 @@ enum BomFormat {
     CyclonedxXml,
     /// SPDX 2.3 JSON
     Spdx,
+    /// SPDX 3.0.1 JSON-LD
+    Spdx3,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -147,9 +154,16 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
                     .map_err(|e| format!("{}: {e}", repo.id))?;
                 let file = file_of("vex.cdx.json");
                 std::fs::write(&file, vex).map_err(|e| format!("{}: {e}", file.display()))?;
-                (Ok(bom), "cdx.json")
+                (Ok((bom, None)), "cdx.json")
             }
-            (BomFormat::Spdx, r) => (to_spdx(&inv, r.as_ref(), version, &timestamp), "spdx.json"),
+            (BomFormat::Spdx, r) => (
+                to_spdx(&inv, r.as_ref(), version, &timestamp).map(|b| (b, None)),
+                "spdx.json",
+            ),
+            (BomFormat::Spdx3, r) => (
+                to_spdx3(&inv, r.as_ref(), version, &timestamp).map(|b| (b, None)),
+                "spdx3.json",
+            ),
             (format, r) => {
                 let bom = match r {
                     Some(r) => to_cyclonedx_with_vulns(&inv, r, version, Some(&timestamp), spec),
@@ -157,13 +171,24 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
                 };
                 match format {
                     BomFormat::CyclonedxXml => {
-                        (bom.and_then(|json| to_cyclonedx_xml(&json)), "cdx.xml")
+                        // The NTIA check reads the JSON the XML is converted from.
+                        let json = bom.as_ref().ok().cloned();
+                        let xml = bom.and_then(|json| to_cyclonedx_xml(&json));
+                        (xml.map(|xml| (xml, json)), "cdx.xml")
                     }
-                    _ => (bom, "cdx.json"),
+                    _ => (bom.map(|json| (json, None)), "cdx.json"),
                 }
             }
         };
-        let bom = bom.map_err(|e| format!("{}: {e}", repo.id))?;
+        let (bom, json) = bom.map_err(|e| format!("{}: {e}", repo.id))?;
+        let ntia = if args.check_ntia {
+            Some(
+                crate::ntia::check(json.as_deref().unwrap_or(&bom))
+                    .map_err(|e| format!("{}: NTIA check: {e}", repo.id))?,
+            )
+        } else {
+            None
+        };
         let file = file_of(extension);
         std::fs::write(&file, bom).map_err(|e| format!("{}: {e}", file.display()))?;
         Ok(Written {
@@ -176,6 +201,7 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
                 .filter(|s| s.coverage != fleetreach_core::Coverage::Full)
                 .count(),
             errors: inv.errors,
+            ntia,
         })
     };
     let written: Vec<Result<Written, String>> = if args.fetch_licenses {
@@ -202,6 +228,7 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
             .map(|repo| write(repo, inventory(repo)))
             .collect()
     };
+    let mut ntia_failed = 0usize;
     for (repo, written) in config.repos.iter().zip(written) {
         let w = match written {
             Ok(w) => w,
@@ -216,6 +243,17 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
         }
         if !w.errors.is_empty() {
             incomplete += 1;
+        }
+        if let Some(ntia) = &w.ntia {
+            let missing = ntia.missing();
+            if !missing.is_empty() {
+                ntia_failed += 1;
+                eprintln!(
+                    "ntia: {}: missing {}",
+                    sanitize_cell(&repo.id.0),
+                    missing.join("; ")
+                );
+            }
         }
         if !args.quiet {
             let note = if w.gaps > 0 {
@@ -232,11 +270,18 @@ pub fn run_sbom(args: SbomArgs) -> u8 {
             );
         }
     }
+    if args.check_ntia && !args.quiet || ntia_failed > 0 {
+        let met = config.repos.len() - ntia_failed;
+        eprintln!(
+            "NTIA minimum elements: {met} of {} SBOM(s) meet them all",
+            config.repos.len()
+        );
+    }
     if incomplete > 0 {
         eprintln!("error: {incomplete} repo(s) could not be read in full; their SBOMs are marked incomplete");
         return 2;
     }
-    0
+    u8::from(ntia_failed > 0)
 }
 
 /// A repo id as a file name: `owner/name` becomes `owner__name`, and anything outside
@@ -248,6 +293,7 @@ struct Written {
     sources: usize,
     gaps: usize,
     errors: Vec<String>,
+    ntia: Option<crate::ntia::Ntia>,
 }
 
 fn file_stem(id: &str) -> String {

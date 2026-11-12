@@ -68,6 +68,7 @@ use serde::Serialize;
 mod cyclonedx;
 mod cyclonedx_xml;
 mod spdx;
+mod spdx3;
 mod ssvc;
 mod vex;
 mod vex_csaf;
@@ -77,6 +78,7 @@ pub use cyclonedx::{
 };
 pub use cyclonedx_xml::to_cyclonedx_xml;
 pub use spdx::{to_spdx, SPDX_VERSION};
+pub use spdx3::{to_spdx3, SPDX3_CONTEXT, SPDX3_VERSION};
 pub use ssvc::{to_owners, to_ssvc};
 pub use vex::{
     project, purl, to_vex, HumanAssertion, StatementView, VexParams, VexScope, OPENVEX_CONTEXT,

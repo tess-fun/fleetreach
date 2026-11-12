@@ -8,6 +8,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`sbom -f spdx3` writes SPDX 3.0.1 JSON-LD.** The same packages, hashes, licenses and graph
+  as the other formats, and two things SPDX 2.3 cannot say: each dependency relationship carries
+  its `completeness`, and a development-only dependency has the `development` scope. With
+  `--report`, findings are vulnerabilities with VEX relationships (`affects`, `doesNotAffect`
+  with the justification or a person's reason, `underInvestigationFor`), CVSS scores and KEV
+  entries. Every document of the demo fleet, and of two real repos with 870 packages, passes
+  `spdx3-validate` (the SPDX 3.0.1 JSON schema and SHACL model).
+- **`sbom --check-ntia` checks each SBOM for the NTIA minimum elements** (2021), as written, in
+  every format: author, timestamp, and a supplier, name, version and purl or CPE for every
+  component, and the repo's dependencies. It exits 1 when one is missing, and says which and
+  how many components lack it. Lockfiles name no supplier, so that element is reported missing,
+  never filled in.
+- **SPDX 3.0 SBOMs are read as scan input**, and found by `discover` as `.spdx3.json`. Roots,
+  dependency relationships, development and test scopes and completeness come from the
+  document's own graph; it is complete only when every dependency relationship says so.
 - **`scan --reachability=jvm` sets aside Java findings no code path reaches.** fleetreach reads
   every Java archive in each image as data, never running it, and builds one call graph from the
   service's entry points. Those are the classes in the image's `jvm_app` packages

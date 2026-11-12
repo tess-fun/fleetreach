@@ -1,6 +1,6 @@
 ---
 title: Output formats
-description: "Every fleetreach output format and view: table, JSON, SARIF, OpenVEX, CSAF, CycloneDX, SPDX, HTML and the impact, blast, packages, fix-first, remediation, SSVC and owners views."
+description: "Every fleetreach output format and view: table, JSON, SARIF, OpenVEX, CSAF, CycloneDX, SPDX 2.3 and 3, HTML and the impact, blast, packages, fix-first, remediation, SSVC and owners views."
 sidebar:
   order: 3
 ---
@@ -30,6 +30,7 @@ Other commands:
 | `sbom -f cyclonedx-xml` | the same in XML |
 | `sbom --report R --separate-vex` | the CycloneDX SBOM plus a CycloneDX VEX beside it, `<repo>.vex.cdx.json` |
 | `sbom -f spdx` | SPDX 2.3 JSON per repo |
+| `sbom -f spdx3` | SPDX 3.0.1 JSON-LD per repo, with VEX relationships from `--report` |
 | `report html` | one self-contained HTML page |
 | `notify -f generic` | `fleetreach-notify/1` JSON |
 | `notify -f slack` | Slack Block Kit |

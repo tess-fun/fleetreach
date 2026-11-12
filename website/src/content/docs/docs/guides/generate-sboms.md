@@ -1,11 +1,11 @@
 ---
 title: Generate SBOMs
-description: Write a CycloneDX 1.7 or SPDX 2.3 SBOM per repository from the same lockfiles fleetreach scans, with the dependency graph, coverage and optional vulnerabilities.
+description: Write a CycloneDX 1.7, SPDX 2.3 or SPDX 3.0.1 SBOM per repository from the same lockfiles fleetreach scans, with the dependency graph, coverage and optional vulnerabilities, and check it for the NTIA minimum elements.
 sidebar:
   order: 9
 ---
 
-`fleetreach sbom` writes one SBOM per repo, CycloneDX 1.7 or SPDX 2.3, from the same
+`fleetreach sbom` writes one SBOM per repo, CycloneDX 1.7, SPDX 2.3 or SPDX 3.0.1, from the same
 lockfiles and manifests `scan` reads, in every ecosystem. It needs no advisory data and no
 network.
 
@@ -26,12 +26,14 @@ partner-api: 5 package(s) from 1 source(s) -> boms/partner-api.cdx.json
 
 ```sh
 fleetreach sbom -o boms/ -f spdx              # boms/<repo-id>.spdx.json
+fleetreach sbom -o boms/ -f spdx3             # boms/<repo-id>.spdx3.json (JSON-LD)
 fleetreach sbom -o boms/ -f cyclonedx-xml     # boms/<repo-id>.cdx.xml
 fleetreach sbom -o boms/ --cyclonedx-version 1.6
 ```
 
-CycloneDX JSON and XML hold the same content. Every format passes its official schema, and
-SPDX output validates with the SPDX tools.
+CycloneDX JSON and XML hold the same content. Every format passes its official schema: SPDX
+2.3 validates with the SPDX tools, and SPDX 3 with `spdx3-validate`, which checks the SPDX 3.0.1
+JSON schema and the SHACL model.
 
 ## What each BOM holds
 
@@ -43,7 +45,9 @@ SPDX output validates with the SPDX tools.
 - **Hashes** of the file the registry serves, where the lockfile records one. See below.
 - **The dependency graph** from the lockfiles.
 - **Compositions** that say which parts are complete and which came from a source read only
-  in part, so an incomplete inventory is never presented as complete.
+  in part, so an incomplete inventory is never presented as complete. SPDX 3 says the same on
+  each relationship (`completeness`), and gives a development-only dependency the
+  `development` scope; SPDX 2.3 can only say it in comments.
 
 BOMs are deterministic: set `SOURCE_DATE_EPOCH` and two runs over the same lockfiles write
 byte-identical files.
@@ -76,8 +80,12 @@ fleetreach sbom -o boms/ --report report.json
 
 CycloneDX gets a `vulnerabilities[]` entry per finding, with ratings, KEV, EPSS and the SSVC
 outcome, and an `analysis.state`: `not_affected` only for the sound signals (a proven
-unreachable function, a dependency that is never compiled), `in_triage` otherwise. SPDX 2.3
-has no vulnerability model, so each affected package gets an advisory reference.
+unreachable function, a dependency that is never compiled), `in_triage` otherwise. SPDX 3 has
+the same model: each finding is a `security_Vulnerability`, and its verdict a VEX relationship
+to the packages it is in (`affects`, `doesNotAffect` with the justification, or
+`underInvestigationFor`), with CVSS scores and the CISA KEV entry as assessments. A finding a
+person set aside is `doesNotAffect` with their reason and approver. SPDX 2.3 has no
+vulnerability model, so each affected package gets an advisory reference.
 
 ## Scan an SBOM instead of lockfiles
 
@@ -91,11 +99,17 @@ path = "../android-app"
 sbom = "build/reports/bom.json"
 ```
 
-fleetreach reads CycloneDX as JSON or XML, SPDX 2 as JSON or tag-value, and the JSON GitHub's
-dependency graph export returns. SPDX 3 is refused by name, as is anything else that is not an
-SBOM. A scan reads the same packages from any format of one generator's run, checked on Syft,
+fleetreach reads CycloneDX as JSON or XML, SPDX 2 as JSON or tag-value, SPDX 3.0 as JSON-LD, and
+the JSON GitHub's dependency graph export returns. Anything else that is not an SBOM is refused
+by name. A scan reads the same packages from any format of one generator's run, checked on Syft,
 Trivy, cdxgen, Microsoft sbom-tool and GitHub. Go and Rust repos scanned from Syft's or Trivy's
 SBOM gave the findings their lockfiles give, except where the SBOM left a package out.
+
+An SPDX 3 document is read from its own graph: the SBOM's root elements are the project,
+`dependsOn` (and the link and optional-dependency kinds) are the edges, and a dependency scoped to
+development or test is dev. It counts as complete only when every dependency relationship says
+`complete`; SPDX 2 has no way to say so, and is always partial. fleetreach's own SPDX 3 reads
+back as its CycloneDX does: over the demo fleet, the same 254 findings.
 
 Direct and transitive come from the SBOM's own graph, so they are only as good as the generator's.
 Syft's CycloneDX has no edges from the root, so everything reads as transitive; Trivy hangs every Go module
@@ -136,7 +150,7 @@ sbom_assets = true
 
 With `discover`, a repo with no lockfile or manifest is scanned from the SBOMs it holds, by name:
 `bom.json`, `bom.xml`, `sbom.json`, `sbom.xml`, and `.cdx.json`, `.cdx.xml`, `.spdx.json`,
-`.spdx`, `.bom.json`, `.bom.xml`, `.sbom.json`, `.sbom.xml` or `.sbom` endings. Several are read
+`.spdx3.json`, `.spdx`, `.bom.json`, `.bom.xml`, `.sbom.json`, `.sbom.xml` or `.sbom` endings. Several are read
 as one, complete only if all are. A file with such a name that is not an SBOM errors the repo
 rather than leaving it unscanned, and `sbom_discover = false` on the `[[repo]]` turns it off.
 
@@ -144,6 +158,29 @@ rather than leaving it unscanned, and `sbom_discover = false` on the `[[repo]]` 
 64 MB from each repo's latest release in the checkout, for GitHub, Gitea and Forgejo. A release
 that cannot be read is a note, and the files of the last good sync stay. GitLab releases only
 link to their files, so they are not fetched.
+
+## Check the NTIA minimum elements
+
+`--check-ntia` reads each SBOM as written and checks the
+[NTIA minimum elements](https://www.ntia.gov/report/2021/minimum-elements-software-bill-materials-sbom)
+of 2021: the author of the SBOM data and a timestamp, a supplier, name, version and unique
+identifier (a purl or CPE) for every component, the repo included, and the repo's dependency
+relationships. It works on every format, and exits 1 when an element is missing.
+
+<!-- run: fleetreach sbom -o boms/ --check-ntia -q 2>&1 | head -n 3 -->
+```console
+$ fleetreach sbom -o boms/ --check-ntia -q 2>&1 | head -n 3
+ntia: payments-api: missing supplier name (28 of 28 components lack it); version (1 of 28 components lack it); other unique identifiers (1 of 28 components lack it)
+ntia: ledger-svc: missing supplier name (26 of 26 components lack it); version (1 of 26 components lack it); other unique identifiers (1 of 26 components lack it)
+ntia: checkout-web: missing supplier name (9 of 9 components lack it); version (1 of 9 components lack it); other unique identifiers (1 of 9 components lack it)
+```
+<!-- /run -->
+
+Lockfiles do not name who supplied a package, so no component has a supplier, and the check
+says so rather than filling one in. `NOASSERTION` and `NONE` count as absent. The repo itself
+has a version (its commit) only when it came from a fleet source, and no package URL, since it
+is not a published package; that is the one component the version and identifier counts above
+are missing.
 
 ## Next
 

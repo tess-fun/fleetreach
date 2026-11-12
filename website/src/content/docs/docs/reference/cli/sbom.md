@@ -19,7 +19,7 @@ Options:
           [default: ./fleet.toml]
 
   -o, --out-dir <OUT_DIR>
-          Directory to write `<repo-id>.cdx.json` (or `.cdx.xml`, `.spdx.json`) files into (created if missing)
+          Directory to write `<repo-id>.cdx.json` (or `.cdx.xml`, `.spdx.json`, `.spdx3.json`) files into (created if missing)
 
   -f, --format <FORMAT>
           SBOM format
@@ -28,6 +28,7 @@ Options:
           - cyclonedx:     CycloneDX JSON, 1.7 unless `--cyclonedx-version` says otherwise
           - cyclonedx-xml: CycloneDX XML, the same content as the JSON
           - spdx:          SPDX 2.3 JSON
+          - spdx3:         SPDX 3.0.1 JSON-LD
           
           [default: cyclonedx]
 
@@ -42,6 +43,9 @@ Options:
 
       --separate-vex
           With --report and CycloneDX JSON, write the findings to `<repo-id>.vex.cdx.json` beside each SBOM instead of embedding them: a CycloneDX VEX whose `affects` point at the SBOM's components by BOM-Link, for tools that apply VEX to an SBOM (`trivy sbom --vex`)
+
+      --check-ntia
+          Check each SBOM as written for the NTIA minimum elements (2021): author, timestamp, and a supplier, name, version and purl for every component, and the repo's dependencies; exit 1 when any is missing
 
       --sync
           List `[[source]]` entries afresh and clone or refresh their checkouts first

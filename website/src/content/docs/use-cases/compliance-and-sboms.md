@@ -13,7 +13,8 @@ handled on time, and a license review.
 
 | Evidence | Command |
 |----------|---------|
-| SBOM per repo with component hashes, CycloneDX 1.7 or SPDX 2.3 | `fleetreach sbom -o boms/` (`-f spdx`) |
+| SBOM per repo with component hashes, CycloneDX 1.7, SPDX 2.3 or SPDX 3 | `fleetreach sbom -o boms/` (`-f spdx`, `-f spdx3`) |
+| NTIA minimum elements checked on each SBOM | `fleetreach sbom -o boms/ --check-ntia` |
 | SBOM with known vulnerabilities and VEX analysis | `fleetreach sbom --report report.json -o boms/` |
 | Vulnerability handling over time | `fleetreach history sla`, `history mttr`, `report html` |
 | Statements that a finding does not apply | `fleetreach scan -f vex` |

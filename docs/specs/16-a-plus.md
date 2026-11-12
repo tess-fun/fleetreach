@@ -1487,6 +1487,16 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Effort**: M. **Release**: 1.6.0 + 1.7.0.
 - **Proof**: official schemas; NTIA check vs `sbomqs`; hashes checked against registry
   downloads.
+- **Status: SPDX 3.0.1 JSON-LD and `--check-ntia` implemented 2026-11-12, for 1.7.0**
+  (`crates/report/src/spdx3.rs`, `crates/cli/src/ntia.rs`). All 18 demo documents (with and
+  without `--report`) and two real repos (870 packages, hashes, a development scope) pass
+  `spdx3-validate` 0.0.7, which checks the SPDX 3.0.1 JSON schema and SHACL model; a document
+  with a required field removed fails it. CVSS scores are strings: JSON-LD turns a fractional
+  JSON number into a double's lexical form, which SHACL rejects as `xsd:decimal`. The NTIA check
+  reads the written document in all four formats and gives the same verdicts on each. **Left**:
+  the comparison with sbomqs (building it was not allowed in this session; its 2021 profile
+  is `--ntia-2021`, and it counts SPDX `PackageSupplier: NOASSERTION` as a supplier, which
+  fleetreach does not); no component has a supplier, since lockfiles name none.
 
 #### 26. SBOM input (B to A+)
 
@@ -1512,8 +1522,11 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   in Docker. OS purls implemented 2026-11-05, released in 1.6.0 (`crates/os/src/purl.rs`):
   `docs/differential/sbom_os.py` over 27 images, Syft and Trivy, CycloneDX and SPDX, 108 documents:
   OS findings identical to the image's own scan in 104; the 4 others are SPDX documents of images
-  with module builds, which carry no stream label and say so in a coverage gap. **Left**: SPDX 3
-  (1.7.0); SPDX as YAML, RDF or XML is refused; GitLab release
+  with module builds, which carry no stream label and say so in a coverage gap. SPDX 3.0 JSON-LD
+  input implemented 2026-11-12, for 1.7.0: the demo fleet scanned from its own SPDX 3 SBOMs gives
+  the 254 findings, direct flags and coverage notes its CycloneDX SBOMs give. **Left**: SPDX 3
+  from other generators is untested (Syft 1.56 writes SPDX 2.3 only; sbom-tool here has no
+  .NET runtime); SPDX as YAML, RDF or XML is refused; GitLab release
   assets are links and are not fetched; staleness says nothing in a shallow clone.
 
 ### Operating model
