@@ -171,15 +171,75 @@ pub(crate) fn read_dir_resolved(
     Ok(reader.out)
 }
 
-/// A `pyproject.toml`'s PEP 621 `[project] dependencies`, one requirement per line, or `None`
-/// when it declares none (or does not parse). Optional dependencies (extras) and Poetry's own
-/// tables are not read here: a Poetry project without its lock has no PEP 508 strings.
+/// A `pyproject.toml`'s declared runtime dependencies, one requirement per line, or `None`
+/// when it declares none (or does not parse): PEP 621 `[project] dependencies`, else, for a
+/// Poetry project, `[tool.poetry.dependencies]` written as PEP 508 (see `poetry_deps`).
+/// Optional dependencies (extras) are not read here.
+#[must_use]
 pub fn pyproject_requirements(dir: &Path) -> Option<String> {
+    project_requirements(dir, &[])
+}
+
+/// [`pyproject_requirements`] plus the optional dependencies of `extras`, for `.[dev]`.
+fn project_requirements(dir: &Path, extras: &[String]) -> Option<String> {
     let body = fleetreach_core::repofile::read_to_string(dir.join("pyproject.toml")).ok()?;
     let value = toml::from_str::<toml::Value>(&body).ok()?;
-    let deps = value.get("project")?.get("dependencies")?.as_array()?;
-    let lines: Vec<&str> = deps.iter().filter_map(toml::Value::as_str).collect();
+    let project = value.get("project");
+    let strings = |v: Option<&toml::Value>| -> Vec<String> {
+        v.and_then(toml::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(toml::Value::as_str)
+            .map(str::to_string)
+            .collect()
+    };
+    let mut lines = strings(project.and_then(|p| p.get("dependencies")));
+    if lines.is_empty() {
+        lines = crate::poetry_deps::requirement_lines(&value, extras);
+    } else {
+        let optional = project.and_then(|p| p.get("optional-dependencies"));
+        for extra in extras {
+            lines.extend(strings(optional.and_then(|o| o.get(extra))));
+        }
+    }
     (!lines.is_empty()).then(|| lines.join("\n"))
+}
+
+/// A requirement that installs a project from a directory inside the repo (`-e .`, `.`,
+/// `./pkg[dev]`): that project's own declared dependencies stand in for it, since a resolver
+/// would otherwise have to build it. `Err` says why it cannot.
+fn local_project(root: &Path, base: &Path, spec: &str) -> Result<(PathBuf, String), String> {
+    let (path, extras) = match spec.split_once('[') {
+        Some((path, rest)) => {
+            let names = rest.trim_end_matches(']').split(',');
+            let names = names
+                .map(|e| e.trim().to_string())
+                .filter(|e| !e.is_empty());
+            (path.trim(), names.collect())
+        }
+        None => (spec.trim(), Vec::new()),
+    };
+    let path = path.strip_prefix("file:").unwrap_or(path);
+    let dir = base.join(path);
+    let inside = dir.canonicalize().ok().filter(|c| c.starts_with(root));
+    let Some(dir) = inside else {
+        return Err("outside the repo or missing".to_string());
+    };
+    let manifest = dir.join("pyproject.toml");
+    if !manifest.is_file() {
+        return Err("a local project with no pyproject.toml (setup.py is never run)".to_string());
+    }
+    match project_requirements(&dir, &extras) {
+        Some(text) => Ok((manifest, text)),
+        None => Err("a local project that declares no dependencies".to_string()),
+    }
+}
+
+/// Whether a requirement names a local directory rather than a package.
+fn is_local_dir(spec: &str) -> bool {
+    let path = spec.split('[').next().unwrap_or(spec).trim();
+    let path = path.strip_prefix("file:").unwrap_or(path);
+    path == "." || path == ".." || path.starts_with("./") || path.starts_with("../")
 }
 
 /// One dependency set for a resolver, built by fleetreach so the resolver opens no file of
@@ -340,11 +400,18 @@ fn gather_lines(
                     input.requirements.push_str(line);
                     input.requirements.push('\n');
                 }
+                "-e" | "--editable" if is_local_dir(value) => {
+                    own_project(root, base, value, line, input, seen, depth, constraint);
+                }
                 _ => input.left_out.push(line.to_string()),
             }
             continue;
         }
         let spec = line.split(" --").next().unwrap_or(line).trim();
+        if is_local_dir(spec) {
+            own_project(root, base, spec, line, input, seen, depth, constraint);
+            continue;
+        }
         match requirement(spec) {
             Req::Pinned(..) | Req::Unpinned(_) => {
                 let out = if constraint {
@@ -360,6 +427,38 @@ fn gather_lines(
                 .push(format!("{spec} (not from the package index)")),
             Req::Bad => input.left_out.push(format!("{spec} (not understood)")),
         }
+    }
+}
+
+/// A local project's dependencies in place of the line that installs it (see
+/// [`local_project`]), read once per project.
+#[allow(clippy::too_many_arguments)]
+fn own_project(
+    root: &Path,
+    base: &Path,
+    spec: &str,
+    line: &str,
+    input: &mut ResolutionInput,
+    seen: &mut BTreeSet<(PathBuf, bool)>,
+    depth: usize,
+    constraint: bool,
+) {
+    if depth + 1 > MAX_INCLUDE_DEPTH {
+        input.left_out.push(format!("{line} (nested too deeply)"));
+        return;
+    }
+    match local_project(root, base, spec) {
+        Ok((manifest, text)) => {
+            // Keyed with the extras, so `-e .` then `-e .[dev]` still reads `dev`.
+            let extras = spec.find('[').map_or("", |i| &spec[i..]);
+            let canonical = manifest.canonicalize().unwrap_or(manifest.clone());
+            let key = PathBuf::from(format!("{}{extras}", canonical.display()));
+            if seen.insert((key, constraint)) {
+                let dir = manifest.parent().unwrap_or(root);
+                gather_lines(root, dir, &text, input, seen, depth + 1, constraint);
+            }
+        }
+        Err(why) => input.left_out.push(format!("{line} ({why})")),
     }
 }
 
@@ -1037,6 +1136,49 @@ mod tests {
         let inputs = resolution_inputs(&py);
         assert_eq!(inputs[0].requirements, "rich\n");
         assert_eq!(inputs[0].left_out.len(), 1);
+    }
+
+    #[test]
+    fn a_local_project_hands_over_its_own_dependencies() {
+        let repo = scratch("own-project");
+        std::fs::create_dir_all(repo.join("sub")).unwrap();
+        std::fs::write(
+            repo.join("pyproject.toml"),
+            "[project]\nname = \"app\"\ndependencies = [\"flask>=2\"]\n\
+             [project.optional-dependencies]\ndev = [\"pytest\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            repo.join("sub/pyproject.toml"),
+            "[tool.poetry]\nname = \"sub\"\n[tool.poetry.dependencies]\npython = \"^3.9\"\n\
+             attrs = \"^23.1\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            repo.join("requirements.txt"),
+            "-e .\n./sub\n-e .[dev]\n-e ../elsewhere\nrequests\n",
+        )
+        .unwrap();
+        let inputs = resolution_inputs(&repo);
+        assert_eq!(
+            inputs[0].requirements,
+            "flask>=2\nattrs >=23.1,<24\nflask>=2\npytest\nrequests\n"
+        );
+        assert_eq!(
+            inputs[0].left_out,
+            ["-e ../elsewhere (outside the repo or missing)"]
+        );
+
+        // A Poetry project with no lock: its own table, as PEP 508.
+        let poetry = scratch("poetry-only");
+        std::fs::write(
+            poetry.join("pyproject.toml"),
+            "[tool.poetry]\nname = \"p\"\n[tool.poetry.dependencies]\npython = \"^3.10\"\n\
+             django = \"~4.2\"\nrich = \"*\"\n",
+        )
+        .unwrap();
+        let inputs = resolution_inputs(&poetry);
+        assert_eq!(inputs[0].requirements, "django >=4.2,<4.3\nrich\n");
     }
 
     #[test]

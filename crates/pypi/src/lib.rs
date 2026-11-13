@@ -51,6 +51,7 @@
 mod db;
 mod error;
 mod lockfile;
+mod poetry_deps;
 mod pylock;
 mod requirements;
 mod scan;

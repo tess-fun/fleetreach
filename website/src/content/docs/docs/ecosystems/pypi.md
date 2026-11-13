@@ -33,9 +33,11 @@ not evaluated (a marker could only hide a finding). Files named for development
 into exit 2.
 
 A repo with only a `pyproject.toml` is read from its PEP 621 `[project].dependencies`,
-direct-only like a hand-written requirements file. Dependencies declared only under
-`[tool.poetry]` with no `poetry.lock`, or marked `dynamic`, are not read: the repo is an
-errored gap.
+direct-only like a hand-written requirements file. A Poetry project with no `poetry.lock` is
+read from `[tool.poetry.dependencies]`, its constraints written as PEP 440 (`^1.2` is
+`>=1.2,<2`, `~1.2.3` is `>=1.2.3,<1.3`, a bare version is exact), with a table's `python`
+and `markers` as environment markers. Optional dependencies, git, path and URL entries, and
+`||` constraints are left out and named. Dependencies marked `dynamic` are not read.
 
 ## Resolving unlocked sets with uv
 
@@ -48,7 +50,9 @@ later on `PATH`, or `--uv PATH`; without it the scan stops with exit 2.
   distributions, so no package code is built or run.
 - fleetreach writes the set to uv's standard input and runs uv in an empty scratch directory
   with `--no-config --no-sources`, so uv opens no file of the repo. `-r` and `-c` are expanded
-  by fleetreach, inside the repo only. Local paths, editables, URLs and options other than
+  by fleetreach, inside the repo only. A local project installed from the repo (`-e .`,
+  `.`, `./pkg[dev]`) is replaced by its own `pyproject.toml` dependencies, extras included,
+  since uv would have to build it. Other local paths, editables, URLs and options other than
   http(s) index ones are left out, and the coverage note names them.
 - The resolution is `--universal` from Python 3.12, so platform markers are kept.
 - A resolved file is labelled partial: its versions are what the index allows today, not what

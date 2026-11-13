@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Poetry projects without a lock, and `-e .`, are read.** A `pyproject.toml` with only
+  `[tool.poetry.dependencies]` and no `poetry.lock` was an errored gap; its constraints are
+  now written as PEP 440 (`^`, `~`, wildcards, exact versions, `python` and `markers`) and read
+  direct-only, or resolved with `--resolve-python`. A requirements line that installs a
+  project from the repo (`-e .`, `./pkg[dev]`) is replaced by that project's declared
+  dependencies and extras when resolving. On the 185-repo resolution corpus no finding
+  changed; one repo with `-e .` now resolves and one Poetry-only repo is read.
 - **`fleetreach whatif` shows what bumps would do before any lockfile moves.** From a saved
   report, it takes bumps from `--bump [ECOSYSTEM:]PACKAGE@VERSION`, the first N items of the
   fix-first queue (`--top N`) or a `fix plan` file (`--plan`). It raises each copy below the

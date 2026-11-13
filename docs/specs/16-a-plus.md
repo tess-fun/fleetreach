@@ -891,8 +891,13 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   355 more PyPI findings in 14 repos, none lost. A fixed Linux target instead of `--universal`
   resolved 91, so universal stays. Validation found a real risk and closed it: uv follows
   `-r` anywhere on disk and quotes bad lines in its errors, so fleetreach now builds the input
-  and runs uv on stdin in an empty directory. Still open: Poetry-only `pyproject.toml` without
-  a lock, and a repo's `-e .` (its own pyproject could be substituted).
+  and runs uv on stdin in an empty directory. **Closed 2026-11-13**: a Poetry-only
+  `pyproject.toml` without a lock is read from `[tool.poetry.dependencies]` written as PEP 508
+  (`crates/pypi/src/poetry_deps.rs`), and `-e .` / `./pkg[extra]` inside the repo is replaced
+  by that project's declared dependencies. Rerun on the 185-repo corpus: 3,580 findings before
+  and after, none changed; TradingAgents (`-e .`) now resolves, sherlock (Poetry-only, was
+  errored) is read and reaches uv, which refuses `stem` as sdist-only. Only 2 Poetry-only
+  repos and 1 `-e .` set were on disk; a wider sample needs repos fetched.
 
 #### 10. Container / OS packages (- to A+)
 
