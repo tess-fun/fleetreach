@@ -58,6 +58,8 @@ serde = { workspace = true }
 sha2 = { workspace = true }
 # Docker config logins and HTTP Basic (pure Rust).
 base64 = "0.22"
+# Signs webhook posts (Standard Webhooks, HMAC-SHA256; RustCrypto, pure Rust).
+hmac = "0.13"
 # Checks cosign signatures on VEX attached to images (RustCrypto, pure Rust).
 p256 = { version = "0.14", default-features = false, features = ["ecdsa", "pem", "pkcs8"] }
 toml = { workspace = true }

@@ -61,6 +61,30 @@ A gap run in between never makes old findings look new when their repo is read a
 host, because webhook URLs carry their secret in the path. Nothing is sent when nothing is
 new, fixed or overdue, unless `--always`. `--dry-run` prints the payload instead.
 
+### Signed posts
+
+`--webhook-secret-env VAR` signs each post with the secret in environment variable `VAR`, as
+[Standard Webhooks](https://www.standardwebhooks.com) specifies, so the receiver can check
+that the post came from your scan and was not changed. The secret is `whsec_` followed by
+base64, the format the spec's libraries generate; it is read from the environment so it never
+appears in a process list or shell history. Three headers are added:
+
+| Header | Value |
+|--------|-------|
+| `webhook-id` | `msg_` and a hash of the body, so a resend of the same payload has the same id |
+| `webhook-timestamp` | Unix seconds when the post was signed |
+| `webhook-signature` | `v1,` and the base64 HMAC-SHA256 of `id.timestamp.body` |
+
+Any Standard Webhooks library verifies it, for example in Python:
+
+```python
+from standardwebhooks import Webhook
+Webhook(secret).verify(body, headers)  # raises if the signature or timestamp is wrong
+```
+
+A secret that is unset or not base64 exits `3` before anything is sent. `--dry-run` also
+prints the headers it would send.
+
 The default `generic` payload has a stable schema, `fleetreach-notify/1`, whose fields only
 grow; use it for Jira automation, ServiceNow, PagerDuty or your own script. `-f slack` sends
 a Block Kit message with one section per owner. See

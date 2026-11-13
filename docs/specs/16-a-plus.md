@@ -827,6 +827,9 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     every action and refusal; checked in a real browser (filter, form, refusal, phone width).
   - 1.8.0: Jira tickets (create, update, close with the finding) next to the existing
     GitHub/GitLab issues; signed webhooks.
+    Status: signed webhooks done (2026-11-13): `notify --webhook-secret-env` signs as Standard
+    Webhooks, matching the spec's test vector and a stdlib verifier on a real post. Jira needs
+    a free cloud instance, which is the user's account to create.
 - **Effort**: L. **Release**: 1.6.0, 1.7.0, 1.8.0. **Depends on**: incremental cache.
 - **Proof**: merge tests (two branches triaging different findings merge clean); triage to
   VEX consumed by Trivy and Grype; HTTP-level tests of every `serve` action; Jira against a

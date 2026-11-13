@@ -15,6 +15,10 @@ fleetreach notify --history-dir history/ -c fleet.toml --webhook "$HOOK_URL"
 Its fields only grow within the schema id; a breaking change gets a new id. The full payload
 is in [Send notifications](/fleetreach/docs/guides/send-notifications/).
 
+For your own receiver, add `--webhook-secret-env VAR` to sign each post (Standard Webhooks,
+HMAC-SHA256) so the receiver can reject posts that did not come from your scan. See
+[Signed posts](/fleetreach/docs/guides/send-notifications/#signed-posts).
+
 ## Jira
 
 There is no Jira client, so fleetreach holds no Jira credentials. Create a Jira automation

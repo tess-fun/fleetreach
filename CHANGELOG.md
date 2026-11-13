@@ -8,6 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Signed webhooks.** `fleetreach notify --webhook-secret-env VAR` signs each post as
+  Standard Webhooks specifies (`webhook-id`, `webhook-timestamp`, `webhook-signature`: HMAC-SHA256
+  of `id.timestamp.body`), with the secret read from that environment variable, so any of the
+  spec's libraries can verify that a post came from your scan. Checked against the spec's
+  test vector and an independent verifier.
 - **`fleetreach ecosystems` prints the coverage matrix.** Per ecosystem: the files read and
   the coverage each gives, where advisories come from, the version rules, what they were
   checked against and the result (table, `-f markdown` or `-f json`). The website's ecosystem

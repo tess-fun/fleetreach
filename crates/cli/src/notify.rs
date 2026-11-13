@@ -7,8 +7,16 @@
 //! Issues are found again by a hidden marker in their body and rewritten in place: reopened
 //! when findings come back, closed when an owner has none open.
 //!
+//! With `--webhook-secret-env`, a post is signed as Standard Webhooks
+//! (<https://www.standardwebhooks.com>) specifies: `webhook-id`, `webhook-timestamp` and
+//! `webhook-signature: v1,<base64 HMAC-SHA256 of "id.timestamp.body">`, keyed by the secret in
+//! that environment variable (`whsec_` and base64, as the spec's libraries generate). Any of
+//! those libraries verifies it; the id is a hash of the body, so a resend of the same payload
+//! can be told apart from a new one.
+//!
 //! Exit `0` when delivered (or nothing to send), `2` when the history cannot be read or
-//! delivery fails, `3` for a webhook URL that is not HTTPS.
+//! delivery fails, `3` for a webhook URL that is not HTTPS or a signing secret that cannot be
+//! read.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -75,6 +83,10 @@ pub struct NotifyArgs {
     /// Send to the webhook even when nothing changed
     #[arg(long)]
     always: bool,
+    /// Sign the webhook post with the secret in this environment variable (Standard Webhooks:
+    /// `whsec_` followed by base64)
+    #[arg(long, value_name = "VAR", requires = "webhook")]
+    webhook_secret_env: Option<String>,
 }
 
 /// The generic payload (`fleetreach-notify/1`).
@@ -275,6 +287,11 @@ pub fn run_notify(args: &NotifyArgs) -> u8 {
             return usage_fail("--webhook must be an https:// URL (http:// only for localhost)");
         }
     }
+    let key = match args.webhook_secret_env.as_deref().map(signing_key) {
+        Some(Ok(key)) => Some(key),
+        Some(Err(e)) => return usage_fail(&e),
+        None => None,
+    };
     let policy = match &args.config {
         Some(path) => match Config::load(path) {
             Ok(c) if c.sla.is_empty() => {
@@ -327,12 +344,19 @@ pub fn run_notify(args: &NotifyArgs) -> u8 {
         eprintln!("nothing new, fixed or past due; nothing sent (--always sends anyway)");
         return 0;
     }
+    let headers = key
+        .as_deref()
+        .map(|key| signed_headers(key, &body, history::now().unix_timestamp()))
+        .unwrap_or_default();
     if args.dry_run {
         println!("{body}");
+        for (name, value) in &headers {
+            eprintln!("{name}: {value}");
+        }
         eprintln!("dry run: would POST to {}", host_of(url));
         return 0;
     }
-    match post_json(url, &body) {
+    match post_json(url, &body, &headers) {
         Ok(()) => {
             eprintln!(
                 "sent: {} new, {} fixed, {} past SLA to {}",
@@ -473,8 +497,58 @@ fn host_of(url: &str) -> String {
         .to_string()
 }
 
+/// The signing key in environment variable `var`: the Standard Webhooks secret format, base64
+/// after an optional `whsec_` prefix.
+fn signing_key(var: &str) -> Result<Vec<u8>, String> {
+    use base64::Engine;
+    let secret = std::env::var(var)
+        .map_err(|_| format!("--webhook-secret-env: environment variable {var} is not set"))?;
+    let encoded = secret.trim();
+    let encoded = encoded.strip_prefix("whsec_").unwrap_or(encoded);
+    match base64::engine::general_purpose::STANDARD.decode(encoded) {
+        Ok(key) if !key.is_empty() => Ok(key),
+        _ => Err(format!(
+            "--webhook-secret-env: {var} is not a Standard Webhooks secret (whsec_ followed by \
+             base64)"
+        )),
+    }
+}
+
+/// The Standard Webhooks headers for `body` sent at `timestamp` (Unix seconds).
+fn signed_headers(key: &[u8], body: &str, timestamp: i64) -> Vec<(&'static str, String)> {
+    use sha2::Digest;
+    let digest = sha2::Sha256::digest(body.as_bytes());
+    let id: String = format!("msg_{}", hex_prefix(&digest, 16));
+    let signature = signature(key, &id, timestamp, body);
+    vec![
+        ("webhook-id", id),
+        ("webhook-timestamp", timestamp.to_string()),
+        ("webhook-signature", signature),
+    ]
+}
+
+fn hex_prefix(bytes: &[u8], n: usize) -> String {
+    bytes.iter().take(n).map(|b| format!("{b:02x}")).collect()
+}
+
+/// `v1,` and the base64 HMAC-SHA256 of `id.timestamp.body`.
+fn signature(key: &[u8], id: &str, timestamp: i64, body: &str) -> String {
+    use base64::Engine;
+    use hmac::{KeyInit, Mac};
+    // HMAC takes a key of any length, so this never fails.
+    let Ok(mut mac) = hmac::Hmac::<sha2::Sha256>::new_from_slice(key) else {
+        return String::new();
+    };
+    mac.update(format!("{id}.{timestamp}.{body}").as_bytes());
+    let tag = mac.finalize().into_bytes();
+    format!(
+        "v1,{}",
+        base64::engine::general_purpose::STANDARD.encode(tag)
+    )
+}
+
 #[cfg(feature = "network")]
-fn post_json(url: &str, body: &str) -> Result<(), String> {
+fn post_json(url: &str, body: &str, headers: &[(&str, String)]) -> Result<(), String> {
     use std::time::Duration;
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_connect(Some(Duration::from_secs(10)))
@@ -482,16 +556,18 @@ fn post_json(url: &str, body: &str) -> Result<(), String> {
         .build()
         .into();
     let host = host_of(url);
-    agent
-        .post(url)
-        .header("Content-Type", "application/json")
+    let mut request = agent.post(url).header("Content-Type", "application/json");
+    for (name, value) in headers {
+        request = request.header(*name, value);
+    }
+    request
         .send(body)
         .map(|_| ())
         .map_err(|e| format!("POST to {host}: {}", e.to_string().replace(url, &host)))
 }
 
 #[cfg(not(feature = "network"))]
-fn post_json(_url: &str, _body: &str) -> Result<(), String> {
+fn post_json(_url: &str, _body: &str, _headers: &[(&str, String)]) -> Result<(), String> {
     Err(
         "this build has no network support; rebuild with `--features network`, or print the \
          payload (no --webhook) and send it with curl"
@@ -890,8 +966,34 @@ fn sync_issues(tracker: Tracker, repo: &str, campaign: &str, built: &Built, dry_
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signatures_match_the_standard_webhooks_test_vector() {
+        // From the Standard Webhooks specification's reference test.
+        use base64::Engine;
+        let key = base64::engine::general_purpose::STANDARD
+            .decode("MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw")
+            .unwrap();
+        assert_eq!(
+            signature(
+                &key,
+                "msg_p5jXN8AQM9LWM0D4loKWxJek",
+                1_614_265_330,
+                r#"{"test": 2432232314}"#
+            ),
+            "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE="
+        );
+        let headers = signed_headers(&key, "{}", 1);
+        assert_eq!(
+            headers[0].1,
+            signed_headers(&key, "{}", 2)[0].1,
+            "id from the body"
+        );
+        assert_ne!(headers[0].1, signed_headers(&key, "[]", 1)[0].1);
+    }
 
     #[test]
     fn webhook_urls_must_be_https_except_on_localhost() {

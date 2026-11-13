@@ -23,5 +23,6 @@ Options:
       --campaign <CAMPAIGN>        Names the set of issues, so separate programs keep separate issues [default: fleetreach]
       --dry-run                    Print what would be sent or changed instead
       --always                     Send to the webhook even when nothing changed
+      --webhook-secret-env <VAR>   Sign the webhook post with the secret in this environment variable (Standard Webhooks: `whsec_` followed by base64)
   -h, --help                       Print help
 ```
