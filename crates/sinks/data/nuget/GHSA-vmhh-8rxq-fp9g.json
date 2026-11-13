@@ -26,158 +26,8 @@
     "Magick.NET-Q8-x64",
     "Magick.NET-Q8-x86"
   ],
-  "status": "proposed",
-  "verdict": "sinks",
-  "sinks": [
-    {
-      "class": "ImageMagick.ByteArrayWrapper",
-      "method": ".ctor"
-    },
-    {
-      "class": "ImageMagick.ByteArrayWrapper",
-      "method": "EnsureLength"
-    },
-    {
-      "class": "ImageMagick.ByteArrayWrapper",
-      "method": "GetBytes"
-    },
-    {
-      "class": "ImageMagick.ByteArrayWrapper",
-      "method": "Read"
-    },
-    {
-      "class": "ImageMagick.ByteArrayWrapper",
-      "method": "ResizeBytes"
-    },
-    {
-      "class": "ImageMagick.ByteArrayWrapper",
-      "method": "Write"
-    },
-    {
-      "class": "ImageMagick.Bytes",
-      "method": "GetData"
-    },
-    {
-      "class": "ImageMagick.Bytes",
-      "method": "GetDataAsync"
-    },
-    {
-      "class": "ImageMagick.Configuration.ConfigurationFiles",
-      "method": ".ctor"
-    },
-    {
-      "class": "ImageMagick.Configuration.ConfigurationFiles",
-      "method": "ImageMagick-Configuration-IConfigurationFiles-get_All"
-    },
-    {
-      "class": "ImageMagick.ImageOptimizerHelper",
-      "method": "GetFormatInformationFromHeader"
-    },
-    {
-      "class": "ImageMagick.MagickGeometry",
-      "method": ".ctor"
-    },
-    {
-      "class": "ImageMagick.MagickGeometry",
-      "method": "Initialize"
-    },
-    {
-      "class": "ImageMagick.MagickGeometry",
-      "method": "InitializeFromPercentage"
-    },
-    {
-      "class": "ImageMagick.MagickGeometry",
-      "method": "ToString"
-    },
-    {
-      "class": "ImageMagick.MagickImage",
-      "method": "Resample"
-    },
-    {
-      "class": "ImageMagick.MagickImage",
-      "method": "Resize"
-    },
-    {
-      "class": "ImageMagick.MagickImage",
-      "method": "ToByteArray"
-    },
-    {
-      "class": "ImageMagick.MagickImage",
-      "method": "Trim"
-    },
-    {
-      "class": "ImageMagick.MagickImage",
-      "method": "WriteAsync"
-    },
-    {
-      "class": "ImageMagick.MagickImage+CloneMutator",
-      "method": "Resample"
-    },
-    {
-      "class": "ImageMagick.MagickImage+CloneMutator",
-      "method": "Resize"
-    },
-    {
-      "class": "ImageMagick.MagickImage+NativeMagickImage",
-      "method": "Resample"
-    },
-    {
-      "class": "ImageMagick.MagickImage+NativeMagickImage",
-      "method": "Resize"
-    },
-    {
-      "class": "ImageMagick.MagickImage+NativeMethods",
-      "method": "MagickImage_Resample"
-    },
-    {
-      "class": "ImageMagick.MagickImage+NativeMethods",
-      "method": "MagickImage_Resize"
-    },
-    {
-      "class": "ImageMagick.MagickImage+NativeMethods+Arm64",
-      "method": "MagickImage_Resample"
-    },
-    {
-      "class": "ImageMagick.MagickImage+NativeMethods+Arm64",
-      "method": "MagickImage_Resize"
-    },
-    {
-      "class": "ImageMagick.MagickImage+NativeMethods+X64",
-      "method": "MagickImage_Resample"
-    },
-    {
-      "class": "ImageMagick.MagickImage+NativeMethods+X64",
-      "method": "MagickImage_Resize"
-    },
-    {
-      "class": "ImageMagick.MagickImage+NativeMethods+X86",
-      "method": "MagickImage_Resample"
-    },
-    {
-      "class": "ImageMagick.MagickImage+NativeMethods+X86",
-      "method": "MagickImage_Resize"
-    },
-    {
-      "class": "ImageMagick.MagickImageCollection",
-      "method": "ToByteArray"
-    },
-    {
-      "class": "ImageMagick.StreamWrapper",
-      "method": ".ctor"
-    },
-    {
-      "class": "ImageMagick.StreamWrapper",
-      "method": "Dispose"
-    },
-    {
-      "class": "ImageMagick.StreamWrapper",
-      "method": "Read"
-    },
-    {
-      "class": "ImageMagick.StreamWrapper",
-      "method": "Write"
-    }
-  ],
+  "status": "reviewed",
+  "verdict": "no-method-sink",
   "evidence": {
     "commits": [
       "https://github.com/ImageMagick/ImageMagick/commit/229fa96a988a21d78318bbca61245a6ed1ee33a0",
@@ -323,8 +173,197 @@
         "class": "ImageMagick.PooledByteArray",
         "method": "get_Length",
         "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.ByteArrayWrapper",
+        "method": ".ctor",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.ByteArrayWrapper",
+        "method": "EnsureLength",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.ByteArrayWrapper",
+        "method": "GetBytes",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.ByteArrayWrapper",
+        "method": "Read",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.ByteArrayWrapper",
+        "method": "ResizeBytes",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.ByteArrayWrapper",
+        "method": "Write",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.Bytes",
+        "method": "GetData",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.Bytes",
+        "method": "GetDataAsync",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.Configuration.ConfigurationFiles",
+        "method": ".ctor",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.Configuration.ConfigurationFiles",
+        "method": "ImageMagick-Configuration-IConfigurationFiles-get_All",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.ImageOptimizerHelper",
+        "method": "GetFormatInformationFromHeader",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": ".ctor",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "Initialize",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "InitializeFromPercentage",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "ToString",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage",
+        "method": "Resample",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage",
+        "method": "Resize",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage",
+        "method": "ToByteArray",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage",
+        "method": "Trim",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage",
+        "method": "WriteAsync",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage+CloneMutator",
+        "method": "Resample",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage+CloneMutator",
+        "method": "Resize",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage+NativeMagickImage",
+        "method": "Resample",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage+NativeMagickImage",
+        "method": "Resize",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage+NativeMethods",
+        "method": "MagickImage_Resample",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage+NativeMethods",
+        "method": "MagickImage_Resize",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage+NativeMethods+Arm64",
+        "method": "MagickImage_Resample",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage+NativeMethods+Arm64",
+        "method": "MagickImage_Resize",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage+NativeMethods+X64",
+        "method": "MagickImage_Resample",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage+NativeMethods+X64",
+        "method": "MagickImage_Resize",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage+NativeMethods+X86",
+        "method": "MagickImage_Resample",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImage+NativeMethods+X86",
+        "method": "MagickImage_Resize",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.MagickImageCollection",
+        "method": "ToByteArray",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.StreamWrapper",
+        "method": ".ctor",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.StreamWrapper",
+        "method": "Dispose",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.StreamWrapper",
+        "method": "Read",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "ImageMagick.StreamWrapper",
+        "method": "Write",
+        "reason": "unrelated managed change in the same release"
       }
     ]
   },
-  "note": "Proposed from the IL diff of Magick.NET-Q16-AnyCPU 14.6.0 -> 14.7.0 (net8.0): every changed method (the fix commits could not be read)."
+  "note": "ImageMagick has XMP profile write that triggers hang due to unbounded loop. The flaw is in the native ImageMagick library that Magick.NET bundles; managed methods that changed in the same release are unrelated, and the native code is reached through many managed entry points, so no method can be named.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

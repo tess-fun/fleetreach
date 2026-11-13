@@ -24,7 +24,7 @@
     "Magick.NET-Q8-x64",
     "Magick.NET-Q8-x86"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "no-method-sink",
   "evidence": {
     "commits": [
@@ -88,5 +88,9 @@
       }
     ]
   },
-  "note": "Proposed: no managed method of a source file the fix changed differs between Magick.NET-Q16-AnyCPU 14.11.1 -> 14.12.0 (net8.0); the flaw may be in native code, configuration or another package."
+  "note": "ImageMagick has a heap Buffer Overflow in ImageMagick MVG decoder. The flaw is in the native ImageMagick library that Magick.NET bundles; managed methods that changed in the same release are unrelated, and the native code is reached through many managed entry points, so no method can be named.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

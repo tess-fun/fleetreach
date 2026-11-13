@@ -15,34 +15,8 @@
     "magick.net-q8-openmp-x64",
     "magick.net-q8-x64"
   ],
-  "status": "proposed",
-  "verdict": "sinks",
-  "sinks": [
-    {
-      "class": "SkiaSharp.GRContextOptions",
-      "method": "ToNative"
-    },
-    {
-      "class": "SkiaSharp.GRVkBackendContext",
-      "method": "ToNative"
-    },
-    {
-      "class": "SkiaSharp.SKDocument",
-      "method": "CreatePdf"
-    },
-    {
-      "class": "SkiaSharp.SKHighContrastConfig",
-      "method": ".ctor"
-    },
-    {
-      "class": "SkiaSharp.SKPath+Iterator",
-      "method": ".ctor"
-    },
-    {
-      "class": "SkiaSharp.SkiaSharpVersion",
-      "method": "CheckNativeLibraryCompatible"
-    }
-  ],
+  "status": "reviewed",
+  "verdict": "no-method-sink",
   "evidence": {
     "commits": [
       "https://github.com/qnighy/libwebp-sys2-rs/pull/21",
@@ -72,8 +46,42 @@
         "class": "SkiaSharp.SKHighContrastConfig",
         "method": "set_Grayscale",
         "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "SkiaSharp.GRContextOptions",
+        "method": "ToNative",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "SkiaSharp.GRVkBackendContext",
+        "method": "ToNative",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "SkiaSharp.SKDocument",
+        "method": "CreatePdf",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "SkiaSharp.SKHighContrastConfig",
+        "method": ".ctor",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "SkiaSharp.SKPath+Iterator",
+        "method": ".ctor",
+        "reason": "unrelated managed change in the same release"
+      },
+      {
+        "class": "SkiaSharp.SkiaSharpVersion",
+        "method": "CheckNativeLibraryCompatible",
+        "reason": "unrelated managed change in the same release"
       }
     ]
   },
-  "note": "Proposed from the IL diff of SkiaSharp 2.88.5 -> 2.88.6 (net6.0): every changed method (the fix commits could not be read)."
+  "note": "libwebp: OOB write in BuildHuffmanTable. The flaw is in libwebp, which SkiaSharp bundles; managed methods that changed in the same release are unrelated, and the native code is reached through many managed entry points, so no method can be named.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
