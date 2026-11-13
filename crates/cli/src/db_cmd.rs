@@ -769,9 +769,8 @@ pub fn run_db_quality(args: DbQualityArgs) -> u8 {
     };
     let errors = issues.iter().any(|i| i.level == Level::Error);
     if args.json {
-        match serde_json::to_string_pretty(&issues) {
-            Ok(json) => println!("{json}"),
-            Err(e) => return fail(&e.to_string()),
+        if let Err(e) = crate::cli::print_json(&issues) {
+            return fail(&e);
         }
         return u8::from(errors);
     }
@@ -865,12 +864,9 @@ pub fn run_db_ranges(args: DbRangesArgs) -> u8 {
         );
     }
     if args.json {
-        return match serde_json::to_string_pretty(&checks) {
-            Ok(body) => {
-                println!("{body}");
-                0
-            }
-            Err(e) => fail(&e.to_string()),
+        return match crate::cli::print_json(&checks) {
+            Ok(()) => 0,
+            Err(e) => fail(&e),
         };
     }
     let mut counts: std::collections::BTreeMap<Verdict, usize> = Default::default();
@@ -971,9 +967,8 @@ pub fn run_db_crosscheck(args: DbCrosscheckArgs) -> u8 {
     if !args.json {
         eprintln!("(the cross-check is printed as JSON; it is a measurement, not a table)");
     }
-    match serde_json::to_string_pretty(&serde_json::Value::Object(out)) {
-        Ok(json) => println!("{json}"),
-        Err(e) => return fail(&e.to_string()),
+    match crate::cli::print_json(&serde_json::Value::Object(out)) {
+        Ok(()) => 0,
+        Err(e) => fail(&e),
     }
-    0
 }

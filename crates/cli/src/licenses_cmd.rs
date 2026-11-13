@@ -275,17 +275,7 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
                 packages: &decisions,
                 unread: unread.clone(),
             };
-            // Written as it serializes: a fleet's package list runs to hundreds of megabytes.
-            let mut stdout = std::io::BufWriter::with_capacity(1 << 16, std::io::stdout().lock());
-            let written = serde_json::to_writer_pretty(&mut stdout, &out)
-                .map_err(|e| e.to_string())
-                .and_then(|()| {
-                    use std::io::Write;
-                    writeln!(stdout)
-                        .and_then(|()| stdout.flush())
-                        .map_err(|e| e.to_string())
-                });
-            if let Err(e) = written {
+            if let Err(e) = crate::cli::print_json(&out) {
                 return fail(&e);
             }
         }

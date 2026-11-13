@@ -708,10 +708,11 @@ pub fn run_whatif(args: &WhatifArgs) -> u8 {
     }
     match args.format {
         Format::Table => print!("{}", render_table(&out)),
-        Format::Json => match serde_json::to_string_pretty(&out) {
-            Ok(text) => println!("{text}"),
-            Err(e) => return fail(&e.to_string()),
-        },
+        Format::Json => {
+            if let Err(e) = crate::cli::print_json(&out) {
+                return fail(&e);
+            }
+        }
     }
     0
 }

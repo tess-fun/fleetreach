@@ -144,12 +144,9 @@ fn since_cutoff(
 }
 
 fn print_json<T: Serialize>(value: &T) -> u8 {
-    match serde_json::to_string_pretty(value) {
-        Ok(json) => {
-            println!("{json}");
-            0
-        }
-        Err(e) => fail(&e.to_string()),
+    match crate::cli::print_json(value) {
+        Ok(()) => 0,
+        Err(e) => fail(&e),
     }
 }
 

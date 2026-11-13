@@ -581,9 +581,7 @@ fn list(args: &ListArgs) -> Result<(), String> {
             && (!args.expired || d.expired(today))
     });
     if args.json {
-        let text = serde_json::to_string_pretty(&decisions).map_err(|e| e.to_string())?;
-        println!("{text}");
-        return Ok(());
+        return crate::cli::print_json(&decisions);
     }
     println!(
         "{:<15} {:<11} {:<24} {:<34} ASSIGNEE",
@@ -692,9 +690,7 @@ fn export(args: &ExportArgs) -> Result<(), String> {
         "version": 1,
         "statements": statements,
     });
-    let text = serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?;
-    println!("{text}");
-    Ok(())
+    crate::cli::print_json(&doc)
 }
 
 /// [`Triage::load`] for `scan`: what cannot be read exits 2, as an unreadable repo does.

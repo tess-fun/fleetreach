@@ -78,10 +78,9 @@ pub(crate) fn run_why(config: &Config, package: &str, cap: Option<usize>, json_o
 }
 
 fn print_json(value: &serde_json::Value) {
-    println!(
-        "{}",
-        serde_json::to_string_pretty(value).unwrap_or_default()
-    );
+    if let Err(e) = crate::cli::print_json(value) {
+        eprintln!("error: {e}");
+    }
 }
 
 fn print_route(route: &Route) {

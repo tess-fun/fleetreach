@@ -572,9 +572,8 @@ fn run_plan(args: &FixPlanArgs) -> u8 {
         Err(e) => return fail(&e),
     }
     fit_to_checkouts(&mut plan.edits, &repos);
-    match serde_json::to_string_pretty(&plan) {
-        Ok(json) => {
-            println!("{json}");
+    match crate::cli::print_json(&plan) {
+        Ok(()) => {
             let count = |strategy: Strategy| {
                 let matching = plan.edits.iter().filter(|e| e.strategy == strategy);
                 matching.count()
@@ -591,7 +590,7 @@ fn run_plan(args: &FixPlanArgs) -> u8 {
             }
             0
         }
-        Err(e) => fail(&e.to_string()),
+        Err(e) => fail(&e),
     }
 }
 
@@ -999,9 +998,8 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
         );
     }
 
-    match serde_json::to_string_pretty(&results) {
-        Ok(json) => println!("{json}"),
-        Err(e) => return fail(&e.to_string()),
+    if let Err(e) = crate::cli::print_json(&results) {
+        return fail(&e);
     }
     let count = |o: Outcome| results.iter().filter(|r| r.outcome == o).count();
     eprintln!(
@@ -2057,9 +2055,8 @@ fn run_status(args: &FixStatusArgs) -> u8 {
             }
         }
     }
-    match serde_json::to_string_pretty(&rows) {
-        Ok(json) => println!("{json}"),
-        Err(e) => return fail(&e.to_string()),
+    if let Err(e) = crate::cli::print_json(&rows) {
+        return fail(&e);
     }
     u8::from(failed > 0) * 2
 }

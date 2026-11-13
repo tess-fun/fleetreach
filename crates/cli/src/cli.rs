@@ -142,6 +142,17 @@ pub(crate) fn fail(message: &str) -> u8 {
     2
 }
 
+/// Print `value` as pretty JSON and a newline on stdout, written as it serializes so a large
+/// payload is never held whole in memory a second time.
+pub(crate) fn print_json<T: serde::Serialize + ?Sized>(value: &T) -> Result<(), String> {
+    use std::io::Write;
+    let mut out = std::io::BufWriter::with_capacity(1 << 16, std::io::stdout().lock());
+    serde_json::to_writer_pretty(&mut out, value).map_err(|e| e.to_string())?;
+    writeln!(out)
+        .and_then(|()| out.flush())
+        .map_err(|e| e.to_string())
+}
+
 /// A usage error (exit `3`), distinct from could-not-scan (`2`); used for the
 /// fail-closed VEX author/timestamp/consent checks.
 pub(crate) fn usage_fail(message: &str) -> u8 {
