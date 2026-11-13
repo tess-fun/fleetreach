@@ -8,6 +8,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`scan --resolve-python` resolves unlocked Python dependency sets with uv.** A
+  requirements file with unpinned names, or a `pyproject.toml` with no lockfile, is compiled
+  with `uv pip compile --no-build --universal`, so transitive packages are matched too. uv
+  gets the set on standard input in an empty directory and opens no file of the repo:
+  fleetreach expands includes inside the repo and leaves out local paths, URLs and other
+  options, naming them. Nothing is built. Resolved files are labelled partial, and a file uv
+  cannot resolve keeps its label with uv's reason. On 185 real repos uv resolved 90 of 143
+  sets (44 failures need a package with no wheel), and the scan found 355 more PyPI findings
+  in 14 repos, matching an independent reading of uv's output.
+- **`pyproject.toml`-only Python repos are scanned.** Their PEP 621 dependencies are read as
+  direct-only instead of the repo being an errored gap.
 - **Exploit maturity from Metasploit, nuclei and Exploit-DB.** `db sync --source exploits`
   reads which CVEs have public code in the three collections into one index (29,764 CVEs,
   2,570 with a Metasploit exploit module). Enriched findings then carry `exploit_maturity`

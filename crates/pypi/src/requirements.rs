@@ -25,7 +25,7 @@
 //! for development (`requirements-dev.txt`, `dev-requirements.txt`, `requirements/test.txt`)
 //! are dev scope, a filename heuristic.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use fleetreach_core::{Coverage, DepGraph};
@@ -118,7 +118,22 @@ fn is_dev_file(path: &Path) -> bool {
 /// A top-level file that exists but cannot be read is an error (fail closed). Problems
 /// further in (a missing include, an include outside `dir`, an unparseable line) are
 /// coverage gaps naming what was not read, not errors.
+#[cfg(test)]
 pub(crate) fn read_dir(dir: &Path) -> Result<Requirements, PyPiError> {
+    read_dir_resolved(dir, &BTreeMap::new())
+}
+
+/// [`read_dir`], reading a resolver's output in place of each file in `resolved` (keyed by
+/// the path [`requirements_files`] gives, or `pyproject.toml`'s): the resolved set replaces
+/// what the file and its includes declare.
+///
+/// # Errors
+///
+/// As [`read_dir`].
+pub(crate) fn read_dir_resolved(
+    dir: &Path,
+    resolved: &BTreeMap<PathBuf, String>,
+) -> Result<Requirements, PyPiError> {
     let root = dir.canonicalize().map_err(|e| PyPiError::db(dir, e))?;
     let mut reader = Reader {
         root,
@@ -131,13 +146,238 @@ pub(crate) fn read_dir(dir: &Path) -> Result<Requirements, PyPiError> {
         constraints: BTreeMap::new(),
         unresolved: Vec::new(),
     };
-    for path in requirements_files(dir) {
-        let text = fleetreach_core::repofile::read_to_string(&path)
-            .map_err(|e| PyPiError::db(&path, e))?;
-        reader.read_file(&path, &text, is_dev_file(&path), 0);
+    let files = requirements_files(dir);
+    for path in &files {
+        let text = match resolved.get(path) {
+            Some(text) => text.clone(),
+            None => fleetreach_core::repofile::read_to_string(path)
+                .map_err(|e| PyPiError::db(path, e))?,
+        };
+        reader.read_file(path, &text, is_dev_file(path), 0);
+    }
+    // No requirements files: a `pyproject.toml`'s declared dependencies, read like a
+    // hand-written requirements file (pins matched, ranges listed as unresolved).
+    if files.is_empty() {
+        let path = dir.join("pyproject.toml");
+        let text = match resolved.get(&path) {
+            Some(text) => Some(text.clone()),
+            None => pyproject_requirements(dir),
+        };
+        if let Some(text) = text {
+            reader.read_file(&path, &text, false, 0);
+        }
     }
     reader.finish();
     Ok(reader.out)
+}
+
+/// A `pyproject.toml`'s PEP 621 `[project] dependencies`, one requirement per line, or `None`
+/// when it declares none (or does not parse). Optional dependencies (extras) and Poetry's own
+/// tables are not read here: a Poetry project without its lock has no PEP 508 strings.
+pub fn pyproject_requirements(dir: &Path) -> Option<String> {
+    let body = fleetreach_core::repofile::read_to_string(dir.join("pyproject.toml")).ok()?;
+    let value = toml::from_str::<toml::Value>(&body).ok()?;
+    let deps = value.get("project")?.get("dependencies")?.as_array()?;
+    let lines: Vec<&str> = deps.iter().filter_map(toml::Value::as_str).collect();
+    (!lines.is_empty()).then(|| lines.join("\n"))
+}
+
+/// One dependency set for a resolver, built by fleetreach so the resolver opens no file of
+/// the repo: the requirement lines (includes expanded, inside the repo only) for its stdin,
+/// and the constraint lines for a `-c` file.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ResolutionInput {
+    /// The file this set stands for: a requirements file, or `pyproject.toml`.
+    pub path: PathBuf,
+    pub requirements: String,
+    pub constraints: String,
+    /// Lines not handed to the resolver, each with why: local paths, editables, URLs,
+    /// includes outside the repo, options other than http(s) index ones.
+    pub left_out: Vec<String>,
+}
+
+/// The dependency sets a resolver should compile: each requirements file that is not already a
+/// resolver's complete output, else a `pyproject.toml` that declares dependencies. Empty
+/// when the directory has a lockfile or `pylock.toml` (those are read as they are), and a set
+/// with nothing left to resolve is dropped.
+pub(crate) fn resolution_inputs(dir: &Path) -> Vec<ResolutionInput> {
+    let Ok(root) = dir.canonicalize() else {
+        return Vec::new();
+    };
+    let files = requirements_files(dir);
+    if files.is_empty() {
+        let Some(text) = pyproject_requirements(dir) else {
+            return Vec::new();
+        };
+        let mut input = ResolutionInput {
+            path: dir.join("pyproject.toml"),
+            ..ResolutionInput::default()
+        };
+        // PEP 508 lines: no options or includes, but a line can still name a URL or a path.
+        gather_lines(
+            &root,
+            &root,
+            &text,
+            &mut input,
+            &mut BTreeSet::new(),
+            0,
+            false,
+        );
+        return (!input.requirements.trim().is_empty())
+            .then_some(input)
+            .into_iter()
+            .collect();
+    }
+    files
+        .into_iter()
+        .filter(|path| {
+            fleetreach_core::repofile::read_to_string(path).is_ok_and(|text| {
+                let parsed = parse(&text);
+                // A compiled file is complete unless it pulls in something it did not pin.
+                !(parsed.generated
+                    && !parsed.has_unpinned()
+                    && parsed.includes.is_empty()
+                    && parsed.non_registry == 0
+                    && !parsed.pinned.is_empty())
+            })
+        })
+        .filter_map(|path| {
+            let mut input = ResolutionInput {
+                path: path.clone(),
+                ..ResolutionInput::default()
+            };
+            let mut seen = BTreeSet::new();
+            gather(&root, &path, &mut input, &mut seen, 0, false);
+            (!input.requirements.trim().is_empty()).then_some(input)
+        })
+        .collect()
+}
+
+/// Options a resolver may be given from a repo's file: where packages come from (http(s)
+/// only) and which distributions to prefer. Anything else is left out.
+const INDEX_OPTIONS: [&str; 6] = [
+    "-i",
+    "--index-url",
+    "--extra-index-url",
+    "-f",
+    "--find-links",
+    "--trusted-host",
+];
+const PLAIN_OPTIONS: [&str; 4] = ["--pre", "--prefer-binary", "--only-binary", "--no-binary"];
+
+/// Append `path`'s resolvable lines to `input` (to its constraints when `constraint`),
+/// following `-r` and `-c` only to files inside `root`.
+fn gather(
+    root: &Path,
+    path: &Path,
+    input: &mut ResolutionInput,
+    seen: &mut BTreeSet<(PathBuf, bool)>,
+    depth: usize,
+    constraint: bool,
+) {
+    let Ok(canonical) = path.canonicalize() else {
+        return;
+    };
+    if !seen.insert((canonical, constraint)) {
+        return;
+    }
+    let Ok(text) = fleetreach_core::repofile::read_to_string(path) else {
+        input
+            .left_out
+            .push(format!("{} (could not be read)", path.display()));
+        return;
+    };
+    let base = path.parent().unwrap_or(root);
+    gather_lines(root, base, &text, input, seen, depth, constraint);
+}
+
+/// [`gather`] for text already read, with `base` the directory its includes are relative to.
+fn gather_lines(
+    root: &Path,
+    base: &Path,
+    text: &str,
+    input: &mut ResolutionInput,
+    seen: &mut BTreeSet<(PathBuf, bool)>,
+    depth: usize,
+    constraint: bool,
+) {
+    for raw in logical_lines(text) {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let line = line.split(" #").next().unwrap_or(line).trim();
+        if line.starts_with('-') {
+            let (flag, value) = split_option(line);
+            match flag {
+                "-r" | "--requirement" | "-c" | "--constraint" if !value.is_empty() => {
+                    let target = base.join(value);
+                    let inside = target.canonicalize().is_ok_and(|c| c.starts_with(root));
+                    if !inside {
+                        input
+                            .left_out
+                            .push(format!("{flag} {value} (outside the repo or missing)"));
+                    } else if depth + 1 > MAX_INCLUDE_DEPTH {
+                        input
+                            .left_out
+                            .push(format!("{flag} {value} (nested too deeply)"));
+                    } else {
+                        let as_constraint = constraint || matches!(flag, "-c" | "--constraint");
+                        gather(root, &target, input, seen, depth + 1, as_constraint);
+                    }
+                }
+                f if INDEX_OPTIONS.contains(&f) && !constraint => {
+                    let web = value.starts_with("https://") || value.starts_with("http://");
+                    if web || f == "--trusted-host" {
+                        input.requirements.push_str(&format!("{f} {value}\n"));
+                    } else {
+                        input
+                            .left_out
+                            .push(format!("{line} (not an http(s) index)"));
+                    }
+                }
+                f if PLAIN_OPTIONS.contains(&f) && !constraint => {
+                    input.requirements.push_str(line);
+                    input.requirements.push('\n');
+                }
+                _ => input.left_out.push(line.to_string()),
+            }
+            continue;
+        }
+        let spec = line.split(" --").next().unwrap_or(line).trim();
+        match requirement(spec) {
+            Req::Pinned(..) | Req::Unpinned(_) => {
+                let out = if constraint {
+                    &mut input.constraints
+                } else {
+                    &mut input.requirements
+                };
+                out.push_str(spec);
+                out.push('\n');
+            }
+            Req::NonRegistry => input
+                .left_out
+                .push(format!("{spec} (not from the package index)")),
+            Req::Bad => input.left_out.push(format!("{spec} (not understood)")),
+        }
+    }
+}
+
+/// `-r file`, `-rfile`, `--requirement=file`: the flag and its value.
+fn split_option(line: &str) -> (&str, &str) {
+    let (flag, value) = match line.split_once(|c: char| c == '=' || c.is_whitespace()) {
+        Some((flag, value)) => (flag, value.trim()),
+        None => (line, ""),
+    };
+    match flag {
+        f if f.len() > 2
+            && (f.starts_with("-r") || f.starts_with("-c"))
+            && !f.starts_with("--") =>
+        {
+            (&f[..2], f[2..].trim())
+        }
+        f => (f, value),
+    }
 }
 
 /// A pinned requirement on its way to an [`InstalledPackage`].
@@ -332,7 +572,8 @@ impl Reader {
                 reason: format!(
                     "{} requirement(s) not pinned to one version, so not matched: {}; \
                      pinned ones were matched, but transitive dependencies were not resolved \
-                     (compile the file with pip-compile or uv pip compile)",
+                     (compile the file with pip-compile or uv pip compile, or scan with \
+                     --resolve-python)",
                     names.len(),
                     sample(&names)
                 ),
@@ -742,6 +983,60 @@ mod tests {
             r.coverage[0].reason
         );
         assert!(!r.coverage[0].reason.contains("flask"));
+    }
+
+    #[test]
+    fn resolver_input_opens_nothing_outside_the_repo() {
+        let root = scratch("resolve-in");
+        let repo = root.join("repo");
+        std::fs::create_dir_all(repo.join("requirements")).unwrap();
+        std::fs::write(root.join("secret.txt"), "token-abc\n").unwrap();
+        std::fs::write(
+            repo.join("requirements/base.txt"),
+            "flask>=2 ; python_version >= '3.8'\n",
+        )
+        .unwrap();
+        std::fs::write(repo.join("constraints.txt"), "jinja2==3.1.4\n").unwrap();
+        std::fs::write(
+            repo.join("requirements.txt"),
+            "-r requirements/base.txt\n-r ../secret.txt\n-c constraints.txt\n\
+             --index-url https://pypi.example/simple\n--find-links /opt/wheels\n\
+             -e .\n./local-pkg\nlib @ https://example.com/lib.whl\nrequests # http\n",
+        )
+        .unwrap();
+        let inputs = resolution_inputs(&repo);
+        let input = inputs
+            .iter()
+            .find(|i| i.path == repo.join("requirements.txt"))
+            .unwrap();
+        assert_eq!(
+            input.requirements,
+            "flask>=2 ; python_version >= '3.8'\n--index-url https://pypi.example/simple\nrequests\n"
+        );
+        assert_eq!(input.constraints, "jinja2==3.1.4\n");
+        let left = input.left_out.join(" | ");
+        for part in [
+            "../secret.txt",
+            "/opt/wheels",
+            "-e .",
+            "./local-pkg",
+            "lib @ https",
+        ] {
+            assert!(left.contains(part), "{part}: {left}");
+        }
+        assert!(!input.requirements.contains("token-abc"));
+
+        // A pyproject-only directory hands its PEP 621 list over, URLs left out.
+        let py = root.join("py");
+        std::fs::create_dir_all(&py).unwrap();
+        std::fs::write(
+            py.join("pyproject.toml"),
+            "[project]\nname = \"a\"\ndependencies = [\"rich\", \"x @ git+https://e.com/x\"]\n",
+        )
+        .unwrap();
+        let inputs = resolution_inputs(&py);
+        assert_eq!(inputs[0].requirements, "rich\n");
+        assert_eq!(inputs[0].left_out.len(), 1);
     }
 
     #[test]

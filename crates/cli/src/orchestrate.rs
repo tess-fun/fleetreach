@@ -77,6 +77,8 @@ pub struct GoScan<'a> {
     pub sandbox: SandboxPolicy,
     pub vuln_db: Option<&'a str>,
     pub offline: bool,
+    /// `--resolve-python`: uv, run on each unlocked Python dependency set (spec 16, row 9).
+    pub python: Option<&'a crate::py_resolve::PyResolver>,
 }
 
 /// The `file://` OSV mirror of each toolchain-free ecosystem: its matcher reads a lockfile
@@ -499,6 +501,8 @@ fn cache_key(
     let depends_on_more = |unit: &ScanUnit| {
         unit.sbom.is_some()
             || (unit.ecosystem == Ecosystem::Go && go.govulncheck.is_some())
+            // A resolution reads the index as it is today, not the repo's bytes.
+            || (unit.ecosystem == Ecosystem::Pypi && go.python.is_some())
             || (unit.ecosystem == Ecosystem::Cargo && host_triple.is_some())
     };
     if !plan.walk_errors.is_empty() || plan.units.iter().any(depends_on_more) {
@@ -1965,15 +1969,37 @@ fn scan_unit(
             })
         }
         Ecosystem::Pypi => {
+            let (resolved, failed) = match go.python {
+                Some(uv) => {
+                    let inputs = fleetreach_pypi::resolution_inputs(&repo.path);
+                    let (resolved, mut failed) = uv.compile_all(&inputs);
+                    // Lines fleetreach kept from uv are named on the file's gap.
+                    for input in inputs.iter().filter(|i| !i.left_out.is_empty()) {
+                        let note = format!("left out of resolution: {}", input.left_out.join(", "));
+                        failed.push((input.path.clone(), note));
+                    }
+                    (resolved, failed)
+                }
+                None => Default::default(),
+            };
+            let uv_version = go.python.map(|uv| uv.version().to_string());
             return scan_tier_c(repo, ecosystem, dbs.pypi.as_ref(), &PYPI, |db| {
-                fleetreach_pypi::scan_offline_with_coverage(&repo.path, db, &repo.id).map(|s| {
-                    let gaps = s.coverage.into_iter();
-                    (
-                        s.scan,
-                        gaps.map(|g| (g.source, g.level, g.reason)).collect(),
-                    )
-                })
-            })
+                fleetreach_pypi::scan_offline_resolved(&repo.path, db, &repo.id, &resolved).map(
+                    |s| {
+                        let gaps = s.coverage.into_iter();
+                        let mut gaps: Vec<Gap> =
+                            gaps.map(|g| (g.source, g.level, g.reason)).collect();
+                        python_resolution_gaps(
+                            &repo.path,
+                            uv_version.as_deref(),
+                            &resolved,
+                            &failed,
+                            &mut gaps,
+                        );
+                        (s.scan, gaps)
+                    },
+                )
+            });
         }
         Ecosystem::RubyGems => {
             return scan_tier_c(repo, ecosystem, dbs.rubygems.as_ref(), &RUBYGEMS, |db| {
@@ -2243,6 +2269,46 @@ fn tier_c_db<'a, D, E: std::fmt::Display>(
 
 /// A source a matcher read with less than full coverage: `(source, level, reason)`.
 type Gap = (String, Coverage, String);
+
+/// Say on each Python file `--resolve-python` touched what its versions are: a resolved file
+/// holds what the index allows today, not what the repo installs, so it is Partial; a file
+/// uv could not resolve keeps its own gap, with uv's reason added.
+fn python_resolution_gaps(
+    repo_dir: &Path,
+    uv_version: Option<&str>,
+    resolved: &BTreeMap<PathBuf, String>,
+    failed: &[(PathBuf, String)],
+    gaps: &mut Vec<Gap>,
+) {
+    let rel = |p: &Path| {
+        p.strip_prefix(repo_dir)
+            .unwrap_or(p)
+            .to_string_lossy()
+            .replace('\\', "/")
+    };
+    let uv = uv_version.unwrap_or("?");
+    for input in resolved.keys() {
+        let source = rel(input);
+        gaps.retain(|g| g.0 != source);
+        gaps.push((
+            source,
+            Coverage::Partial,
+            format!(
+                "resolved by uv {uv} pip compile --no-build: the versions the index allows \
+                 today, not what is installed; commit a lockfile for exact versions"
+            ),
+        ));
+    }
+    for (input, error) in failed {
+        let source = rel(input);
+        let note = format!("uv {uv} could not resolve it: {error}");
+        match gaps.iter_mut().find(|g| g.0 == source) {
+            Some(gap) => gap.2 = format!("{}; {note}", gap.2),
+            None => gaps.push((source, Coverage::DirectOnly, note)),
+        }
+    }
+    gaps.sort();
+}
 
 /// Scan a repo with a toolchain-free Tier-C matcher: it reads the repo's lockfiles and
 /// matches each package version against the preloaded OSV DB, building nothing, so it needs

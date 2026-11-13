@@ -21,7 +21,7 @@ ecosystem, or a failed clone is an errored gap, listed in the report, never coun
 |----------|---------|
 | full | a lockfile with the whole resolved tree |
 | partial | `pip freeze` output, a `pom.xml` with an unresolved parent, `bun.lockb`, an SPDX SBOM |
-| direct-only | a requirements file with ranges, `.csproj` files without `project.assets.json` |
+| direct-only | a requirements file with ranges or a `pyproject.toml` with no lockfile (`scan --resolve-python` resolves these with uv), `.csproj` files without `project.assets.json` |
 
 What was read is still matched; the gap is named in the report with the reason. Pass
 `--require-full-coverage` to turn any label below full into exit 2. On the demo fleet's

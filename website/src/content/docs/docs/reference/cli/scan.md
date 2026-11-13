@@ -98,6 +98,12 @@ Options:
       --resolve-features
           mark findings built/phantom via cargo tree (needs buildable source)
 
+      --resolve-python
+          resolve unlocked Python dependency sets (requirements files with unpinned names, or a pyproject.toml with no lockfile) by running `uv pip compile --no-build` on each, so the scan sees transitive packages. uv contacts the package index (unless --offline), but never builds or runs package code, and the repo's own uv configuration is ignored. Resolved versions are what the index allows today, not what is installed.
+
+      --uv <PATH>
+          the uv binary for --resolve-python (default: search PATH and ~/.local/bin)
+
       --ignore-phantom
           suppress findings on phantom (unbuilt optional) deps; implies --resolve-features
 

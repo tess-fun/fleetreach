@@ -162,6 +162,7 @@ pub fn assemble_fresh(
             sandbox: SandboxPolicy::Off,
             vuln_db: None,
             offline: false,
+            python: None,
         },
         &Mirrors::default(),
     );

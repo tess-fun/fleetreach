@@ -57,6 +57,7 @@ mod osvdelta;
 pub mod osvrecords;
 pub mod overlay;
 pub mod py_reach;
+pub mod py_resolve;
 pub mod quality;
 pub mod reach;
 pub mod registry;

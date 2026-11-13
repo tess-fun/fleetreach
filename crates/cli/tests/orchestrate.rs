@@ -19,6 +19,7 @@ fn go() -> GoScan<'static> {
         sandbox: SandboxPolicy::Off,
         vuln_db: None,
         offline: false,
+        python: None,
     }
 }
 

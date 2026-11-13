@@ -8,7 +8,8 @@
 //! versions, never running `pip`/`poetry`/`uv` or any package's build, so it needs no
 //! untrusted-build consent and no sandbox.
 
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 use fleetreach_core::inventory::{Package, SourceInventory};
 use fleetreach_core::osv::{sort_dedup_findings, Match, TierCFinding, TierCScan};
@@ -59,7 +60,34 @@ pub fn scan_offline_with_coverage(
     db: &PyPiDb,
     repo: &RepoId,
 ) -> Result<PyPiScan, PyPiError> {
-    let source = read_sources(repo_dir)?;
+    scan_offline_resolved(repo_dir, db, repo, &BTreeMap::new())
+}
+
+/// The files a resolver should compile in `repo_dir` so its scan sees the full transitive set:
+/// each requirements file that is not already complete resolver output, else a
+/// `pyproject.toml` that declares dependencies. Empty when a lockfile or `pylock.toml` is the
+/// source, since those are read as they are.
+#[must_use]
+pub fn resolution_inputs(repo_dir: &Path) -> Vec<requirements::ResolutionInput> {
+    if detect(repo_dir).is_some() || !pylock::pylock_files(repo_dir).is_empty() {
+        return Vec::new();
+    }
+    requirements::resolution_inputs(repo_dir)
+}
+
+/// [`scan_offline_with_coverage`], reading a resolver's output (`uv pip compile` text) in
+/// place of each input in `resolved`, keyed by the paths [`resolution_inputs`] returned.
+///
+/// # Errors
+///
+/// As [`scan_offline`].
+pub fn scan_offline_resolved(
+    repo_dir: &Path,
+    db: &PyPiDb,
+    repo: &RepoId,
+    resolved: &BTreeMap<PathBuf, String>,
+) -> Result<PyPiScan, PyPiError> {
+    let source = read_sources(repo_dir, resolved)?;
     let installed = dedupe(source.packages);
     let graph = source.graph;
 
@@ -114,6 +142,7 @@ pub fn has_python_sources(dir: &Path) -> bool {
     detect(dir).is_some()
         || !pylock::pylock_files(dir).is_empty()
         || !requirements::requirements_files(dir).is_empty()
+        || requirements::pyproject_requirements(dir).is_some()
 }
 
 /// Every package the directory's preferred Python source declares, for SBOM output: the
@@ -123,7 +152,7 @@ pub fn has_python_sources(dir: &Path) -> bool {
 ///
 /// As [`scan_offline`].
 pub fn inventory(repo_dir: &Path) -> Result<SourceInventory, PyPiError> {
-    let source = read_sources(repo_dir)?;
+    let source = read_sources(repo_dir, &BTreeMap::new())?;
     let packages = dedupe(source.packages)
         .into_iter()
         .map(|p| Package::new(p.name, p.version, p.direct, p.dev))
@@ -148,7 +177,10 @@ struct Sources {
 
 /// Read the preferred source in `repo_dir`: a lockfile, else `pylock.toml` files, else
 /// requirements files.
-fn read_sources(repo_dir: &Path) -> Result<Sources, PyPiError> {
+fn read_sources(
+    repo_dir: &Path,
+    resolved: &BTreeMap<PathBuf, String>,
+) -> Result<Sources, PyPiError> {
     if let Some((kind, lock_path)) = detect(repo_dir) {
         let (packages, graph) = installed_packages(kind, &lock_path, repo_dir)?;
         return Ok(Sources {
@@ -174,9 +206,12 @@ fn read_sources(repo_dir: &Path) -> Result<Sources, PyPiError> {
             non_registry,
         });
     }
-    let files = requirements::requirements_files(repo_dir);
+    let mut files = requirements::requirements_files(repo_dir);
+    if files.is_empty() && requirements::pyproject_requirements(repo_dir).is_some() {
+        files.push(repo_dir.join("pyproject.toml"));
+    }
     if !files.is_empty() {
-        let read = requirements::read_dir(repo_dir)?;
+        let read = requirements::read_dir_resolved(repo_dir, resolved)?;
         return Ok(Sources {
             name: files
                 .iter()
@@ -194,7 +229,7 @@ fn read_sources(repo_dir: &Path) -> Result<Sources, PyPiError> {
         std::io::Error::new(
             std::io::ErrorKind::NotFound,
             "no recognized Python dependency file (uv.lock, poetry.lock, Pipfile.lock, \
-             pylock.toml or requirements*.txt)",
+             pylock.toml, requirements*.txt or a pyproject.toml with dependencies)",
         ),
     ))
 }

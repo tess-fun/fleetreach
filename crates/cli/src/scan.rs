@@ -120,6 +120,19 @@ pub(crate) struct ScanArgs {
         help = "mark findings built/phantom via cargo tree (needs buildable source)"
     )]
     resolve_features: bool,
+
+    #[arg(
+        long,
+        help = "resolve unlocked Python dependency sets (requirements files with unpinned names, or a pyproject.toml with no lockfile) by running `uv pip compile --no-build` on each, so the scan sees transitive packages. uv contacts the package index (unless --offline), but never builds or runs package code, and the repo's own uv configuration is ignored. Resolved versions are what the index allows today, not what is installed."
+    )]
+    resolve_python: bool,
+    #[arg(
+        long,
+        value_name = "PATH",
+        requires = "resolve_python",
+        help = "the uv binary for --resolve-python (default: search PATH and ~/.local/bin)"
+    )]
+    uv: Option<PathBuf>,
     #[arg(
         long,
         help = "suppress findings on phantom (unbuilt optional) deps; implies --resolve-features"
@@ -941,6 +954,8 @@ struct Feeds {
     host: Option<String>,
     go_govulncheck: Option<PathBuf>,
     go_db: Option<String>,
+    /// `--resolve-python`: the located, version-checked uv.
+    python: Option<crate::py_resolve::PyResolver>,
     osv_sources: BTreeMap<Ecosystem, osvdb::OsvSource>,
     /// The distro exports the images need, and the distro ecosystems with none.
     distro_sources: Vec<osvdb::DistroSource>,
@@ -978,6 +993,16 @@ impl Feeds {
         // an honest Errored gap (handled in orchestrate), never silently skipped.
         let go_govulncheck = if args.allow_untrusted_builds {
             locate_govulncheck(args.govulncheck.as_deref())
+        } else {
+            None
+        };
+        // Fail closed: --resolve-python without a usable uv stops the scan rather than
+        // reporting the unresolved files as if resolution had been asked for and done.
+        let python = if args.resolve_python {
+            Some(
+                crate::py_resolve::PyResolver::locate(args.uv.as_deref(), args.offline)
+                    .map_err(|e| fail(&e))?,
+            )
         } else {
             None
         };
@@ -1095,6 +1120,7 @@ impl Feeds {
             host,
             go_govulncheck,
             go_db,
+            python,
             osv_sources,
             distro_sources,
             distro_missing: distro_missing.into_iter().collect(),
@@ -1110,6 +1136,7 @@ impl Feeds {
             sandbox: args.build_sandbox.into(),
             vuln_db: self.go_db.as_deref(),
             offline: args.offline,
+            python: self.python.as_ref(),
         }
     }
 

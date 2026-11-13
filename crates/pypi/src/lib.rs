@@ -61,9 +61,9 @@ pub use error::{DbError, PyPiError};
 /// The OSV version-match outcome, shared with the other ecosystem feeders.
 pub use fleetreach_core::osv::Match;
 pub use lockfile::{detect, installed_packages, InstalledPackage, LockfileKind};
-pub use requirements::SourceCoverage;
+pub use requirements::{pyproject_requirements, ResolutionInput, SourceCoverage};
 pub use scan::{
-    has_python_sources, inventory, scan_installed, scan_offline, scan_offline_with_coverage,
-    PyPiScan,
+    has_python_sources, inventory, resolution_inputs, scan_installed, scan_offline,
+    scan_offline_resolved, scan_offline_with_coverage, PyPiScan,
 };
 pub use version::{normalize_name, parse_pypi_version, to_semver, Version};

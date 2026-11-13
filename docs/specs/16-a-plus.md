@@ -868,6 +868,17 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   71 of 109. Misses are Gradle module metadata (`-jvm` artifacts, BOM nodes) and a Kotlin version
   set by a convention plugin. Android builds need the Android SDK and Google's repository and
   are untested. Reading `.module` files is the next step.
+- **Result (1.7.0, Python)**: `scan --resolve-python` (named so, not `--resolve`, since the
+  consent is per ecosystem) on 185 repos (110 popular GitHub Python repos with no lockfile, by
+  their root manifests, plus the testbed): 143 sets, 90 resolved, 44 fail for a package with no
+  wheel (`--no-build` refuses it, by design), 9 unsatisfiable. An oracle reading the captured
+  `uv pip compile` output with pip's `packaging` against the osv.dev export found 69 vulnerable
+  pins; fleetreach reported all of them (4 differ only in display, `3.11` shown as `3.11.0`).
+  355 more PyPI findings in 14 repos, none lost. A fixed Linux target instead of `--universal`
+  resolved 91, so universal stays. Validation found a real risk and closed it: uv follows
+  `-r` anywhere on disk and quotes bad lines in its errors, so fleetreach now builds the input
+  and runs uv on stdin in an empty directory. Still open: Poetry-only `pyproject.toml` without
+  a lock, and a repo's `-e .` (its own pyproject could be substituted).
 
 #### 10. Container / OS packages (- to A+)
 
