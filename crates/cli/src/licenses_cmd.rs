@@ -124,6 +124,10 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
         .map(|repo| {
             let mut inv = repo_inventory_with(repo, maven.as_ref());
             annotate(&mut inv, &repo.path, &cache);
+            // Nothing here reads the dependency edges; a fleet's worth is most of the memory.
+            for source in &mut inv.sources {
+                source.edges = Vec::new();
+            }
             inv
         })
         .collect();
@@ -271,9 +275,18 @@ pub fn run_licenses(args: &LicensesArgs) -> u8 {
                 packages: &decisions,
                 unread: unread.clone(),
             };
-            match serde_json::to_string_pretty(&out) {
-                Ok(json) => println!("{json}"),
-                Err(e) => return fail(&e.to_string()),
+            // Written as it serializes: a fleet's package list runs to hundreds of megabytes.
+            let mut stdout = std::io::BufWriter::with_capacity(1 << 16, std::io::stdout().lock());
+            let written = serde_json::to_writer_pretty(&mut stdout, &out)
+                .map_err(|e| e.to_string())
+                .and_then(|()| {
+                    use std::io::Write;
+                    writeln!(stdout)
+                        .and_then(|()| stdout.flush())
+                        .map_err(|e| e.to_string())
+                });
+            if let Err(e) = written {
+                return fail(&e);
             }
         }
         LicenseFormat::Table => {
