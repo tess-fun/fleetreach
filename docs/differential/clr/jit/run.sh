@@ -9,6 +9,10 @@ root=$(git rev-parse --show-toplevel)
 ( cd hook && dotnet build -c Release -o out > /dev/null ) || { echo "hook build failed"; exit 1; }
 ( cd $root && cargo build -q --release -p fleetreach-clr --example clrreach ) || exit 1
 hook=$PWD/hook/out/JitHook.dll
+# The shared frameworks the apps run on: their interfaces say which methods the runtime
+# may call through.
+fw=()
+dotnet --list-runtimes | while read name ver dir; do fw+=(--framework "${${dir#\[}%\]}/$ver"); done
 apps=($@); (( $#apps )) || apps=(apps/*(/:t))
 for app in $apps; do
   dir=apps/$app
@@ -16,6 +20,6 @@ for app in $apps; do
     || { echo "$app: build failed (see $dir/build.log)"; continue; }
   JIT_OUT=$PWD/$dir/ran.txt DOTNET_STARTUP_HOOKS=$hook DOTNET_ReadyToRun=0 \
     dotnet $dir/out/$app.dll > $dir/run.log 2>&1
-  $root/target/release/examples/clrreach $app.dll $dir/out $dir/ran.txt > $dir/cmp.txt 2>/dev/null
+  $root/target/release/examples/clrreach $fw $app.dll $dir/out $dir/ran.txt > $dir/cmp.txt 2>/dev/null
   printf "%-11s %s | %s\n" $app "$(head -1 $dir/cmp.txt | cut -d';' -f1)" "$(sed -n 2p $dir/cmp.txt)"
 done

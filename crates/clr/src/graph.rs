@@ -60,6 +60,44 @@ pub struct Witness {
     pub steps: Vec<Step>,
 }
 
+/// The interfaces of assemblies outside the graph (the shared frameworks an image ships),
+/// by reflection name: the method names each declares and the interfaces it extends.
+///
+/// A method that starts a new slot on a type implementing an outside interface may be what
+/// that interface's callers land on. With the interface listed here, only a method of a name
+/// it (or an interface it extends) declares can be; an interface not listed may declare
+/// anything.
+#[derive(Debug, Default, Clone)]
+pub struct OutsideInterfaces {
+    map: HashMap<String, (HashSet<String>, Vec<String>)>,
+}
+
+impl OutsideInterfaces {
+    /// Add `assembly`'s interfaces. Several versions of one interface pool their names.
+    pub fn add(&mut self, assembly: &Assembly) {
+        for t in assembly.types.iter().filter(|t| t.is_interface()) {
+            let (names, bases) = self.map.entry(t.full_name.clone()).or_default();
+            names.extend(t.methods.iter().map(|m| m.name.clone()));
+            for i in &t.interfaces {
+                if !bases.contains(i) {
+                    bases.push(i.clone());
+                }
+            }
+        }
+    }
+
+    /// How many interfaces are listed.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+}
+
 type Sym = u32;
 type Id = u32;
 
@@ -182,6 +220,7 @@ impl std::fmt::Debug for Analysis<'_> {
 
 struct Walk<'g, 'a> {
     g: &'g Analysis<'a>,
+    outside: &'g OutsideInterfaces,
     /// Per type and method name, the type's methods of that name (overloads).
     members: HashMap<(u32, Sym), Vec<Id>>,
     /// Per type and method name, its explicit interface implementations (`IFoo.Bar`) of it.
@@ -224,6 +263,16 @@ pub fn analyze(inputs: &[(Assembly, Role)]) -> Analysis<'_> {
 /// `web.config`, `nlog.config`): reflection makes those types.
 #[must_use]
 pub fn analyze_with<'a>(inputs: &'a [(Assembly, Role)], config_names: &[String]) -> Analysis<'a> {
+    analyze_outside(inputs, config_names, &OutsideInterfaces::default())
+}
+
+/// [`analyze_with`], knowing the interfaces of the shared frameworks the service runs on.
+#[must_use]
+pub fn analyze_outside<'a>(
+    inputs: &'a [(Assembly, Role)],
+    config_names: &[String],
+    outside: &OutsideInterfaces,
+) -> Analysis<'a> {
     let mut g = Analysis {
         inputs,
         types: Vec::new(),
@@ -266,7 +315,7 @@ pub fn analyze_with<'a>(inputs: &'a [(Assembly, Role)], config_names: &[String])
             first += u32::try_from(ty.methods.len()).unwrap_or(u32::MAX);
         }
     }
-    let mut walk = Walk::new(&g);
+    let mut walk = Walk::new(&g, outside);
     walk.seed(config_names);
     walk.run();
     let Walk {
@@ -453,7 +502,7 @@ fn type_words(s: &str) -> impl Iterator<Item = &str> {
 }
 
 impl<'g, 'a> Walk<'g, 'a> {
-    fn new(g: &'g Analysis<'a>) -> Self {
+    fn new(g: &'g Analysis<'a>, outside: &'g OutsideInterfaces) -> Self {
         let mut members: HashMap<(u32, Sym), Vec<Id>> = HashMap::new();
         let mut explicit_members: HashMap<(u32, Sym), Vec<Id>> = HashMap::new();
         for (ti, t) in g.types.iter().enumerate() {
@@ -470,6 +519,7 @@ impl<'g, 'a> Walk<'g, 'a> {
         }
         let mut walk = Walk {
             g,
+            outside,
             members,
             explicit: explicit_members,
             ancestors: Vec::new(),
@@ -530,24 +580,45 @@ impl<'g, 'a> Walk<'g, 'a> {
         out
     }
 
-    /// Whether `t` reaches a type outside the graph, or a framework-family one, through its
-    /// interfaces.
-    fn has_outside_interface(&self, t: u32) -> bool {
-        let mut seen = HashSet::new();
+    /// Whether an interface `t` (or a base type of it) implements from outside the graph, or
+    /// from a framework-family assembly, may declare a method named `name`: one the
+    /// [`OutsideInterfaces`] do not list may declare anything.
+    fn outside_may_declare(&self, t: u32, name: &str) -> bool {
+        let mut todo: Vec<&'g str> = Vec::new();
+        let mut seen_types = HashSet::new();
         let mut stack = vec![t];
         while let Some(t) = stack.pop() {
-            if !seen.insert(t) {
+            if !seen_types.insert(t) {
                 continue;
             }
             let ty = self.g.types[t as usize].ty;
-            for i in &ty.interfaces {
-                let inside = self.sym(i).map_or(&[][..], |s| self.types_named(s));
-                if inside.is_empty() || inside.iter().any(|&x| self.g.types[x as usize].framework) {
-                    return true;
-                }
-            }
+            todo.extend(ty.interfaces.iter().map(String::as_str));
             if let Some(base) = ty.extends.as_deref().and_then(|b| self.sym(b)) {
                 stack.extend_from_slice(self.types_named(base));
+            }
+        }
+        let mut seen = HashSet::new();
+        while let Some(i) = todo.pop() {
+            if !seen.insert(i) {
+                continue;
+            }
+            let inside = self.sym(i).map_or(&[][..], |s| self.types_named(s));
+            if inside.is_empty() {
+                let Some((names, bases)) = self.outside.map.get(i) else {
+                    return true;
+                };
+                if names.contains(name) {
+                    return true;
+                }
+                todo.extend(bases.iter().map(String::as_str));
+                continue;
+            }
+            for &x in inside {
+                let info = &self.g.types[x as usize];
+                if info.framework && info.ty.methods.iter().any(|m| m.name == name) {
+                    return true;
+                }
+                todo.extend(info.ty.interfaces.iter().map(String::as_str));
             }
         }
         false
@@ -867,7 +938,7 @@ impl<'g, 'a> Walk<'g, 'a> {
             let own = self.members.get(&(x, name)).map_or(&[][..], Vec::as_slice);
             own.iter().any(|&id| {
                 let (_, d) = self.g.method(id);
-                !d.is_static() && (!d.is_new_slot() || self.has_outside_interface(x))
+                !d.is_static() && (!d.is_new_slot() || self.outside_may_declare(x, &m.name))
             })
         })
     }

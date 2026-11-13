@@ -144,3 +144,114 @@ fn verdicts_follow_the_jvm_rules() {
         Verdict::Unknown(Why::NoEntryPoints)
     );
 }
+
+fn method(name: &str, flags: u16, ops: Vec<fleetreach_clr::Op>) -> fleetreach_clr::Method {
+    fleetreach_clr::Method {
+        name: name.into(),
+        flags,
+        body: Some((1, ops)),
+        type_args: Vec::new(),
+        mentions: Vec::new(),
+        params: Vec::new(),
+    }
+}
+
+fn class(
+    name: &str,
+    interfaces: &[&str],
+    methods: Vec<fleetreach_clr::Method>,
+) -> fleetreach_clr::Type {
+    fleetreach_clr::Type {
+        full_name: name.into(),
+        flags: 0x0001,
+        extends: Some("System.Object".into()),
+        interfaces: interfaces.iter().map(|s| (*s).to_string()).collect(),
+        methods,
+        field_types: Vec::new(),
+        attributes: Vec::new(),
+        attribute_text: Vec::new(),
+    }
+}
+
+fn assembly(name: &str, types: Vec<fleetreach_clr::Type>) -> Assembly {
+    Assembly {
+        name: name.into(),
+        references: Vec::new(),
+        types,
+        attributes: Vec::new(),
+        attribute_text: Vec::new(),
+    }
+}
+
+// A method starting a new slot on a type that implements an outside interface is the
+// runtime's way in only under a name that interface declares, once its members are known.
+#[test]
+fn a_new_slot_is_outside_only_under_a_name_the_outside_interface_declares() {
+    use fleetreach_clr::graph::{analyze_outside, OutsideInterfaces};
+    use fleetreach_clr::{Invoke, Op, Target};
+    // public virtual newslot, and the constructor.
+    const NEW_SLOT: u16 = 0x0006 | 0x0040 | 0x0100;
+    let make = Op::Invoke {
+        kind: Invoke::NewObj,
+        target: Target {
+            type_name: "Lib.Widget".into(),
+            name: ".ctor".into(),
+        },
+    };
+    let inputs = vec![
+        (
+            assembly(
+                "App",
+                vec![class(
+                    "App.Program",
+                    &[],
+                    vec![method("Main", 0x0010, vec![make])],
+                )],
+            ),
+            Role::App,
+        ),
+        (
+            assembly(
+                "Lib",
+                vec![class(
+                    "Lib.Widget",
+                    &["System.IDisposable"],
+                    vec![
+                        method(".ctor", 0x0006, Vec::new()),
+                        method("Dispose", NEW_SLOT, Vec::new()),
+                        method("Accept", NEW_SLOT, Vec::new()),
+                    ],
+                )],
+            ),
+            Role::Dependency,
+        ),
+    ];
+    // Without the framework, IDisposable may declare anything.
+    let a = analyze(&inputs);
+    assert!(a.witness("Lib.Widget", "Accept").is_some());
+    assert!(a.witness("Lib.Widget", "Dispose").is_some());
+    let mut outside = OutsideInterfaces::default();
+    outside.add(&assembly(
+        "System.Runtime",
+        vec![fleetreach_clr::Type {
+            flags: 0x00a1, // public abstract interface
+            extends: None,
+            ..class(
+                "System.IDisposable",
+                &[],
+                vec![method(
+                    "Dispose",
+                    0x0400 | 0x0040 | 0x0100 | 0x0006,
+                    Vec::new(),
+                )],
+            )
+        }],
+    ));
+    assert_eq!(outside.len(), 1);
+    let a = analyze_outside(&inputs, &[], &outside);
+    assert!(a.witness("Lib.Widget", "Dispose").is_some());
+    assert!(
+        a.witness("Lib.Widget", "Accept").is_none(),
+        "IDisposable declares no Accept"
+    );
+}

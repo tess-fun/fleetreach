@@ -2,23 +2,49 @@
 //! runtime ran (the JIT-event oracle, docs/differential/clr/jit): every method that ran in
 //! one of the folder's assemblies should be in the graph.
 //!
-//! `clrreach APP.dll DIR [RAN.txt]`: APP.dll is the service's own assembly, every other
-//! `*.dll` in DIR a dependency. Without RAN.txt, prints the graph's size only.
+//! `clrreach [--framework DIR]... APP.dll DIR [RAN.txt]`: APP.dll is the service's own
+//! assembly, every other `*.dll` in DIR a dependency. Each `--framework` folder (a shared
+//! framework such as `shared/Microsoft.NETCore.App/10.0.9`) gives the interfaces the
+//! runtime calls through. Without RAN.txt, prints the graph's size only.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::time::Instant;
 
-use fleetreach_clr::graph::{analyze, Role};
+use fleetreach_clr::graph::{analyze_outside, OutsideInterfaces, Role};
 
 fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = Vec::new();
+    let mut frameworks: Vec<String> = Vec::new();
+    let mut it = std::env::args().skip(1);
+    while let Some(a) = it.next() {
+        if a == "--framework" {
+            frameworks.extend(it.next());
+        } else {
+            args.push(a);
+        }
+    }
     let [app, dir, rest @ ..] = args.as_slice() else {
-        eprintln!("usage: clrreach APP.dll DIR [RAN.txt]");
+        eprintln!("usage: clrreach [--framework DIR]... APP.dll DIR [RAN.txt]");
         std::process::exit(2);
     };
     let start = Instant::now();
+    let mut outside = OutsideInterfaces::default();
+    for fw in &frameworks {
+        for e in std::fs::read_dir(fw).into_iter().flatten().flatten() {
+            let p = e.path();
+            if p.extension().and_then(|e| e.to_str()) != Some("dll") {
+                continue;
+            }
+            if let Some(a) = std::fs::read(&p)
+                .ok()
+                .and_then(|b| fleetreach_clr::read(&b).ok())
+            {
+                outside.add(&a);
+            }
+        }
+    }
     let mut inputs = Vec::new();
     // The whole tree: `runtimes/<rid>/lib/` holds platform builds that replace the top
     // level's.
@@ -56,7 +82,7 @@ fn main() {
         }
     }
     let read = start.elapsed();
-    let analysis = analyze(&inputs);
+    let analysis = analyze_outside(&inputs, &[], &outside);
     let walked = start.elapsed() - read;
     println!(
         "{} assemblies, {} methods, {} reached, {} roots, {} open reflection; read {:.0?}, graph {:.0?}",

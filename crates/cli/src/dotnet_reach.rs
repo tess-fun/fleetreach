@@ -6,14 +6,16 @@
 //! once from the services' entry points. A service is a folder holding a `*.deps.json`, as
 //! `dotnet publish` writes it: its own assembly and the deps file's `project` libraries are the
 //! service's code. Type names in its configuration files (`appsettings*.json`, `*.config`) are
-//! made, since reflection loads them. Every bundled NuGet record is judged against that graph,
+//! made, since reflection loads them. The shared frameworks' assemblies are read for their
+//! interfaces only: a method can be the runtime's way in only under a name an outside interface
+//! declares. Every bundled NuGet record is judged against that graph,
 //! and a NuGet finding takes the verdict of its advisory's record in each image it occurs in,
 //! combined as for the JVM (`graph_reach`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
 
-use fleetreach_clr::graph::{analyze_with, Role, Root};
+use fleetreach_clr::graph::{analyze_outside, OutsideInterfaces, Role, Root};
 use fleetreach_clr::verdict::{judge, Verdict, Why};
 use fleetreach_core::{Ecosystem, FleetReport, RepoId};
 use fleetreach_os::image::DotnetAssemblies;
@@ -29,10 +31,12 @@ const CONFIG: &str = "image assemblies";
 /// One graph at a time, as for the JVM.
 static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
 
-/// Whether the image reader should keep a file for this engine: assemblies (written out) and
-/// the configuration files whose type names reflection loads.
+/// Whether the image reader should keep a file for this engine: assemblies and the shared
+/// frameworks' (written out) and the configuration files whose type names reflection loads.
 pub(crate) fn wanted(path: &str) -> bool {
-    fleetreach_os::image::is_assembly(path) || is_config(path)
+    fleetreach_os::image::is_assembly(path)
+        || fleetreach_os::image::is_framework_assembly(path)
+        || is_config(path)
 }
 
 /// `appsettings.json`, `appsettings.Production.json`, `web.config`, `App.dll.config`,
@@ -135,8 +139,19 @@ pub(crate) fn analyze_image(fs: &ImageFs, set: &SinkSet) -> GraphOutcome {
             Err(e) => unread.push(format!("{path}: {e}")),
         }
     }
+    // The shared frameworks' interfaces: a framework assembly that cannot be read leaves its
+    // interfaces unknown, which only keeps more methods reached.
+    let mut outside = OutsideInterfaces::default();
+    for (_, file) in &assemblies.framework {
+        if let Some(a) = std::fs::read(file)
+            .ok()
+            .and_then(|b| fleetreach_clr::read(&b).ok())
+        {
+            outside.add(&a);
+        }
+    }
     let names = config_names(fs, &services);
-    let analysis = analyze_with(&inputs, &names);
+    let analysis = analyze_outside(&inputs, &names, &outside);
     let partial = !unread.is_empty() || !assemblies.missing.is_empty();
     let verdicts = set
         .records
@@ -168,6 +183,13 @@ pub(crate) fn analyze_image(fs: &ImageFs, set: &SinkSet) -> GraphOutcome {
         .flat_map(|(dir, own)| own.iter().map(move |n| format!("{dir}/{n}")))
         .collect();
     rule.extend(names);
+    // A framework is named by its versioned folder, so its paths stand for its content.
+    rule.extend(
+        assemblies
+            .framework
+            .iter()
+            .map(|(p, _)| format!("framework:{p}")),
+    );
     Ok(ImageGraph {
         verdicts,
         inputs: inputs_hash(&assemblies.files, &rule)?,

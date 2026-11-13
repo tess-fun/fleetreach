@@ -1448,8 +1448,22 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   findings, all on Microsoft's own SDK and ASP.NET runtime images (System.Security.Cryptography.Xml,
   NuGet.Packaging, Microsoft.Build.Tasks.Core), none with a record, so no verdicts; the pass
   costs 0.35s and 140 MB over the whole fleet and leaves every other finding identical.
-  **Still open**: yield on images that ship third-party .NET apps (none are cached; pulling
-  them is a download to ask for).
+  Second run (2026-11-13, user-approved pull of 11 public .NET app images: Jellyfin latest and
+  10.8.13, Sonarr, Radarr, Lidarr, Prowlarr, Jackett, Squidex, Duplicati, Kavita, EventStore;
+  nopCommerce refused anonymous pulls): 42 NuGet findings, 6 with a record, 5 reached with a
+  witness (four ImageSharp encoder/decoder records in the *arr apps and Squidex, AutoMapper in
+  Kavita), 1 unknown (SkiaSharp, a native record), none not reached. Of the 36 without a
+  record, 25 are Microsoft runtime and BCL advisories with no fix commit (outside the
+  proposer's reach) and 8 are third-party with commits (SharpCompress, MySqlConnector,
+  OpenTelemetry, Swashbuckle UI, two medium ImageSharp, SQLitePCLRaw native, one runtime).
+  The run found a precision gap: a new-slot method on a type implementing any outside
+  interface counted as the runtime's way in, so `Image<T>.Accept` (ImageSharp; `Image` is
+  `IDisposable`) was reached as soon as an image was made and the witness skipped real hops.
+  The graph now reads the image's shared-framework assemblies for their interfaces only
+  (`OutsideInterfaces`) and keeps such a method only under a name an outside interface
+  declares; an interface it cannot read may still declare anything. JIT oracle unchanged at 0
+  missed, the witnesses now follow real calls (`Mutate`, `AcceptVisitor`, `Accept`,
+  `EncodeVisitor.Visit`), every other finding identical over the 224 cached images.
 
 #### 14. Import-graph witness chains (A- to A+)
 

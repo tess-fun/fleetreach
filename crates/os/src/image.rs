@@ -52,7 +52,7 @@ fn file_limit(path: &str) -> u64 {
 fn kept(path: &str, data: Vec<u8>) -> Vec<u8> {
     if crate::jar::is_archive(path) {
         crate::jar::digest(path, &data)
-    } else if is_assembly(path) {
+    } else if is_assembly(path) || is_framework_assembly(path) {
         Vec::new()
     } else {
         data
@@ -74,6 +74,21 @@ pub fn is_assembly(path: &str) -> bool {
         .iter()
         .any(|p| lower.contains(p))
         && !lower.starts_with("shared/microsoft.")
+}
+
+/// An assembly of one of the .NET runtime's shared frameworks (`Microsoft.NETCore.App`,
+/// `Microsoft.AspNetCore.App`): outside a service's call graph, but its interfaces say which
+/// of a service's methods the runtime may call.
+#[must_use]
+pub fn is_framework_assembly(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".dll")
+        && (lower.contains("/shared/microsoft.") || lower.starts_with("shared/microsoft."))
+}
+
+/// A service's assembly or a shared framework's.
+fn is_any_assembly(path: &str) -> bool {
+    is_assembly(path) || is_framework_assembly(path)
 }
 
 /// What is at a path in the merged image.
@@ -150,6 +165,9 @@ pub struct DotnetAssemblies {
     pub files: Vec<(String, PathBuf)>,
     /// Assemblies in the image that are not among `files`, as `path: reason`.
     pub missing: Vec<String>,
+    /// The shared frameworks' assemblies written out, by image path (see
+    /// [`is_framework_assembly`]). One that could not be written is simply not here.
+    pub framework: Vec<(String, PathBuf)>,
 }
 
 /// One layer as the image's config describes it.
@@ -593,7 +611,7 @@ impl ImageFs {
         }
         let extension = if crate::jar::is_archive(path) {
             "jar"
-        } else if is_assembly(path) {
+        } else if is_any_assembly(path) {
             "dll"
         } else {
             return;
@@ -655,7 +673,12 @@ impl ImageFs {
     #[must_use]
     pub fn dotnet_assemblies(&self) -> DotnetAssemblies {
         let (files, missing) = self.spilled(is_assembly);
-        DotnetAssemblies { files, missing }
+        let (framework, _) = self.spilled(is_framework_assembly);
+        DotnetAssemblies {
+            files,
+            missing,
+            framework,
+        }
     }
 
     /// The written-out files whose path `kind` accepts, and those of that kind missing.
@@ -1202,8 +1225,9 @@ pub fn open_spilling(
     open_with(path, want, platform, Some((dir, crate::jar::is_archive)))
 }
 
-/// [`open`], also writing every wanted .NET assembly (see [`is_assembly`]) into `dir`, for a
-/// call graph over the image's .NET code: [`ImageFs::dotnet_assemblies`] lists them.
+/// [`open`], also writing every wanted .NET assembly (see [`is_assembly`] and
+/// [`is_framework_assembly`]) into `dir`, for a call graph over the image's .NET code:
+/// [`ImageFs::dotnet_assemblies`] lists them.
 ///
 /// # Errors
 ///
@@ -1214,7 +1238,7 @@ pub fn open_spilling_assemblies(
     platform: Option<&str>,
     dir: &Path,
 ) -> Result<ImageFs, OsError> {
-    open_with(path, want, platform, Some((dir, is_assembly)))
+    open_with(path, want, platform, Some((dir, is_any_assembly)))
 }
 
 fn open_with(
@@ -1498,7 +1522,24 @@ mod tests {
             .map(|(p, _)| p)
             .collect();
         assert_eq!(jars, ["app/lib.jar"]);
+        // The shared framework's assemblies are written out apart, for their interfaces.
+        let framework: Vec<String> = fs
+            .dotnet_assemblies()
+            .framework
+            .into_iter()
+            .map(|(p, _)| p)
+            .collect();
+        assert_eq!(
+            framework,
+            ["usr/share/dotnet/shared/Microsoft.NETCore.App/8.0.1/System.Text.Json.dll"]
+        );
         assert!(is_assembly("App/X.DLL") && !is_assembly("app/x.dll.config"));
+        assert!(is_framework_assembly(
+            "shared/Microsoft.AspNetCore.App/8.0.1/Microsoft.AspNetCore.Http.dll"
+        ));
+        assert!(!is_framework_assembly(
+            "usr/share/dotnet/sdk/8.0.100/NuGet.Packaging.dll"
+        ));
     }
 
     fn archive_text(fs: &ImageFs) -> Vec<(String, Vec<u8>)> {
