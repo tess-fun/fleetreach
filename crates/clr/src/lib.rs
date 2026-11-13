@@ -28,7 +28,7 @@ pub mod propose;
 mod sig;
 pub mod verdict;
 
-use std::collections::HashMap;
+use foldhash::{HashMap, HashMapExt};
 
 pub use il::Invoke;
 use il::Raw;

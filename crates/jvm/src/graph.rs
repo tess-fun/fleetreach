@@ -1,7 +1,9 @@
 //! A rapid type analysis call graph, walked from a service's entry points: a virtual call
 //! lands only on classes the graph has seen an instance of, or that something makes by name.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::VecDeque;
+
+use foldhash::{HashMap, HashMapExt, HashSet, HashSetExt};
 
 use crate::classpath::ClassPath;
 use crate::model::{CallKind, Class, Method, Op, Role, Sym};

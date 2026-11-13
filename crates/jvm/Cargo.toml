@@ -18,4 +18,6 @@ workspace = true
 cafebabe = "0.9"
 fleetreach-sinks = { path = "../sinks", version = "1.6.0" }
 thiserror = { workspace = true }
+# Seeded per process, so names in a crafted class cannot flood one bucket.
+foldhash = "0.2"
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }

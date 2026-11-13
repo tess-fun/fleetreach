@@ -1046,6 +1046,7 @@ name = "fleetreach-clr"
 version = "1.6.0"
 dependencies = [
  "fleetreach-sinks",
+ "foldhash 0.2.0",
  "serde_json",
  "thiserror",
 ]
@@ -1125,6 +1126,7 @@ version = "1.6.0"
 dependencies = [
  "cafebabe",
  "fleetreach-sinks",
+ "foldhash 0.2.0",
  "thiserror",
  "zip",
 ]

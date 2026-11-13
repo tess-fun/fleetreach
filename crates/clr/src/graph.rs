@@ -20,7 +20,9 @@
 //! `MethodBase.Invoke`, ...) are listed in [`Analysis::open_reflection`]: what they load is
 //! outside the graph, so "not reached" means "not reached in this graph".
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::VecDeque;
+
+use foldhash::{HashMap, HashMapExt, HashSet, HashSetExt};
 
 use crate::{Assembly, Invoke, Method, Op, Type};
 

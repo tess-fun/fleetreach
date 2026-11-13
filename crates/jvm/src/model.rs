@@ -1,6 +1,6 @@
 //! The parts of a class file a call graph needs, with names interned.
 
-use std::collections::HashMap;
+use foldhash::HashMap;
 
 /// An interned string.
 pub type Sym = u32;

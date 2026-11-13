@@ -210,6 +210,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Faster .NET and JVM graphs.** An image's .NET assemblies are parsed on all cores (graphs
+  still run one at a time, to bound memory), and both call graphs hash with foldhash, seeded per
+  process so names in a crafted image cannot pile into one bucket, instead of SipHash. On the 11
+  .NET app images `scan --reachability=dotnet` takes 9.2 s instead of 16.5 s at the same peak
+  memory; a 216-jar JVM graph 2.6 s instead of 3.0 s. Output is byte-identical.
 - **Less memory reading OSV exports.** The `all.zip` exports are now read member by member
   from disk with an in-house ZIP reader (ZIP64 included, every member checked against its size
   and CRC-32), instead of holding the whole archive and an index of every member name in

@@ -154,9 +154,8 @@ pub(crate) fn analyze_image(fs: &ImageFs, set: &SinkSet) -> GraphOutcome {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut inputs = Vec::new();
     let mut unread = Vec::new();
-    for (path, file) in &assemblies.files {
-        let bytes = std::fs::read(file).map_err(|e| format!("{path}: {e}"))?;
-        match fleetreach_clr::read(&bytes) {
+    for ((path, _), read) in assemblies.files.iter().zip(read_all(&assemblies.files)) {
+        match read? {
             Ok(assembly) => {
                 let name = path.rsplit('/').next().unwrap_or(path);
                 let stem = name
@@ -235,6 +234,51 @@ pub(crate) fn analyze_image(fs: &ImageFs, set: &SinkSet) -> GraphOutcome {
         inputs: inputs_hash(&assemblies.files, &rule)?,
         summary,
     })
+}
+
+/// Read and parse every spilled assembly, in order, on scoped threads of their own: the
+/// caller is a rayon worker holding `ONE_AT_A_TIME`, and rayon work started from it could
+/// steal another image's job, which would wait on that lock forever.
+#[allow(clippy::type_complexity)]
+fn read_all(
+    files: &[(String, std::path::PathBuf)],
+) -> Vec<Result<Result<fleetreach_clr::Assembly, fleetreach_clr::ClrError>, String>> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let threads = std::thread::available_parallelism()
+        .map_or(4, std::num::NonZeroUsize::get)
+        .min(files.len().max(1));
+    let next = AtomicUsize::new(0);
+    let read_one = |(path, file): &(String, std::path::PathBuf)| {
+        let bytes = std::fs::read(file).map_err(|e| format!("{path}: {e}"))?;
+        Ok(fleetreach_clr::read(&bytes))
+    };
+    let mut done: Vec<(usize, _)> = std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..threads)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut out = Vec::new();
+                    loop {
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(f) = files.get(i) else { break };
+                        out.push((i, read_one(f)));
+                    }
+                    out
+                })
+            })
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|w| {
+                w.join()
+                    .unwrap_or_else(|_| vec![(usize::MAX, Err("a reader thread failed".into()))])
+            })
+            .collect()
+    });
+    done.sort_by_key(|(i, _)| *i);
+    if done.len() != files.len() || done.iter().any(|(i, _)| *i == usize::MAX) {
+        return vec![Err("a reader thread failed".to_string())];
+    }
+    done.into_iter().map(|(_, r)| r).collect()
 }
 
 /// The assemblies the image's deps files say `record_packages` ship, or `None` when no deps

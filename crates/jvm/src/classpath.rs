@@ -1,6 +1,6 @@
 //! Read a service's classes and resources from jars, wars, fat jars and class directories.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::io::{Cursor, Read, Seek};
 use std::path::{Path, PathBuf};
 
@@ -11,6 +11,8 @@ use cafebabe::constant_pool::{
 };
 use cafebabe::descriptors::FieldType;
 use cafebabe::{ClassAccessFlags, MethodAccessFlags, ParseOptions};
+
+use foldhash::HashMap;
 
 use crate::model::{CallKind, Class, Interner, Method, Op, Role, Sym};
 
