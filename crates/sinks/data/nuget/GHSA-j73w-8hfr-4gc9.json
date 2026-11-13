@@ -89,6 +89,22 @@
       "method": "SetWorkingDirectory"
     },
     {
+      "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
+      "method": ".ctor"
+    },
+    {
+      "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
+      "method": "Equals"
+    },
+    {
+      "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
+      "method": "GetHashCode"
+    },
+    {
+      "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
+      "method": "ToString"
+    },
+    {
       "class": "AlastairLundy.CliInvoke.Extensibility.Factories.RunnerProcessFactory",
       "method": ".ctor"
     },
@@ -107,6 +123,26 @@
       "https://github.com/alastairlundy/CliInvoke/commit/fac321c7cc9cf4372919842701829ca2be5e7307"
     ],
     "excluded": [
+      {
+        "class": "AlastairLundy.CliInvoke.Core.ArgumentTokenizer",
+        "method": "Tokenize",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
+        "method": ".cctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
+        "method": "get_ArgumentList",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
+        "method": "set_ArgumentList",
+        "reason": "added by the fix"
+      },
       {
         "class": "AlastairLundy.CliInvoke.Extensibility.Factories.RunnerProcessFactory",
         "method": ".cctor",

@@ -56,6 +56,18 @@
       "method": "Get"
     },
     {
+      "class": "Recurly.Accounts",
+      "method": "Close"
+    },
+    {
+      "class": "Recurly.Accounts",
+      "method": "Get"
+    },
+    {
+      "class": "Recurly.Accounts",
+      "method": "Reopen"
+    },
+    {
       "class": "Recurly.AddOn",
       "method": "Create"
     },
@@ -74,6 +86,10 @@
     {
       "class": "Recurly.Adjustment",
       "method": "Delete"
+    },
+    {
+      "class": "Recurly.Adjustments",
+      "method": "Get"
     },
     {
       "class": "Recurly.BillingInfo",
@@ -100,12 +116,32 @@
       "method": "Redeem"
     },
     {
+      "class": "Recurly.Coupons",
+      "method": "Get"
+    },
+    {
+      "class": "Recurly.Exports",
+      "method": "DownloadExportFile"
+    },
+    {
+      "class": "Recurly.GiftCards",
+      "method": "Get"
+    },
+    {
       "class": "Recurly.Invoice",
       "method": "Create"
     },
     {
       "class": "Recurly.Invoice",
       "method": "Preview"
+    },
+    {
+      "class": "Recurly.Invoices",
+      "method": "Create"
+    },
+    {
+      "class": "Recurly.Invoices",
+      "method": "List"
     },
     {
       "class": "Recurly.MeasuredUnit",
@@ -126,6 +162,10 @@
     {
       "class": "Recurly.Plan",
       "method": "Update"
+    },
+    {
+      "class": "Recurly.Plans",
+      "method": "Get"
     },
     {
       "class": "Recurly.Subscription",
@@ -160,8 +200,16 @@
       "method": "UpdateNotes"
     },
     {
+      "class": "Recurly.Subscriptions",
+      "method": "Get"
+    },
+    {
       "class": "Recurly.Transaction",
       "method": "Refund"
+    },
+    {
+      "class": "Recurly.Transactions",
+      "method": "Get"
     }
   ],
   "evidence": {
