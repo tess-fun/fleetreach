@@ -8,7 +8,7 @@
   "packages": [
     "elFinder.AspNet"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -23,7 +23,12 @@
   "evidence": {
     "commits": [
       "https://github.com/mguinness/elFinder.AspNet/commit/675049b39284a9e84f0915c71d688da8ebc7d720"
-    ]
+    ],
+    "excluded": []
   },
-  "note": "Proposed from the IL diff of elFinder.AspNet 1.1.0 -> 1.1.1 (netstandard2.0): methods of the files the fix commits changed."
+  "note": "From the 1.1.0 -> 1.1.1 IL diff. FileSystemDriver.ExtractAsync writes archive entries and RenameAsync takes a new name, both without keeping the result under the root; 1.1.1 checks both. Reached wherever the app serves elFinder with the file system driver.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

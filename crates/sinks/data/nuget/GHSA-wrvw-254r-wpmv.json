@@ -9,7 +9,7 @@
     "AlastairLundy.CliInvoke.Specializations",
     "CliInvoke.Specializations"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -21,15 +21,54 @@
       "method": ".ctor"
     },
     {
-      "class": "AlastairLundy.CliInvoke.Specializations.Configurations.PowershellProcessConfiguration",
-      "method": "GetUnixInstallLocation"
+      "class": "AlastairLundy.CliInvoke.Specializations.Configurations.CmdCommandConfiguration",
+      "method": ".ctor"
+    },
+    {
+      "class": "AlastairLundy.CliInvoke.Specializations.Configurations.PowershellCommandConfiguration",
+      "method": ".ctor"
+    },
+    {
+      "class": "AlastairLundy.CliInvoke.Specializations.Configurations.ClassicPowershellCommandConfiguration",
+      "method": ".ctor"
+    },
+    {
+      "class": "CliInvoke.Specializations.Configurations.CmdProcessConfiguration",
+      "method": ".ctor"
+    },
+    {
+      "class": "CliInvoke.Specializations.Configurations.PowershellProcessConfiguration",
+      "method": ".ctor"
+    },
+    {
+      "class": "CliInvoke.Specializations.Configurations.ClassicPowershellProcessConfiguration",
+      "method": ".ctor"
+    },
+    {
+      "class": "CliInvoke.Specializations.Middleware.CmdMiddleware",
+      "method": "InvokeAsync"
+    },
+    {
+      "class": "CliInvoke.Specializations.Middleware.PowerShellMiddleware",
+      "method": "InvokeAsync"
     }
   ],
   "evidence": {
     "commits": [
       "https://github.com/alastairlundy/CliInvoke/commit/1e98582f02eb43e345e5b97b8dd6ff9443806685",
       "https://github.com/alastairlundy/CliInvoke/commit/2077e5239850e83dc9cc67ae6036dcd4e68a1876"
+    ],
+    "excluded": [
+      {
+        "class": "AlastairLundy.CliInvoke.Specializations.Configurations.PowershellProcessConfiguration",
+        "method": "GetUnixInstallLocation",
+        "reason": "finds the shell, does not build the command"
+      }
     ]
   },
-  "note": "Proposed from the IL diff of AlastairLundy.CliInvoke.Specializations 2.0.0 -> 2.0.2 (net8.0): methods of the files the fix commits changed."
+  "note": "The wrappers re-run the caller's target and arguments inside a pwsh -Command or cmd /c string. The classes that build it are renamed in every line: *CommandConfiguration in AlastairLundy 1.x, *ProcessConfiguration in 2.0.0 and in the renamed CliInvoke.Specializations package, and the UseCmd/UsePowerShell middleware in 3.0 previews. Classic PowerShell wraps the same way. Each affected line holds 2 to 4 of these. Reached wherever the app runs a command through these wrappers.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

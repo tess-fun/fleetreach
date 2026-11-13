@@ -8,7 +8,7 @@
   "packages": [
     "elFinder.Net.Core"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -47,5 +47,9 @@
       }
     ]
   },
-  "note": "Proposed from the IL diff of elFinder.Net.Core 1.2.3 -> 1.2.4 (netstandard2.0): methods of the files the fix commits changed."
+  "note": "From the 1.2.3 -> 1.2.4 IL diff. Connector.ProcessCoreAsync handles every command and now parses the put command's target path; PathInfo is built for every path a command names. 1.0.0 lacks ProcessCoreAsync but builds PathInfo. Reached wherever the app serves an elFinder connector.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

@@ -8,13 +8,9 @@
   "packages": [
     "DotNetNuke.Core"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
-    {
-      "class": "DotNetNuke.Entities.Portals.PortalSettingsController",
-      "method": "LoadPortalSettings"
-    },
     {
       "class": "DotNetNuke.Entities.Tabs.TabModulesController",
       "method": "GetTabModules"
@@ -64,8 +60,18 @@
         "class": "DotNetNuke.Entities.Portals.PortalSettings",
         "method": "set_AllowJsInModuleHeaders",
         "reason": "added by the fix"
+      },
+      {
+        "class": "DotNetNuke.Entities.Portals.PortalSettingsController",
+        "method": "LoadPortalSettings",
+        "reason": "settings for the new sanitizer options, not the output"
       }
     ]
   },
-  "note": "Proposed from the IL diff of DotNetNuke.Core 10.1.2 -> 10.2.0 (net48): methods of the files the fix commits changed."
+  "note": "From the 10.1.2 -> 10.2.0 IL diff. TabModulesController.GetTabModules loads module titles, which 10.2.0 sanitizes. The DNN platform loads modules for every page, so an extension or site reaches this without any call of its own: no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  },
+  "reached_by_name": true
 }

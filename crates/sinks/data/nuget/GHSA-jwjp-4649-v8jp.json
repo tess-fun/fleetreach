@@ -5,13 +5,9 @@
   "packages": [
     "SIPSorcery"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
-    {
-      "class": "SIPSorcery.Net.RTCSctpTransport",
-      "method": "DoReceive"
-    },
     {
       "class": "SIPSorcery.Net.SctpSackChunk",
       "method": "ParseChunk"
@@ -20,7 +16,18 @@
   "evidence": {
     "commits": [
       "https://github.com/sipsorcery-org/sipsorcery/commit/a2466550bb2a28821c73fb1961bc33dcc467f8cf"
+    ],
+    "excluded": [
+      {
+        "class": "SIPSorcery.Net.RTCSctpTransport",
+        "method": "DoReceive",
+        "reason": "caller of the parser"
+      }
     ]
   },
-  "note": "Proposed from the IL diff of SIPSorcery 10.0.13 -> 10.0.14 (net8.0): methods of the files the fix commits changed."
+  "note": "From the 10.0.13 -> 10.0.14 IL diff. SctpSackChunk.ParseChunk loops over gap-ack and duplicate-TSN counts read from the chunk without checking them against its length. Present from 5.x; earlier releases have no SCTP and read as unknown. Reached wherever the app runs WebRTC data channels.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
