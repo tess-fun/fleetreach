@@ -1444,7 +1444,12 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   often wrong: fixes in static fields or regexes, test-only or other-port commits, writer
   instead of reader, renamed classes across release lines. `span.py` checks every sink across
   each affected line (376 release lines): where all of a record's sinks are absent the verdict
-  is unknown, never not reached. **Still open**: a real-image corpus measurement of yield.
+  is unknown, never not reached. First corpus run (2026-11-13, the 224 cached images): 15 NuGet
+  findings, all on Microsoft's own SDK and ASP.NET runtime images (System.Security.Cryptography.Xml,
+  NuGet.Packaging, Microsoft.Build.Tasks.Core), none with a record, so no verdicts; the pass
+  costs 0.35s and 140 MB over the whole fleet and leaves every other finding identical.
+  **Still open**: yield on images that ship third-party .NET apps (none are cached; pulling
+  them is a download to ask for).
 
 #### 14. Import-graph witness chains (A- to A+)
 
