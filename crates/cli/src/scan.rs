@@ -25,7 +25,7 @@ use crate::db::{
     parse_duration_secs,
 };
 use crate::enrich::{self, Enrichment};
-use crate::orchestrate::{fleet_ecosystems, scan_fleet_with, GoScan, Mirrors};
+use crate::orchestrate::{scan_fleet_with, GoScan, Mirrors};
 use crate::{import_reach, npm_reach, osvdb, py_reach, reach, resolve, sources, static_reach, vex};
 
 #[derive(Parser)]
@@ -719,7 +719,8 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         }
     }
     let sbom_os = crate::orchestrate::sbom_inspections(&config);
-    let feeds = Feeds::resolve(args, &config, &images, &sbom_os)?;
+    let plans = crate::orchestrate::plan_fleet(&config);
+    let feeds = Feeds::resolve(args, &config, &plans, &images, &sbom_os)?;
     let store = args
         .incremental
         .then(|| osvdb::private_subdir("scan"))
@@ -735,6 +736,7 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
     let mut scan = scan_fleet_with(
         &db,
         &config,
+        &plans,
         feeds.toolchain.as_ref(),
         feeds.host.as_deref(),
         &feeds.go(args),
@@ -773,7 +775,7 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
     let baseline_new = apply_baseline(args, &mut fleet_report)?;
     // 5b2. Fleet evidence for upgrades (spec 13): the versions of each vulnerable package
     //      every repo runs, so the fix queue can say which bumps the fleet already survived.
-    crate::evidence::annotate(&mut fleet_report, &config.repos);
+    crate::evidence::annotate(&mut fleet_report, &config.repos, &plans);
     decide_ssvc(args, &config, &mut fleet_report, exploitation_known)?;
 
     // 6. Render: machine payload to stdout, human summary to stderr.
@@ -976,6 +978,7 @@ impl Feeds {
     fn resolve(
         args: &ScanArgs,
         config: &Config,
+        plans: &[crate::orchestrate::RepoPlan],
         images: &[crate::images::Prepared],
         sbom_os: &[fleetreach_os::Inspection],
     ) -> Result<Feeds, u8> {
@@ -1023,7 +1026,7 @@ impl Feeds {
         // its explicit flag (or env var), then the one OSV directory, then the default cache,
         // which network builds keep fresh. Only ecosystems the fleet actually has are resolved,
         // so a Rust-only fleet fetches only crates.io's.
-        let mut needed = fleet_ecosystems(config);
+        let mut needed = crate::orchestrate::plans_ecosystems(plans);
         needed.extend(crate::images::language_ecosystems(images));
         needed.sort();
         needed.dedup();

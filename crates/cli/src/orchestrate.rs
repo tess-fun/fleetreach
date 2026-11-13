@@ -307,6 +307,7 @@ pub fn scan_fleet(
     scan_fleet_with(
         db,
         config,
+        &plan_fleet(config),
         toolchain,
         host_triple,
         go,
@@ -332,9 +333,11 @@ pub(crate) struct Images<'a> {
 
 /// [`scan_fleet`], plus container images: each image's OS packages against the distro
 /// exports, and its language lockfiles and installed packages with the language feeders.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn scan_fleet_with(
     db: &AdvisoryDb,
     config: &Config,
+    plans: &[RepoPlan],
     toolchain: Option<&Toolchain>,
     host_triple: Option<&str>,
     go: &GoScan,
@@ -343,13 +346,8 @@ pub(crate) fn scan_fleet_with(
 ) -> ScanData {
     let mut data = ScanData::default();
 
-    // Plan every repo up front: which ecosystems it holds and where. The plans decide which
-    // OSV DBs are worth loading, then drive the per-repo scan.
-    let plans: Vec<RepoPlan> = config
-        .repos
-        .par_iter()
-        .map(|repo| repo_plan(config, repo))
-        .collect();
+    // The plans (one per repo, in config order) decide which OSV DBs are worth loading, then
+    // drive the per-repo scan.
     let image_plans: Vec<Option<RepoPlan>> = images
         .prepared
         .iter()
@@ -361,7 +359,7 @@ pub(crate) fn scan_fleet_with(
         })
         .collect();
     let image_ecosystems = crate::images::language_ecosystems(images.prepared);
-    let session = cache_session(db, go, mirrors, config, &plans);
+    let session = cache_session(db, go, mirrors, config, plans);
     let keys: Vec<Option<String>> = plans
         .par_iter()
         .zip(&config.repos)
@@ -627,15 +625,26 @@ fn cache_key(
 /// The ecosystems present anywhere in the fleet, sorted. Planning only walks directories, so
 /// this is cheap; it decides which OSV exports a run needs before any is loaded or fetched.
 pub fn fleet_ecosystems(config: &Config) -> Vec<Ecosystem> {
-    let found: BTreeSet<Ecosystem> = config
-        .repos
-        .par_iter()
-        .map(|repo| repo_plan(config, repo))
-        .collect::<Vec<_>>()
+    plans_ecosystems(&plan_fleet(config))
+}
+
+/// The ecosystems `plans` hold, sorted.
+pub(crate) fn plans_ecosystems(plans: &[RepoPlan]) -> Vec<Ecosystem> {
+    let found: BTreeSet<Ecosystem> = plans
         .iter()
         .flat_map(|p| p.units.iter().map(|u| u.ecosystem))
         .collect();
     found.into_iter().collect()
+}
+
+/// Every repo's plan, in config order. Planning walks each repo's tree, so a scan plans once
+/// and hands the plans to every phase that needs them.
+pub(crate) fn plan_fleet(config: &Config) -> Vec<RepoPlan> {
+    config
+        .repos
+        .par_iter()
+        .map(|repo| repo_plan(config, repo))
+        .collect()
 }
 
 /// The findings and outcome for a single repo, returned by the parallel map so

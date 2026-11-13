@@ -13,9 +13,10 @@ use fleetreach_core::{
 };
 
 use crate::config::Repo;
+use crate::orchestrate::RepoPlan;
 
 /// Fill `report.package_versions` for every package with an in-repo finding.
-pub fn annotate(report: &mut FleetReport, repos: &[Repo]) {
+pub(crate) fn annotate(report: &mut FleetReport, repos: &[Repo], plans: &[RepoPlan]) {
     let wanted: BTreeSet<(Ecosystem, String)> = report
         .vulnerabilities
         .iter()
@@ -31,13 +32,19 @@ pub fn annotate(report: &mut FleetReport, repos: &[Repo]) {
     if wanted.is_empty() {
         return;
     }
+    let ecosystems: BTreeSet<Ecosystem> = wanted.iter().map(|(eco, _)| *eco).collect();
+    let crates: BTreeSet<&str> = wanted
+        .iter()
+        .filter(|(eco, _)| *eco == Ecosystem::Cargo)
+        .map(|(_, name)| name.as_str())
+        .collect();
     let found: Vec<(Ecosystem, String, String, Version, RepoId)> = {
         use rayon::prelude::*;
         repos
             .par_iter()
-            .flat_map_iter(|repo| {
-                let inv = crate::inventory::repo_inventory(repo);
-                inv.sources
+            .zip(plans)
+            .flat_map_iter(|(repo, plan)| {
+                crate::inventory::repo_sources(repo, plan, &ecosystems, &crates)
                     .into_iter()
                     .flat_map(|s| s.packages.into_iter().map(move |p| (s.ecosystem, p)))
                     .filter_map(|(eco, p)| {

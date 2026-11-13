@@ -55,6 +55,54 @@ pub fn repo_inventory_with(repo: &Repo, maven: Option<&Remote>) -> RepoInventory
     inv
 }
 
+/// The package sources of the units of `repo`'s `plan` in `ecosystems`, unmarked for dev scope and without
+/// walk errors or gaps: just what fleet evidence needs, read only for the ecosystems it asks about.
+/// A `Cargo.lock` that names none of `crates` (quoted, as TOML spells a crate name, which never
+/// needs an escape) is not parsed: it cannot hold one.
+pub(crate) fn repo_sources(
+    repo: &Repo,
+    plan: &crate::orchestrate::RepoPlan,
+    ecosystems: &std::collections::BTreeSet<Ecosystem>,
+    crates: &std::collections::BTreeSet<&str>,
+) -> Vec<SourceInventory> {
+    let names_one = |path: &std::path::Path| {
+        fleetreach_core::repofile::read_to_string(path).map_or(true, |text| {
+            crates.iter().any(|name| {
+                text.contains(&format!("\"{name}\"")) || text.contains(&format!("'{name}'"))
+            })
+        })
+    };
+    // A repo scanned from an SBOM is still read from its own lockfiles here.
+    let own;
+    let units = if plan.units.iter().any(|u| u.sbom.is_some()) {
+        own = plan_repo(repo);
+        &own.units
+    } else {
+        &plan.units
+    };
+    let mut sources = Vec::new();
+    for unit in units {
+        if !ecosystems.contains(&unit.ecosystem) {
+            continue;
+        }
+        if unit.ecosystem == Ecosystem::Cargo {
+            let (lockfiles, errors) = discover_lockfiles(&unit.repo);
+            if !errors.is_empty() {
+                continue;
+            }
+            sources.extend(
+                lockfiles
+                    .iter()
+                    .filter(|path| names_one(path))
+                    .filter_map(|path| fleetreach_scan::lockfile_inventory(path).ok()),
+            );
+            continue;
+        }
+        sources.extend(unit_inventory(unit, None).into_iter().flatten());
+    }
+    sources
+}
+
 pub(crate) fn unit_inventory(
     unit: &ScanUnit,
     maven: Option<&Remote>,
