@@ -857,6 +857,11 @@ pub(crate) fn is_public(ecosystem: Ecosystem, p: &fleetreach_core::inventory::Pa
             ))
 }
 
+/// A client for registry metadata, in a build with the `network` feature.
+pub(crate) fn registry_client() -> Option<Box<dyn Fetch>> {
+    client::Http::new().map(|http| Box::new(http) as Box<dyn Fetch>)
+}
+
 /// A client for package archives, in a build with the `network` feature.
 pub(crate) fn archive_client() -> Option<Box<dyn Fetch>> {
     client::Http::for_archives().map(|http| Box::new(http) as Box<dyn Fetch>)

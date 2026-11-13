@@ -143,6 +143,22 @@ an update that executes no package code:
 | Go | `go get <module>@v<to>`, then `go list -deps -test ./...`, with `GOTOOLCHAIN=local` and `GOWORK=off` |
 | PyPI (`uv.lock`) | `uv lock --upgrade-package <pkg>==<to> --no-build` |
 | GitHub Actions | the `uses:` tag rewritten to the fixed release |
+| Swift | the `Package.resolved` pin moved to the tag's commit, from `git ls-remote` |
+| Hex | the `mix.lock` entry rewritten with the checksums and requirements from `repo.hex.pm` |
+| Julia | the `Manifest.toml` entry's `version` and `git-tree-sha1` set from the General registry |
+
+`Package.swift` and `mix.exs` are code, and Julia needs a resolver run, so for these three
+fleetreach rewrites the lockfile entry itself. It reads only metadata, never a package archive.
+It refuses with a reason when it cannot see that the result is consistent:
+
+- **Swift:** a target outside the range in `Package.swift`, or a pin that comes in only
+  through another package (its range is in that package's manifest).
+- **Hex and Julia:** a new version whose dependency list differs, a locked dependency the new
+  version's requirements leave out, or a requirement from `mix.exs`, `Project.toml`'s
+  `[compat]` or a dependent package that leaves the target out.
+- **All three:** a pin from git, a path or another registry.
+
+Hex and Julia need a build with the `network` feature.
 
 Poetry, Pipenv and requirements files are not updated, because their tools may build source
 distributions (which runs package code).

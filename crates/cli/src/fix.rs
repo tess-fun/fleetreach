@@ -41,7 +41,7 @@ use serde::{Deserialize, Serialize};
 use crate::cli::fail;
 use crate::config::{Config, Repo};
 use crate::fix_policy::{FixSettings, Group, RolloutGate};
-use crate::{fix_constraints, fix_forges, fix_managers, fix_targets, osvdb, sources};
+use crate::{fix_constraints, fix_forges, fix_locks, fix_managers, fix_targets, osvdb, sources};
 
 /// The plan file format.
 const PLAN_SCHEMA: &str = "fleetreach-fix-plan/1";
@@ -305,6 +305,9 @@ fn applicable(ecosystem: Ecosystem) -> bool {
             | Ecosystem::RubyGems
             | Ecosystem::NuGet
             | Ecosystem::Maven
+            | Ecosystem::Swift
+            | Ecosystem::Hex
+            | Ecosystem::Julia
     )
 }
 
@@ -2198,6 +2201,15 @@ fn apply_edit(work: &Path, edit: &Edit) -> Result<String, String> {
         Ecosystem::RubyGems => fix_managers::bundler_bump(work, edit),
         Ecosystem::NuGet => fix_managers::nuget_bump(work, edit),
         Ecosystem::Maven => fix_managers::maven_bump(work, edit),
+        Ecosystem::Swift => fix_locks::swift_bump(work, edit),
+        Ecosystem::Hex => {
+            let client = crate::health::registry_client();
+            fix_locks::hex_bump(work, edit, client.as_deref())
+        }
+        Ecosystem::Julia => {
+            let client = crate::health::registry_client();
+            fix_locks::julia_bump(work, edit, client.as_deref())
+        }
         other => Err(format!(
             "fix apply does not handle {} yet",
             ecosystem_name(other)

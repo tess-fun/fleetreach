@@ -768,7 +768,14 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     a comment. Forgejo 11 merged a commit pushed after `merge_when_checks_succeed` with
     `head_commit_id` was set, so auto-merge stays off on all four (none can be pinned).
     Bitbucket and Azure are tested against their documented API shapes only (no accounts).
-    Still open: Swift/Hex/Julia lock edits.
+    **Swift, Hex and Julia lock edits implemented 2026-11-12** (`crates/cli/src/fix_locks.rs`):
+    text rewrites of `Package.resolved` (tag commit by `git ls-remote`), `mix.lock`
+    (repo.hex.pm registry checksums and requirements) and `Manifest.toml` (General registry
+    tree hash), refused unless the manifest range, dependents' requirements and the new
+    version's own requirements all hold and the dependency list is unchanged. Transitive
+    Swift pins are blocked (no graph in the lockfile). Tested against fixtures and a real git
+    repo for tags; not yet checked by `swift package resolve`, `mix deps.get --check-locked`
+    or `Pkg.instantiate` on real projects (needs downloads).
 - **Effort**: L. **Release**: 1.6.0 + 1.7.0. **Depends on**: forges (row 4) for phase B.
 - **Proof**: a 30-repo PR corpus across all managers on throwaway repos: every PR re-scanned
   clean, nothing new introduced, lockfile accepted by the package manager's frozen install.

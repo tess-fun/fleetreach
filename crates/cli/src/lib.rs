@@ -23,6 +23,7 @@ pub mod evidence;
 pub mod fix;
 pub mod fix_constraints;
 pub(crate) mod fix_forges;
+pub(crate) mod fix_locks;
 pub(crate) mod fix_managers;
 pub mod fix_policy;
 pub(crate) mod fix_targets;

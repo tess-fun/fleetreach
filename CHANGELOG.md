@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`fix apply` updates Swift, Hex and Julia lockfiles** without running package code. It
+  moves the `Package.resolved` pin to the tag's commit (`git ls-remote`). It rewrites the
+  `mix.lock` entry with checksums and requirements from `repo.hex.pm`. It sets the
+  `Manifest.toml` entry's version and tree hash from the General registry. An edit is
+  refused, with the reason, when the target leaves a visible constraint unmet. Those are the
+  range in `Package.swift`, `mix.exs` or `Project.toml`, a dependent's requirement, a locked
+  dependency's version, or a changed dependency list. Transitive Swift pins are left alone.
 - **`fix apply --open-pr` and `fix status` work on Gitea, Forgejo, Bitbucket Cloud and Data
   Center, and Azure DevOps**, through their APIs with the same tokens as the forge sources
   (`--forge gitea|forgejo|bitbucket|bitbucket-server|azure`, `--forge-api` for an unusual API
