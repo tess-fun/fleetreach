@@ -1,0 +1,42 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-22rr-f3p8-5gf8",
+  "ecosystem": "npm",
+  "packages": [
+    "directus"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "api/src/operations/exec/index.ts",
+      "method": "handler"
+    },
+    {
+      "class": "app/src/operations/exec/index.ts",
+      "method": "options"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "284156426fa94f688e8d65a7a4f34f9e6705f058"
+    ],
+    "excluded": [
+      {
+        "class": "api/src/services/graphql/index.ts.GraphQLService",
+        "method": "injectSystemResolvers",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "api/src/services/server.ts.ServerService",
+        "method": "serverInfo",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "app/src/stores/server.ts",
+        "method": "hydrate",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-236h-rqv8-8q73",
+  "aliases": [
+    "CVE-2020-15126"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "parse-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/GraphQL/loaders/usersQueries.js",
+      "method": "getUserFromSessionToken"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "78239ac9071167fdf243c55ae4bc9a2c0b0d89aa"
+    ],
+    "excluded": [
+      {
+        "class": "src/GraphQL/loaders/usersMutations.js",
+        "method": "load",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/GraphQL/loaders/usersQueries.js",
+        "method": "load",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

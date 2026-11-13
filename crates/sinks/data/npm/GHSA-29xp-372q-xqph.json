@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-29xp-372q-xqph",
+  "aliases": [
+    "CVE-2025-64118"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "tar"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/list.ts",
+      "method": "listFileSync"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "5330eb04bc43014f216e5c271b40d5c00d45224d",
+      "5e1a8e638600d3c3a2969b4de6a6ec44fa8d74c9"
+    ]
+  }
+}

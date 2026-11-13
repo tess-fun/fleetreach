@@ -1,0 +1,61 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3ch3-jhc6-5r8x",
+  "aliases": [
+    "CVE-2023-46121",
+    "PYSEC-2026-2063"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "yt-dlp"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "yt_dlp.extractor.cybrary.CybraryIE",
+      "method": "_real_extract"
+    },
+    {
+      "class": "yt_dlp.extractor.duboku.DubokuIE",
+      "method": "_real_extract"
+    },
+    {
+      "class": "yt_dlp.extractor.embedly.EmbedlyIE",
+      "method": "_real_extract"
+    },
+    {
+      "class": "yt_dlp.extractor.generic.GenericIE",
+      "method": "_extract_embeds"
+    },
+    {
+      "class": "yt_dlp.extractor.generic.GenericIE",
+      "method": "_real_extract"
+    },
+    {
+      "class": "yt_dlp.extractor.slideslive.SlidesLiveIE",
+      "method": "_real_extract"
+    },
+    {
+      "class": "yt_dlp.extractor.storyfire.StoryFireBaseIE",
+      "method": "_parse_video"
+    },
+    {
+      "class": "yt_dlp.extractor.vimeo.VimeoBaseInfoExtractor",
+      "method": "_smuggle_referrer"
+    },
+    {
+      "class": "yt_dlp.extractor.vimeo.VimeoBaseInfoExtractor",
+      "method": "_unsmuggle_headers"
+    },
+    {
+      "class": "yt_dlp.utils.networking",
+      "method": "clean_headers"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "f04b5bedad7b281bee9814686bba1762bae092eb"
+    ]
+  }
+}

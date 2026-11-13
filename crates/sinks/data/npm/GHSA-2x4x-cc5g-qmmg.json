@@ -1,0 +1,43 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2x4x-cc5g-qmmg",
+  "aliases": [
+    "CVE-2026-33577"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/agents/tools/nodes-tool.ts",
+      "method": "createNodesTool"
+    },
+    {
+      "class": "src/gateway/server-methods/nodes.ts.node.pair",
+      "method": "approve"
+    },
+    {
+      "class": "src/gateway/server/ws-connection/message-handler.ts",
+      "method": "attachGatewayWsMessageHandler"
+    },
+    {
+      "class": "src/infra/node-pairing.ts",
+      "method": "approveNodePairing"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "4d7cc6bb4fac68b5a5fadd1c5a23168281221f34"
+    ],
+    "excluded": [
+      {
+        "class": "src/agents/tools/gateway.ts",
+        "method": "callGatewayTool",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

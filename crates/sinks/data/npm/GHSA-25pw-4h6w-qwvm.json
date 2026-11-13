@@ -1,0 +1,120 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-25pw-4h6w-qwvm",
+  "aliases": [
+    "CVE-2026-32006"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "extensions/mattermost/src/mattermost/monitor.ts",
+      "method": "monitorMattermostProvider"
+    },
+    {
+      "class": "extensions/voice-call/src/providers/mock.ts.MockProvider",
+      "method": "parseWebhookEvent"
+    },
+    {
+      "class": "extensions/voice-call/src/providers/plivo.ts.PlivoProvider",
+      "method": "apiRequest"
+    },
+    {
+      "class": "extensions/voice-call/src/providers/plivo.ts.PlivoProvider",
+      "method": "parseWebhookEvent"
+    },
+    {
+      "class": "extensions/voice-call/src/providers/plivo.ts.PlivoProvider",
+      "method": "verifyWebhook"
+    },
+    {
+      "class": "extensions/voice-call/src/providers/telnyx.ts.TelnyxProvider",
+      "method": "apiRequest"
+    },
+    {
+      "class": "extensions/voice-call/src/providers/telnyx.ts.TelnyxProvider",
+      "method": "parseWebhookEvent"
+    },
+    {
+      "class": "extensions/voice-call/src/providers/telnyx.ts.TelnyxProvider",
+      "method": "verifyWebhook"
+    },
+    {
+      "class": "extensions/voice-call/src/providers/twilio.ts.TwilioProvider",
+      "method": "parseWebhookEvent"
+    },
+    {
+      "class": "extensions/voice-call/src/webhook-security.ts",
+      "method": "createTwilioReplayKey"
+    },
+    {
+      "class": "extensions/voice-call/src/webhook-security.ts",
+      "method": "validateTwilioSignature"
+    },
+    {
+      "class": "extensions/voice-call/src/webhook-security.ts",
+      "method": "verifyTwilioWebhook"
+    },
+    {
+      "class": "src/imessage/monitor/inbound-processing.ts",
+      "method": "resolveIMessageInboundDecision"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "051fdcc428129446e7c084260f837b7284279ce9",
+      "1aadf26f9acc399affabd859937a09468a9c5cb4"
+    ],
+    "excluded": [
+      {
+        "class": "extensions/mattermost/src/mattermost/monitor-auth.ts",
+        "method": "isMattermostSenderAllowed",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "extensions/msteams/src/monitor-handler/message-handler.ts",
+        "method": "createMSTeamsMessageHandler",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "extensions/voice-call/src/providers/plivo.ts.PlivoProvider",
+        "method": "constructor",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "extensions/voice-call/src/providers/telnyx.ts.TelnyxProvider",
+        "method": "normalizeEvent",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "extensions/voice-call/src/providers/twilio.ts",
+        "method": "createTwilioRequestDedupeKey",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "extensions/voice-call/src/providers/twilio/webhook.ts",
+        "method": "verifyTwilioProviderWebhook",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "extensions/voice-call/src/webhook-security.ts",
+        "method": "verifyPlivoWebhook",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "extensions/voice-call/src/webhook-security.ts",
+        "method": "verifyTelnyxWebhook",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "extensions/voice-call/src/webhook.ts.VoiceCallWebhookServer",
+        "method": "handleRequest",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

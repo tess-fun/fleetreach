@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2g4f-4pwh-qvx6",
+  "aliases": [
+    "CVE-2025-69873"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "ajv"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/vocabularies/validation/pattern.ts",
+      "method": "code"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "720a23fa453ffae8340e92c9b0fe886c54cfe0d5"
+    ]
+  }
+}

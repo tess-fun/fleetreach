@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-28mg-98xm-q493",
+  "aliases": [
+    "CVE-2022-0697",
+    "PYSEC-2022-161"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "archivy"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "archivy.routes",
+      "method": "login"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "2d8cb29853190d42572b36deb61127e68d6be574"
+    ]
+  }
+}

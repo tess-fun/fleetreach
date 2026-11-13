@@ -1,0 +1,35 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2mqv-4j3r-vjvp",
+  "aliases": [
+    "CVE-2021-43812"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@auth0/nextjs-auth0"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/handlers/login.ts",
+      "method": "handleLoginFactory"
+    },
+    {
+      "class": "src/utils/url-helpers.ts",
+      "method": "isSafeRedirect"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "0bbd9f8a0c93af51f607f28633b5fb18c5e48ad6"
+    ],
+    "excluded": [
+      {
+        "class": "src/index.ts",
+        "method": "initAuth0",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2pqj-h3vj-pqgw",
+  "aliases": [
+    "CVE-2012-6708"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "jquery"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "05531fc4080ae24070930d15ae0cea7ae056457d"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

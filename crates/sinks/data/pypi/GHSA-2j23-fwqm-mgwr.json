@@ -1,0 +1,27 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2j23-fwqm-mgwr",
+  "aliases": [
+    "CVE-2019-19687",
+    "PYSEC-2019-29"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "keystone"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "keystone.api.credentials.CredentialResource",
+      "method": "_list_credentials"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "17947516b0095c51da5cff94771247f2e7c44ee6",
+      "17c337dbdbfb9d548ad531c2ad0483c9bce5b98f",
+      "bd3f63787151183f4daa43578aa491856fefae5b"
+    ]
+  }
+}

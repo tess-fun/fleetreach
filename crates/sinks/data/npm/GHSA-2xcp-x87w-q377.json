@@ -1,0 +1,56 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2xcp-x87w-q377",
+  "aliases": [
+    "CVE-2026-45002"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/gateway/hooks.ts",
+      "method": "resolveHooksConfig"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "5275d008ed33203dba3f98e969ad683a65c416c3"
+    ],
+    "excluded": [
+      {
+        "class": "src/gateway/hooks-mapping.ts",
+        "method": "buildActionFromMapping",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/gateway/hooks-mapping.ts",
+        "method": "mergeAction",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/gateway/hooks-mapping.ts",
+        "method": "resolveHookMappings",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/gateway/hooks.ts",
+        "method": "getHookSessionKeyRequestPolicyError",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/gateway/hooks.ts",
+        "method": "resolveHookSessionKey",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/gateway/server-http.ts",
+        "method": "createHooksRequestHandler",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

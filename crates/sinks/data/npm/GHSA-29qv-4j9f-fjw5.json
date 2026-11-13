@@ -1,0 +1,49 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-29qv-4j9f-fjw5",
+  "aliases": [
+    "CVE-2026-40897"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "mathjs"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/utils/customs.js",
+      "method": "getSafeProperty"
+    },
+    {
+      "class": "src/utils/customs.js",
+      "method": "isSafeMethod"
+    },
+    {
+      "class": "src/utils/customs.js",
+      "method": "isSafeProperty"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "513ab2a0e01004af91b31aada68fae8a821326ad"
+    ],
+    "excluded": [
+      {
+        "class": "src/utils/customs.js",
+        "method": "setSafeProperty",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/utils/map.js.ObjectWrappingMap",
+        "method": "delete",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/utils/map.js.ObjectWrappingMap",
+        "method": "has",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

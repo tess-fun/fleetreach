@@ -1,0 +1,128 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-26c4-7vv6-867j",
+  "aliases": [
+    "CVE-2026-12480",
+    "PYSEC-2026-3629"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "keras"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "saving.saving_lib.H5IOStore",
+      "method": "_verify_dataset"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "8f987f11bf7512f0df4774a8f1557bba07dc2b49",
+      "d5a88bdb137c0d3039b8f4bbbe8c7099925cc10c"
+    ],
+    "excluded": [
+      {
+        "class": "export.openvino",
+        "method": "export_openvino",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "legacy.saving.legacy_h5_format",
+        "method": "load_model_from_hdf5",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "legacy.saving.legacy_h5_format",
+        "method": "load_optimizer_weights_from_hdf5_group",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "legacy.saving.legacy_h5_format",
+        "method": "load_subset_weights_from_hdf5_group",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "legacy.saving.legacy_h5_format",
+        "method": "load_weights_from_hdf5_group",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "legacy.saving.legacy_h5_format",
+        "method": "load_weights_from_hdf5_group_by_name",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "legacy.saving.legacy_h5_format",
+        "method": "save_optimizer_weights_to_hdf5_group",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "legacy.saving.legacy_h5_format",
+        "method": "save_subset_weights_to_hdf5_group",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "legacy.saving.legacy_h5_format",
+        "method": "save_weights_to_hdf5_group",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "models.functional",
+        "method": "deserialize_node",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "models.functional",
+        "method": "functional_from_config",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "saving.saving_lib.H5IOStore",
+        "method": "__getitem__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "saving.saving_lib.H5IOStore",
+        "method": "_verify_group",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "saving.saving_lib.H5IOStore",
+        "method": "get",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "saving.saving_lib.ShardedH5IOStore",
+        "method": "_get_h5_group",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "utils.file_utils",
+        "method": "extract_open_archive",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "utils.file_utils",
+        "method": "filter_safe_tarinfos",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "utils.file_utils",
+        "method": "filter_safe_zipinfos",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "utils.file_utils",
+        "method": "is_link_in_dir",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "utils.file_utils",
+        "method": "is_path_in_dir",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

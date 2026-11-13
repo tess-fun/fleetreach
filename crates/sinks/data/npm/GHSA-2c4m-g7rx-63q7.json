@@ -1,0 +1,38 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2c4m-g7rx-63q7",
+  "aliases": [
+    "CVE-2026-26021"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "set-in"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "index.js",
+      "method": "set"
+    },
+    {
+      "class": "index.js",
+      "method": "setIn"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "34842cc02de3fd65d6f8bd0b268347e7b390125b",
+      "6bad255961d379e4b1f5fbc52ef9dc8420816f24",
+      "b8e1dabfdbd35c8d604b6324e01d03f280256c3d",
+      "d87c1a09fa2edb55cd76440a67d83d1cb828df11"
+    ],
+    "excluded": [
+      {
+        "class": "index.js",
+        "method": "recursivelySetIn",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2gx6-7gx2-wwcf",
+  "aliases": [
+    "BIT-ghost-2026-70588",
+    "CVE-2026-70588"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "ghost"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "apps/ember-admin/app/components/modal-post-history.js.ModalPostHistory",
+      "method": "selectedRevision"
+    },
+    {
+      "class": "ghost/core/core/frontend/services/proxy.js",
+      "method": "prepareContextResource"
+    },
+    {
+      "class": "ghost/core/core/server/data/importer/importers/json-to-html.js",
+      "method": "itemsToHtml"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "a8bea3a4ceec4c852b880f4885119453c3d8588e"
+    ]
+  }
+}

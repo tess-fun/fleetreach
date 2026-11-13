@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-33xw-247w-6hmc",
+  "aliases": [
+    "CVE-2025-27520",
+    "PYSEC-2026-294"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "bentoml"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "_bentoml_impl.server.app.ServiceAppFactory",
+      "method": "api_endpoint"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "b35f4f4fcc53a8c3fe8ed9c18a013fe0a728e194"
+    ],
+    "excluded": [
+      {
+        "class": "_bentoml_impl.server.app.ServiceAppFactory",
+        "method": "create_instance",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

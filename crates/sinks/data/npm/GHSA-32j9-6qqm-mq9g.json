@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-32j9-6qqm-mq9g",
+  "aliases": [
+    "CVE-2022-21164",
+    "SNYK-JS-NODELMDB-2400723"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "node-lmdb"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "97760104c0fd311206b88aecd91fa1f59fe2b85a"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

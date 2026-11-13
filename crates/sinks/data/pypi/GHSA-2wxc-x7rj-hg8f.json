@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2wxc-x7rj-hg8f",
+  "aliases": [
+    "CVE-2026-54591",
+    "PYSEC-2026-3808"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "asyncssh"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "asyncssh.scp",
+      "method": "_parse_cd_args"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "d730803b8e4e94c20c7580d90f94d1e05f9f58de"
+    ]
+  }
+}

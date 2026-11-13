@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2hvc-hwg3-hpvw",
+  "aliases": [
+    "CVE-2022-46741",
+    "PYSEC-2026-441"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "paddlepaddle"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "python.paddle.nn.functional.extension",
+      "method": "gather_tree"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "6712e262fc6734873cc6d5ca4f45973339a88697",
+      "ee6e6d511f9f33fc862c11722701fb5abb99ed94"
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2vj5-px25-gjrp",
+  "aliases": [
+    "CVE-2021-4118",
+    "PYSEC-2021-874",
+    "PYSEC-2026-3968"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pytorch-lightning"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "pytorch_lightning.core.saving",
+      "method": "load_hparams_from_yaml"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "62f1e82e032eb16565e676d39e0db0cac7e34ace"
+    ]
+  }
+}

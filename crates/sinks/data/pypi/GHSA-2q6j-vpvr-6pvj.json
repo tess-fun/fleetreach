@@ -1,0 +1,30 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2q6j-vpvr-6pvj",
+  "aliases": [
+    "BIT-superset-2024-39887",
+    "CVE-2024-39887",
+    "PYSEC-2026-1155"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "apache-superset"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "superset.db_engine_specs.base.BaseEngineSpec",
+      "method": "execute"
+    },
+    {
+      "class": "superset.db_engine_specs.trino.TrinoEngineSpec",
+      "method": "execute_with_cursor"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "56f0103b5771d477dd106272abbd8021c9ea7506"
+    ]
+  }
+}

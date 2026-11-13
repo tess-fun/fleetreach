@@ -1,0 +1,94 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2xj6-xx86-cwwc",
+  "aliases": [
+    "CVE-2026-77255",
+    "PYSEC-2026-4080"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "mcp-atlassian"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "mcp_atlassian.confluence.attachments.AttachmentsMixin",
+      "method": "upload_attachment"
+    },
+    {
+      "class": "mcp_atlassian.confluence.search.SearchMixin",
+      "method": "search"
+    },
+    {
+      "class": "mcp_atlassian.jira.attachments.AttachmentsMixin",
+      "method": "download_attachment"
+    },
+    {
+      "class": "mcp_atlassian.jira.attachments.AttachmentsMixin",
+      "method": "upload_attachment"
+    },
+    {
+      "class": "mcp_atlassian.jira.search.SearchMixin",
+      "method": "get_sprint_issues"
+    },
+    {
+      "class": "mcp_atlassian.jira.search.SearchMixin",
+      "method": "search_issues"
+    },
+    {
+      "class": "mcp_atlassian.servers.confluence",
+      "method": "_resolve_page_content"
+    },
+    {
+      "class": "mcp_atlassian.servers.dependencies",
+      "method": "_get_fetcher"
+    },
+    {
+      "class": "mcp_atlassian.servers.main.AtlassianMCP",
+      "method": "_list_tools_mcp"
+    },
+    {
+      "class": "mcp_atlassian.servers.main.UserTokenMiddleware",
+      "method": "__call__"
+    },
+    {
+      "class": "mcp_atlassian.utils.oauth.OAuthConfig",
+      "method": "_save_tokens_to_file"
+    },
+    {
+      "class": "mcp_atlassian.utils.oauth_setup.CallbackHandler",
+      "method": "_send_response"
+    },
+    {
+      "class": "mcp_atlassian.utils.ssl.SSLIgnoreAdapter",
+      "method": "init_poolmanager"
+    },
+    {
+      "class": "mcp_atlassian.utils.urls",
+      "method": "validate_url_for_ssrf"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "b041733473f95119dd539542a43c280737a8e460"
+    ],
+    "excluded": [
+      {
+        "class": "mcp_atlassian.confluence.client.ConfluenceClient",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "mcp_atlassian.jira.client.JiraClient",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "mcp_atlassian.jira.search.SearchMixin",
+        "method": "get_board_issues",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

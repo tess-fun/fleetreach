@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-37q6-576q-vgr7",
+  "aliases": [
+    "CVE-2018-14731"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "parcel-bundler"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/core/parcel-bundler/src/HMRServer.js.HMRServer",
+      "method": "start"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "066e0bf6bd26b15c78bd47df023452e4b20073e4"
+    ]
+  }
+}

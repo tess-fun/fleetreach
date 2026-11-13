@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2f54-p244-32q6",
+  "aliases": [
+    "CVE-2026-70493",
+    "PYSEC-2026-3637"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "open-webui"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "backend.open_webui.tools.knowledge_fs",
+      "method": "build_matcher"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3ab2026262ef6f09810e4d235c5f9a9cb903e595"
+    ],
+    "excluded": [
+      {
+        "class": "backend.open_webui.tools.knowledge_fs",
+        "method": "kb_exec",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

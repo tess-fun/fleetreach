@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2m8g-3cmr-wg3w",
+  "aliases": [
+    "CVE-2026-73228",
+    "PYSEC-2026-3827"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "djangorestframework"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "rest_framework.request.Request",
+      "method": "_parse"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "2912dc98042f78e27636551fc22eeaf10f725fdd",
+      "82ef7b7e4e0a73ba5c489b465fae7e76d948da4e"
+    ]
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-23c5-xmqv-rm74",
+  "aliases": [
+    "CVE-2026-27904"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "minimatch"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/ast.ts.AST",
+      "method": "toRegExpSource"
+    },
+    {
+      "class": "src/ast.ts.AST",
+      "method": "toString"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "11d0df6165d15a955462316b26d52e5efae06fce"
+    ],
+    "excluded": [
+      {
+        "class": "src/ast.ts",
+        "method": "isExtglobType",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/ast.ts.AST",
+        "method": "[computed]",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/ast.ts.AST",
+        "method": "clone",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/ast.ts.AST",
+        "method": "constructor",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/ast.ts.AST",
+        "method": "fromGlob",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/ast.ts.AST",
+        "method": "hasMagic",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/ast.ts.AST",
+        "method": "isEnd",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/ast.ts.AST",
+        "method": "isStart",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/ast.ts.AST",
+        "method": "push",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/ast.ts.AST",
+        "method": "toJSON",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

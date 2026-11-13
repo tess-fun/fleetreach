@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-394h-qwmc-48pf",
+  "aliases": [
+    "BIT-virtualenv-2026-113718",
+    "CVE-2026-113718"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "virtualenv"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "virtualenv.activation.xonsh.XonshActivator",
+      "method": "quote"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "e5fc2e6e189a877ff559af288919e3525d13e5e0"
+    ]
+  }
+}

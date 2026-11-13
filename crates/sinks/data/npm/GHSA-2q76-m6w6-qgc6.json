@@ -1,0 +1,63 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2q76-m6w6-qgc6",
+  "aliases": [
+    "CVE-2026-105806"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@payloadcms/plugin-mcp"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/plugin-mcp/src/collections/createApiKeysCollection.ts",
+      "method": "createAPIKeysCollection"
+    },
+    {
+      "class": "packages/plugin-mcp/src/endpoints/mcp.ts",
+      "method": "initializeMCPHandler"
+    },
+    {
+      "class": "packages/plugin-mcp/src/mcp/getMcpHandler.ts",
+      "method": "getMCPHandler"
+    },
+    {
+      "class": "packages/plugin-mcp/src/mcp/tools/resource/update.ts",
+      "method": "updateResourceTool"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "025581d8c5ed836039ad85397288a30f0d3c11c1"
+    ],
+    "excluded": [
+      {
+        "class": "packages/payload/src/index.ts.BasePayload",
+        "method": "init",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/plugin-mcp/src/mcp/tools/auth/login.ts",
+        "method": "loginTool",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/plugin-mcp/src/mcp/tools/global/find.ts",
+        "method": "findGlobalTool",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/plugin-mcp/src/mcp/tools/global/update.ts",
+        "method": "updateGlobalTool",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/plugin-mcp/src/mcp/tools/job/run.ts",
+        "method": "runJob",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

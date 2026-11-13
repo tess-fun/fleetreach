@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2m5v-pch6-74hx",
+  "aliases": [
+    "CVE-2026-109383"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "undici"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/dispatcher/agent.js.Agent",
+      "method": "constructor"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "04cb74b1db131ff8f5b4557dce811cbf5f4664b4",
+      "8c59f6b302898cb2e9b0f7962cd7212b6e597c9f",
+      "f75eac00ac177f7b2e6c8bfbd52d4113164286e6"
+    ]
+  }
+}

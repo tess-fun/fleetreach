@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-389r-rccm-h3h5",
+  "aliases": [
+    "CVE-2026-29780",
+    "PYSEC-2026-2148"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "eml-parser"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "99af03a09a90aaaaadd0ed2ffb5eea46d1ea2cc9"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

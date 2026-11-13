@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2v8p-3f2j-5mp7",
+  "aliases": [
+    "CVE-2026-71436"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "mermaid"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/mermaid/src/diagrams/xychart/xychartDb.ts",
+      "method": "transformDataWithoutCategory"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "630aa7e5dd417e1f56bff2a1ce8df2c5ad08d289",
+      "ef60adc837d9d5107af21285f01e83dea309bd0a"
+    ]
+  }
+}

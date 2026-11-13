@@ -1,0 +1,30 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-375g-39jq-vq7m",
+  "aliases": [
+    "CVE-2024-26134",
+    "PYSEC-2024-155"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "cbor2"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "cbor2._decoder.CBORDecoder",
+      "method": "decode_bytestring"
+    },
+    {
+      "class": "cbor2._decoder.CBORDecoder",
+      "method": "decode_string"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "387755eacf0be35591a478d3c67fe10618a6d542",
+      "4de6991ba29bf2290d7b9d83525eda7d021873df"
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-38cw-85xc-xr9x",
+  "ecosystem": "npm",
+  "packages": [
+    "@veramo/data-store"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/data-store/src/data-store-orm.ts",
+      "method": "decorateQB"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "067e39dd76f11ee2d25b99c8361d4f02a4223e3b"
+    ],
+    "excluded": [
+      {
+        "class": "packages/data-store-json/src/data-store-json.ts",
+        "method": "buildQuery",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

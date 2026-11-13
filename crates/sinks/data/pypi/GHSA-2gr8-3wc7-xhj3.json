@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2gr8-3wc7-xhj3",
+  "aliases": [
+    "CVE-2024-32879",
+    "PYSEC-2026-1931"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "social-auth-app-django"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "social_django.models.AbstractUserSocialAuth",
+      "method": "get_social_auth"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "31c3e0c7edb187004d8abbde7e9c4f7ef9098138"
+    ]
+  }
+}

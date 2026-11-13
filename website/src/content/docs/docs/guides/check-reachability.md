@@ -23,6 +23,11 @@ fleetreach scan --reachability
 - **Python** does the same over a repo's virtualenv, mapping modules to distributions
   through their `RECORD` files, so `import yaml` is PyYAML. It is positive-only: an
   unreached distribution stays `unknown`.
+- **npm and Python, function level**: when the advisory has a sink record, a call graph over
+  your source (and the installed dependency source in `node_modules` or a virtualenv) looks
+  for a chain of calls to the vulnerable function. A chain found replaces the import chain
+  as the witness, each step with its file and line. Calls the graph cannot resolve by name
+  (callbacks, framework dispatch, `getattr`) are not followed, so this is positive-only too.
 - **Ruby, PHP, .NET, Java and Kotlin, Elixir and Swift** read the import lines of your own
   source and follow the lockfile from there. The chain starts at a file and line, and every
   later hop is a dependency the lockfile records. This is positive-only too.

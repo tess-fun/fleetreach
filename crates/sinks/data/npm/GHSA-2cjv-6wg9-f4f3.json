@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2cjv-6wg9-f4f3",
+  "aliases": [
+    "CVE-2025-25298"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@strapi/core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/plugins/users-permissions/server/controllers/validation/auth.js",
+      "method": "createChangePasswordSchema"
+    },
+    {
+      "class": "packages/plugins/users-permissions/server/controllers/validation/auth.js",
+      "method": "createRegisterSchema"
+    },
+    {
+      "class": "packages/plugins/users-permissions/server/controllers/validation/auth.js",
+      "method": "createResetPasswordSchema"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "41f8cdf116f7f464dae7d591e52d88f7bfa4b7cb"
+    ]
+  }
+}

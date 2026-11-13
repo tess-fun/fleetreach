@@ -1,0 +1,56 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2fmp-9rvw-hc96",
+  "aliases": [
+    "CVE-2026-58484"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "network-ai"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/env-manager.ts.EnvironmentManager",
+      "method": "pruneBackups"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "a59c13a1f0ce0e8a0779a90343eef92fac5ab4c3"
+    ],
+    "excluded": [
+      {
+        "class": "lib/agent-runtime.ts.SandboxPolicy",
+        "method": "isPathAllowed",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/agent-runtime.ts.SandboxPolicy",
+        "method": "resolvePath",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/approval-inbox.ts.ApprovalInbox",
+        "method": "constructor",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/approval-inbox.ts.ApprovalInbox",
+        "method": "routeRequest",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/env-manager.ts.EnvironmentManager",
+        "method": "_collectBackupFiles",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/env-manager.ts.EnvironmentManager",
+        "method": "restore",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

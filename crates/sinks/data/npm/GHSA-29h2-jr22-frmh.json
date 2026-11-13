@@ -1,0 +1,18 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-29h2-jr22-frmh",
+  "ecosystem": "npm",
+  "packages": [
+    "@openzeppelin/confidential-contracts"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "93e75ceed2b9648f53f9d133f431064353456805",
+      "ee47edf189ab681cebdad18bfb53dee541987be2",
+      "fe0863af2c9dce7614acce98720a913bf6a767a5"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

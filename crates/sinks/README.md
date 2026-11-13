@@ -27,6 +27,10 @@ modules are small hand-written readers, `js` uses `oxc_parser`. Records are for 
 or npm; Python and JS sinks are module or file paths plus a function name, and only ever
 produce witnesses, since name-based call graphs in those languages are positive-only.
 
+`calls` builds name-resolved call graphs over JavaScript/TypeScript and Python source (and
+installed dependency source) and looks for a chain from the project's own code to a
+record's sinks. It is positive-only: a chain is a witness, and no chain proves nothing.
+
 The curated records under `data/` are built into the crate: [`record::bundled`](https://docs.rs/fleetreach-sinks/latest/fleetreach_sinks/record/fn.bundled.html) returns
 them, checked as [`record::load_dir`](https://docs.rs/fleetreach-sinks/latest/fleetreach_sinks/record/fn.load_dir.html) checks a directory.
 

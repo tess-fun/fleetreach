@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-24p2-j2jr-386w",
+  "aliases": [
+    "CVE-2026-27809",
+    "PYSEC-2026-2262"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "psd-tools"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "psd_tools.compression",
+      "method": "decompress"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "6c0a78f195b5942757886a1863793fd5946c1fb1"
+    ],
+    "excluded": [
+      {
+        "class": "psd_tools.compression.rle",
+        "method": "decode",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

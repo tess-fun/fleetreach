@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2p49-hgcm-8545",
+  "aliases": [
+    "CVE-2026-73650"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "svgo"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "plugins/removeScriptElement.js",
+      "method": "fn"
+    },
+    {
+      "class": "plugins/removeScripts.js",
+      "method": "fn"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "628e3bc7336625a30365d0a9b60185307d852466",
+      "72a23886b4698b27624b936f3a15a80afd36d75f",
+      "f529cfccc6c154d6f6eabe276ec637a8c5db6763"
+    ],
+    "excluded": [
+      {
+        "class": "lib/svgo/tools.js",
+        "method": "hasScripts",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

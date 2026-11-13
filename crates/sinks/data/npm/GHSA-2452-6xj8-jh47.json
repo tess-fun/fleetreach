@@ -1,0 +1,36 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2452-6xj8-jh47",
+  "aliases": [
+    "CVE-2025-24360"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@nuxt/vite-builder"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/webpack/src/webpack.ts",
+      "method": "wdmToH3Handler"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "7eeb910bf4accb1e0193b9178c746f06ad3dd88f"
+    ],
+    "excluded": [
+      {
+        "class": "packages/vite/src/client.ts",
+        "method": "buildClient",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/webpack/src/webpack.ts",
+        "method": "createDevMiddleware",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

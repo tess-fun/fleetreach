@@ -1,0 +1,40 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2gqq-gqf2-x968",
+  "aliases": [
+    "CVE-2026-84947"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "undici"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/interceptor/dump.js.DumpHandler",
+      "method": "onResponseData"
+    },
+    {
+      "class": "lib/interceptor/dump.js.DumpHandler",
+      "method": "onResponseEnd"
+    },
+    {
+      "class": "lib/interceptor/dump.js.DumpHandler",
+      "method": "onResponseError"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "21693f406f0142f3504192e9f9b022dcf84782ae",
+      "6d583124e7cf60b640097d64144ed633cc450584"
+    ],
+    "excluded": [
+      {
+        "class": "lib/interceptor/dump.js.DumpHandler",
+        "method": "onRequestStart",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

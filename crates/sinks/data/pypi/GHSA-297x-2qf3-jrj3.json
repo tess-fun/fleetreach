@@ -1,0 +1,30 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-297x-2qf3-jrj3",
+  "aliases": [
+    "CVE-2024-23730",
+    "PYSEC-2026-393"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "llama-hub"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "llama_hub.tools.chatgpt_plugin.base.ChatGPTPluginToolSpec",
+      "method": "__init__"
+    },
+    {
+      "class": "llama_hub.tools.openapi.base.OpenAPIToolSpec",
+      "method": "__init__"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "9dc9c21a5c6d0226d1d2101c3121d4f085743d52",
+      "c01416e737c7747a213a79881b8308c41d043515"
+    ]
+  }
+}

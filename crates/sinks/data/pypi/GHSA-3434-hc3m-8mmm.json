@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3434-hc3m-8mmm",
+  "aliases": [
+    "CVE-2024-5062",
+    "PYSEC-2024-176"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "zenml"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "21edd863c0ba53c1110b6f018a07c2d6853cf6d4"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

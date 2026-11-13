@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2hw7-mxvj-m455",
+  "aliases": [
+    "CVE-2021-3223"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "node-red-dashboard"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "nodes/ui_base.js",
+      "method": "exports"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "f48f356df966f607ba3d09c27396074b81f2ae97"
+    ]
+  }
+}

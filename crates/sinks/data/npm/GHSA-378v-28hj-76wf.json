@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-378v-28hj-76wf",
+  "aliases": [
+    "CVE-2026-2739"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "bn.js"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/bn.js",
+      "method": "imaskn"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "33df26b5771e824f303a79ec6407409376baa64b"
+    ]
+  }
+}

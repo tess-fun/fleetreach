@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2p8c-gr87-2676",
+  "aliases": [
+    "CVE-2026-113796"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "electron"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/browser/api/web-contents.ts.WebContents",
+      "method": "_init"
+    },
+    {
+      "class": "lib/browser/guest-window-manager.ts",
+      "method": "openGuestWindow"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "079b9b1594ee62c336adc3aa430d4c1cf62bd51e",
+      "0e6aca0618eeae50a18cfd50548b8688820629ed",
+      "652ef79ac79c6767b31e59b2f28d0d46114645e5",
+      "98940cb274bb6adcb7cdb2da2d4495ac83119670",
+      "a86ae4205ba2ba7ae60a6caa9d5d3a44321f2f9b"
+    ]
+  }
+}

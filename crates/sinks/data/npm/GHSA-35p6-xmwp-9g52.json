@@ -1,0 +1,49 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-35p6-xmwp-9g52",
+  "aliases": [
+    "CVE-2026-6733"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "undici"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/dispatcher/client-h1.js.Parser",
+      "method": "onMessageBegin"
+    },
+    {
+      "class": "lib/dispatcher/client-h1.js",
+      "method": "connectH1"
+    },
+    {
+      "class": "lib/dispatcher/client-h1.js",
+      "method": "resumeH1"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "6ea54ef8c4051e95bb68c89d4a5c9274fe6fbb4b"
+    ],
+    "excluded": [
+      {
+        "class": "lib/dispatcher/client-h1.js",
+        "method": "onHttpSocketClose",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "lib/dispatcher/client-h1.js",
+        "method": "writeH1",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "lib/dispatcher/client-h1.js.Parser",
+        "method": "onMessageComplete",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-39pv-4j6c-2g6v",
+  "aliases": [
+    "CVE-2026-54266"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@angular/common"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/common/http/src/transfer_cache.ts",
+      "method": "generateHash"
+    },
+    {
+      "class": "packages/common/http/src/transfer_cache.ts",
+      "method": "getHeadersToInclude"
+    },
+    {
+      "class": "packages/common/http/src/transfer_cache.ts",
+      "method": "retrieveStateFromCache"
+    },
+    {
+      "class": "packages/common/http/src/transfer_cache.ts",
+      "method": "shouldCacheRequest"
+    },
+    {
+      "class": "packages/common/http/src/transfer_cache.ts",
+      "method": "transferCacheInterceptorFn"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "5f36274da3f961430ae72865159afa02a1dd9133"
+    ],
+    "excluded": [
+      {
+        "class": "packages/common/http/src/transfer_cache.ts",
+        "method": "hasAuthHeaders",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/common/http/src/transfer_cache.ts",
+        "method": "hasOutgoingCredentials",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

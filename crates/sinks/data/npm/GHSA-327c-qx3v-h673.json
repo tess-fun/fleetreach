@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-327c-qx3v-h673",
+  "aliases": [
+    "CVE-2020-1914"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "hermes-engine"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "b2021df620824627f5a8c96615edbd1eb7fdddfc"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

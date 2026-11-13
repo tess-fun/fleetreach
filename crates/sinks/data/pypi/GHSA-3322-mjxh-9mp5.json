@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3322-mjxh-9mp5",
+  "aliases": [
+    "BIT-airflow-2026-48891",
+    "CVE-2026-48891",
+    "PYSEC-2026-2086"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "apache-airflow"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "airflow.api_fastapi.core_api.services.ui.dependencies",
+      "method": "get_scheduling_dependencies"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "e61c9bac30a7b1a7f68589629f10c4cb247c683e"
+    ]
+  }
+}

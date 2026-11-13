@@ -1,0 +1,21 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2mf3-mr2r-r4vf",
+  "ecosystem": "npm",
+  "packages": [
+    "@rhinostone/swig-twig"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/swig-core/lib/loaders/filesystem.js",
+      "method": "exports"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "381bdc305e0b10e45368d56324328b9b4f7017fc"
+    ]
+  }
+}

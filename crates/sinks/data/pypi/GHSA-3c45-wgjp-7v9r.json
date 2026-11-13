@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3c45-wgjp-7v9r",
+  "aliases": [
+    "CVE-2014-7143",
+    "PYSEC-2019-212"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "twisted"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "twisted.web.client.BrowserLikePolicyForHTTPS",
+      "method": "creatorForNetloc"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3b5942252f5f3e45862a0e12b266ab29e243cc33"
+    ]
+  }
+}

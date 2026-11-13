@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2ch6-x3g4-7759",
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/auto-reply/command-auth.ts",
+      "method": "resolveSenderCandidates"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "08e2aa44e78a9c946d97bea62304e6f533b8fa8e"
+    ],
+    "excluded": [
+      {
+        "class": "src/auto-reply/command-auth.ts",
+        "method": "resolveCommandAuthorization",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

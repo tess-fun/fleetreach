@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2ggp-cmvm-f62f",
+  "aliases": [
+    "CVE-2023-39523",
+    "PYSEC-2026-1904"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "scancodeio"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "scanpipe.pipes.fetch",
+      "method": "fetch_docker_image"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "07ec0de1964b14bf085a1c9a27ece2b61ab6105c"
+    ],
+    "excluded": [
+      {
+        "class": "scanpipe.pipes",
+        "method": "run_command",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

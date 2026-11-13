@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-24hm-wm2h-h8w7",
+  "aliases": [
+    "CVE-2025-66371",
+    "PYSEC-2026-1765"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "peppol-py"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "peppol_py.validation",
+      "method": "validate_peppol_document"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "349a4bff8adb6205ea411bac8d7a06da0477abd7"
+    ]
+  }
+}

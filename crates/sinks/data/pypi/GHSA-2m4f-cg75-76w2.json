@@ -1,0 +1,56 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2m4f-cg75-76w2",
+  "aliases": [
+    "CVE-2025-66470",
+    "PYSEC-2026-1696"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "nicegui"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "nicegui.elements.interactive_image.InteractiveImage",
+      "method": "add_layer"
+    },
+    {
+      "class": "nicegui.elements.interactive_image.InteractiveImageLayer",
+      "method": "__init__"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "58ad0b36e19922de16bbc79ea3ddd29851b1a3e3"
+    ],
+    "excluded": [
+      {
+        "class": "nicegui.elements.interactive_image.InteractiveImage",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "website.documentation.content.interactive_image_documentation",
+        "method": "adding_layers",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "website.documentation.content.interactive_image_documentation",
+        "method": "blank_canvas",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "website.documentation.content.interactive_image_documentation",
+        "method": "main_demo",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "website.documentation.content.interactive_image_documentation",
+        "method": "svg_content",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

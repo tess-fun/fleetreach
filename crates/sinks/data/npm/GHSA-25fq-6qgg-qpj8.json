@@ -1,0 +1,40 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-25fq-6qgg-qpj8",
+  "aliases": [
+    "CVE-2026-25581"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "sceditor"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/lib/SCEditor.js",
+      "method": "SCEditor"
+    },
+    {
+      "class": "src/lib/defaultCommands.js",
+      "method": "_dropDown"
+    },
+    {
+      "class": "src/lib/defaultCommands.js",
+      "method": "exec"
+    },
+    {
+      "class": "src/lib/escape.js",
+      "method": "uriScheme"
+    },
+    {
+      "class": "src/plugins/dragdrop.js.plugins",
+      "method": "dragdrop"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "5733aed4f0e257cb78e1ba191715fc458cbd473d"
+    ]
+  }
+}

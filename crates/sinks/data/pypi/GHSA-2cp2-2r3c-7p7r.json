@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2cp2-2r3c-7p7r",
+  "aliases": [
+    "CVE-2026-68508",
+    "PYSEC-2026-3850"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "hydra-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "hydra._internal.instantiate._instantiate2",
+      "method": "_resolve_target"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "7faad0dcedfb4c0a364aa1067c0080fd6fdf8dca"
+    ]
+  }
+}

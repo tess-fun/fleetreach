@@ -1,0 +1,21 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-329j-jfvr-rhr6",
+  "aliases": [
+    "BIT-spark-2023-22946",
+    "CVE-2023-22946",
+    "PYSEC-2023-44"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pyspark"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "909da96e1471886a01a9e1def93630c4fd40e74a"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

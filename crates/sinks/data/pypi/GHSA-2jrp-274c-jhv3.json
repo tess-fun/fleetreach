@@ -1,0 +1,53 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2jrp-274c-jhv3",
+  "aliases": [
+    "CVE-2026-25580",
+    "PYSEC-2026-2976",
+    "PYSEC-2026-2980"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pydantic-ai-slim"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "pydantic_ai_slim.pydantic_ai.models",
+      "method": "download_item"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "d398bc9d39aecca6530fa7486a410d5cce936301"
+    ],
+    "excluded": [
+      {
+        "class": "pydantic_ai_slim.pydantic_ai.messages.AudioUrl",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "pydantic_ai_slim.pydantic_ai.messages.DocumentUrl",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "pydantic_ai_slim.pydantic_ai.messages.FileUrl",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "pydantic_ai_slim.pydantic_ai.messages.ImageUrl",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "pydantic_ai_slim.pydantic_ai.messages.VideoUrl",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-22m3-c7vp-49fj",
+  "aliases": [
+    "CVE-2026-28681",
+    "PYSEC-2026-2186"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "irrd"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "irrd.integration_tests.run.TestIntegration",
+      "method": "_check_recipients_in_mails"
+    },
+    {
+      "class": "irrd.integration_tests.run.TestIntegration",
+      "method": "_check_text_in_mails"
+    },
+    {
+      "class": "irrd.integration_tests.run.TestIntegration",
+      "method": "_extract_message_body"
+    },
+    {
+      "class": "irrd.integration_tests.run.TestIntegration",
+      "method": "_prepare_database"
+    },
+    {
+      "class": "irrd.integration_tests.run.TestIntegration",
+      "method": "_retrieve_mails"
+    },
+    {
+      "class": "irrd.integration_tests.run.TestIntegration",
+      "method": "_start_irrds"
+    },
+    {
+      "class": "irrd.integration_tests.run.TestIntegration",
+      "method": "_submit_update"
+    },
+    {
+      "class": "irrd.integration_tests.run.TestIntegration",
+      "method": "check_http"
+    },
+    {
+      "class": "irrd.integration_tests.run.TestIntegration",
+      "method": "teardown_method"
+    },
+    {
+      "class": "irrd.webui.auth.users.PasswordResetToken",
+      "method": "_hash"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "8408e0f1b9f47eb2f2e712d6153e32194df05fbb",
+      "cf62df4a49d3891e80b2879d9b324d1af050000c"
+    ],
+    "excluded": [
+      {
+        "class": "irrd.integration_tests.run.TestIntegration",
+        "method": "check_graphql",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "irrd.server.http.app",
+        "method": "set_middleware",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-322x-v876-g883",
+  "ecosystem": "npm",
+  "packages": [
+    "@asymmetric-effort/nogginlessdom"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/assertions/snapshots.ts",
+      "method": "matchFileSnapshot"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "785e6ac6e124d1a89b3ccf40bbd75fc8e4cb215d"
+    ]
+  }
+}

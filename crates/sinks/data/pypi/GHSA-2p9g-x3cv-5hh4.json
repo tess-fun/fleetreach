@@ -1,0 +1,79 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2p9g-x3cv-5hh4",
+  "aliases": [
+    "CVE-2026-55227",
+    "PYSEC-2026-3941"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "weblate"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "weblate.auth.models.User",
+      "method": "needs_project_filter"
+    },
+    {
+      "class": "weblate.trans.views.changes",
+      "method": "show_change"
+    },
+    {
+      "class": "weblate.trans.views.edit",
+      "method": "delete_comment"
+    },
+    {
+      "class": "weblate.trans.views.edit",
+      "method": "resolve_comment"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "836bc082803d49d02f2831ec8339268eb66bcdae"
+    ],
+    "excluded": [
+      {
+        "class": "weblate.trans.views.edit",
+        "method": "comment",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "weblate.trans.views.edit",
+        "method": "delete_unit",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "weblate.trans.views.js",
+        "method": "dismiss_automatically_translated",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "weblate.trans.views.js",
+        "method": "get_unit_translations",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "weblate.trans.views.js",
+        "method": "ignore_check",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "weblate.trans.views.js",
+        "method": "ignore_check_source",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "weblate.trans.views.settings",
+        "method": "announcement_delete",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "weblate.trans.views.source",
+        "method": "edit_context",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

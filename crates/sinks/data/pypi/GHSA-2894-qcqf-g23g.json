@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2894-qcqf-g23g",
+  "aliases": [
+    "CVE-2023-26150",
+    "PYSEC-2023-189"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "asyncua"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "asyncua.server.uaprocessor.UaProcessor",
+      "method": "_process_message"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "2be7ce80df05de8d6c6ae1ebce6fa2bb7147844a",
+      "b4106dfd5037423c9d1810b48a97296b59cde513"
+    ]
+  }
+}

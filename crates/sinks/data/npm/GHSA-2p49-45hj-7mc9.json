@@ -1,0 +1,36 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2p49-45hj-7mc9",
+  "aliases": [
+    "CVE-2026-24047"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@backstage/cli-common"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/backend-plugin-api/src/paths.ts",
+      "method": "resolveSafeChildPath"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "ae4dd5d1572a4f639e1a466fd982656b50f8e692"
+    ],
+    "excluded": [
+      {
+        "class": "packages/backend-plugin-api/src/paths.ts",
+        "method": "resolveRealPath",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/cli-common/src/isChildPath.ts",
+        "method": "isChildPath",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

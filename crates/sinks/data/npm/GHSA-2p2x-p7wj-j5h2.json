@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2p2x-p7wj-j5h2",
+  "aliases": [
+    "CVE-2024-31454"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "psitransfer"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "app/src/Upload/store/upload.js",
+      "method": "upload"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "0014d81141e0f1664ccb6841970ef1ea0237cca3"
+    ]
+  }
+}

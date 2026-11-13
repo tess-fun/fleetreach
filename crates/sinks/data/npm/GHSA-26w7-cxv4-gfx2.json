@@ -1,0 +1,16 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-26w7-cxv4-gfx2",
+  "ecosystem": "npm",
+  "packages": [
+    "astro"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "ecb4082131490b4fe9a56aa44fda84b54ef8967b"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

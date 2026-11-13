@@ -1,0 +1,66 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2m8v-572m-ff2v",
+  "aliases": [
+    "CVE-2021-21315"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "systeminformation"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/processes.js",
+      "method": "processLoad"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "07daa05fb06f24f96297abaa30c2ace8bfd8b525"
+    ],
+    "excluded": [
+      {
+        "class": "lib/docker.js",
+        "method": "dockerContainerInspect",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/docker.js",
+        "method": "dockerContainerProcesses",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/docker.js",
+        "method": "dockerContainerStats",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/docker.js",
+        "method": "dockerContainers",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/internet.js",
+        "method": "inetChecksite",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "lib/internet.js",
+        "method": "inetLatency",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "lib/network.js",
+        "method": "networkStats",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/processes.js",
+        "method": "services",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

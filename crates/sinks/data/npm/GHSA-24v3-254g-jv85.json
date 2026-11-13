@@ -1,0 +1,69 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-24v3-254g-jv85",
+  "ecosystem": "npm",
+  "packages": [
+    "@tutao/tutanota-utils"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/otest/lib/Assertion.ts.Assertion",
+      "method": "equals"
+    },
+    {
+      "class": "src/common/api/worker/facades/lazy/MailFacade.ts",
+      "method": "getUrlDomain"
+    },
+    {
+      "class": "src/common/api/worker/facades/lazy/MailFacade.ts",
+      "method": "parseUrl"
+    },
+    {
+      "class": "src/common/contactsFunctionality/ContactUtils.ts",
+      "method": "getSocialUrl"
+    },
+    {
+      "class": "src/mail-app/contacts/VCardImporter.ts",
+      "method": "vCardListToContacts"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "e28345f5f78f628f9d5c04e785f79543f01dca8b"
+    ],
+    "excluded": [
+      {
+        "class": "src/mail-app/contacts/VCardExporter.ts",
+        "method": "_socialIdsToVCardSocialUrls",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/mail-app/contacts/view/ContactViewer.ts.ContactViewer",
+        "method": "renderAddress",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/mail-app/contacts/view/ContactViewer.ts.ContactViewer",
+        "method": "renderMessengerHandle",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/mail-app/contacts/view/ContactViewer.ts.ContactViewer",
+        "method": "renderPhoneNumber",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/mail-app/contacts/view/ContactViewer.ts.ContactViewer",
+        "method": "renderSocialId",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/mail-app/contacts/view/ContactViewer.ts.ContactViewer",
+        "method": "renderWebsite",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

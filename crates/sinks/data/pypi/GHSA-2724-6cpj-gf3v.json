@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2724-6cpj-gf3v",
+  "aliases": [
+    "CVE-2026-87998",
+    "PYSEC-2026-4115"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "open-webui"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "backend.open_webui.routers.knowledge",
+      "method": "delete_knowledge_by_id"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "dc03e7e595d61be97b25a1dd7bb99ad264f73199"
+    ]
+  }
+}

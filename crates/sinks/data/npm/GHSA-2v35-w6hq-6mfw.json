@@ -1,0 +1,63 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2v35-w6hq-6mfw",
+  "aliases": [
+    "CVE-2026-41673"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@xmldom/xmldom"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/dom.js",
+      "method": "_visitNode"
+    },
+    {
+      "class": "lib/dom.js",
+      "method": "cloneNode"
+    },
+    {
+      "class": "lib/dom.js",
+      "method": "getTextContent"
+    },
+    {
+      "class": "lib/dom.js",
+      "method": "importNode"
+    },
+    {
+      "class": "lib/dom.js",
+      "method": "isEqualNode"
+    },
+    {
+      "class": "lib/dom.js",
+      "method": "normalize"
+    },
+    {
+      "class": "lib/dom.js",
+      "method": "serializeToString"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "17678a2a73ecbd1a2da90f3d47dc23da9cef81aa",
+      "291257493cb0eb6980eda83b162a9c4e6d7d2597",
+      "2d6d6916ed8a4c223db1f6d7560ab4544c465b0f",
+      "430357c7b6333108856e917bf2367afe5ceb6f8a",
+      "4845ef109221df0890825de2822fbe77afba3afe",
+      "8834218c85ac2a4d757b9587c9028e67c2f7b6c3",
+      "8b7cfd1491314abdc347261921d7334ff15f7112",
+      "b0620383abc1df067f3ce1014c43ae1bc1161eeb",
+      "e6edcab6bef5bcdba0b220bb35442aa72f452b84"
+    ],
+    "excluded": [
+      {
+        "class": "lib/dom.js",
+        "method": "get",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

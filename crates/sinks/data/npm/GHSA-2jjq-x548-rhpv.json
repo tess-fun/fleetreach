@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2jjq-x548-rhpv",
+  "aliases": [
+    "CVE-2022-39266"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "isolated-vm"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "218e87a6d4e8cb818bea76d1ab30cd0be51920e8"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

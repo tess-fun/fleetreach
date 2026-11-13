@@ -1,0 +1,91 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-26g9-27vm-x3q8",
+  "aliases": [
+    "CVE-2026-45671",
+    "PYSEC-2026-2692"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "open-webui"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "backend.open_webui.models.chats.ChatTable",
+      "method": "get_shared_chats_by_file_id"
+    },
+    {
+      "class": "backend.open_webui.utils.access_control.files",
+      "method": "has_access_to_file"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "2e52ad8ff2f8d9ed9f38f76e9bc19c8f92d91fc3"
+    ],
+    "excluded": [
+      {
+        "class": "backend.open_webui.models.chats.ChatTable",
+        "method": "delete_shared_chat_by_chat_id",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "backend.open_webui.models.chats.ChatTable",
+        "method": "delete_shared_chats_by_user_id",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "backend.open_webui.models.chats.ChatTable",
+        "method": "get_chat_by_share_id",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "backend.open_webui.models.chats.ChatTable",
+        "method": "get_shared_chat_list_by_user_id",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "backend.open_webui.models.chats.ChatTable",
+        "method": "insert_shared_chat_by_chat_id",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "backend.open_webui.models.chats.ChatTable",
+        "method": "update_shared_chat_by_chat_id",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "backend.open_webui.routers.chats",
+        "method": "clone_shared_chat_by_id",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "backend.open_webui.routers.chats",
+        "method": "delete_shared_chat_by_id",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "backend.open_webui.routers.chats",
+        "method": "get_chat_by_id",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "backend.open_webui.routers.chats",
+        "method": "get_shared_chat_by_id",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "backend.open_webui.routers.chats",
+        "method": "get_shared_session_user_chat_list",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "backend.open_webui.routers.chats",
+        "method": "share_chat_by_id",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

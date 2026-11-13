@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-22p3-qrh9-cx32",
+  "aliases": [
+    "CVE-2022-31052",
+    "PYSEC-2022-224"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "matrix-synapse"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "synapse.rest.media.v1.preview_html",
+      "method": "_iterate_over_text"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "fa1308061802ac7b7d20e954ba7372c5ac292333"
+    ],
+    "excluded": [
+      {
+        "class": "synapse.rest.media.v1.preview_html",
+        "method": "parse_html_description",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

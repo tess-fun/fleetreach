@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-39mp-8hj3-5c49",
+  "aliases": [
+    "CVE-2026-28414",
+    "PYSEC-2026-64"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "gradio"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "gradio.utils",
+      "method": "safe_join"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "6011b00d0154b85532fa901dd73cf8fa7d86fd04"
+    ]
+  }
+}

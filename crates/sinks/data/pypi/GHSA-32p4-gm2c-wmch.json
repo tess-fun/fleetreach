@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-32p4-gm2c-wmch",
+  "aliases": [
+    "CVE-2024-9902",
+    "PYSEC-2026-1121"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "ansible-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib.ansible.modules.user.User",
+      "method": "ssh_key_gen"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "03794735d370db98a5ec2ad514fab2b0dd22d6be",
+      "03daf774d0d80fb7235910ed1c2b4fbcaebdfe65",
+      "3b6de811abea0a811e03e3029222a7e459922892",
+      "9d7312f695639e804d2caeb1d0f51c716a9ac7dd",
+      "f7be90626da3035c697623dcf9c90b7a0bc91c92"
+    ]
+  }
+}

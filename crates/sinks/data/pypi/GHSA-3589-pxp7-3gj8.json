@@ -1,0 +1,46 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3589-pxp7-3gj8",
+  "aliases": [
+    "CVE-2026-114386"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pydantic-ai-harness"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "pydantic_ai_harness.pydantic_ai_harness.code_mode._toolset",
+      "method": "run_nested_call"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "eb27b2b89fe76ae23ee9b6fc9eb4b227a4967949"
+    ],
+    "excluded": [
+      {
+        "class": "pydantic_ai_harness.pydantic_ai_harness.code_mode._eager.EagerCodeModeToolset",
+        "method": "call_tool",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "pydantic_ai_harness.pydantic_ai_harness.code_mode._speculation.SpeculationCoordinator",
+        "method": "claim",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "pydantic_ai_harness.pydantic_ai_harness.code_mode._toolset.CodeModeToolset",
+        "method": "_execute_code",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "pydantic_ai_harness.pydantic_ai_harness.code_mode._toolset.RunCodeExecution",
+        "method": "finish",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

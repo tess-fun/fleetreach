@@ -1,0 +1,27 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2jv5-9r88-3w3p",
+  "aliases": [
+    "CVE-2024-24762",
+    "GHSA-qf9m-vfgh-m389",
+    "PYSEC-2024-38",
+    "PYSEC-2026-1850"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "python-multipart"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "multipart.multipart",
+      "method": "parse_options_header"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "20f0ef6b4e4caf7d69a667c54dff57fe467109a4"
+    ]
+  }
+}

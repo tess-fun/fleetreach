@@ -1,0 +1,191 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-258h-f687-4226",
+  "aliases": [
+    "CVE-2024-41951",
+    "PYSEC-2026-1779"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pheonixappapi"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+      "method": "Make_BIN_Encoded_Files"
+    },
+    {
+      "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+      "method": "Make_JSON_Files"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "0937419e323f5ea9013d43dc1b82fef9d7e05044"
+    ],
+    "excluded": [
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Delete_File",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Delete_Files",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Delete_Folder",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Delete_Folders",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Link",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Links",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Make_Bin_Encoded_File",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Make_Empty_File",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Make_Empty_Files",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Make_Encoded_File",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Make_Encoded_Files",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Make_File",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Make_Files",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Make_Folder",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Make_Folders",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Make_Json_File",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Move_File",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Move_Files",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Read_Bin_Encoded_File",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Read_Bin_Encoded_Files",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Read_Encoded_File",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Read_Encoded_Files",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Read_File",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Read_Files",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Remove_Tree",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Remove_Trees",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Rename_File",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Rename_File_Folder",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Rename_Files",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Rename_Files_Folders",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Rename_Folder",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "PheonixAppAPI.apis.FileManager.Large_File_Management_System",
+        "method": "Rename_Folders",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

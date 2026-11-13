@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-37qj-frw5-hhjh",
+  "aliases": [
+    "CVE-2026-25128"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "fast-xml-parser"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/xmlparser/OrderedObjParser.js.OrderedObjParser",
+      "method": "constructor"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "4e387f61c4a5cef792f6a2f42467013290bf95dc"
+    ]
+  }
+}

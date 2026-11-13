@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-25mp-g6fv-mqxx",
+  "aliases": [
+    "CVE-2021-43803"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "next"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/next/server/next-server.ts.Server",
+      "method": "handleRequest"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "6d98b4fb4315dec1badecf0e9bdc212a4272b264"
+    ]
+  }
+}

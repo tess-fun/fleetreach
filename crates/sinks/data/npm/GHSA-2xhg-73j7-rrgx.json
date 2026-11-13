@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2xhg-73j7-rrgx",
+  "aliases": [
+    "CVE-2026-53957"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@contentful/mcp-tools"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/mcp-tools/src/tools/jobs/space-to-space-migration/exportSpace.ts",
+      "method": "createExportSpaceTool"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "fa7477ee48515f4248bc91a025eab0ca83423fe0"
+    ],
+    "excluded": [
+      {
+        "class": "packages/mcp-server/src/tools/register.ts",
+        "method": "registerAllTools",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/mcp-tools/src/tools/jobs/space-to-space-migration/importSpace.ts",
+        "method": "createImportSpaceTool",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/mcp-tools/src/tools/jobs/space-to-space-migration/mockClient.ts",
+        "method": "createExportTestArgs",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2977-5php-6789",
+  "aliases": [
+    "CVE-2024-57189"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "erxes"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/core/src/data/utils.ts",
+      "method": "readFileRequest"
+    },
+    {
+      "class": "packages/core/src/data/utils.ts",
+      "method": "uploadFileAWS"
+    },
+    {
+      "class": "packages/core/src/data/utils.ts",
+      "method": "uploadFileCloudflare"
+    },
+    {
+      "class": "packages/core/src/data/utils.ts",
+      "method": "uploadFileGCS"
+    },
+    {
+      "class": "packages/core/src/data/utils.ts",
+      "method": "uploadFileLocal"
+    },
+    {
+      "class": "packages/core/src/data/utils.ts",
+      "method": "uploadToCFImages"
+    },
+    {
+      "class": "packages/core/src/data/utils.ts",
+      "method": "uploadToCFStream"
+    },
+    {
+      "class": "packages/workers/src/data/utils.ts",
+      "method": "getCsvHeadersInfo"
+    },
+    {
+      "class": "packages/workers/src/data/utils.ts",
+      "method": "getImportCsvInfo"
+    },
+    {
+      "class": "packages/workers/src/worker/import/utils.ts",
+      "method": "getCsvInfo"
+    },
+    {
+      "class": "packages/workers/src/worker/import/utils.ts",
+      "method": "importBulkStream"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "d626070a0fcd435ae29e689aca051ccfb440c2f3"
+    ]
+  }
+}

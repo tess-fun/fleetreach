@@ -1,0 +1,36 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3c48-6pcv-88rm",
+  "aliases": [
+    "CVE-2018-1999024"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "mathjax"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "unpacked/extensions/TeX/unicode.js",
+      "method": "Unicode"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "a55da396c18cafb767a26aa9ad96f6f4199852f1"
+    ],
+    "excluded": [
+      {
+        "class": "unpacked/extensions/toMathML.js",
+        "method": "toMathML",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "unpacked/extensions/toMathML.js",
+        "method": "toMathMLclass",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

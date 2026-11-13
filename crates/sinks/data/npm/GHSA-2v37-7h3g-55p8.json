@@ -1,0 +1,58 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2v37-7h3g-55p8",
+  "aliases": [
+    "CVE-2026-67213"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "nanoid"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "async/index.browser.cjs",
+      "method": "customAlphabet"
+    },
+    {
+      "class": "async/index.browser.js",
+      "method": "customAlphabet"
+    },
+    {
+      "class": "async/index.cjs",
+      "method": "customAlphabet"
+    },
+    {
+      "class": "async/index.js",
+      "method": "customAlphabet"
+    },
+    {
+      "class": "async/index.native.js",
+      "method": "customAlphabet"
+    },
+    {
+      "class": "index.browser.cjs",
+      "method": "customRandom"
+    },
+    {
+      "class": "index.browser.js",
+      "method": "customRandom"
+    },
+    {
+      "class": "index.cjs",
+      "method": "customRandom"
+    },
+    {
+      "class": "index.js",
+      "method": "customRandom"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "cb3626d0f3342fdf179cd425fd9c4fbb92c7d0e7",
+      "e10f8d40ce9d1ab47f66d65a16b48086432730d0",
+      "f9d13f150847d117877adee3460a46eceb0cf49b"
+    ]
+  }
+}

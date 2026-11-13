@@ -1,0 +1,59 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2943-9672-r45w",
+  "aliases": [
+    "BIT-airflow-2026-33264",
+    "CVE-2026-33264",
+    "PYSEC-2026-2082"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "apache-airflow"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "airflow.serialization.serialized_objects.BaseSerialization",
+      "method": "deserialize"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "69b6c54ef17b048ebb0e9a656d0d9e1c99480d6b",
+      "7e9bdb245e09373d91fcb7bda575ad4be63aa28d"
+    ],
+    "excluded": [
+      {
+        "class": "airflow.models.taskinstance.TaskInstance",
+        "method": "defer_task",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "airflow.models.trigger.Trigger",
+        "method": "encrypt_kwargs",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "airflow.serialization.serialized_objects",
+        "method": "_decode_start_trigger_args",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "airflow.serialization.serialized_objects.BaseSerialization",
+        "method": "serialize",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "airflow.triggers.base.BaseEventTrigger",
+        "method": "hash",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "airflow.triggers.base.BaseTrigger",
+        "method": "task_instance",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

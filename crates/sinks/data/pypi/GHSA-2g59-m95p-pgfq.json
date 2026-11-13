@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2g59-m95p-pgfq",
+  "aliases": [
+    "CVE-2026-22219",
+    "PYSEC-2026-1237"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "chainlit"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "cypress.e2e.data_layer.main.TestDataLayer",
+      "method": "create_element"
+    },
+    {
+      "class": "cypress.e2e.data_layer.main.TestDataLayer",
+      "method": "get_element"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "ffc3cce648b343b933e10e85ee5805c7e02ab3bf"
+    ],
+    "excluded": [
+      {
+        "class": "backend.chainlit.server",
+        "method": "delete_thread_element",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "backend.chainlit.server",
+        "method": "update_thread_element",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

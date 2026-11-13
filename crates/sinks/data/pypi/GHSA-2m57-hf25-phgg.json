@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2m57-hf25-phgg",
+  "aliases": [
+    "CVE-2024-4340",
+    "PYSEC-2026-1940"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "sqlparse"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "sqlparse.sql.TokenList",
+      "method": "flatten"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "b4a39d9850969b4e1d6940d32094ee0b42a2cf03"
+    ]
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2p39-2jf3-fv2q",
+  "aliases": [
+    "CVE-2026-54150"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "next-video"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/utils/utils.ts",
+      "method": "isRemote"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "73abf1d534c2ac48db546ecfed0e89cbaf124f6f"
+    ],
+    "excluded": [
+      {
+        "class": "src/request-handler.ts",
+        "method": "getRequest",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/request-handler.ts",
+        "method": "postRequest",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

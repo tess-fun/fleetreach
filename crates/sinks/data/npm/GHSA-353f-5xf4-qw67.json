@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-353f-5xf4-qw67",
+  "aliases": [
+    "CVE-2023-34092"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "vite"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/vite/src/node/server/middlewares/static.ts",
+      "method": "serveRawFsMiddleware"
+    },
+    {
+      "class": "packages/vite/src/node/server/middlewares/static.ts",
+      "method": "serveStaticMiddleware"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "813ddd6155c3d54801e264ba832d8347f6f66b32"
+    ]
+  }
+}

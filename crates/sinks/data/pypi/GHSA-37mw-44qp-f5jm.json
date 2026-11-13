@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-37mw-44qp-f5jm",
+  "aliases": [
+    "CVE-2025-3933",
+    "PYSEC-2026-1977"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "transformers"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "transformers.models.donut.processing_donut.DonutProcessor",
+      "method": "token2json"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "ebbe9b12dd75b69f92100d684c47f923ee262a93"
+    ]
+  }
+}

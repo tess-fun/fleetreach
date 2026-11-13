@@ -1,0 +1,152 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2f48-3555-fpx6",
+  "aliases": [
+    "CVE-2026-110644"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "nodejs-whisper"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/utils.ts",
+      "method": "convertToWavType"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "957fd84da217dd8c6265418e938a77db0e2c2ae7",
+      "d93780c9164be5f7e0b2f4094005378923659ce5"
+    ],
+    "excluded": [
+      {
+        "class": "src/WhisperHelper.ts",
+        "method": "constructCommand",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/WhisperHelper.ts",
+        "method": "constructOptionsFlags",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/WhisperHelper.ts",
+        "method": "constructVadFlags",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/WhisperHelper.ts",
+        "method": "escapeArg",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/WhisperHelper.ts",
+        "method": "getExecutablePath",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/WhisperHelper.ts",
+        "method": "validateNumber",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/autoDownloadModel.ts",
+        "method": "autoDownloadModel",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/autoDownloadModel.ts",
+        "method": "quoteShellArg",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/autoDownloadVadModel.ts",
+        "method": "autoDownloadVadModel",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/autoDownloadVadModel.ts",
+        "method": "downloadFile",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/autoDownloadVadModel.ts",
+        "method": "getResponse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/autoDownloadVadModel.ts",
+        "method": "isValidVadModel",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/buildConfig.ts",
+        "method": "getCmakeConfigureCommand",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/downloadModel.ts",
+        "method": "askForModel",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/downloadModel.ts",
+        "method": "askIfUserWantToUseCuda",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/downloadModel.ts",
+        "method": "downloadModel",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/index.ts",
+        "method": "nodewhisper",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/utils.ts",
+        "method": "checkIfFileExists",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/utils.ts",
+        "method": "isValidWavHeader",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/whisper.ts",
+        "method": "checkExecutableExists",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/whisper.ts",
+        "method": "executeCppCommand",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/whisper.ts",
+        "method": "getWhisperExecutablePath",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/whisper.ts",
+        "method": "handleError",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/whisper.ts",
+        "method": "isBuildConfigured",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/whisper.ts",
+        "method": "whisperShell",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

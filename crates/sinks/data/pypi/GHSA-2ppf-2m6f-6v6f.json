@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2ppf-2m6f-6v6f",
+  "aliases": [
+    "CVE-2023-6110",
+    "PYSEC-2026-1853"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "python-openstackclient"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "openstackclient.identity.v3.access_rule.DeleteAccessRule",
+      "method": "get_parser"
+    },
+    {
+      "class": "openstackclient.identity.v3.access_rule.DeleteAccessRule",
+      "method": "take_action"
+    },
+    {
+      "class": "openstackclient.identity.v3.access_rule.ShowAccessRule",
+      "method": "get_parser"
+    },
+    {
+      "class": "openstackclient.identity.v3.access_rule.ShowAccessRule",
+      "method": "take_action"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "bc60e3bb908a7f10c87993d791184bfe46784d6c"
+    ]
+  }
+}

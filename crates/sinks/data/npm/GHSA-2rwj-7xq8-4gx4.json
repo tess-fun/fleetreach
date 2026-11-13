@@ -1,0 +1,35 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2rwj-7xq8-4gx4",
+  "aliases": [
+    "CVE-2024-41677"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@builder.io/qwik"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/qwik/src/core/render/ssr/render-ssr.ts",
+      "method": "escapeAttr"
+    },
+    {
+      "class": "packages/qwik/src/core/render/ssr/render-ssr.ts",
+      "method": "escapeHtml"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "7e742eb3a1001542d795776c0317d47df8b9d64e"
+    ],
+    "excluded": [
+      {
+        "class": "packages/qwik/src/core/render/ssr/render-ssr.ts",
+        "method": "renderNode",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

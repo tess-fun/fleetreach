@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-269x-pg5c-5xgm",
+  "aliases": [
+    "BIT-airflow-2023-39508",
+    "CVE-2023-39508",
+    "PYSEC-2023-134"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "apache-airflow"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "airflow.www.views.Airflow",
+      "method": "run"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "101d59c4b88ab979d305b8d96f612c27c8a44aa8"
+    ]
+  }
+}

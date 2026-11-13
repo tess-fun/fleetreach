@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-36m4-6v6m-4vpr",
+  "aliases": [
+    "CVE-2019-12043"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "remarkable"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/helpers/parse_link_destination.js",
+      "method": "parseLinkDestination"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "49e87b7ae2dc323d83606792a749fb207595249e"
+    ]
+  }
+}

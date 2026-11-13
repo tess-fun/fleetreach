@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-23qq-p4gq-gc2g",
+  "aliases": [
+    "CVE-2024-34528",
+    "PYSEC-2024-175"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "wordops"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "wo.cli.plugins.stack_pref",
+      "method": "pre_pref"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "31353f0fef14ad8bc1f61c028971bd30b9e1909b"
+    ]
+  }
+}

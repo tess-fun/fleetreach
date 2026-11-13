@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2fqm-m4r2-fh98",
+  "aliases": [
+    "CVE-2023-33977",
+    "PYSEC-2026-1495"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "kiwitcms"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "tcms.kiwi_attachments.validators",
+      "method": "deny_uploads_containing_script_tag"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "d789f4b51025de4f8c747c037d02e1b0da80b034"
+    ]
+  }
+}

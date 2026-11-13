@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3c6g-pvg8-gqw2",
+  "aliases": [
+    "CVE-2020-7712"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "json"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/json.js",
+      "method": "parseLookup"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "cc4798169f9e0f181f8aa61905b88479badcd483"
+    ],
+    "excluded": [
+      {
+        "class": "lib/json.js",
+        "method": "main",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

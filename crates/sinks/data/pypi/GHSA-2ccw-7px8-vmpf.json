@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2ccw-7px8-vmpf",
+  "aliases": [
+    "CVE-2022-24776",
+    "PYSEC-2026-635"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "flask-appbuilder"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "flask_appbuilder.security.views.AuthDBView",
+      "method": "login"
+    },
+    {
+      "class": "flask_appbuilder.security.views.AuthLDAPView",
+      "method": "login"
+    },
+    {
+      "class": "flask_appbuilder.security.views.AuthOAuthView",
+      "method": "oauth_authorized"
+    },
+    {
+      "class": "flask_appbuilder.security.views.AuthOIDView",
+      "method": "login"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "5214d975ebad2ff32057443d2cc20fef1c04d0ea"
+    ]
+  }
+}

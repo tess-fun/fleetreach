@@ -1,0 +1,21 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2cx9-54hp-r698",
+  "aliases": [
+    "BIT-superset-2024-53948",
+    "CVE-2024-53948",
+    "PYSEC-2026-1154"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "apache-superset"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "ac3a10d8f192520580b8ce545cf418dc7928d27c"
+    ]
+  },
+  "note": "the fix changes no Python function that exists in the vulnerable version; it also changes JavaScript files, which this ecosystem's call graph does not read"
+}

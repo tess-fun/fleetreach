@@ -1,0 +1,39 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-29xr-v42j-r956",
+  "aliases": [
+    "CVE-2020-7677"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "thenify"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "index.js",
+      "method": "createCallback"
+    },
+    {
+      "class": "index.js",
+      "method": "createWrapper"
+    },
+    {
+      "class": "index.js.thenify",
+      "method": "withCallback"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "0d94a24eb933bc835d568f3009f4d269c4c4c17a"
+    ],
+    "excluded": [
+      {
+        "class": "index.js",
+        "method": "thenify",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -1606,6 +1606,12 @@ fn assess_reachability(
                 // PyPI likewise gets a package import graph over the repo's virtualenv(s):
                 // transitive reachability with a witness chain, positive-only.
                 py_reach::assess(fleet_report, config);
+                // Then a call graph over the same source refines npm and PyPI findings that
+                // have a sink record: a chain of calls to a sink is the witness. Positive-only.
+                match fleetreach_sinks::record::bundled() {
+                    Ok(set) => crate::fn_reach::assess(fleet_report, config, &set, args.verbose),
+                    Err(e) => eprintln!("warning: the bundled sink records: {e}"),
+                }
                 // Six more read import lines and follow the lockfile: positive-only, so the
                 // grep's answer stands where they find no chain.
                 import_reach::assess(fleet_report, config);

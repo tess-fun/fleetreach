@@ -1,0 +1,148 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2p9h-rqjw-gm92",
+  "aliases": [
+    "CVE-2026-27578"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "n8n"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/nodes-base/nodes/Form/Form.node.ts.Form",
+      "method": "webhook"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "062644ef786b6af480afe4a0f12bc6d70040534a",
+      "1479aab2d32fe0ee087f82b9038b1035c98be2f6",
+      "9e5212ecbc5d2d4e6f340b636a5e84be6369882e"
+    ],
+    "excluded": [
+      {
+        "class": "packages/@n8n/nodes-langchain/nodes/trigger/ChatTrigger/GenericFunctions.ts",
+        "method": "validateAuth",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/@n8n/nodes-langchain/nodes/trigger/ChatTrigger/templates.ts",
+        "method": "createPage",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/@n8n/task-runner/src/js-task-runner/js-task-runner.ts.JsTaskRunner",
+        "method": "buildContext",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/@n8n/task-runner/src/js-task-runner/js-task-runner.ts.JsTaskRunner",
+        "method": "buildCustomConsole",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/@n8n/task-runner/src/js-task-runner/js-task-runner.ts.JsTaskRunner",
+        "method": "createVmExecutableCode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/@n8n/task-runner/src/js-task-runner/js-task-runner.ts.JsTaskRunner",
+        "method": "getNativeVariables",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/@n8n/task-runner/src/js-task-runner/js-task-runner.ts.JsTaskRunner",
+        "method": "preventPrototypePollution",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/@n8n/task-runner/src/js-task-runner/js-task-runner.ts.JsTaskRunner",
+        "method": "runCode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/cli/src/webhooks/webhook-helpers.ts",
+        "method": "evaluateResponseHeaders",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/cli/src/webhooks/webhook-helpers.ts",
+        "method": "executeWebhook",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/cli/src/webhooks/webhook-helpers.ts",
+        "method": "setupResponseNodePromise",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/cli/src/webhooks/webhook-request-handler.ts.WebhookRequestHandler",
+        "method": "sendLegacyResponse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/cli/src/webhooks/webhook-request-handler.ts.WebhookRequestHandler",
+        "method": "setResponseHeaders",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/core/src/html-sandbox.ts",
+        "method": "isHtmlRenderedContentType",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/nodes-base/nodes/Form/utils/utils.ts",
+        "method": "prepareFormFields",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/nodes-base/nodes/Form/utils/utils.ts",
+        "method": "renderForm",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/nodes-base/nodes/Merge/v3/actions/mode/combineBySql.ts",
+        "method": "disableAlasqlFileAccess",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/nodes-base/nodes/Merge/v3/actions/mode/combineBySql.ts",
+        "method": "execute",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/nodes-base/nodes/Merge/v3/actions/mode/combineBySql.ts",
+        "method": "executeSelectWithMappedPairedItems",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/nodes-base/utils/sendAndWait/utils.ts",
+        "method": "sendAndWaitWebhook",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/workflow/src/expression-sandboxing.ts",
+        "method": "PrototypeSanitizer",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/workflow/src/expression.ts.Expression",
+        "method": "initializeGlobalContext",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/workflow/src/extensions/expression-extension.ts",
+        "method": "findExtendedFunction",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/workflow/src/node-helpers.ts",
+        "method": "getNodeParameters",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

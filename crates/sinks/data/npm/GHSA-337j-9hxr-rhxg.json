@@ -1,0 +1,40 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-337j-9hxr-rhxg",
+  "aliases": [
+    "CVE-2026-53666"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "react-router"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/react-router/lib/dom/lib.tsx",
+      "method": "deserializeErrors"
+    },
+    {
+      "class": "packages/react-router/lib/dom/ssr/errors.ts",
+      "method": "deserializeErrors"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "9d22943fd46c8ae4b08236425fa3549e10e9ad1a"
+    ],
+    "excluded": [
+      {
+        "class": "packages/react-router/lib/dom-export/hydrated-router.tsx",
+        "method": "createHydratedRouter",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/react-router/lib/server-runtime/server.ts",
+        "method": "handleDocumentRequest",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

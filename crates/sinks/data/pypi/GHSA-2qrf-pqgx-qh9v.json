@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2qrf-pqgx-qh9v",
+  "aliases": [
+    "CVE-2026-115774"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "twisted"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "twisted.mail.imap4",
+      "method": "parseNestedParens"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3d125548bcbe955007cb97f480bb699a5e074741"
+    ]
+  }
+}

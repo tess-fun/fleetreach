@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-274f-6w77-8qm9",
+  "aliases": [
+    "CVE-2026-58271"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@sync-in/server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "backend/src/applications/users/services/users-manager.service.ts.UsersManager",
+      "method": "updateAccesses"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "b13a4aad5c2b38fe8231a0d007cd08a086ec5bdb"
+    ]
+  }
+}

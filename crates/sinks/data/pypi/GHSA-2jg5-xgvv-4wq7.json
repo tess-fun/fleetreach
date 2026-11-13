@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2jg5-xgvv-4wq7",
+  "aliases": [
+    "CVE-2021-34337",
+    "PYSEC-2023-22"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "mailman"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "mailman.rest.wsgiapp.Middleware",
+      "method": "process_resource"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "e4a39488c4510fcad8851217f10e7337a196bb51"
+    ]
+  }
+}

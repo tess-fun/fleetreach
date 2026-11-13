@@ -1,0 +1,21 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2pr6-76vf-7546",
+  "ecosystem": "npm",
+  "packages": [
+    "js-yaml"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/js-yaml/loader.js",
+      "method": "storeMappingPair"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "a567ef3c6e61eb319f0bfc2671d91061afb01235"
+    ]
+  }
+}

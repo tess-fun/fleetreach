@@ -1,0 +1,44 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2364-jh4q-m9vm",
+  "aliases": [
+    "CVE-2026-73488"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "flowise"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/server/src/enterprise/controllers/organization.controller.ts.OrganizationController",
+      "method": "getAdditionalSeatsProration"
+    },
+    {
+      "class": "packages/server/src/enterprise/controllers/organization.controller.ts.OrganizationController",
+      "method": "getAdditionalSeatsQuantity"
+    },
+    {
+      "class": "packages/server/src/enterprise/controllers/organization.controller.ts.OrganizationController",
+      "method": "getCustomerWithDefaultSource"
+    },
+    {
+      "class": "packages/server/src/enterprise/controllers/organization.controller.ts.OrganizationController",
+      "method": "getPlanProration"
+    },
+    {
+      "class": "packages/server/src/enterprise/controllers/organization.controller.ts.OrganizationController",
+      "method": "updateAdditionalSeats"
+    },
+    {
+      "class": "packages/server/src/enterprise/controllers/organization.controller.ts.OrganizationController",
+      "method": "updateSubscriptionPlan"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "4d7899d02ca370a5510406be5c91483085a412f9"
+    ]
+  }
+}

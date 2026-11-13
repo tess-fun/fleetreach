@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-33cg-gxv8-3p8g",
+  "aliases": [
+    "CVE-2026-55514",
+    "PYSEC-2026-2303"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "vllm"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "vllm.v1.worker.gpu_model_runner.GPUModelRunner",
+      "method": "_init_mrope_positions"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "470229c37efaf69c86e8bc97482b0b1ff7551c65"
+    ]
+  }
+}

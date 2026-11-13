@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2vrm-gr82-f7m5",
+  "aliases": [
+    "CVE-2026-34514",
+    "PYSEC-2026-2096"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "aiohttp"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "aiohttp.formdata.FormData",
+      "method": "add_field"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "9a6ada97e2c6cf1ce31727c6c9fcea17c21f6f06"
+    ]
+  }
+}

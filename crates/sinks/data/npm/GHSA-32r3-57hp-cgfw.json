@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-32r3-57hp-cgfw",
+  "aliases": [
+    "CVE-2023-46943"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@evershop/evershop"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "96d9ca3e024e0b63c538911e4a914df3d287cc9f"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

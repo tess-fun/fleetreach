@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2jp7-wwpg-3p9w",
+  "aliases": [
+    "CVE-2026-55090"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "ep_etherpad-lite"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/node/utils/ExportHtml.ts",
+      "method": "getHTMLFromAtext"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "86c56cf827dd6e5ff1b6cd3760f87adc47f58bb1"
+    ],
+    "excluded": [
+      {
+        "class": "src/node/utils/Settings.ts",
+        "method": "reloadSettings",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

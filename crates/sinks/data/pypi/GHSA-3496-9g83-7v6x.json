@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3496-9g83-7v6x",
+  "aliases": [
+    "CVE-2026-59894",
+    "PYSEC-2026-3696"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "sqlparse"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "sqlparse.filters.output.OutputPHPFilter",
+      "method": "_process"
+    },
+    {
+      "class": "sqlparse.filters.output.OutputPythonFilter",
+      "method": "_process"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "53ff44b53e27cff78259acc1af015506fea60f63"
+    ]
+  }
+}

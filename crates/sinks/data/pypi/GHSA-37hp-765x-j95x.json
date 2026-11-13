@@ -1,0 +1,27 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-37hp-765x-j95x",
+  "aliases": [
+    "CVE-2017-7233",
+    "PYSEC-2017-9"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "django"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "django.utils.http",
+      "method": "_is_safe_url"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "254326cb3682389f55f886804d2c43f7b9f23e4f",
+      "8339277518c7d8ec280070a780915304654e3b66",
+      "f824655bc2c50b19d2f202d7640785caabc82787"
+    ]
+  }
+}

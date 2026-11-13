@@ -1,0 +1,60 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2h9g-j24r-h63g",
+  "aliases": [
+    "CVE-2026-71869"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "orval"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/core/src/getters/keys.ts",
+      "method": "getKey"
+    },
+    {
+      "class": "packages/core/src/getters/route.ts",
+      "method": "getRoutePath"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "8ef1bfdf3f9bcaf9dabfbe2e42887f1c0e159ab6"
+    ],
+    "excluded": [
+      {
+        "class": "packages/core/src/getters/route.ts",
+        "method": "getFullRoute",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/core/src/getters/route.ts",
+        "method": "getRoute",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/core/src/getters/route.ts",
+        "method": "getRouteAsArray",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/query/src/mutation-generator.ts",
+        "method": "createGenerateInvalidateCall",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/zod/src/index.ts",
+        "method": "generateZodValidationSchemaDefinition",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/zod/src/index.ts",
+        "method": "parseZodValidationSchemaDefinition",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

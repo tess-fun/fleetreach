@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-38f9-m297-6q9g",
+  "aliases": [
+    "CVE-2020-4035"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@nozbe/watermelondb"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "924c7ae2a8d7d6459656751e5b9b1bf91a218025"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

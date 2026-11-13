@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2qjv-p2gc-mjg2",
+  "aliases": [
+    "BIT-airflow-2026-67587",
+    "CVE-2026-67587",
+    "PYSEC-2026-3708"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "apache-airflow"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "airflow.sdk.definitions.callback.Callback",
+      "method": "deserialize"
+    },
+    {
+      "class": "airflow.sdk.definitions.callback.Callback",
+      "method": "get_callback_path"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "1baee0bf987eb220f15398e43572e1ed819a0130",
+      "2b598cb8b0570c941633be3d16a7eb912f73180c"
+    ]
+  }
+}

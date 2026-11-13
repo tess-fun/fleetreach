@@ -1,0 +1,57 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2w87-5qcj-j6gx",
+  "aliases": [
+    "CVE-2013-4469",
+    "PYSEC-2026-860"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "nova"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "nova.virt.images",
+      "method": "fetch_to_raw"
+    },
+    {
+      "class": "nova.virt.libvirt.imagebackend.Qcow2",
+      "method": "create_image"
+    },
+    {
+      "class": "nova.virt.libvirt.imagebackend.Rbd",
+      "method": "create_image"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "135faa7b5d9855312bedc19e5e1ecebae34d3d18",
+      "3cdfe894ab58f7b91bf7fb690fc5bc724e44066f",
+      "f6810be4ae1a6c93e7d8017ee67d5344dfdf4a30"
+    ],
+    "excluded": [
+      {
+        "class": "nova.virt.images",
+        "method": "fetch",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "nova.virt.libvirt.imagebackend.Lvm",
+        "method": "create_image",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "nova.virt.libvirt.imagebackend.Raw",
+        "method": "create_image",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "nova.virt.libvirt.utils",
+        "method": "fetch_image",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

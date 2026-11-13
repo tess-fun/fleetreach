@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2wcr-87wf-cf9j",
+  "aliases": [
+    "CVE-2023-27489",
+    "PYSEC-2026-1496"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "kiwitcms"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "6617cee0fb70cc394b7be6bbc86ef84e6e9de077"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

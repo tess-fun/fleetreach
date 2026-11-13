@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2v5j-q74q-r53f",
+  "aliases": [
+    "CVE-2021-3994",
+    "PYSEC-2021-438"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "django-helpdesk"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "helpdesk.models",
+      "method": "get_markdown"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "a22eb0673fe0b7784f99c6b5fd343b64a6700f06"
+    ]
+  }
+}

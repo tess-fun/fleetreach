@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-339r-cjv9-x78g",
+  "aliases": [
+    "CVE-2024-11958",
+    "PYSEC-2026-399"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "llama-index-retrievers-duckdb-retriever"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "llama_index.retrievers.duckdb_retriever.base.DuckDBRetriever",
+      "method": "__init__"
+    },
+    {
+      "class": "llama_index.retrievers.duckdb_retriever.base.DuckDBRetriever",
+      "method": "_retrieve"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "35bd221e948e40458052d30c6ef2779bc965b6d0"
+    ],
+    "excluded": [
+      {
+        "class": "llama_index.retrievers.duckdb_retriever.base.DuckDBLocalContext",
+        "method": "__enter__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "llama_index.retrievers.duckdb_retriever.base.DuckDBLocalContext",
+        "method": "__exit__",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

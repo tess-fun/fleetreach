@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2rhq-96q8-4vjq",
+  "aliases": [
+    "CVE-2025-6209",
+    "PYSEC-2025-65",
+    "PYSEC-2026-1558"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "llama-index-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "llama_index.core.schema.ImageDocument",
+      "method": "__init__"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "cdeaab91a204d1c3527f177dac37390327aef274"
+    ]
+  }
+}

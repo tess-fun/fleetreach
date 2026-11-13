@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2fqr-mr3j-6wp8",
+  "aliases": [
+    "CVE-2026-54279",
+    "PYSEC-2026-2112"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "aiohttp"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "aiohttp.cookiejar.CookieJar",
+      "method": "save"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "a329a7aacad5284f087af36103aff778746da0f2"
+    ],
+    "excluded": [
+      {
+        "class": "aiohttp.cookiejar.CookieJar",
+        "method": "_load_json_data",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "aiohttp.cookiejar.CookieJar",
+        "method": "load",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

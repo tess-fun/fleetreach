@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2ch8-f849-pjg3",
+  "aliases": [
+    "CVE-2014-4301",
+    "PYSEC-2014-99"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "ajenti"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ajenti.routing.CentralDispatcher",
+      "method": "respond_error"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "d3fc5eb142ff16d55d158afb050af18d5ff09120"
+    ]
+  }
+}

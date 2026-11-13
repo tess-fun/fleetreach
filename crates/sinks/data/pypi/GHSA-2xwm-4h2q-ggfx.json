@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2xwm-4h2q-ggfx",
+  "aliases": [
+    "CVE-2026-59212",
+    "PYSEC-2026-3588"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "open-webui"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "backend.open_webui.utils.access_control.files",
+      "method": "has_access_to_file"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "17df0264929514599dbcb21c6578bcdfa204b04d"
+    ]
+  }
+}

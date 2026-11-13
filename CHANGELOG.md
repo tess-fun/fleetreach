@@ -8,11 +8,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Function-level witnesses for npm and PyPI findings.** `scan --reachability` now follows
+  calls, not only imports, from your JavaScript/TypeScript or Python source into installed
+  dependency source, and a finding whose sink is reached shows the chain of calls with file
+  and line. Calls resolve by name through imports, exports, classes, assigned locals and
+  factory return values. It is positive-only: no chain changes nothing. Sinks come from 573
+  proposed PyPI and npm records now bundled. On 40 real repos with dependencies installed it
+  found 33 chains, 139 of 140 hops on a real call line, in 0.1 to 3 seconds per repo.
 - **Sink proposals for Python and npm advisories.** The `sinkpropose` example takes
   `--ecosystem PyPI|npm` and proposes the functions a fix commit changed, read from Python
   (a hand-written reader) and JavaScript/TypeScript (`oxc_parser`) source. Sink records now
   validate PyPI and npm names. On fix commits for 600 advisories, a fresh hand-labelled sample
-  was right for 9 of 10 PyPI and 5 of 10 npm records. These records are not used by scans yet.
+  was right for 9 of 10 PyPI and 5 of 10 npm records.
 - **`scan --resolve-python` resolves unlocked Python dependency sets with uv.** A
   requirements file with unpinned names, or a `pyproject.toml` with no lockfile, is compiled
   with `uv pip compile --no-build --universal`, so transitive packages are matched too. uv

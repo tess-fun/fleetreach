@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3329-pjwv-fjpg",
+  "aliases": [
+    "CVE-2020-26291"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "urijs"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/URI.js.URI",
+      "method": "parseUserinfo"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "b02bf037c99ac9316b77ff8bfd840e90becf1155"
+    ]
+  }
+}

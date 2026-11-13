@@ -1,0 +1,56 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-24cc-9352-h2pg",
+  "aliases": [
+    "CVE-2026-104266"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "tinytag"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "tinytag.tinytag._MP4",
+      "method": "_traverse_atoms"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "9ada221ba44990cb02cd9002d992186e037b515e"
+    ],
+    "excluded": [
+      {
+        "class": "tinytag.tinytag._MP4",
+        "method": "_data_parser",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "tinytag.tinytag._MP4",
+        "method": "_nums_parser",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "tinytag.tinytag._MP4",
+        "method": "_parse_cover_image",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "tinytag.tinytag._MP4",
+        "method": "_parse_custom_field",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "tinytag.tinytag._MP4",
+        "method": "_parse_id3v1_genre",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "tinytag.tinytag._MP4",
+        "method": "_parse_uuid",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

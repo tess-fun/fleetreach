@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-265q-28rp-chq5",
+  "aliases": [
+    "CVE-2015-8851"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "node-uuid"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "672f3834ed02c798aa021c618d0a5666c8da000d"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

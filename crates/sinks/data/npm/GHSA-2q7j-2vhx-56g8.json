@@ -1,0 +1,54 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2q7j-2vhx-56g8",
+  "aliases": [
+    "CVE-2026-62187"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@openclaw/feishu"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "extensions/feishu/src/docx.ts",
+      "method": "registerFeishuDocTools"
+    },
+    {
+      "class": "extensions/feishu/src/tool-account.ts",
+      "method": "resolveFeishuToolAccount"
+    },
+    {
+      "class": "extensions/feishu/src/tool-account.ts",
+      "method": "resolveImplicitToolAccountId"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "d4f11d3005a56abc709ebc8e715972593ebed96e"
+    ],
+    "excluded": [
+      {
+        "class": "extensions/feishu/src/drive.ts",
+        "method": "registerFeishuDriveTools",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "extensions/feishu/src/perm.ts",
+        "method": "registerFeishuPermTools",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "extensions/feishu/src/tool-account.ts",
+        "method": "createFeishuToolClient",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "extensions/feishu/src/wiki.ts",
+        "method": "registerFeishuWikiTools",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

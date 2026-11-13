@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3783-62vc-jr7x",
+  "aliases": [
+    "CVE-2024-5023",
+    "PYSEC-2026-318"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "consoleme"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "consoleme.lib.templated_resources.requests",
+      "method": "generate_honeybee_request_from_change_model_array"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "2795a2bd553938a21c0643b37452971625ce67f5"
+    ],
+    "excluded": [
+      {
+        "class": "consoleme.lib.scm.git.Repository",
+        "method": "clone",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

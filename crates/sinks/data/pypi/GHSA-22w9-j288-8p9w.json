@@ -1,0 +1,27 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-22w9-j288-8p9w",
+  "aliases": [
+    "CVE-2013-6419",
+    "PYSEC-2026-858"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "nova"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "nova.api.metadata.handler.MetadataRequestHandler",
+      "method": "_handle_instance_id_request"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "07006be9165d1008ca0382b6f0ad25b13a676a55",
+      "af2f823107010933ecd94a9c938f8b739baaecb7",
+      "bce36e9bdb1fcb9658f7b684d160e656e88d816c"
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-27jp-wm6q-gp25",
+  "ecosystem": "PyPI",
+  "packages": [
+    "sqlparse"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "sqlparse.engine.grouping",
+      "method": "_group"
+    },
+    {
+      "class": "sqlparse.engine.grouping",
+      "method": "_group_matching"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "40ed3aa958657fa4a82055927fa9de70ab903360"
+    ]
+  }
+}

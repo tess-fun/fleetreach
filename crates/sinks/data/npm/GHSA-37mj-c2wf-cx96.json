@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-37mj-c2wf-cx96",
+  "aliases": [
+    "BIT-parse-2026-33627",
+    "CVE-2026-33627"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "parse-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/Routers/UsersRouter.js.UsersRouter",
+      "method": "handleMe"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "5b8998e6866bcf75be7b5bb625e27d23bfaf912c",
+      "875cf10ac979bd60f70e7a0c534e2bc194d6982f"
+    ]
+  }
+}

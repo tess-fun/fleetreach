@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2328-f5f3-gj25",
+  "aliases": [
+    "CVE-2026-33896"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "node-forge"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/x509.js.pki",
+      "method": "verifyCertificateChain"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "2e492832fb25227e6b647cbe1ac981c123171e90"
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3c93-f73f-qc9h",
+  "aliases": [
+    "CVE-2026-57178",
+    "PYSEC-2026-4165"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "social-auth-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "social_core.backends.vk.VKAppOAuth2",
+      "method": "auth_complete"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "1bfacdd0379e5eb46e169a99ab648b835e9bb6a2"
+    ]
+  }
+}

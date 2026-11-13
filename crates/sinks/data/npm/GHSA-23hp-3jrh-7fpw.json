@@ -1,0 +1,46 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-23hp-3jrh-7fpw",
+  "aliases": [
+    "CVE-2026-59873"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "tar"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/parse.ts.Parser",
+      "method": "write"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "2812e9338665659b183aa7226518c307044957d3"
+    ],
+    "excluded": [
+      {
+        "class": "src/parse.ts.Parser",
+        "method": "[computed]",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/parse.ts.Parser",
+        "method": "abort",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/parse.ts.Parser",
+        "method": "constructor",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/parse.ts.Parser",
+        "method": "end",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

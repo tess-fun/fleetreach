@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-36fh-84j7-cv5h",
+  "aliases": [
+    "CVE-2022-48285"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "jszip"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/load.js",
+      "method": "exports"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "2edab366119c9ee948357c02f1206c28566cdf15"
+    ]
+  }
+}

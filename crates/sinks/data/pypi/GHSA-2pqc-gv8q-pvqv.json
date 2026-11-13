@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2pqc-gv8q-pvqv",
+  "aliases": [
+    "CVE-2015-5081",
+    "PYSEC-2017-11"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "django-cms"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "f77cbc607d6e2a62e63287d37ad320109a2cc78a"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

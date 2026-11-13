@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-22qq-2fwx-7p67",
+  "aliases": [
+    "CVE-2026-114608"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pylint"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "pylint.lint.caching",
+      "method": "load_results"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "58c87cffca9de2b3e89aa07b89686cbc90cfea2d",
+      "5b241f66318220e9ba7b21ca631fbfe8e77682ca"
+    ],
+    "excluded": [
+      {
+        "class": "pylint.lint.caching",
+        "method": "save_results",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

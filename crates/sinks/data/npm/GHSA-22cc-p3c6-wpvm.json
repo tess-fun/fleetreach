@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-22cc-p3c6-wpvm",
+  "aliases": [
+    "CVE-2026-33128"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "h3"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/utils/internal/event-stream.ts",
+      "method": "formatEventStreamComment"
+    },
+    {
+      "class": "src/utils/internal/event-stream.ts",
+      "method": "formatEventStreamMessage"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "7791538e15ca22437307c06b78fa155bb73632a6"
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2cf2-2383-h4jv",
+  "aliases": [
+    "CVE-2020-7600",
+    "SNYK-JS-QUERYMEN-559867"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "querymen"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/index.js",
+      "method": "handler"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "1987fefcb3b7508253a29502a008d5063a873cef"
+    ]
+  }
+}

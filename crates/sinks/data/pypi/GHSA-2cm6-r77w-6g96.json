@@ -1,0 +1,33 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2cm6-r77w-6g96",
+  "aliases": [
+    "BIT-mlflow-2026-8147",
+    "CVE-2026-8147",
+    "PYSEC-2026-3686"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "mlflow"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "mlflow.server.auth",
+      "method": "_find_validator"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "f9b1eb510478570609ef451984a255775aa4b937"
+    ],
+    "excluded": [
+      {
+        "class": "mlflow.server.auth",
+        "method": "_get_permission_from_trace_request_id",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2qw3-2wv6-p64x",
+  "aliases": [
+    "CVE-2024-22232",
+    "PYSEC-2026-1891"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "salt"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "salt.fileserver.Fileserver",
+      "method": "find_file"
+    },
+    {
+      "class": "salt.fileserver.roots",
+      "method": "find_file"
+    },
+    {
+      "class": "salt.fileserver.roots",
+      "method": "serve_file"
+    },
+    {
+      "class": "salt.master.AESFuncs",
+      "method": "_syndic_return"
+    },
+    {
+      "class": "salt.master.MWorker",
+      "method": "_handle_payload"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "e0cdb80b55123f4a024759ffcf2b3f0e0788e7ab"
+    ]
+  }
+}

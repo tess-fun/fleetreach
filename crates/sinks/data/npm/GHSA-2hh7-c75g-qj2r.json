@@ -1,0 +1,96 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2hh7-c75g-qj2r",
+  "aliases": [
+    "CVE-2026-44116"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "extensions/zalo/src/api.ts",
+      "method": "sendPhoto"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "a65eb1b864b7630c1242a82de9e5799b80583c3f"
+    ],
+    "excluded": [
+      {
+        "class": "extensions/zalo/src/monitor.ts",
+        "method": "deliverZaloReply",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "extensions/zalo/src/monitor.ts",
+        "method": "handleZaloWebhookRequest",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "extensions/zalo/src/monitor.ts",
+        "method": "monitorZaloProvider",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "extensions/zalo/src/monitor.ts",
+        "method": "processMessageWithPipeline",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "extensions/zalo/src/monitor.ts",
+        "method": "processUpdate",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "extensions/zalo/src/monitor.ts",
+        "method": "startPollingLoop",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "extensions/zalo/src/send.ts",
+        "method": "sendPhotoZalo",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "extensions/zalo/test-support/monitor-mocks-test-support.ts",
+        "method": "importMonitorModule",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "extensions/zalo/test-support/monitor-mocks-test-support.ts",
+        "method": "resetLifecycleTestState",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "extensions/zalo/test-support/monitor-mocks-test-support.ts",
+        "method": "startWebhookLifecycleMonitor",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/media/fetch.ts",
+        "method": "fetchRemoteMedia",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/media/load-options.ts",
+        "method": "buildOutboundMediaLoadOptions",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/media/web-media.ts",
+        "method": "loadWebMediaInternal",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/plugin-sdk/outbound-media.ts",
+        "method": "loadOutboundMediaFromUrl",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

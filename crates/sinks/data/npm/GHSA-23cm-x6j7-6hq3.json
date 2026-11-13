@@ -1,0 +1,40 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-23cm-x6j7-6hq3",
+  "aliases": [
+    "CVE-2021-40823"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "matrix-js-sdk"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/crypto/algorithms/megolm.ts.MegolmEncryption",
+      "method": "encryptAndSendKeysToDevices"
+    },
+    {
+      "class": "src/crypto/algorithms/megolm.ts.MegolmEncryption",
+      "method": "reshareKeyWithDevice"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "894c24880da0e1cc81818f51c0db80e3c9fb2be9"
+    ],
+    "excluded": [
+      {
+        "class": "src/crypto/algorithms/megolm.ts.MegolmEncryption",
+        "method": "notifyFailedOlmDevices",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/crypto/algorithms/megolm.ts.OutboundSessionInfo",
+        "method": "markSharedWithDevice",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

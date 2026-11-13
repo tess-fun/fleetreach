@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-392p-2q2v-4372",
+  "aliases": [
+    "CVE-2026-53517"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "better-auth"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/oauth-provider/src/revoke.ts",
+      "method": "revokeRefreshToken"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "c6918ecc9e3a75892169415d7f6c95b591b6a52d"
+    ],
+    "excluded": [
+      {
+        "class": "packages/memory-adapter/src/memory-adapter.ts",
+        "method": "memoryAdapter",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/oauth-provider/src/token.ts",
+        "method": "createRefreshToken",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/oauth-provider/src/token.ts",
+        "method": "handleRefreshTokenGrant",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

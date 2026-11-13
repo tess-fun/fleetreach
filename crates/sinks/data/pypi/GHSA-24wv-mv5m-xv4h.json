@@ -1,0 +1,1106 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-24wv-mv5m-xv4h",
+  "aliases": [
+    "CVE-2023-28858",
+    "PYSEC-2023-45"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "redis"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "redis.commands.core.BasicKeyCommands",
+      "method": "bitcount"
+    },
+    {
+      "class": "redis.commands.core.BasicKeyCommands",
+      "method": "bitfield"
+    },
+    {
+      "class": "redis.commands.core.BasicKeyCommands",
+      "method": "bitop"
+    },
+    {
+      "class": "redis.commands.core.BasicKeyCommands",
+      "method": "bitpos"
+    },
+    {
+      "class": "redis.commands.core.BasicKeyCommands",
+      "method": "blmove"
+    },
+    {
+      "class": "redis.commands.core.BasicKeyCommands",
+      "method": "copy"
+    },
+    {
+      "class": "redis.commands.core.BasicKeyCommands",
+      "method": "getex"
+    },
+    {
+      "class": "redis.commands.core.BasicKeyCommands",
+      "method": "hrandfield"
+    },
+    {
+      "class": "redis.commands.core.BasicKeyCommands",
+      "method": "lmove"
+    },
+    {
+      "class": "redis.commands.core.BasicKeyCommands",
+      "method": "psetex"
+    },
+    {
+      "class": "redis.commands.core.BasicKeyCommands",
+      "method": "setrange"
+    },
+    {
+      "class": "redis.commands.core.BitFieldOperation",
+      "method": "__init__"
+    },
+    {
+      "class": "redis.commands.core.BitFieldOperation",
+      "method": "incrby"
+    },
+    {
+      "class": "redis.commands.core.GeoCommands",
+      "method": "_georadiusgeneric"
+    },
+    {
+      "class": "redis.commands.core.GeoCommands",
+      "method": "_geosearchgeneric"
+    },
+    {
+      "class": "redis.commands.core.GeoCommands",
+      "method": "geoadd"
+    },
+    {
+      "class": "redis.commands.core.GeoCommands",
+      "method": "geodist"
+    },
+    {
+      "class": "redis.commands.core.ManagementCommands",
+      "method": "client_list"
+    },
+    {
+      "class": "redis.commands.core.ManagementCommands",
+      "method": "client_reply"
+    },
+    {
+      "class": "redis.commands.core.ManagementCommands",
+      "method": "client_unblock"
+    },
+    {
+      "class": "redis.commands.core.ManagementCommands",
+      "method": "memory_usage"
+    },
+    {
+      "class": "redis.commands.core.ManagementCommands",
+      "method": "slaveof"
+    },
+    {
+      "class": "redis.commands.core.ScanCommands",
+      "method": "hscan"
+    },
+    {
+      "class": "redis.commands.core.ScanCommands",
+      "method": "hscan_iter"
+    },
+    {
+      "class": "redis.commands.core.ScanCommands",
+      "method": "scan"
+    },
+    {
+      "class": "redis.commands.core.ScanCommands",
+      "method": "scan_iter"
+    },
+    {
+      "class": "redis.commands.core.ScanCommands",
+      "method": "sscan"
+    },
+    {
+      "class": "redis.commands.core.ScanCommands",
+      "method": "sscan_iter"
+    },
+    {
+      "class": "redis.commands.core.ScanCommands",
+      "method": "zscan"
+    },
+    {
+      "class": "redis.commands.core.ScanCommands",
+      "method": "zscan_iter"
+    },
+    {
+      "class": "redis.commands.core.Script",
+      "method": "__call__"
+    },
+    {
+      "class": "redis.commands.core.ScriptCommands",
+      "method": "script_flush"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "_zaggregate"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "zadd"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "zincrby"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "zinter"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "zinterstore"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "zmscore"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "zpopmax"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "zpopmin"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "zrandmember"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "zrangebylex"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "zremrangebyscore"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "zrevrange"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "zrevrangebylex"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "zunion"
+    },
+    {
+      "class": "redis.commands.core.SortedSetCommands",
+      "method": "zunionstore"
+    },
+    {
+      "class": "redis.commands.core.StreamCommands",
+      "method": "xack"
+    },
+    {
+      "class": "redis.commands.core.StreamCommands",
+      "method": "xgroup_create"
+    },
+    {
+      "class": "redis.commands.core.StreamCommands",
+      "method": "xgroup_createconsumer"
+    },
+    {
+      "class": "redis.commands.core.StreamCommands",
+      "method": "xgroup_delconsumer"
+    },
+    {
+      "class": "redis.commands.core.StreamCommands",
+      "method": "xgroup_setid"
+    },
+    {
+      "class": "redis.commands.core.StreamCommands",
+      "method": "xrange"
+    },
+    {
+      "class": "redis.commands.core.StreamCommands",
+      "method": "xread"
+    },
+    {
+      "class": "redis.commands.core.StreamCommands",
+      "method": "xreadgroup"
+    },
+    {
+      "class": "redis.commands.core.StreamCommands",
+      "method": "xrevrange"
+    },
+    {
+      "class": "redis.commands.core.StreamCommands",
+      "method": "xtrim"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "d56baeb683fc1935cfa343fa2eeb0fa9bd955283"
+    ],
+    "excluded": [
+      {
+        "class": "redis.commands.core.ACLCommands",
+        "method": "acl_cat",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ACLCommands",
+        "method": "acl_deluser",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ACLCommands",
+        "method": "acl_genpass",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ACLCommands",
+        "method": "acl_getuser",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ACLCommands",
+        "method": "acl_help",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ACLCommands",
+        "method": "acl_list",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ACLCommands",
+        "method": "acl_load",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ACLCommands",
+        "method": "acl_log",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ACLCommands",
+        "method": "acl_log_reset",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ACLCommands",
+        "method": "acl_save",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ACLCommands",
+        "method": "acl_setuser",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ACLCommands",
+        "method": "acl_users",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ACLCommands",
+        "method": "acl_whoami",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "__delitem__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "__getitem__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "__setitem__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "append",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "decrby",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "delete",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "dump",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "exists",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "expire",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "expireat",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "get",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "getbit",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "getdel",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "getrange",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "getset",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "incrby",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "incrbyfloat",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "keys",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "mget",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "move",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "mset",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "msetnx",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "persist",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "pexpire",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "pexpireat",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "pttl",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "randomkey",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "rename",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "renamenx",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "restore",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "set",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "setbit",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "setex",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "setnx",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "stralgo",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "strlen",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "substr",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "touch",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "ttl",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "type",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "unlink",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "unwatch",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BasicKeyCommands",
+        "method": "watch",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BitFieldOperation",
+        "method": "execute",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BitFieldOperation",
+        "method": "get",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BitFieldOperation",
+        "method": "overflow",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.BitFieldOperation",
+        "method": "set",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ClusterCommands",
+        "method": "cluster",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ClusterCommands",
+        "method": "readonly",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ClusterCommands",
+        "method": "readwrite",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.GeoCommands",
+        "method": "geohash",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.GeoCommands",
+        "method": "geopos",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.GeoCommands",
+        "method": "georadius",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.GeoCommands",
+        "method": "georadiusbymember",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.GeoCommands",
+        "method": "geosearch",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.GeoCommands",
+        "method": "geosearchstore",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.HyperlogCommands",
+        "method": "pfadd",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.HyperlogCommands",
+        "method": "pfcount",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.HyperlogCommands",
+        "method": "pfmerge",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ListCommands",
+        "method": "lpos",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ListCommands",
+        "method": "sort",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "bgsave",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "client_getname",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "client_getredir",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "client_id",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "client_info",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "client_kill",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "client_kill_filter",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "client_pause",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "client_setname",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "client_tracking",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "client_tracking_off",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "client_tracking_on",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "client_trackinginfo",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "client_unpause",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "command_count",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "command_info",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "config_get",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "config_resetstat",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "config_rewrite",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "config_set",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "dbsize",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "debug_object",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "debug_segfault",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "echo",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "flushall",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "flushdb",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "info",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "lastsave",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "lolwut",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "memory_doctor",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "memory_help",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "memory_malloc_stats",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "memory_purge",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "memory_stats",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "migrate",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "object",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "ping",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "psync",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "quit",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "replicaof",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "reset",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "role",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "save",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "select",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "shutdown",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "slowlog_get",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "slowlog_len",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "slowlog_reset",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "swapdb",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "sync",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "time",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ManagementCommands",
+        "method": "wait",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ModuleCommands",
+        "method": "command",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ModuleCommands",
+        "method": "command_count",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ModuleCommands",
+        "method": "command_getkeys",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ModuleCommands",
+        "method": "command_info",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ModuleCommands",
+        "method": "module_list",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ModuleCommands",
+        "method": "module_load",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ModuleCommands",
+        "method": "module_unload",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.PubSubCommands",
+        "method": "publish",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.PubSubCommands",
+        "method": "pubsub_channels",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.PubSubCommands",
+        "method": "pubsub_numpat",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.PubSubCommands",
+        "method": "pubsub_numsub",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.Script",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ScriptCommands",
+        "method": "register_script",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ScriptCommands",
+        "method": "script_debug",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ScriptCommands",
+        "method": "script_exists",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ScriptCommands",
+        "method": "script_kill",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.ScriptCommands",
+        "method": "script_load",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "_zrange",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "bzpopmax",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "bzpopmin",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "zcard",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "zcount",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "zdiff",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "zdiffstore",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "zrange",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "zrangebyscore",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "zrangestore",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "zrank",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "zrem",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "zremrangebylex",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "zremrangebyrank",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "zrevrangebyscore",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "zrevrank",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.SortedSetCommands",
+        "method": "zscore",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.StreamCommands",
+        "method": "xadd",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.StreamCommands",
+        "method": "xautoclaim",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.StreamCommands",
+        "method": "xclaim",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.StreamCommands",
+        "method": "xdel",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.StreamCommands",
+        "method": "xgroup_destroy",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.StreamCommands",
+        "method": "xinfo_consumers",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.StreamCommands",
+        "method": "xinfo_groups",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.StreamCommands",
+        "method": "xinfo_stream",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.StreamCommands",
+        "method": "xlen",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.StreamCommands",
+        "method": "xpending",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "redis.commands.core.StreamCommands",
+        "method": "xpending_range",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

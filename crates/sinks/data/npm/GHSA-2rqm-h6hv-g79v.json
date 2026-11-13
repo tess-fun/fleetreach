@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2rqm-h6hv-g79v",
+  "ecosystem": "npm",
+  "packages": [
+    "odf-kit"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/ods/to-html/html-renderer.ts",
+      "method": "renderCell"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "1424227d1ca2716a249b623d1456575ff0331dcc"
+    ],
+    "excluded": [
+      {
+        "class": "src/ods/to-html/html-renderer.ts",
+        "method": "renderRow",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

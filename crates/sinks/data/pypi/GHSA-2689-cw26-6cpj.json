@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2689-cw26-6cpj",
+  "aliases": [
+    "CVE-2024-53305",
+    "PYSEC-2026-2048"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "whoogle-search"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "app.models.config.Config",
+      "method": "_decode_preferences"
+    },
+    {
+      "class": "app.models.config.Config",
+      "method": "_encode_preferences"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "223f00c3c0533423114f99b30c561278bc0b42ba"
+    ]
+  }
+}

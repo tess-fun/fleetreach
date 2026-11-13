@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-27jx-ffw8-xrqv",
+  "aliases": [
+    "CVE-2024-3116",
+    "PYSEC-2026-1767"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pgadmin4"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "web.pgadmin.browser.server_groups.servers.types.ServerType",
+      "method": "set_default_binary_path"
+    },
+    {
+      "class": "web.pgadmin.misc",
+      "method": "validate_binary_path"
+    },
+    {
+      "class": "web.pgadmin.utils",
+      "method": "does_utility_exist"
+    },
+    {
+      "class": "web.pgadmin.utils",
+      "method": "set_binary_path"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "fbbbfe22dd468bcfef1e1f833ec32289a6e56a8b"
+    ]
+  }
+}

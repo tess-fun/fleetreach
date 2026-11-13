@@ -1,0 +1,66 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-22jm-h49p-29qw",
+  "aliases": [
+    "CVE-2026-111767"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@modelcontextprotocol/sdk"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/experimental/tasks/stores/in-memory.ts.InMemoryTaskStore",
+      "method": "createTask"
+    },
+    {
+      "class": "src/experimental/tasks/stores/in-memory.ts.InMemoryTaskStore",
+      "method": "getTask"
+    },
+    {
+      "class": "src/experimental/tasks/stores/in-memory.ts.InMemoryTaskStore",
+      "method": "getTaskResult"
+    },
+    {
+      "class": "src/experimental/tasks/stores/in-memory.ts.InMemoryTaskStore",
+      "method": "listTasks"
+    },
+    {
+      "class": "src/experimental/tasks/stores/in-memory.ts.InMemoryTaskStore",
+      "method": "storeTaskResult"
+    },
+    {
+      "class": "src/experimental/tasks/stores/in-memory.ts.InMemoryTaskStore",
+      "method": "updateTaskStatus"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "727075b5bbeb77fbea22041b36b72a73042160fa"
+    ],
+    "excluded": [
+      {
+        "class": "src/shared/protocol.ts.Protocol",
+        "method": "_enqueueTaskMessage",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/shared/protocol.ts.Protocol",
+        "method": "_onrequest",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/shared/protocol.ts.Protocol",
+        "method": "_waitForTaskUpdate",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/shared/protocol.ts.Protocol",
+        "method": "constructor",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

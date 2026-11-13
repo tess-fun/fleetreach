@@ -1,0 +1,35 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2qrv-rc5x-2g2h",
+  "aliases": [
+    "CVE-2026-41295"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/channels/plugins/catalog.ts",
+      "method": "listChannelPluginCatalogEntries"
+    },
+    {
+      "class": "src/commands/channel-setup/channel-plugin-resolution.ts",
+      "method": "resolveInstallableChannelPlugin"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "53c29df2a9eb242a70d0ff29f3d1e67c8d6801f0"
+    ],
+    "excluded": [
+      {
+        "class": "src/channels/plugins/catalog.ts",
+        "method": "buildCatalogEntry",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

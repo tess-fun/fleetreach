@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2g5w-29q9-w6hx",
+  "aliases": [
+    "CVE-2023-30620",
+    "PYSEC-2023-27"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "mindsdb"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "mindsdb.api.http.namespaces.file.File",
+      "method": "put"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "4419b0f0019c000db390b54d8b9d06e1d3670039"
+    ]
+  }
+}

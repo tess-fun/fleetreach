@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-333x-9vgq-v2j4",
+  "aliases": [
+    "CVE-2015-5688"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "geddy"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "2de63b68b3aa6c08848f261ace550a37959ef231"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

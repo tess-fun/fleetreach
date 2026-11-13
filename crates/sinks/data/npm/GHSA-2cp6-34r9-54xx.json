@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2cp6-34r9-54xx",
+  "aliases": [
+    "CVE-2026-24888"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "makerjs"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/maker.js/src/core/maker.ts",
+      "method": "extendObject"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "85e0f12bd868974b891601a141974f929dec36b8"
+    ]
+  }
+}

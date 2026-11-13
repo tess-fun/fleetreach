@@ -1,0 +1,35 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-38hq-7x33-php4",
+  "aliases": [
+    "CVE-2026-73563"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@backstage/plugin-auth-backend"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "plugins/auth-backend/src/service/OidcService.ts.OidcService",
+      "method": "resolveCimdClient"
+    },
+    {
+      "class": "plugins/auth-backend/src/service/OidcService.ts",
+      "method": "createUrlPatternMatcher"
+    },
+    {
+      "class": "plugins/auth-backend/src/service/OidcService.ts",
+      "method": "validateRedirectUri"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "274acc51d22a7dd919cdda49d9086cf12c0b8711",
+      "6370e53bce8b227c63092300594ffde29c006886",
+      "ef606a85545cb6d765e20afd1ff43ae5407a3660",
+      "fdc0d2dcd9a571e3839d7f5de4133c4e242a3a41"
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-26p8-2jq9-3vq9",
+  "aliases": [
+    "CVE-2026-116692"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "mlflow"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "mlflow.genai.scorers.base.Scorer",
+      "method": "model_validate"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "a732443e695c3c677680c54320efc394c81654ab"
+    ]
+  }
+}

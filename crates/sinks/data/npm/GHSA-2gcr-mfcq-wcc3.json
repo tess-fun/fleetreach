@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2gcr-mfcq-wcc3",
+  "aliases": [
+    "CVE-2026-47676"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "hono"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/hono-base.ts.Hono",
+      "method": "mount"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "6cbb025ff87fca1a3d00d0ccca0eaf3a6385c3f1"
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-354v-3q48-cv69",
+  "aliases": [
+    "CVE-2026-114135"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "jupyter-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "jupyter_server.kernelspecs.handlers.KernelSpecResourceHandler",
+      "method": "get"
+    },
+    {
+      "class": "jupyter_server.serverapp.ServerApp",
+      "method": "_cleanup"
+    },
+    {
+      "class": "jupyter_server.serverapp.ServerWebApplication",
+      "method": "init_handlers"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "35ffe5d435682128da16dc144a8e9e9f8fa85dd8"
+    ]
+  }
+}

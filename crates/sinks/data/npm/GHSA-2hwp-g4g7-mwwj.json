@@ -1,0 +1,62 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2hwp-g4g7-mwwj",
+  "ecosystem": "npm",
+  "packages": [
+    "jquery.terminal"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "js/jquery.terminal-1.20.5.js",
+      "method": "extended_command"
+    },
+    {
+      "class": "js/jquery.terminal-1.20.5.js.fn",
+      "method": "cmd"
+    },
+    {
+      "class": "js/jquery.terminal-1.20.5.js.fn",
+      "method": "terminal"
+    },
+    {
+      "class": "js/jquery.terminal-src.js",
+      "method": "extended_command"
+    },
+    {
+      "class": "js/jquery.terminal.js",
+      "method": "extended_command"
+    },
+    {
+      "class": "js/jquery.terminal.js.fn",
+      "method": "cmd"
+    },
+    {
+      "class": "js/jquery.terminal.js.fn",
+      "method": "terminal"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "c8b7727d21960031b62a4ef1ed52f3c634046211"
+    ],
+    "excluded": [
+      {
+        "class": "js/jquery.terminal-1.20.5.js",
+        "method": "encode",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "js/jquery.terminal-src.js.fn",
+        "method": "terminal",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "js/jquery.terminal.js",
+        "method": "encode",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

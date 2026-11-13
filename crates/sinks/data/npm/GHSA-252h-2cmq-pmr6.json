@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-252h-2cmq-pmr6",
+  "aliases": [
+    "CVE-2020-24855"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@easy-team/easywebpack-cli"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/template.js",
+      "method": "downloadTemplate"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "eb3f54603f58ea706d0c03fd6eb76c94176eae52"
+    ]
+  }
+}

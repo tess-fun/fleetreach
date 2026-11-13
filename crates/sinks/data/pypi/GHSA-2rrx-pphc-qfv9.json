@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2rrx-pphc-qfv9",
+  "aliases": [
+    "CVE-2025-2946",
+    "PYSEC-2026-449"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pgadmin4"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "1305d9910beefd0d6b4c7eb4f111f86edb1d356b"
+    ]
+  },
+  "note": "the fix changes no Python function that exists in the vulnerable version; it also changes JavaScript files, which this ecosystem's call graph does not read"
+}

@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-38jv-5279-wg99",
+  "aliases": [
+    "CVE-2026-21441",
+    "PYSEC-2026-1996"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "urllib3"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "dummyserver.app",
+      "method": "redirect"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "8864ac407bba8607950025e0979c4c69bc7abc7b"
+    ],
+    "excluded": [
+      {
+        "class": "urllib3.response.HTTPResponse",
+        "method": "drain_conn",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-224p-v68g-5g8f",
+  "ecosystem": "npm",
+  "packages": [
+    "@escape.tech/graphql-armor-max-depth"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/plugins/max-depth/src/index.ts.MaxDepthVisitor",
+      "method": "countDepth"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "998986109f8c2313bd61325ddfe7f5dcd48f9232"
+    ]
+  }
+}

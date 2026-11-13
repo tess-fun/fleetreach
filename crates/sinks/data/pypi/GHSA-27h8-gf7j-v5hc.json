@@ -1,0 +1,21 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-27h8-gf7j-v5hc",
+  "aliases": [
+    "BIT-pillow-2026-112392",
+    "CVE-2026-112392",
+    "PYSEC-2026-4326"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pillow"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "443e3130a8c11594fd0e296afad497e11e678961"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

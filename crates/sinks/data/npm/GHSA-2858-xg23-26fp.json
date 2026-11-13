@@ -1,0 +1,48 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2858-xg23-26fp",
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/cli/nodes-camera.ts",
+      "method": "writeUrlToFile"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3bf19d6f40a0aaa55818b96eede3d05130c02533"
+    ],
+    "excluded": [
+      {
+        "class": "src/agents/tools/nodes-tool.ts",
+        "method": "createNodesTool",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/agents/tools/nodes-utils.ts",
+        "method": "resolveNodeId",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/cli/nodes-camera.ts",
+        "method": "writeCameraClipPayloadToFile",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/cli/nodes-cli/register.camera.ts",
+        "method": "registerNodesCameraCommands",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/cli/nodes-cli/rpc.ts",
+        "method": "resolveNodeId",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

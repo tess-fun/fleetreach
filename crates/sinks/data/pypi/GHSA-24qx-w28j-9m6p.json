@@ -1,0 +1,42 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-24qx-w28j-9m6p",
+  "aliases": [
+    "CVE-2026-40110",
+    "PYSEC-2026-2187"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "jupyter-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "jupyter_server.auth.login.LoginFormHandler",
+      "method": "_redirect_safe"
+    },
+    {
+      "class": "jupyter_server.base.handlers.JupyterHandler",
+      "method": "check_origin"
+    },
+    {
+      "class": "jupyter_server.base.handlers.JupyterHandler",
+      "method": "check_referer"
+    },
+    {
+      "class": "jupyter_server.base.handlers.JupyterHandler",
+      "method": "set_cors_headers"
+    },
+    {
+      "class": "jupyter_server.base.websocket.WebSocketMixin",
+      "method": "check_origin"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "057869a327c46730afede3eab0ca2d2e3e74acea",
+      "49b34392feaa97735b3b777e3baf8f22f2a14ed8"
+    ]
+  }
+}

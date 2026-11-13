@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2mhw-wcx5-v3xj",
+  "aliases": [
+    "CVE-2026-61834"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "scim-patch"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/scimPatch.ts",
+      "method": "navigate"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "c86474f7a9b16191d939f59ba94eca6c6e63044b"
+    ],
+    "excluded": [
+      {
+        "class": "src/scimPatch.ts",
+        "method": "assign",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

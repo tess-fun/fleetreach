@@ -1,0 +1,56 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2p3c-p3qw-69r4",
+  "ecosystem": "npm",
+  "packages": [
+    "apollo-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/apollo-server-hapi/src/ApolloServer.ts.ApolloServer",
+      "method": "applyMiddleware"
+    },
+    {
+      "class": "packages/apollo-server-lambda/src/ApolloServer.ts.ApolloServer",
+      "method": "createHandler"
+    },
+    {
+      "class": "packages/apollo-server-micro/src/ApolloServer.ts.ApolloServer",
+      "method": "createHandler"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "82d44985ddca8e61557957d67f41e9c1a705a5ca"
+    ],
+    "excluded": [
+      {
+        "class": "packages/apollo-server-core/src/ApolloServer.ts.ApolloServerBase",
+        "method": "constructor",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apollo-server-core/src/ApolloServer.ts.ApolloServerBase",
+        "method": "generateSchemaDerivedData",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apollo-server-express/src/ApolloServer.ts",
+        "method": "fileUploadMiddleware",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apollo-server-fastify/src/ApolloServer.ts",
+        "method": "fileUploadMiddleware",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apollo-server-koa/src/ApolloServer.ts",
+        "method": "fileUploadMiddleware",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

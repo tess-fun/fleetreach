@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2598-2f59-rmhq",
+  "aliases": [
+    "CVE-2019-10749",
+    "SNYK-JS-SEQUELIZE-450222"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "sequelize"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/dialects/abstract/query-generator.js",
+      "method": "whereItemQuery"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "ee4017379db0059566ecb5424274ad4e2d66bc68"
+    ]
+  }
+}

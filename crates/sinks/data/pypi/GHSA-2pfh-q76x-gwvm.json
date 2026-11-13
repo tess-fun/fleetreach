@@ -1,0 +1,27 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2pfh-q76x-gwvm",
+  "aliases": [
+    "CVE-2021-3583",
+    "PYSEC-2021-358"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "ansible"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib.ansible.template.Templar",
+      "method": "do_template"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "03aff644cc1c00e1f7551195c68fbd0d13a39e6e",
+      "8aa850e3573e48c9a2f12aef84e8a3a6f5ba4847",
+      "8b17e5b9229ffaecfe10a4881bc3f87dd2c184e1"
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2m6g-crv8-p3c6",
+  "aliases": [
+    "BIT-parse-2022-36079",
+    "CVE-2022-36079"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "parse-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/RestQuery.js.RestQuery",
+      "method": "execute"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "634c44acd18f6ee6ec60fac89a2b602d92799bec",
+      "e39d51bd329cd978589983bd659db46e1d45aad4"
+    ]
+  }
+}

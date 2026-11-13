@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-386q-5hp3-95m9",
+  "aliases": [
+    "CVE-2026-54653",
+    "PYSEC-2026-3555"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "datamodel-code-generator"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "datamodel_code_generator.parser.jsonschema.JsonSchemaParser",
+      "method": "get_field_extras"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "17fc235e234cbcfaaadef8c74cb72c9687db0d1d"
+    ]
+  }
+}

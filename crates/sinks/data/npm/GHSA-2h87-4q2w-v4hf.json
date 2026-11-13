@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2h87-4q2w-v4hf",
+  "aliases": [
+    "CVE-2023-22621"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@strapi/plugin-users-permissions"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "921d30961d6ba96cc098f2aea197350a49f990bd"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

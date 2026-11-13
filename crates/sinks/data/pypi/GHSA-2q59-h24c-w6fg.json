@@ -1,0 +1,48 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2q59-h24c-w6fg",
+  "aliases": [
+    "CVE-2024-30265",
+    "PYSEC-2026-2027"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "voila"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "voila.app.Voila",
+      "method": "parse_command_line"
+    },
+    {
+      "class": "voila.app.Voila",
+      "method": "start"
+    },
+    {
+      "class": "voila.app.VoilaHandler",
+      "method": "get"
+    },
+    {
+      "class": "voila.app.VoilaHandler",
+      "method": "initialize"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "00d6362c237b6b4d466873535554d6076ead0c52",
+      "28faacc9b03b160fd8fa920ad045f4ec0667ab67",
+      "5542e4ae36bb5d184deaa48f95e76be477756af2",
+      "98b6a40fec27723572314fdbba99bdc147d904c8",
+      "c045be6988539d07cceeb9f82fc660a49485d504"
+    ],
+    "excluded": [
+      {
+        "class": "voila.app.Voila",
+        "method": "init_settings",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

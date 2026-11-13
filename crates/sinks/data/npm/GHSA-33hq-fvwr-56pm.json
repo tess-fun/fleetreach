@@ -1,0 +1,35 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-33hq-fvwr-56pm",
+  "aliases": [
+    "CVE-2026-123569"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "devalue"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/stringify.js",
+      "method": "stringify"
+    },
+    {
+      "class": "src/uneval.js",
+      "method": "uneval"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "819f1ac7475ab37547645cfb09bf2f678a799cf0"
+    ],
+    "excluded": [
+      {
+        "class": "src/parse.js",
+        "method": "unflatten",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

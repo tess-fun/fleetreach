@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2q4j-m29v-hq73",
+  "aliases": [
+    "CVE-2026-24688",
+    "PYSEC-2026-1827"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pypdf"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "pypdf._doc_common.PdfDocCommon",
+      "method": "_get_outline"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "b1282f8dcdc1a7b41ceab6740ffddfdf31b1fec1"
+    ]
+  }
+}

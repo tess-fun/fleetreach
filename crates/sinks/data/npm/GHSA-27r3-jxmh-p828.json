@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-27r3-jxmh-p828",
+  "aliases": [
+    "CVE-2026-111181"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "body-parser"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/read.js",
+      "method": "read"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "1260c3845f54502a05a87594f09a334786bb34d7",
+      "f7075eae3a84c3473ab4bf0a777da28db208e916"
+    ]
+  }
+}

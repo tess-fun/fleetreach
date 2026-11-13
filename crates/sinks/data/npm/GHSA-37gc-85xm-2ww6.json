@@ -1,0 +1,49 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-37gc-85xm-2ww6",
+  "aliases": [
+    "CVE-2026-27009"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/gateway/control-ui.ts",
+      "method": "applyControlUiSecurityHeaders"
+    },
+    {
+      "class": "src/gateway/control-ui.ts",
+      "method": "handleControlUiHttpRequest"
+    },
+    {
+      "class": "src/gateway/control-ui.ts",
+      "method": "injectControlUiConfig"
+    },
+    {
+      "class": "ui/src/ui/assistant-identity.ts",
+      "method": "resolveInjectedAssistantIdentity"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3b4096e02e7e335f99f5986ec1bd566e90b14a7e",
+      "adc818db4a4b3b8d663e7674ef20436947514e1b"
+    ],
+    "excluded": [
+      {
+        "class": "src/gateway/control-ui.ts",
+        "method": "serveIndexHtml",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "ui/src/ui/app-lifecycle.ts",
+        "method": "handleConnected",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

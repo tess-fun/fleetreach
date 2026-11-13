@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-273c-4g26-4jpm",
+  "aliases": [
+    "BIT-airflow-2025-62402",
+    "CVE-2025-62402",
+    "PYSEC-2026-1129"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "apache-airflow"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "airflow.api_fastapi.core_api.routes.public.dag_report",
+      "method": "get_dag_reports"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "828aaa0b1d95caf90612a648867c17aec7e87874"
+    ]
+  }
+}

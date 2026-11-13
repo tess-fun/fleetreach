@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-28wg-ghj8-5hjv",
+  "aliases": [
+    "CVE-2026-67214"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "nanoid"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "non-secure/index.cjs",
+      "method": "customAlphabet"
+    },
+    {
+      "class": "non-secure/index.js",
+      "method": "customAlphabet"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "6ccc67bbaba71d3d77a21d9b636f4171a268ce49",
+      "e835c9b71eab832bc6106944bdd26ea96cf2c66d"
+    ],
+    "excluded": [
+      {
+        "class": "non-secure/index.cjs",
+        "method": "nanoid",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "non-secure/index.js",
+        "method": "nanoid",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

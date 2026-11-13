@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3c45-4pj5-ch7m",
+  "aliases": [
+    "CVE-2026-27696",
+    "PYSEC-2026-2126"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "changedetection-io"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "changedetectionio.validate_url",
+      "method": "is_safe_valid_url"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "fe7aa38c651d73fe5f41ce09855fa8f97193747b"
+    ],
+    "excluded": [
+      {
+        "class": "changedetectionio.content_fetchers.requests.fetcher",
+        "method": "_run_sync",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "changedetectionio.store.ChangeDetectionStore",
+        "method": "add_watch",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

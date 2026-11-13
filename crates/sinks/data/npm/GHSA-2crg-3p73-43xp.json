@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2crg-3p73-43xp",
+  "aliases": [
+    "CVE-2026-40073"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@sveltejs/kit"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/kit/src/exports/node/index.js",
+      "method": "get_raw_body"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3202ed6c98f9e8d86bf0c4c7ad0f2e273e5e3b95"
+    ]
+  }
+}

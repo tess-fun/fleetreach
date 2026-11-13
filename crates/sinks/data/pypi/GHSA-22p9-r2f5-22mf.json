@@ -1,0 +1,44 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-22p9-r2f5-22mf",
+  "aliases": [
+    "CVE-2026-54706",
+    "PYSEC-2026-3585"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "onionshare-cli"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "cli.onionshare_cli.web.send_base_mode.SendBaseModeWeb",
+      "method": "set_file_info"
+    },
+    {
+      "class": "cli.onionshare_cli.web.send_base_mode.SendBaseModeWeb",
+      "method": "stream_individual_file"
+    },
+    {
+      "class": "cli.onionshare_cli.web.share_mode.ZipWriter",
+      "method": "add_dir"
+    },
+    {
+      "class": "cli.onionshare_cli.web.share_mode.ZipWriter",
+      "method": "add_file"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "48f31cfac077fcc9c04c67c2a6dbf87d956f5eec"
+    ],
+    "excluded": [
+      {
+        "class": "cli.onionshare_cli.web.send_base_mode.SendBaseModeWeb",
+        "method": "build_directory_listing",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

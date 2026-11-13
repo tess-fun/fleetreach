@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-322m-ff4g-9vx9",
+  "aliases": [
+    "BIT-ghost-2026-105647",
+    "CVE-2026-105647"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "ghost"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ghost/core/core/server/services/oembed/oembed-service.js.OEmbedService",
+      "method": "fetchBookmarkData"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3f8594eb53de883ac017545c358f59039cb152de"
+    ]
+  }
+}

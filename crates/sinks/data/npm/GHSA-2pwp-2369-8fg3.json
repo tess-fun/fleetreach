@@ -1,0 +1,133 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2pwp-2369-8fg3",
+  "aliases": [
+    "CVE-2026-105862"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "payload"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/payload-cloud/src/staticHandler.ts",
+      "method": "getStaticHandler"
+    },
+    {
+      "class": "packages/payload/src/uploads/checkFileRestrictions.ts",
+      "method": "checkFileRestrictions"
+    },
+    {
+      "class": "packages/payload/src/uploads/detectSvgFromXml.ts",
+      "method": "detectSvgFromXml"
+    },
+    {
+      "class": "packages/payload/src/uploads/validateSvg.ts",
+      "method": "validateSvg"
+    },
+    {
+      "class": "packages/storage-azure/src/generateSignedURL.ts",
+      "method": "getGenerateSignedURLHandler"
+    },
+    {
+      "class": "packages/storage-azure/src/index.ts",
+      "method": "azureStorage"
+    },
+    {
+      "class": "packages/storage-gcs/src/generateSignedURL.ts",
+      "method": "getGenerateSignedURLHandler"
+    },
+    {
+      "class": "packages/storage-r2/src/handleMultiPartUpload.ts",
+      "method": "getHandleMultiPartUpload"
+    },
+    {
+      "class": "packages/storage-s3/src/generateSignedURL.ts",
+      "method": "getGenerateSignedURLHandler"
+    },
+    {
+      "class": "packages/storage-uploadthing/src/getClientUploadRoute.ts",
+      "method": "getClientUploadRoute"
+    },
+    {
+      "class": "packages/storage-vercel-blob/src/getClientUploadRoute.ts",
+      "method": "getClientUploadRoute"
+    },
+    {
+      "class": "packages/ui/src/elements/BulkUpload/FormsManager/createFormData.ts",
+      "method": "createFormData"
+    },
+    {
+      "class": "packages/ui/src/elements/BulkUpload/FormsManager/index.tsx",
+      "method": "FormsManagerProvider"
+    },
+    {
+      "class": "packages/ui/src/forms/Form/index.tsx",
+      "method": "Form"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "a8c3a8e8e2680c96ec4f66f5b3854c5df6c35adf"
+    ],
+    "excluded": [
+      {
+        "class": "packages/payload/src/uploads/endpoints/getFile.ts",
+        "method": "getFileHandler",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/payload/src/uploads/generateFileData.ts",
+        "method": "generateFileData",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/payload/src/uploads/getFileTypeFallback.ts",
+        "method": "getFileTypeFallback",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/storage-azure/src/adapter.ts",
+        "method": "createAzureAdapter",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/storage-azure/src/getFile.ts",
+        "method": "getFile",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/storage-gcs/src/getFile.ts",
+        "method": "getFile",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/storage-r2/src/getFile.ts",
+        "method": "getFile",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/storage-s3/src/getFile.ts",
+        "method": "getFile",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/storage-uploadthing/src/getFile.ts",
+        "method": "getFile",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/storage-vercel-blob/src/client/VercelBlobClientUploadHandler.ts",
+        "method": "handler",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/storage-vercel-blob/src/getFile.ts",
+        "method": "getFile",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

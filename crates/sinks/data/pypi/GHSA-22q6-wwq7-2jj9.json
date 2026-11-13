@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-22q6-wwq7-2jj9",
+  "aliases": [
+    "CVE-2013-1865",
+    "PYSEC-2013-39"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "keystone"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "keystone.service.TokenController",
+      "method": "_get_token_ref"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "255b1d43500f5d98ec73a0056525b492b14fec05"
+    ]
+  }
+}

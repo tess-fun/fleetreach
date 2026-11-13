@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2qjp-fg8c-g878",
+  "aliases": [
+    "CVE-2023-1001"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "vxe-table"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/table/src/body.js",
+      "method": "mounted"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "d70b0e089740b65a22c89c106ebc4627ac48a22d"
+    ],
+    "excluded": [
+      {
+        "class": "packages/textarea/src/textarea.js",
+        "method": "updateAutoTxt",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

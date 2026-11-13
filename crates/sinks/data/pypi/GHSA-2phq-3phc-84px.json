@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2phq-3phc-84px",
+  "aliases": [
+    "CVE-2026-105755",
+    "PYSEC-2026-4198"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "vllm"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "vllm.entrypoints.pooling.scoring.serving.ServingScores",
+      "method": "_flash_late_interaction_encode_docs"
+    },
+    {
+      "class": "vllm.entrypoints.pooling.scoring.serving.ServingScores",
+      "method": "_flash_late_interaction_encode_queries"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "ee17d0d869203ef9a35ad73358a4987bba14b1fc"
+    ]
+  }
+}

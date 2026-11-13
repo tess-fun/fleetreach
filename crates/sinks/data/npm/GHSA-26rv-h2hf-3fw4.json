@@ -1,0 +1,78 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-26rv-h2hf-3fw4",
+  "aliases": [
+    "CVE-2025-4644"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "payload"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/next/src/auth/logout.ts",
+      "method": "logout"
+    },
+    {
+      "class": "packages/next/src/auth/refresh.ts",
+      "method": "refresh"
+    },
+    {
+      "class": "packages/payload/src/auth/getAuthFields.ts",
+      "method": "getBaseAuthFields"
+    },
+    {
+      "class": "packages/payload/src/auth/getFieldsToSign.ts",
+      "method": "getFieldsToSign"
+    },
+    {
+      "class": "packages/payload/src/auth/operations/login.ts",
+      "method": "loginOperation"
+    },
+    {
+      "class": "packages/payload/src/auth/operations/logout.ts",
+      "method": "logoutOperation"
+    },
+    {
+      "class": "packages/payload/src/auth/operations/refresh.ts",
+      "method": "refreshOperation"
+    },
+    {
+      "class": "packages/payload/src/auth/strategies/jwt.ts",
+      "method": "JWTAuthentication"
+    },
+    {
+      "class": "packages/payload/src/fields/hooks/afterRead/promise.ts",
+      "method": "promise"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "26d709dda6e512ce347557eaa2057db6e0cbf809"
+    ],
+    "excluded": [
+      {
+        "class": "packages/graphql/src/resolvers/auth/logout.ts",
+        "method": "logout",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/graphql/src/schema/initCollections.ts",
+        "method": "initCollections",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/payload/src/auth/endpoints/logout.ts",
+        "method": "logoutHandler",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/payload/src/collections/config/defaults.ts",
+        "method": "addDefaultsToAuthConfig",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

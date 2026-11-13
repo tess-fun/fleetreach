@@ -1,0 +1,56 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2v5f-23xc-v9qr",
+  "aliases": [
+    "CVE-2021-3377"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "ansi_up"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ansi_up.js",
+      "method": "AnsiUp"
+    },
+    {
+      "class": "ansi_up.js.AnsiUp",
+      "method": "escape_txt_for_html"
+    },
+    {
+      "class": "ansi_up.js.AnsiUp",
+      "method": "transform_to_html"
+    },
+    {
+      "class": "ansi_up.js",
+      "method": "get"
+    },
+    {
+      "class": "ansi_up.js",
+      "method": "set"
+    },
+    {
+      "class": "ansi_up.ts.AnsiUp",
+      "method": "constructor"
+    },
+    {
+      "class": "ansi_up.ts.AnsiUp",
+      "method": "escape_for_html"
+    },
+    {
+      "class": "ansi_up.ts.AnsiUp",
+      "method": "escape_txt_for_html"
+    },
+    {
+      "class": "ansi_up.ts.AnsiUp",
+      "method": "transform_to_html"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "c8c726ed1db979bae4f257b7fa41775155ba2e27"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-23fx-92m6-4f2g",
+  "aliases": [
+    "CVE-2023-28458",
+    "PYSEC-2023-40"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pretalx"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "pretalx.agenda.management.commands.export_schedule_html",
+      "method": "dump_content"
+    },
+    {
+      "class": "pretalx.agenda.management.commands.export_schedule_html",
+      "method": "get_mediastatic_content"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "60722c43cf975f319e94102e6bff320723776890"
+    ]
+  }
+}

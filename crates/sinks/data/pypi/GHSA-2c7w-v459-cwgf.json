@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2c7w-v459-cwgf",
+  "aliases": [
+    "CVE-2022-25568",
+    "PYSEC-2022-43141"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "motioneye"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "motioneye.handlers.config.ConfigHandler",
+      "method": "list"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "c60b64af5bb8c09189071522a1f6796cb44340b0"
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2wfh-rcwf-wh23",
+  "aliases": [
+    "CVE-2026-35214"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@budibase/server"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "6344d06d703660fd05995e61d581593c2349c879"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

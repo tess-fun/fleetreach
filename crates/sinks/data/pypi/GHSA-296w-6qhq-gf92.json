@@ -1,0 +1,27 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-296w-6qhq-gf92",
+  "aliases": [
+    "CVE-2014-0481",
+    "PYSEC-2014-5"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "django"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "django.core.files.storage.Storage",
+      "method": "get_available_name"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "26cd48e166ac4d84317c8ee6d63ac52a87e8da99",
+      "30042d475bf084c6723c6217a21598d9247a9c41",
+      "dd0c3f4ee1a30c1a1e6055061c6ba6e58c6b54d1"
+    ]
+  }
+}

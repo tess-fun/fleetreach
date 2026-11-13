@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3787-6prv-h9w3",
+  "aliases": [
+    "CVE-2024-24758"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "undici"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/fetch/index.js",
+      "method": "httpRedirectFetch"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "b9da3e40f1f096a06b4caedbb27c2568730434ef",
+      "d3aa574b1259c1d8d329a0f0f495ee82882b1458"
+    ]
+  }
+}

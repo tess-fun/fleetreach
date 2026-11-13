@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2qgm-m29m-cj2h",
+  "aliases": [
+    "CVE-2024-56331"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "uptime-kuma"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "server/monitor-types/real-browser-monitor-type.js.RealBrowserMonitorType",
+      "method": "check"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "6cfae01a0d3727c517afe512fc8fec1d99acf875"
+    ]
+  }
+}

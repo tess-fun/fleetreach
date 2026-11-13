@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2jcm-hq8r-84wx",
+  "aliases": [
+    "CVE-2026-10143",
+    "PYSEC-2026-2191"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "kafka-python"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "kafka.sasl.scram.ScramClient",
+      "method": "process_server_first_message"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "6e4831444f972d169cdd11f5c8d50333cea3f19b",
+      "74400d7ef1b54ad24d4b8170c23b58d1cab65e4f"
+    ]
+  }
+}

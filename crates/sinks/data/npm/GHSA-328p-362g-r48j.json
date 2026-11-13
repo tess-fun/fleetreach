@@ -1,0 +1,53 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-328p-362g-r48j",
+  "aliases": [
+    "CVE-2024-39001"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "ag-grid-enterprise"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "community-modules/core/src/utils/object.ts",
+      "method": "_cloneObject"
+    },
+    {
+      "class": "community-modules/core/src/utils/object.ts",
+      "method": "_mergeDeep"
+    },
+    {
+      "class": "community-modules/core/src/utils/object.ts",
+      "method": "cloneObject"
+    },
+    {
+      "class": "community-modules/core/src/utils/object.ts",
+      "method": "iterateObject"
+    },
+    {
+      "class": "community-modules/core/src/utils/object.ts",
+      "method": "mergeDeep"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "78fb47f6c996f22c0b7184afb29620ab8c240522",
+      "ff731699453f2632d4852b3a3c34b479c406068c"
+    ],
+    "excluded": [
+      {
+        "class": "community-modules/core/src/utils/object.ts",
+        "method": "_deepCloneDefinition",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "community-modules/core/src/utils/object.ts",
+        "method": "deepCloneDefinition",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

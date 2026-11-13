@@ -1,0 +1,46 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-32gc-64m7-hj7v",
+  "aliases": [
+    "CVE-2026-56682"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "9router"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/app/api/oauth/[provider]/[action]/route.js",
+      "method": "POST"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "efd20be8d81ef2e256a7037f3aa78e6b567b5fd3"
+    ],
+    "excluded": [
+      {
+        "class": "custom-server.js.http",
+        "method": "createServer",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/app/api/oauth/[provider]/[action]/route.js",
+        "method": "GET",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/lib/oauth/providers.js",
+        "method": "mapTokens",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/lib/oauth/providers.js",
+        "method": "pollToken",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2r2c-g63r-vccr",
+  "aliases": [
+    "CVE-2022-24773"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "node-forge"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/asn1.js.asn1",
+      "method": "fromDer"
+    },
+    {
+      "class": "lib/rsa.js.rsa",
+      "method": "setPublicKey"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3f0b49a0573ef1bb7af7f5673c0cfebf00424df1",
+      "bb822c02df0b61211836472e29b9790cc541cdb2"
+    ]
+  }
+}

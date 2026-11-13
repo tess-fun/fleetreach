@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-35xm-qvjg-8m42",
+  "aliases": [
+    "CVE-2026-34725"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "dbgate-web"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "a7d2ed11f3f3d4dfb5d2e4e5467dedafa5fa947e"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

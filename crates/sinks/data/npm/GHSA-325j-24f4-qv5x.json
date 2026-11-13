@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-325j-24f4-qv5x",
+  "aliases": [
+    "CVE-2018-7651"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "ssri"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "d0ebcdc22cb5c8f47f89716d08b3518b2485d65d"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2679-6mx9-h9xc",
+  "aliases": [
+    "CVE-2026-39987",
+    "PYSEC-2026-407"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "marimo"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "marimo._server.api.endpoints.terminal",
+      "method": "websocket_endpoint"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "c24d4806398f30be6b12acd6c60d1d7c68cfd12a"
+    ]
+  }
+}

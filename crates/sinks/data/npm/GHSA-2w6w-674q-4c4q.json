@@ -1,0 +1,61 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2w6w-674q-4c4q",
+  "aliases": [
+    "CVE-2026-33937"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "handlebars"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/handlebars/runtime.js",
+      "method": "template"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "68d8df5a88e0a26fe9e6084c5c6aaebe67b07da2"
+    ],
+    "excluded": [
+      {
+        "class": "lib/handlebars/compiler/base.js",
+        "method": "parseWithoutProcessing",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/handlebars/compiler/javascript-compiler.js",
+        "method": "registerDecorator",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/handlebars/internal/proto-access.js",
+        "method": "createProtoAccessControl",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/handlebars/runtime.js",
+        "method": "invokePartial",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/handlebars/runtime.js",
+        "method": "resolvePartial",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/precompiler.js",
+        "method": "cli",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "spec/precompiler.js.fs",
+        "method": "writeFileSync",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

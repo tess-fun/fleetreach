@@ -1,0 +1,33 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2r4h-8jxv-w2j8",
+  "aliases": [
+    "CVE-2025-54384",
+    "PYSEC-2026-1247"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "ckan"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ckan.lib.helpers",
+      "method": "markdown_extract"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "112affffa74b14fc97c54abcf18315df97114917",
+      "6d0065f2fc7e2682196d125275af34b93e9e554e"
+    ],
+    "excluded": [
+      {
+        "class": "ckan.lib.helpers",
+        "method": "render_markdown",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

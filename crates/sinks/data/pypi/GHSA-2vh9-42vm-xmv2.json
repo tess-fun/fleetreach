@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2vh9-42vm-xmv2",
+  "aliases": [
+    "CVE-2025-66455",
+    "PYSEC-2026-4077"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "lmdeploy"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lmdeploy.pytorch.disagg.conn.engine_conn.EngineP2PConnection",
+      "method": "handle_zmq_recv"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "f05b4ad8bf2e2d84101a1d63b3c44fadd99223b2"
+    ],
+    "excluded": [
+      {
+        "class": "lmdeploy.pytorch.disagg.conn.engine_conn.EngineP2PConnection",
+        "method": "zmq_send",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-27p8-2357-5qqv",
+  "aliases": [
+    "CVE-2026-83608"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@xmldom/xmldom"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/dom.js",
+      "method": "serializeToString"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "57aec90ac57b4408ae7c5d1746bf2a693b5ed90e",
+      "85f12eb4d14b44de33216cfb72b50af4d24e9fdd"
+    ]
+  }
+}

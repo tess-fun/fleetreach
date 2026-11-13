@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-38c4-r59v-3vqw",
+  "aliases": [
+    "CVE-2026-2327"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "markdown-it"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/rules_inline/linkify.mjs",
+      "method": "linkify"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "4b4bbcae5e0990a5b172378e507b33a59012ed26"
+    ]
+  }
+}

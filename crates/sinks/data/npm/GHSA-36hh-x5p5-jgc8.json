@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-36hh-x5p5-jgc8",
+  "aliases": [
+    "CVE-2026-44974"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@hapi/content"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/index.js",
+      "method": "disposition"
+    },
+    {
+      "class": "lib/index.js",
+      "method": "type"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3850079550c191d25e3643dc82a6d61144db8c2f"
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-273r-rm8g-7f3x",
+  "aliases": [
+    "CVE-2021-43801"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "mercurius"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/routes.js",
+      "method": "exports"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "732b2f895312da8deadd7b173dcd2d141d54b223"
+    ]
+  }
+}

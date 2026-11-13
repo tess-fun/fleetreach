@@ -1,0 +1,38 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3cr3-8m4c-fpxw",
+  "aliases": [
+    "CVE-2026-105747",
+    "PYSEC-2026-4194",
+    "PYSEC-2026-4209"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "docling-slim"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "docling.backend.mets_gbs_backend.MetsGbsDocumentBackend",
+      "method": "__init__"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "ebae65cd71c37c88b36185b406a449b92d8f7ffa"
+    ],
+    "excluded": [
+      {
+        "class": "docling.backend.mets_gbs_backend.MetsGbsDocumentBackend",
+        "method": "_parse_page",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "docling.datamodel.document._DocumentConversionInput",
+        "method": "_detect_mets_gbs",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-389g-gv7q-r4x8",
+  "aliases": [
+    "CVE-2026-107832"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "fastify"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/validation.js",
+      "method": "compileSchemasForValidation"
+    },
+    {
+      "class": "lib/validation.js",
+      "method": "lowerCaseHeadersSchema"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3241fbd2f10a8ca1503533726836b53b6e8775a2",
+      "35c32375731c111439682b2f9e6e0baed2694269"
+    ]
+  }
+}

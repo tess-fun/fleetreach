@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-246w-56m2-5899",
+  "aliases": [
+    "CVE-2021-21332",
+    "PYSEC-2021-133"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "matrix-synapse"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "synapse.config._base.Config",
+      "method": "read_templates"
+    },
+    {
+      "class": "synapse.config.captcha.CaptchaConfig",
+      "method": "read_config"
+    },
+    {
+      "class": "synapse.config.consent_config.ConsentConfig",
+      "method": "read_config"
+    },
+    {
+      "class": "synapse.config.registration.RegistrationConfig",
+      "method": "read_config"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "e54746bdf7d5c831eabe4dcea76a7626f1de73df"
+    ]
+  }
+}

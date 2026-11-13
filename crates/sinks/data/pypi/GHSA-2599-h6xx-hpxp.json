@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2599-h6xx-hpxp",
+  "aliases": [
+    "CVE-2026-34591",
+    "PYSEC-2026-2260"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "poetry"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "poetry.installation.wheel_installer.WheelDestination",
+      "method": "write_to_fs"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "ed59537ac3709cfbdbf95d957de801c13872991a"
+    ]
+  }
+}

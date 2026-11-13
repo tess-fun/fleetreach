@@ -1,0 +1,130 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-39mp-545q-w789",
+  "aliases": [
+    "CVE-2026-35620"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/auto-reply/commands-registry.data.ts",
+      "method": "buildChatCommands"
+    },
+    {
+      "class": "src/auto-reply/reply.ts",
+      "method": "extractInlineSimpleCommand"
+    },
+    {
+      "class": "src/auto-reply/reply.ts",
+      "method": "formatElevatedUnavailableMessage"
+    },
+    {
+      "class": "src/auto-reply/reply.ts",
+      "method": "getReplyFromConfig"
+    },
+    {
+      "class": "src/auto-reply/reply.ts",
+      "method": "isApprovedElevatedSender"
+    },
+    {
+      "class": "src/auto-reply/reply.ts",
+      "method": "normalizeAllowToken"
+    },
+    {
+      "class": "src/auto-reply/reply.ts",
+      "method": "resolveElevatedAllowList"
+    },
+    {
+      "class": "src/auto-reply/reply.ts",
+      "method": "resolveElevatedPermissions"
+    },
+    {
+      "class": "src/auto-reply/reply.ts",
+      "method": "slugAllowToken"
+    },
+    {
+      "class": "src/auto-reply/reply.ts",
+      "method": "stageSandboxMedia"
+    },
+    {
+      "class": "src/auto-reply/reply.ts",
+      "method": "stripInlineStatus"
+    },
+    {
+      "class": "src/auto-reply/reply.ts",
+      "method": "stripSenderPrefix"
+    },
+    {
+      "class": "src/auto-reply/reply/agent-runner.ts",
+      "method": "appendUsageLine"
+    },
+    {
+      "class": "src/auto-reply/reply/agent-runner.ts",
+      "method": "buildThreadingToolContext"
+    },
+    {
+      "class": "src/auto-reply/reply/agent-runner.ts",
+      "method": "formatBunFetchSocketError"
+    },
+    {
+      "class": "src/auto-reply/reply/agent-runner.ts",
+      "method": "formatResponseUsageLine"
+    },
+    {
+      "class": "src/auto-reply/reply/agent-runner.ts",
+      "method": "isBunFetchSocketError"
+    },
+    {
+      "class": "src/auto-reply/reply/agent-runner.ts",
+      "method": "resolveEnforceFinalTag"
+    },
+    {
+      "class": "src/auto-reply/reply/agent-runner.ts",
+      "method": "runReplyAgent"
+    },
+    {
+      "class": "src/auto-reply/reply/commands.ts",
+      "method": "buildCommandContext"
+    },
+    {
+      "class": "src/auto-reply/reply/commands.ts",
+      "method": "buildStatusReply"
+    },
+    {
+      "class": "src/auto-reply/reply/commands.ts",
+      "method": "extractCompactInstructions"
+    },
+    {
+      "class": "src/auto-reply/reply/commands.ts",
+      "method": "formatApiKeySnippet"
+    },
+    {
+      "class": "src/auto-reply/reply/commands.ts",
+      "method": "handleCommands"
+    },
+    {
+      "class": "src/auto-reply/reply/commands.ts",
+      "method": "resolveAbortTarget"
+    },
+    {
+      "class": "src/auto-reply/reply/commands.ts",
+      "method": "resolveModelAuthLabel"
+    },
+    {
+      "class": "src/auto-reply/reply/commands.ts",
+      "method": "resolveSessionEntryForKey"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "555b2578a8cc6e1b93f717496935ead97bfbed8b",
+      "ccfeecb6887cd97937e33a71877ad512741e82b2",
+      "ea018a68ccb92dbc735bc1df9880d5c95c63ca35"
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-37q5-v5qm-c9v8",
+  "aliases": [
+    "CVE-2024-3568",
+    "PYSEC-2026-1978"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "transformers"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "transformers.modeling_tf_utils.TFPreTrainedModel",
+      "method": "load_repo_checkpoint"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "693667b8ac8138b83f8adb6522ddaf42fa07c125"
+    ]
+  }
+}

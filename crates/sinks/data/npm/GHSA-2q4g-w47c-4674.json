@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2q4g-w47c-4674",
+  "aliases": [
+    "CVE-2020-15174"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "electron"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "18613925610ba319da7f497b6deed85ad712c59b"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

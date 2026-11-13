@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-238w-f66p-w349",
+  "aliases": [
+    "CVE-2026-9353",
+    "PYSEC-2026-2509"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "hermes-agent"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "7ebebfbb8d10937cbf2219b4cf5e121b71e67428"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

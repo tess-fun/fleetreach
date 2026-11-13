@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-232r-66cg-79px",
+  "aliases": [
+    "CVE-2018-7750",
+    "PYSEC-2018-19"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "paramiko"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "paramiko.transport.Transport",
+      "method": "run"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "e9dfd854bdaf8af15d7834f7502a0451d217bb8c",
+      "fa29bd8446c8eab237f5187d28787727b4610516"
+    ]
+  }
+}

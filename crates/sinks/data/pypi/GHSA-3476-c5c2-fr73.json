@@ -1,0 +1,59 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3476-c5c2-fr73",
+  "aliases": [
+    "CVE-2026-115775"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "twisted"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "twisted.words.xish.domish.ExpatElementStream",
+      "method": "_onStartElement"
+    },
+    {
+      "class": "twisted.words.xish.domish.ExpatElementStream",
+      "method": "parse"
+    },
+    {
+      "class": "twisted.words.xish.domish.SuxElementStream",
+      "method": "parse"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "8873814bec8288e2466fad4d2c4d64039beb88b0"
+    ],
+    "excluded": [
+      {
+        "class": "twisted.words.xish.domish.ExpatElementStream",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "twisted.words.xish.domish.ExpatElementStream",
+        "method": "_onEndElement",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "twisted.words.xish.domish.SuxElementStream",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "twisted.words.xish.domish.SuxElementStream",
+        "method": "gotTagEnd",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "twisted.words.xish.domish.SuxElementStream",
+        "method": "gotTagStart",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

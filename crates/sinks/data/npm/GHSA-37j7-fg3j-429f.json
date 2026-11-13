@@ -1,0 +1,77 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-37j7-fg3j-429f",
+  "aliases": [
+    "CVE-2025-61927"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "happy-dom"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/happy-dom/src/window/BrowserWindow.ts.BrowserWindow",
+      "method": "constructor"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "819d15ba289495439eda8be360d92a614ce22405",
+      "de438ad72921c69793584aa657b48d3655dfac97"
+    ],
+    "excluded": [
+      {
+        "class": "packages/@happy-dom/server-renderer/src/ServerRenderer.ts.ServerRenderer",
+        "method": "[computed]",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/@happy-dom/server-renderer/src/utilities/ProcessArgumentsParser.ts.ProcessArgumentsParser",
+        "method": "getConfiguration",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/happy-dom/src/browser/utilities/BrowserFrameNavigator.ts.BrowserFrameNavigator",
+        "method": "navigate",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/happy-dom/src/html-parser/HTMLParser.ts.HTMLParser",
+        "method": "parseRawTextElementContent",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/happy-dom/src/module/ECMAScriptModuleCompiler.ts.ECMAScriptModuleCompiler",
+        "method": "compile",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/happy-dom/src/nodes/element/ElementEventAttributeUtility.ts.ElementEventAttributeUtility",
+        "method": "getEventListener",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/happy-dom/src/nodes/html-link-element/HTMLLinkElement.ts.HTMLLinkElement",
+        "method": "[computed]",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/happy-dom/src/nodes/html-script-element/HTMLScriptElement.ts.HTMLScriptElement",
+        "method": "[computed]",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/happy-dom/src/window/BrowserWindow.ts.BrowserWindow",
+        "method": "[computed]",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/happy-dom/src/window/GlobalWindow.ts.GlobalWindow",
+        "method": "[computed]",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

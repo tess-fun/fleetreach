@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-238p-pmpm-9mq7",
+  "aliases": [
+    "CVE-2026-103923"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "katex"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/Namespace.ts.Namespace",
+      "method": "get"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "0adf7e77db6915d991803b29699f82b1ccf8d4f4"
+    ],
+    "excluded": [
+      {
+        "class": "src/Namespace.ts.Namespace",
+        "method": "set",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/Settings.ts",
+        "method": "applySetting",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/Settings.ts",
+        "method": "getDefaultValue",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

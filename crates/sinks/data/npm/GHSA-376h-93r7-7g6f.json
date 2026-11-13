@@ -1,0 +1,48 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-376h-93r7-7g6f",
+  "aliases": [
+    "CVE-2026-84376"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "astro"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/astro/src/core/app/base.ts.BaseApp",
+      "method": "removeBase"
+    },
+    {
+      "class": "packages/astro/src/core/fetch/fetch-state.ts.FetchState",
+      "method": "[computed]"
+    },
+    {
+      "class": "packages/astro/src/core/i18n/domain.ts",
+      "method": "removeBase"
+    },
+    {
+      "class": "packages/astro/src/core/routing/match-request.ts",
+      "method": "removeBase"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "05763a0884aabb1da78a2749d5bb9d41ae620527"
+    ],
+    "excluded": [
+      {
+        "class": "packages/astro/src/core/i18n/domain.ts",
+        "method": "computePathnameFromDomain",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/astro/src/core/routing/match-request.ts",
+        "method": "matchRequest",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -30,6 +30,7 @@ pub(crate) mod fix_managers;
 pub mod fix_policy;
 pub(crate) mod fix_targets;
 pub mod fixranges;
+pub mod fn_reach;
 pub mod forges;
 pub mod health;
 pub mod history;

@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2v2p-6j97-cjg9",
+  "aliases": [
+    "CVE-2026-100722"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "vm2"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/bridge.js",
+      "method": "createBridge"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "6e487df9518e455e5e60faec3df3a0e2e27f9940"
+    ]
+  }
+}

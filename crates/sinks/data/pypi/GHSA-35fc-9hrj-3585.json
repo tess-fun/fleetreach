@@ -1,0 +1,21 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-35fc-9hrj-3585",
+  "aliases": [
+    "BIT-superset-2024-53949",
+    "CVE-2024-53949",
+    "PYSEC-2026-1156"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "apache-superset"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "7650c47e72f28559e91524f5d68d50c2060df4c7"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

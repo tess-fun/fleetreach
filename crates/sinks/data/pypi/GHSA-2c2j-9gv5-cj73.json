@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2c2j-9gv5-cj73",
+  "aliases": [
+    "CVE-2025-54121",
+    "PYSEC-2026-1941"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "starlette"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "starlette.datastructures.UploadFile",
+      "method": "write"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "9f7ec2eb512fcc3fe90b43cb9dd9e1d08696bec1"
+    ],
+    "excluded": [
+      {
+        "class": "starlette.datastructures.UploadFile",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

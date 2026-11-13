@@ -1,0 +1,27 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2cvf-r9jm-4qm9",
+  "aliases": [
+    "CVE-2019-3830",
+    "PYSEC-2019-78"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "ceilometer"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "8881a42af169a2d7c912b1434911f978883c83f3"
+    ],
+    "excluded": [
+      {
+        "class": "ceilometer.agent.ConfigManagerBase",
+        "method": "load_config",
+        "reason": "only comments, braces, imports or logging changed"
+      }
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

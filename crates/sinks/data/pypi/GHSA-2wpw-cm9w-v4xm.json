@@ -1,0 +1,33 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2wpw-cm9w-v4xm",
+  "aliases": [
+    "CVE-2022-4719",
+    "PYSEC-2022-43005"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "rdiffweb"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "rdiffweb.core.model._user.UserObject",
+      "method": "add_authorizedkey"
+    },
+    {
+      "class": "rdiffweb.core.notification.NotificationPlugin",
+      "method": "start"
+    },
+    {
+      "class": "rdiffweb.core.notification.NotificationPlugin",
+      "method": "stop"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "bc4bed89affcba71251fe54ed10639da9d392c1d"
+    ]
+  }
+}

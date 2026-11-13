@@ -1,0 +1,135 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2xpw-w6gg-jr37",
+  "aliases": [
+    "CVE-2025-66471",
+    "PYSEC-2026-1994"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "urllib3"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "urllib3.response.HTTPResponse",
+      "method": "read"
+    },
+    {
+      "class": "urllib3.response.HTTPResponse",
+      "method": "read1"
+    },
+    {
+      "class": "urllib3.response.HTTPResponse",
+      "method": "read_chunked"
+    },
+    {
+      "class": "urllib3.response.HTTPResponse",
+      "method": "stream"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "c19571de34c47de3a766541b041637ba5f716ed7",
+      "d0fde3672e4a4093f7587858dccfc298eb66e46c"
+    ],
+    "excluded": [
+      {
+        "class": "noxfile",
+        "method": "test_brotlipy",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "noxfile",
+        "method": "tests_impl",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.connectionpool.HTTPConnectionPool",
+        "method": "get_url",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.connectionpool.HTTPConnectionPool",
+        "method": "post_url",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.connectionpool.HTTPConnectionPool",
+        "method": "urlopen",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.connectionpool.HTTPResponse",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.connectionpool.HTTPResponse",
+        "method": "from_httplib",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.connectionpool.HTTPResponse",
+        "method": "getheader",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.connectionpool.HTTPResponse",
+        "method": "getheaders",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.response.BaseHTTPResponse",
+        "method": "_decode",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.response.BrotliDecoder",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.response.BytesQueueBuffer",
+        "method": "get",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.response.ContentDecoder",
+        "method": "decompress",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.response.DeflateDecoder",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.response.DeflateDecoder",
+        "method": "decompress",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.response.GzipDecoder",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.response.GzipDecoder",
+        "method": "decompress",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.response.MultiDecoder",
+        "method": "decompress",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "urllib3.response.ZstdDecoder",
+        "method": "decompress",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

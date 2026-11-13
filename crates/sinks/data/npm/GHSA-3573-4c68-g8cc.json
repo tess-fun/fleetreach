@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3573-4c68-g8cc",
+  "aliases": [
+    "CVE-2026-22032"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "directus"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "api/src/auth/drivers/saml.ts",
+      "method": "createSAMLAuthRouter"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "dad9576ea9362905cc4de8028d3877caff36dc23"
+    ]
+  }
+}

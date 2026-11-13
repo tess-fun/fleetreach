@@ -1,0 +1,22 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2f9x-5v75-3qv4",
+  "aliases": [
+    "CVE-2018-7537",
+    "PYSEC-2018-6"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "django"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "94c5da1d17a6b0d378866c66b605102c19f7988c",
+      "a91436360b79a6ff995c3e5018bcc666dfaf1539",
+      "d17974a287a6ea2e361daff88fcc004cbd6835fa"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

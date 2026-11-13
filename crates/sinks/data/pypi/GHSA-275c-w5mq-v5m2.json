@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-275c-w5mq-v5m2",
+  "aliases": [
+    "CVE-2023-52313",
+    "PYSEC-2024-145"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "paddlepaddle"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "6ef71779197ad6faf51ac295022ab5008d81372f"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

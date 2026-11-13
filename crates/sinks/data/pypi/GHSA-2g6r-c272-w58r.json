@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2g6r-c272-w58r",
+  "aliases": [
+    "CVE-2026-26013",
+    "PYSEC-2026-2562"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "langchain-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "libs.partners.openai.langchain_openai.chat_models.base.BaseChatOpenAI",
+      "method": "get_num_tokens_from_messages"
+    },
+    {
+      "class": "libs.partners.openai.langchain_openai.chat_models.base",
+      "method": "_url_to_size"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "2b4b1dc29a833d4053deba4c2b77a3848c834565"
+    ]
+  }
+}

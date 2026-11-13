@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2gqw-q9r9-7f79",
+  "aliases": [
+    "CVE-2021-25915"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "changeset"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "index.js",
+      "method": "apply"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "9e588844edbb9993b32e7366cc799262b4447f99"
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2hrw-hx67-34x6",
+  "aliases": [
+    "BIT-django-2023-24580",
+    "CVE-2023-24580",
+    "PYSEC-2023-13"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "django"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "django.http.multipartparser.MultiPartParser",
+      "method": "parse"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "628b33a854a9c68ec8a0c51f382f304a0044ec92",
+      "83f1ea83e4553e211c1c5a0dfc197b66d4e50432",
+      "a665ed5179f5bbd3db95ce67286d0192eff041d8"
+    ],
+    "excluded": [
+      {
+        "class": "django.core.handlers.exception",
+        "method": "response_for_exception",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "django.http.request.HttpRequest",
+        "method": "_load_post_and_files",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

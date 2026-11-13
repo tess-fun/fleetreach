@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-22jr-vc7j-g762",
+  "aliases": [
+    "CVE-2020-10571",
+    "PYSEC-2020-91"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "psd-tools"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "fd51f8b4a52bc9c1c06d1035dfdf2cd920e87074"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

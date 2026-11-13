@@ -1,0 +1,48 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-33wh-fxxf-88vv",
+  "aliases": [
+    "CVE-2026-114138"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "djangorestframework"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "rest_framework.negotiation.DefaultContentNegotiation",
+      "method": "get_accept_list"
+    },
+    {
+      "class": "rest_framework.negotiation.DefaultContentNegotiation",
+      "method": "select_renderer"
+    },
+    {
+      "class": "rest_framework.utils.mediatypes._MediaType",
+      "method": "__init__"
+    },
+    {
+      "class": "rest_framework.utils.mediatypes",
+      "method": "order_by_precedence"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "148ab6523922d5a0c110f76615935e5220b63029"
+    ],
+    "excluded": [
+      {
+        "class": "rest_framework.negotiation.DefaultContentNegotiation",
+        "method": "select_parser",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "rest_framework.request",
+        "method": "is_form_media_type",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

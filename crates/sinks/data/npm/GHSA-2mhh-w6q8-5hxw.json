@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2mhh-w6q8-5hxw",
+  "aliases": [
+    "CVE-2016-10518"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "ws"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/Sender.js.Sender",
+      "method": "frameAndSend"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "29293ed11b679e0366fa0f6bb9310b330dafd795"
+    ]
+  }
+}

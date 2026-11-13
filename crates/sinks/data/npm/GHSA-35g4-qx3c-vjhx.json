@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-35g4-qx3c-vjhx",
+  "aliases": [
+    "CVE-2021-32659"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "matrix-appservice-bridge"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/components/room-upgrade-handler.ts.RoomUpgradeHandler",
+      "method": "onJoinedNewRoom"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "b69e745584a34fcfd858df33e4631e420da07b9f"
+    ]
+  }
+}

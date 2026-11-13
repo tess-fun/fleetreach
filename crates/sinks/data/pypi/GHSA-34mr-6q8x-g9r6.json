@@ -1,0 +1,33 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-34mr-6q8x-g9r6",
+  "aliases": [
+    "CVE-2023-49795",
+    "PYSEC-2023-277"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "mindsdb"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "mindsdb.api.http.namespaces.file.File",
+      "method": "put"
+    },
+    {
+      "class": "mindsdb.integrations.handlers.llama_index_handler.llama_index_handler.LlamaIndexHandler",
+      "method": "create"
+    },
+    {
+      "class": "mindsdb.integrations.handlers.web_handler.web_handler.CrawlerTable",
+      "method": "select"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "8d13c9c28ebcf3b36509eb679378004d4648d8fe"
+    ]
+  }
+}

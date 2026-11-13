@@ -1,0 +1,51 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-36fq-jgmw-4r9c",
+  "aliases": [
+    "CVE-2025-9906",
+    "PYSEC-2025-76"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "keras"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "saving.saving_lib",
+      "method": "get_attr_skipset"
+    },
+    {
+      "class": "saving.serialization_lib",
+      "method": "_retrieve_class_or_fn"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "713172ab56b864e59e2aa79b1a51b0e728bba858"
+    ],
+    "excluded": [
+      {
+        "class": "legacy.saving.legacy_h5_format",
+        "method": "load_model_from_hdf5",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "legacy.saving.legacy_h5_format",
+        "method": "save_optimizer_weights_to_hdf5_group",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "legacy.saving.saving_utils",
+        "method": "compile_args_from_training_config",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "legacy.saving.saving_utils",
+        "method": "model_from_config",
+        "reason": "only comments, braces, imports or logging changed"
+      }
+    ]
+  }
+}

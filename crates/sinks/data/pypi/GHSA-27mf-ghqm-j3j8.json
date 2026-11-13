@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-27mf-ghqm-j3j8",
+  "aliases": [
+    "CVE-2024-52303",
+    "PYSEC-2026-1096"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "aiohttp"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "aiohttp.web_app.Application",
+      "method": "_handle"
+    },
+    {
+      "class": "aiohttp.web_app",
+      "method": "_build_middlewares"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "bc15db61615079d1b6327ba42c682f758fa96936"
+    ]
+  }
+}

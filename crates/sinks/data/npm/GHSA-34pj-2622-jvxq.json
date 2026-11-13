@@ -1,0 +1,46 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-34pj-2622-jvxq",
+  "aliases": [
+    "CVE-2026-53607"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "apostrophe"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/apostrophe/modules/@apostrophecms/util/index.js",
+      "method": "methods"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "5a88e9630cbbdde33154ef8abe7557ddf7be418b"
+    ],
+    "excluded": [
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/file/index.js",
+        "method": "routes",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/sanitize-html/index.js",
+        "method": "sanitizeHtml",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/seo/lib/nodes.js",
+        "method": "getMetaHead",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/seo/lib/nodes.js",
+        "method": "getTagManagerHead",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

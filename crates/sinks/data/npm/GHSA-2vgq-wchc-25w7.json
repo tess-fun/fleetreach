@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2vgq-wchc-25w7",
+  "aliases": [
+    "CVE-2026-118776"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "node-forge"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/cipherModes.js.cbc",
+      "method": "unpad"
+    },
+    {
+      "class": "lib/cipherModes.js.ecb",
+      "method": "unpad"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "81774ff99e2da64aec9a43591df45a360040c136"
+    ]
+  }
+}

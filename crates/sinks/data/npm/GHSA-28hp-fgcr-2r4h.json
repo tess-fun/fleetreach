@@ -1,0 +1,21 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-28hp-fgcr-2r4h",
+  "ecosystem": "npm",
+  "packages": [
+    "angular"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/ng/http.js",
+      "method": "$HttpProvider"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "6476af83cd0418c84e034a955b12a842794385c4"
+    ]
+  }
+}

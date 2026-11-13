@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2h4p-vjrc-8xpq",
+  "aliases": [
+    "CVE-2026-44307",
+    "PYSEC-2026-2617"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "mako"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "mako.lookup.TemplateLookup",
+      "method": "get_template"
+    },
+    {
+      "class": "mako.template.Template",
+      "method": "__init__"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "72e10c573ca0fbcbddd4455abca8ce92a61780d7"
+    ]
+  }
+}

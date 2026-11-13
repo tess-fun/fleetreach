@@ -1,0 +1,35 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-342q-2mc2-5gmp",
+  "aliases": [
+    "CVE-2024-39919"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@jmondi/url-to-png"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/app.ts",
+      "method": "createApplication"
+    },
+    {
+      "class": "src/lib/utils.ts",
+      "method": "formatAllowList"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "f62ff40403ffa1781459d6be8d97b8035888c00c"
+    ],
+    "excluded": [
+      {
+        "class": "src/middlewares/allow_list.ts",
+        "method": "handleAllowListMiddleware",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

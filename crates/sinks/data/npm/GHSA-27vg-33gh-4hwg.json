@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-27vg-33gh-4hwg",
+  "aliases": [
+    "CVE-2026-3089"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@actual-app/sync-server"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "18072e1d8b5281db43ded8b21433ee177bae9dfa"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

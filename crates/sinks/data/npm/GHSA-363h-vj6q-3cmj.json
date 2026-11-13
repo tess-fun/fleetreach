@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-363h-vj6q-3cmj",
+  "aliases": [
+    "CVE-2014-4671"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "hapi"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "d47f57abf23bdaa84f61aed2bac94ae5f358afb7"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

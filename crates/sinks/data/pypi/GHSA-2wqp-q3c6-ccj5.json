@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2wqp-q3c6-ccj5",
+  "aliases": [
+    "BIT-mlflow-2026-115886",
+    "CVE-2026-115886"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "mlflow"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "mlflow.server.handlers",
+      "method": "_invoke_scorer_handler"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "bac30b4148c4f40045b4d4db07ae60ab3838803f"
+    ],
+    "excluded": [
+      {
+        "class": "mlflow.server.handlers",
+        "method": "_invoke_genai_evaluate_handler",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "mlflow.server.handlers",
+        "method": "_register_scorer",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

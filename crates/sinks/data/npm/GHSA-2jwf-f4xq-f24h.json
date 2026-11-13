@@ -1,0 +1,73 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2jwf-f4xq-f24h",
+  "aliases": [
+    "CVE-2026-55086"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "ep_etherpad-lite"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/node/db/API.ts",
+      "method": "restoreRevision"
+    },
+    {
+      "class": "src/node/db/Pad.ts.Pad",
+      "method": "copyPadWithoutHistory"
+    },
+    {
+      "class": "src/node/db/Pad.ts.Pad",
+      "method": "init"
+    },
+    {
+      "class": "src/node/handler/APIHandler.ts",
+      "method": "handle"
+    },
+    {
+      "class": "src/node/hooks/express/admin.ts",
+      "method": "expressCreateServer"
+    },
+    {
+      "class": "src/node/hooks/express/specialpages.ts",
+      "method": "sanitizeProxyPath"
+    },
+    {
+      "class": "src/node/hooks/express/tokenTransfer.ts",
+      "method": "expressCreateServer"
+    },
+    {
+      "class": "src/node/utils/ImportEtherpad.ts",
+      "method": "setPadRaw"
+    },
+    {
+      "class": "src/node/utils/ImportHtml.ts",
+      "method": "setPadHTML"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "8c6104c5d5daf41f0d454acc04d42dffa0e0d996"
+    ],
+    "excluded": [
+      {
+        "class": "src/node/db/Pad.ts.Pad",
+        "method": "appendRevision",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/node/handler/ExportHandler.ts",
+        "method": "doExport",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/node/handler/ImportHandler.ts",
+        "method": "doImport",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

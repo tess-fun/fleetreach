@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2fgq-7j6h-9rm4",
+  "aliases": [
+    "CVE-2026-32003"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/node-host/invoke-system-run.ts",
+      "method": "handleSystemRunInvoke"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "e80c803fa887f9699ad87a9e906ab5c1ff85bd9a"
+    ]
+  }
+}

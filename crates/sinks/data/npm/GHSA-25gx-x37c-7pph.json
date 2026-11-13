@@ -1,0 +1,33 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-25gx-x37c-7pph",
+  "aliases": [
+    "CVE-2026-32064"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/agents/sandbox/browser.ts",
+      "method": "ensureSandboxBrowser"
+    },
+    {
+      "class": "src/browser/bridge-server.ts",
+      "method": "startBrowserBridgeServer"
+    },
+    {
+      "class": "src/security/audit-extra.async.ts",
+      "method": "collectSandboxBrowserHashLabelFindings"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "621d8e1312482f122f18c43c72c67211b141da01",
+      "8c1518f0f3e0533593cd2dec3a46c9b746753661"
+    ]
+  }
+}

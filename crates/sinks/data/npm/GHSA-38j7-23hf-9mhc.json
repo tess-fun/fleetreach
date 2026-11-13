@@ -1,0 +1,35 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-38j7-23hf-9mhc",
+  "aliases": [
+    "CVE-2026-49253"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "electerm"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/app/server/trzsz.js.TrzszSession",
+      "method": "getUniqueFilePath"
+    },
+    {
+      "class": "src/app/server/zmodem.js.ZmodemSession",
+      "method": "prepareReceiveFile"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "fde153d677a170c5816368f6586647f3af4ef284"
+    ],
+    "excluded": [
+      {
+        "class": "src/app/server/trzsz.js.TrzszSession",
+        "method": "_startFileReceiving",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

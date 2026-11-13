@@ -1,0 +1,62 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2q4h-27m7-rj67",
+  "aliases": [
+    "CVE-2013-2191",
+    "PYSEC-2014-88"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "python-bugzilla"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "bugzilla.Bugzilla",
+      "method": "__init__"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "a782282ee479ba4cc1b8b1d89700ac630ba83eef"
+    ],
+    "excluded": [
+      {
+        "class": "bugzilla.base.BugzillaBase",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "bugzilla.base.BugzillaBase",
+        "method": "connect",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "bugzilla.base.BugzillaBase",
+        "method": "login",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "bugzilla.base.BugzillaBase",
+        "method": "openattachment",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "bugzilla.base.BugzillaBase",
+        "method": "url_to_query",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "bugzilla.base._CookieTransport",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "bugzilla.base._CookieTransport",
+        "method": "request",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

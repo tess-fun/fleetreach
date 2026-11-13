@@ -1,0 +1,47 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2x7j-588g-ccc2",
+  "aliases": [
+    "CVE-2026-92596"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "nodemailer"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/addressparser/index.js",
+      "method": "addressparser"
+    },
+    {
+      "class": "lib/mime-node/index.js.MimeNode",
+      "method": "_convertAddresses"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "34da64282dcdc9b0581c721a27ab2fa226673150",
+      "7cc38af418ffa6fc7e86085195ca5ca681694b3e",
+      "9116da9528c6524cefaed75185602a7e85d20434"
+    ],
+    "excluded": [
+      {
+        "class": "lib/mime-node/index.js.MimeNode",
+        "method": "getAddresses",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "lib/mime-node/index.js.MimeNode",
+        "method": "getEnvelope",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "lib/mime-node/index.js.MimeNode",
+        "method": "setEnvelope",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

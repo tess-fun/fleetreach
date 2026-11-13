@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-28xr-mwxg-3qc8",
+  "aliases": [
+    "CVE-2022-24066"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "simple-git"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "simple-git/src/lib/tasks/clone.ts",
+      "method": "cloneTask"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "2040de601c894363050fef9f28af367b169a56c5"
+    ],
+    "excluded": [
+      {
+        "class": "simple-git/src/lib/tasks/clone.ts",
+        "method": "cloneMirrorTask",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

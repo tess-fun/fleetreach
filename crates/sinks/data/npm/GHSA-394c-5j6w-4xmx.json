@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-394c-5j6w-4xmx",
+  "aliases": [
+    "CVE-2020-7793"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "ua-parser-js"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "6d1f26df051ba681463ef109d36c9cf0f7e32b18"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

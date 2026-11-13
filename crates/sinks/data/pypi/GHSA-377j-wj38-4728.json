@@ -1,0 +1,42 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-377j-wj38-4728",
+  "aliases": [
+    "CVE-2025-58352",
+    "PYSEC-2026-2036"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "weblate"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "weblate.accounts.utils",
+      "method": "adjust_session_expiry"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "0b46fe596231dd456283ead66699ae5516f23908"
+    ],
+    "excluded": [
+      {
+        "class": "weblate.accounts.forms.LoginForm",
+        "method": "clean",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "weblate.accounts.middleware.AuthenticationMiddleware",
+        "method": "__call__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "weblate.accounts.pipeline",
+        "method": "notify_connect",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

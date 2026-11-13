@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2pc9-4j83-qjmr",
+  "aliases": [
+    "CVE-2026-22807",
+    "PYSEC-2026-2010"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "vllm"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "vllm.transformers_utils.dynamic_module",
+      "method": "try_get_class_from_dynamic_module"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "78d13ea9de4b1ce5e4d8a5af9738fea71fb024e5"
+    ],
+    "excluded": [
+      {
+        "class": "vllm.model_executor.models.registry._ModelRegistry",
+        "method": "_try_resolve_transformers",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

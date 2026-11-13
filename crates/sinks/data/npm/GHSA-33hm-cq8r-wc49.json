@@ -1,0 +1,57 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-33hm-cq8r-wc49",
+  "aliases": [
+    "CVE-2026-32026"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/infra/tmp-openclaw-dir.ts",
+      "method": "resolvePreferredOpenClawTmpDir"
+    },
+    {
+      "class": "src/media/local-roots.ts",
+      "method": "buildMediaLocalRoots"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "79a7b3d22ef92e36a4031093d80a0acb0d82f351",
+      "d3da67c7a9b463edc1a9b1c1f7af107a34ca32f5",
+      "def993dbd843ff28f2b3bad5cc24603874ba9f1e"
+    ],
+    "excluded": [
+      {
+        "class": "extensions/llm-task/src/llm-task-tool.ts",
+        "method": "createLlmTaskTool",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/agents/sandbox-paths.ts",
+        "method": "resolveAllowedTmpMediaPath",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/media-understanding/runner.entries.ts",
+        "method": "runCliEntry",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/plugin-sdk/temp-path.ts",
+        "method": "buildRandomTempFilePath",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/plugin-sdk/temp-path.ts",
+        "method": "withTempDownloadPath",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

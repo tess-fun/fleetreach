@@ -1,0 +1,50 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-33fm-6gp7-4p47",
+  "aliases": [
+    "CVE-2026-24126",
+    "PYSEC-2026-2309"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "weblate"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "weblate.trans.models.component.Component",
+      "method": "add_ssh_host_key"
+    },
+    {
+      "class": "weblate.vcs.ssh",
+      "method": "add_host_key"
+    },
+    {
+      "class": "weblate.wladmin.tests.AdminTest",
+      "method": "test_ssh_add"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "78773cc141ce0a97900c11341e6cf856451395fd"
+    ],
+    "excluded": [
+      {
+        "class": "weblate.utils.files",
+        "method": "cleanup_error_message",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "weblate.wladmin.forms.SSHAddForm",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "weblate.wladmin.views",
+        "method": "ssh",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-333x-w4r6-6crp",
+  "aliases": [
+    "CVE-2026-110725"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "fast-uri"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "index.js",
+      "method": "serialize"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "39e6493c1356f30a0084171627eb266786e1620e",
+      "a9b8d67353630aab053cd727cf629023dd018d2b"
+    ]
+  }
+}

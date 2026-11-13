@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-35jh-r3h4-6jhm",
+  "aliases": [
+    "CVE-2021-23337"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "lodash-es"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lodash.js",
+      "method": "runInContext"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3469357cff396a26c363f8c1b5a91dde28ba4b1c"
+    ]
+  }
+}

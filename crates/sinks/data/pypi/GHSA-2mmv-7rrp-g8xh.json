@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2mmv-7rrp-g8xh",
+  "aliases": [
+    "CVE-2026-22250",
+    "PYSEC-2026-2051"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "wlc"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "wlc.Weblate",
+      "method": "_should_verify_ssl"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "a513864ec4daad00146e6d6e039559726e256fa3"
+    ],
+    "excluded": [
+      {
+        "class": "wlc.Weblate",
+        "method": "invoke_request",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

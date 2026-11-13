@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2wcj-qr76-9768",
+  "aliases": [
+    "CVE-2023-52303",
+    "PYSEC-2024-135"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "paddlepaddle"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "python.paddle.tensor.manipulation",
+      "method": "unstack"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "19da5c0c4d8c5e4dfef2a92e24141c3f51884dcc"
+    ]
+  }
+}

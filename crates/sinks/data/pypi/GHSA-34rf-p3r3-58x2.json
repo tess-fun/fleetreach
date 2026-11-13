@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-34rf-p3r3-58x2",
+  "aliases": [
+    "CVE-2024-34511",
+    "PYSEC-2026-1407"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "gradio"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "gradio.routes.App",
+      "method": "create_app"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "24a583688046867ca8b8b02959c441818bdb34a2"
+    ],
+    "excluded": [
+      {
+        "class": "gradio.components.file_explorer.FileExplorer",
+        "method": "ls",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

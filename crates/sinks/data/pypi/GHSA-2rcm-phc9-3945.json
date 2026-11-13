@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2rcm-phc9-3945",
+  "aliases": [
+    "CVE-2018-1000808",
+    "PYSEC-2018-24"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pyopenssl"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "OpenSSL.SSL._VerifyHelper",
+      "method": "__init__"
+    },
+    {
+      "class": "OpenSSL.crypto",
+      "method": "load_pkcs12"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "e73818600065821d588af475b024f4eb518c3509"
+    ]
+  }
+}

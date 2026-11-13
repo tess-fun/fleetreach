@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-29w2-fq35-v728",
+  "aliases": [
+    "CVE-2026-16584",
+    "PYSEC-2026-3549"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "awslabs-aws-api-mcp-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "awslabs.aws_api_mcp_server.server",
+      "method": "call_aws_helper"
+    },
+    {
+      "class": "awslabs.aws_api_mcp_server.server",
+      "method": "main"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "ab1bbebc097d674c1cdd4bd75a8f313be18473bf"
+    ]
+  }
+}

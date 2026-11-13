@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-35w3-6qhc-474v",
+  "aliases": [
+    "CVE-2024-29901"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@workos-inc/authkit-nextjs"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/session.ts",
+      "method": "updateSession"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "6c3f4f3179d66cbb15de3962792083ff3b244a01"
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-396q-4vc8-28x9",
+  "aliases": [
+    "CVE-2026-49336"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@microsoft/kiota-http-fetchlibrary"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "09f8bd9b34d68bf412a9b78f6ca7e7961ef14974"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

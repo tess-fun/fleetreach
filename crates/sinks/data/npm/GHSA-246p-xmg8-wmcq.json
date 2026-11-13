@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-246p-xmg8-wmcq",
+  "aliases": [
+    "CVE-2024-29194"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@oneuptime/model"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "CommonServer/Types/Database/ModelPermission.ts.ModelPermission",
+      "method": "checkReadPermission"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "14016d23d834038dd65d3a96cf71af04b556a32c"
+    ]
+  }
+}

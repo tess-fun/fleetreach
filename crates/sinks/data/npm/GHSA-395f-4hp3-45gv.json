@@ -1,0 +1,35 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-395f-4hp3-45gv",
+  "aliases": [
+    "CVE-2026-13311"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "shell-quote"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "parse.js",
+      "method": "parse"
+    },
+    {
+      "class": "parse.js",
+      "method": "parseInternal"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "7ff5488599d01c323514f02f5efb74088dd134ec"
+    ],
+    "excluded": [
+      {
+        "class": "parse.js",
+        "method": "matchAll",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

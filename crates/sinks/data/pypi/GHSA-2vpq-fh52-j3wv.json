@@ -1,0 +1,47 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2vpq-fh52-j3wv",
+  "aliases": [
+    "CVE-2025-24793",
+    "PYSEC-2025-26"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "snowflake-connector-python"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "snowflake.connector.pandas_tools",
+      "method": "write_pandas"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "f3f9b666518d29c31a49384bbaa9a65889e72056"
+    ],
+    "excluded": [
+      {
+        "class": "snowflake.connector.cursor.SnowflakeCursor",
+        "method": "execute",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "snowflake.connector.cursor.SnowflakeCursor",
+        "method": "executemany",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "snowflake.connector.pandas_tools",
+        "method": "_do_create_temp_file_format",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "snowflake.connector.pandas_tools",
+        "method": "_do_create_temp_stage",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

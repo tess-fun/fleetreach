@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2gc4-cqfq-p2gv",
+  "aliases": [
+    "CVE-2026-102599"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "engine.io"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/engine.io/lib/server.ts.BaseServer",
+      "method": "verify"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "86db1fc3db2cd315a065d64c4e48918ccf9b4729"
+    ],
+    "excluded": [
+      {
+        "class": "packages/engine.io/lib/server.ts.BaseServer",
+        "method": "handshake",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

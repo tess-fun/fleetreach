@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-33p9-3p43-82vq",
+  "aliases": [
+    "CVE-2025-30167",
+    "PYSEC-2026-1477"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "jupyter-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "jupyter_core.paths",
+      "method": "jupyter_path"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "5e8965600adda6b416692ce7e85ecb2bd814bd52"
+    ]
+  }
+}

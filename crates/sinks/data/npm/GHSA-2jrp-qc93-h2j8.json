@@ -1,0 +1,822 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2jrp-qc93-h2j8",
+  "aliases": [
+    "CVE-2026-113655"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "apostrophe"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/apostrophe/modules/@apostrophecms/area/ui/apos/logic/AposAreaEditor.js",
+      "method": "insert"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "9500b8b0e1d630d5e07fbb5fd2c25ed0943845ce",
+      "f84fd41cbf6c22eb8d0008fc9c25df1f7130b350"
+    ],
+    "excluded": [
+      {
+        "class": "packages/ai-helper/modules/@apostrophecms/ai-helper-image/index.js",
+        "method": "apiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/ai-helper/modules/@apostrophecms/ai-helper-image/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/ai-helper/modules/@apostrophecms/ai-helper-rich-text-widget/index.js",
+        "method": "apiRoutes",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "packages/ai-helper/providers/anthropic.js",
+        "method": "exports",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "packages/apostrophe-astro/helpers/universal/attachment.js",
+        "method": "getAttachmentUrl",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe-astro/helpers/universal/styles.js",
+        "method": "stylesAttributes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe-astro/lib/aposLiteralContentMiddleware.js",
+        "method": "getMatchers",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe-astro/lib/aposPageFetch.js",
+        "method": "aposPageFetch",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe-astro/lib/aposResponse.js",
+        "method": "aposResponse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/index.js",
+        "method": "apostrophe",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/index.js",
+        "method": "buildRoot",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/index.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/index.js",
+        "method": "getRoot",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/index.js",
+        "method": "respawn",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/lib/moog-require.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/admin-bar/index.js",
+        "method": "commands",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/area/index.js",
+        "method": "apiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/area/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/area/lib/custom-tags/area.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/area/ui/apos/apps/AposAreas.js",
+        "method": "createAreaApp",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/area/ui/apos/logic/AposAreaEditor.js",
+        "method": "bindEventListeners",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/area/ui/apos/logic/AposAreaEditor.js",
+        "method": "down",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/area/ui/apos/logic/AposAreaEditor.js",
+        "method": "remove",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/area/ui/apos/logic/AposAreaEditor.js",
+        "method": "unbindEventListeners",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/area/ui/apos/logic/AposAreaEditor.js",
+        "method": "up",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/area/ui/apos/logic/AposAreaEditor.js",
+        "method": "update",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/asset/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/asset/lib/build/task.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/asset/lib/webpack/utils.js",
+        "method": "writeBundlesImportFiles",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/attachment/index.js",
+        "method": "init",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/attachment/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/attachment/lib/tasks/download-all.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/attachment/lib/tasks/rescale.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/db/index.js",
+        "method": "init",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/doc-type/index.js",
+        "method": "extendMethods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/doc-type/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/doc-type/index.js",
+        "method": "queries",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/express/index.js",
+        "method": "handlers",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/express/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/http/lib/big-upload-middleware.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/i18n/index.js",
+        "method": "apiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/i18n/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/i18n/index.js",
+        "method": "middleware",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/i18n/index.js",
+        "method": "tasks",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/image-widget/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/job/index.js",
+        "method": "apiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/job/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/job/index.js",
+        "method": "restApiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/log/index.js",
+        "method": "init",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/log/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/login/index.js",
+        "method": "handlers",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/login/index.js",
+        "method": "init",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/login/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/login/index.js",
+        "method": "routes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/login/ui/apos/logic/AposForgotPasswordForm.js",
+        "method": "data",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/login/ui/apos/logic/AposResetPasswordForm.js",
+        "method": "data",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/migration/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/module/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/module/lib/log.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/notification/index.js",
+        "method": "apiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/notification/index.js",
+        "method": "init",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/notification/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/notification/index.js",
+        "method": "restApiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/page-type/index.js",
+        "method": "handlers",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/page/index.js",
+        "method": "apiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/page/index.js",
+        "method": "handlers",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/page/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/page/index.js",
+        "method": "restApiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/permission/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/piece-type/index.js",
+        "method": "apiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/piece-type/index.js",
+        "method": "restApiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/piece-type/index.js",
+        "method": "tasks",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/rich-text-widget/index.js",
+        "method": "extendMethods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/rich-text-widget/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/rich-text-widget/index.js",
+        "method": "tasks",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/rich-text-widget/lib/apiRoutes.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/schema/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/schema/lib/addFieldTypes.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/schema/lib/newInstance.js",
+        "method": "newInstance",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/schema/ui/apos/logic/AposInputRelationship.js",
+        "method": "search",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/settings/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/template/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/template/lib/custom-tags/fragment.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/template/lib/custom-tags/render.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/template/lib/jsxRender.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/ui/ui/apos/composables/useInfiniteScroll.js",
+        "method": "useInfiniteScroll",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/ui/ui/apos/stores/notification.js",
+        "method": "poll",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/ui/ui/apos/stores/widget.js",
+        "method": "scrollToWidget",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/ui/ui/apos/stores/widget.js",
+        "method": "setFocusedWidget",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/uploadfs/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/user/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/util/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/util/lib/logger.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/util/ui/src/http.js.http",
+        "method": "parseQuery",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/widget-type/index.js",
+        "method": "init",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/apostrophe/modules/@apostrophecms/widget-type/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/boring/boring.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/adapters/postgres.js",
+        "method": "buildOrderBy",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/adapters/postgres.js.PostgresClient",
+        "method": "close",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/adapters/postgres.js.PostgresClient",
+        "method": "constructor",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/adapters/postgres.js.PostgresCollection",
+        "method": "createIndex",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/adapters/postgres.js.PostgresCollection",
+        "method": "indexes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/adapters/postgres.js.PostgresCursor",
+        "method": "[computed]",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/adapters/postgres.js.PostgresCursor",
+        "method": "_next",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/adapters/postgres.js.PostgresCursor",
+        "method": "close",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/adapters/sqlite.js.SqliteClient",
+        "method": "close",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/adapters/sqlite.js.SqliteClient",
+        "method": "constructor",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/adapters/sqlite.js.SqliteCollection",
+        "method": "createIndex",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/adapters/sqlite.js.SqliteCollection",
+        "method": "indexes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/adapters/sqlite.js.SqliteCursor",
+        "method": "[computed]",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/lib/shared.js",
+        "method": "getNestedField",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/lib/shared.js",
+        "method": "setNestedField",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/db-connect/lib/shared.js",
+        "method": "unsetNestedField",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/express-cache-on-demand/index.js",
+        "method": "expressCacheOnDemand",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/form-submission-google/index.js",
+        "method": "init",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/form-submission-google/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/form/index.js",
+        "method": "apiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/form/index.js",
+        "method": "handlers",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/form/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/form/lib/recaptcha.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/form/modules/@apostrophecms/form-widget/ui/src/index.js",
+        "method": "player",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/i18n-static/handlers.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/import-export-xlsx/lib/xlsx.js",
+        "method": "output",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/import-export/lib/formats/gzip.js",
+        "method": "extract",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/import-export/lib/formats/gzip.js",
+        "method": "input",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/import-export/lib/formats/gzip.js",
+        "method": "remove",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/import-export/lib/methods/export.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/import-export/lib/methods/import-page.js",
+        "method": "update",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/import-export/lib/methods/import.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/import-export/lib/methods/index.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/import-export/modules/@apostrophecms/import-export-page/index.js",
+        "method": "apiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/import-export/modules/@apostrophecms/import-export-piece-type/index.js",
+        "method": "apiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/login-hcaptcha/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/login-hcaptcha/index.js",
+        "method": "requirements",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/login-recaptcha/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/openapi-generator/index.js",
+        "method": "tasks",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/openapi-generator/lib/schema-discovery.js.SchemaDiscovery",
+        "method": "constructor",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/openapi-generator/lib/schema-discovery.js.SchemaDiscovery",
+        "method": "convertFieldToOpenApiProperty",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/openapi-generator/lib/schema-discovery.js.SchemaDiscovery",
+        "method": "discoverSchemas",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/openapi-generator/lib/schema-discovery.js.SchemaDiscovery",
+        "method": "getModuleFields",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/passport-bridge/index.js",
+        "method": "handlers",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/passport-bridge/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/sanitize-html/index.js",
+        "method": "sanitizeHtml",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/seo/lib/jsonld-schemas.js.JsonLdSchemaHandler",
+        "method": "constructor",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/seo/lib/jsonld-schemas.js.JsonLdSchemaHandler",
+        "method": "logDebug",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/seo/lib/nodes.js",
+        "method": "getMetaHead",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/seo/modules/@apostrophecms/seo-fields-doc-type/index.js",
+        "method": "fields",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/seo/modules/@apostrophecms/seo-fields-global/index.js",
+        "method": "apiRoutes",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/seo/modules/@apostrophecms/seo-fields-global/index.js",
+        "method": "fields",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/sitemap/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/sluggo/sluggo.js",
+        "method": "sluggo",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/uploadfs/lib/image/sharp.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/uploadfs/lib/storage/azure.js",
+        "method": "__log",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/uploadfs/lib/storage/azure.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/uploadfs/lib/storage/local.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/uploadfs/uploadfs.js",
+        "method": "Uploadfs",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/vite/index.js",
+        "method": "methods",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/vite/lib/internals.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "packages/vite/lib/vite-base-config.js",
+        "method": "exports",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

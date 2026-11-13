@@ -1,0 +1,34 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2655-q453-22f9",
+  "aliases": [
+    "CVE-2012-4520",
+    "PYSEC-2012-7"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "django"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "django.http.HttpRequest",
+      "method": "get_host"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "92d3430f12171f16f566c9050c40feefb830a4a3",
+      "9305c0e12d43c4df999c3301a1f0c742264a657e",
+      "b45c377f8f488955e0c7069cad3f3dd21910b071"
+    ],
+    "excluded": [
+      {
+        "class": "django.contrib.auth.views",
+        "method": "password_reset",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

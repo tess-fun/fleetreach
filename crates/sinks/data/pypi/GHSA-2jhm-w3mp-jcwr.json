@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2jhm-w3mp-jcwr",
+  "aliases": [
+    "CVE-2026-12372",
+    "PYSEC-2026-3955"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "nltk"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "nltk.pathsec",
+      "method": "validate_network_url"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "4a820afa58810cd05049b6c6eae306694d6cfe65"
+    ],
+    "excluded": [
+      {
+        "class": "nltk.pathsec",
+        "method": "urlopen",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

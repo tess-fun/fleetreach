@@ -1,0 +1,35 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-253c-mchw-3w2r",
+  "ecosystem": "npm",
+  "packages": [
+    "markdown-it"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/rules_core/linkify.mjs",
+      "method": "linkify"
+    },
+    {
+      "class": "lib/rules_inline/linkify.mjs",
+      "method": "linkify"
+    },
+    {
+      "class": "src/rules_core/linkify.ts",
+      "method": "linkify"
+    },
+    {
+      "class": "src/rules_inline/linkify.ts",
+      "method": "linkify"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "09fa07118dda4c953f058848f53dae88395618ca",
+      "aaadcfa6d817b3c5f89afb49d97c7b797a6dd4fd",
+      "ad70f6b7cff64bee10e42a774147112480ca0d49"
+    ]
+  }
+}

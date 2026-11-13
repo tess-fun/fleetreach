@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2vhw-q7vh-7xv2",
+  "aliases": [
+    "CVE-2026-74879",
+    "PYSEC-2026-3758"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "openssl-encrypt"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "openssl_encrypt_server.server",
+      "method": "create_app"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "7aa8787f4de2e9a23f58fca067bb16c4c69d28bb"
+    ]
+  }
+}

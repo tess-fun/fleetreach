@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-34q8-jcq6-mc37",
+  "aliases": [
+    "CVE-2024-21489"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "uplot"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/utils.js",
+      "method": "assign"
+    },
+    {
+      "class": "src/utils.js",
+      "method": "copy"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "5756e3e9b91270b303157e14bd0174311047d983"
+    ]
+  }
+}

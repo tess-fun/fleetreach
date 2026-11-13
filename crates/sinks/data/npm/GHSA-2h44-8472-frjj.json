@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2h44-8472-frjj",
+  "aliases": [
+    "CVE-2026-61559"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@zereight/mcp-gitlab"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "6ffb4cc70706fd05b1ab80901676bc2998b6db6d"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

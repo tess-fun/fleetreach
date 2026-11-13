@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2rp8-mm9q-fp49",
+  "aliases": [
+    "CVE-2026-73651"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "typeorm"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/commands/MigrationGenerateCommand.ts.MigrationGenerateCommand",
+      "method": "handler"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "41d1c62fe49f99c3ca916d4d986f61ee9f45d519",
+      "b175f9b8be422edd2a2ac035ba90c3f2ce782dfe"
+    ]
+  }
+}

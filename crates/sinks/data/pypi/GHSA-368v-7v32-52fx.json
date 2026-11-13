@@ -1,0 +1,23 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-368v-7v32-52fx",
+  "aliases": [
+    "BIT-tensorflow-2022-41907",
+    "CVE-2022-41907",
+    "PYSEC-2026-3091",
+    "PYSEC-2026-3268",
+    "PYSEC-2026-945"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "tensorflow-gpu"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "00c821af032ba9e5f5fa3fe14690c8d28a657624"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

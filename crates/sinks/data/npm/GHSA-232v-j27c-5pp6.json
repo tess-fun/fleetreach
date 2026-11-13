@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-232v-j27c-5pp6",
+  "aliases": [
+    "CVE-2026-23744"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@mcpjam/inspector"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "e6b9cf9d9e6c9cbec31493b1bdca3a1255fe3e7a"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

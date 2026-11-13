@@ -1,0 +1,49 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2hwx-mjrm-v3g8",
+  "aliases": [
+    "CVE-2021-21274",
+    "PYSEC-2021-132"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "matrix-synapse"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "synapse.http.client.SimpleHttpClient",
+      "method": "get_file"
+    },
+    {
+      "class": "synapse.http.client._ReadBodyToFileProtocol",
+      "method": "__init__"
+    },
+    {
+      "class": "synapse.http.client._ReadBodyToFileProtocol",
+      "method": "connectionLost"
+    },
+    {
+      "class": "synapse.http.client._ReadBodyToFileProtocol",
+      "method": "dataReceived"
+    },
+    {
+      "class": "synapse.http.client",
+      "method": "readBodyToFile"
+    },
+    {
+      "class": "synapse.http.federation.well_known_resolver.WellKnownResolver",
+      "method": "_make_well_known_request"
+    },
+    {
+      "class": "synapse.http.matrixfederationclient.MatrixFederationHttpClient",
+      "method": "get_file"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "ff5c4da1289cb5e097902b3e55b771be342c29d6"
+    ]
+  }
+}

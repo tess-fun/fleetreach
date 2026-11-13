@@ -1,0 +1,50 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2658-85cv-9wwq",
+  "aliases": [
+    "CVE-2026-111059"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "mercury"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "mercury.md",
+      "method": "Markdown"
+    },
+    {
+      "class": "mercury.md.MarkdownWidget",
+      "method": "_to_html"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "c798a85924e6614c6fea7afe5a560e4554a1d09b"
+    ],
+    "excluded": [
+      {
+        "class": "mercury.chat.message.Message",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "mercury.chat.message.Message",
+        "method": "_render",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "mercury.md.MarkdownWidget",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "mercury.md.MarkdownWidget",
+        "method": "_add_inline_style",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

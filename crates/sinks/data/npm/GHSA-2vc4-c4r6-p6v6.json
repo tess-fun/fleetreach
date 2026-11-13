@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2vc4-c4r6-p6v6",
+  "aliases": [
+    "CVE-2026-100409"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@opennextjs/cloudflare"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "38ea40b669be272ddf09a7df7e70c69d0b57404b"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

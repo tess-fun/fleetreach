@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2xxc-73fv-36f7",
+  "aliases": [
+    "CVE-2023-39662",
+    "PYSEC-2023-148"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "llama-index"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "llama_index.query_engine.pandas_query_engine",
+      "method": "default_output_processor"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "9f3e50a803f519af9ab62e63d413441c43001d81",
+      "aa6726706476e0f957a8d57a5ca89e519e93bad7"
+    ]
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2gx3-rcp4-g85q",
+  "aliases": [
+    "CVE-2026-101917",
+    "PYSEC-2026-4140"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pyjwt"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "jwt.jwks_client.PyJWKClient",
+      "method": "get_signing_key"
+    },
+    {
+      "class": "jwt.jwks_client.PyJWKClient",
+      "method": "get_signing_keys"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "ba4853a75fb9676362da17f67d0f64bd18afd4e1"
+    ],
+    "excluded": [
+      {
+        "class": "jwt.jwks_client.PyJWKClient",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "jwt.jwks_client.PyJWKClient",
+        "method": "fetch_data",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

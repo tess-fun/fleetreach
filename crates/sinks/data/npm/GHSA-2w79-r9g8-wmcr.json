@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2w79-r9g8-wmcr",
+  "aliases": [
+    "CVE-2026-41400"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "extensions/voice-call/src/media-stream.ts.MediaStreamHandler",
+      "method": "handleUpgrade"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "9abcfdadf591bf266d85fbdfe14ae833e557a110"
+    ],
+    "excluded": [
+      {
+        "class": "extensions/voice-call/src/media-stream.ts.MediaStreamHandler",
+        "method": "handleConnection",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

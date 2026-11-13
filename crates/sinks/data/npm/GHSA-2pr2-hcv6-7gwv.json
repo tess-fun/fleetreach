@@ -1,0 +1,35 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2pr2-hcv6-7gwv",
+  "aliases": [
+    "CVE-2026-34503"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/gateway/server-methods/devices.ts.device.token",
+      "method": "revoke"
+    },
+    {
+      "class": "src/gateway/server.impl.ts",
+      "method": "startGatewayServer"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "7a801cc451e9e667b705eeccff651923a1b8c863"
+    ],
+    "excluded": [
+      {
+        "class": "src/gateway/server-methods/devices.ts.device.pair",
+        "method": "remove",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

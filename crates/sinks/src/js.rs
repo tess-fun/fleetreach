@@ -17,14 +17,19 @@ use std::collections::BTreeMap;
 
 use oxc_allocator::Allocator;
 use oxc_ast::ast::{
-    ArrowFunctionExpression, AssignmentExpression, Class, Expression, Function, MethodDefinition,
-    ObjectProperty, Program, VariableDeclarator,
+    Argument, ArrowFunctionExpression, AssignmentExpression, BindingPattern, CallExpression,
+    ChainElement, Class, Declaration, ExportAllDeclaration, ExportDeclaration,
+    ExportDefaultDeclaration, ExportDefaultDeclarationKind, ExportFromDeclaration,
+    ExportNamedDeclaration, Expression, Function, ImportDeclaration, ImportDeclarationSpecifier,
+    ImportExpression, MethodDefinition, NewExpression, ObjectProperty, ObjectPropertyKind, Program,
+    ReturnStatement, VariableDeclarator,
 };
 use oxc_ast_visit::{walk, Visit};
 use oxc_parser::Parser;
 use oxc_span::{GetSpan, SourceType, Span};
 use oxc_syntax::scope::ScopeFlags;
 
+use crate::calls::{Expr, ModuleFacts, Spec};
 use crate::java::Method;
 
 /// Whether `path` is JavaScript or TypeScript source this reader takes (declaration files
@@ -69,6 +74,33 @@ pub fn functions(path: &str, src: &str) -> BTreeMap<String, Method> {
     out
 }
 
+/// What one file defines, imports, exports and calls, for the call graph (`crate::calls`).
+/// Function names are those of [`functions`] without the file. A file that does not parse
+/// gives nothing.
+#[must_use]
+pub fn facts(path: &str, src: &str) -> ModuleFacts {
+    let source_type = SourceType::from_path(path)
+        .unwrap_or_default()
+        .with_module(true);
+    let allocator = Allocator::default();
+    let ret = Parser::new(&allocator, src, source_type).parse();
+    if ret.fatal_error {
+        return ModuleFacts::default();
+    }
+    let mut finder = Finder {
+        line_starts: std::iter::once(0)
+            .chain(src.match_indices('\n').map(|(i, _)| i + 1))
+            .collect(),
+        ..Finder::default()
+    };
+    finder.visit_program(&ret.program);
+    let mut facts = finder.facts;
+    for (name, _) in finder.found {
+        facts.functions.entry(name).or_default();
+    }
+    facts
+}
+
 /// `src[span]` with each comment inside it replaced by spaces (newlines kept, so lines line up).
 fn blank_comments(src: &str, span: Span, comments: &[Span]) -> String {
     let (start, end) = (span.start as usize, span.end as usize);
@@ -100,6 +132,14 @@ struct Finder {
     /// Depth inside a named function: functions in there are part of it.
     inside: usize,
     found: Vec<(String, Span)>,
+    /// The outermost named function being walked: calls inside belong to it.
+    current: Option<String>,
+    /// Function nesting (named or not), and the depth of `current`'s own body: only its own
+    /// `return`s are what it returns.
+    depth: usize,
+    current_depth: usize,
+    facts: ModuleFacts,
+    line_starts: Vec<usize>,
 }
 
 impl Finder {
@@ -113,13 +153,42 @@ impl Finder {
     fn named(&mut self, name: Option<String>, span: Span, walk_it: impl FnOnce(&mut Self)) {
         match name {
             Some(name) => {
+                let outermost = self.inside == 0;
+                if outermost {
+                    self.current = Some(name.clone());
+                    self.current_depth = self.depth;
+                }
                 self.record(name, span);
                 self.inside += 1;
                 walk_it(self);
                 self.inside -= 1;
+                if outermost {
+                    self.current = None;
+                }
             }
             None => walk_it(self),
         }
+    }
+
+    fn scope(&self) -> String {
+        self.current.clone().unwrap_or_default()
+    }
+
+    fn line(&self, span: Span) -> u32 {
+        let at = span.start as usize;
+        let line = self.line_starts.partition_point(|&s| s <= at);
+        u32::try_from(line).unwrap_or(u32::MAX)
+    }
+
+    fn bind(&mut self, name: String, value: Expr) {
+        if value != Expr::Unknown {
+            let scope = self.scope();
+            self.facts.bind(&scope, name, value);
+        }
+    }
+
+    fn export(&mut self, name: String, value: Expr) {
+        self.facts.exports.insert(name, value);
     }
 
     fn qualified(&self, name: &str) -> String {
@@ -169,6 +238,80 @@ fn member_name(e: &Expression<'_>) -> Option<String> {
     }
 }
 
+/// A value expression as the call graph sees it.
+fn expr_of(e: &Expression<'_>) -> Expr {
+    match e.get_inner_expression() {
+        Expression::Identifier(id) => Expr::Name(id.name.to_string()),
+        Expression::ThisExpression(_) => Expr::This,
+        Expression::StaticMemberExpression(m) => {
+            Expr::Member(Box::new(expr_of(&m.object)), m.property.name.to_string())
+        }
+        Expression::ComputedMemberExpression(m) => match &m.expression {
+            Expression::StringLiteral(s) => {
+                Expr::Member(Box::new(expr_of(&m.object)), s.value.display().to_string())
+            }
+            _ => Expr::Unknown,
+        },
+        Expression::CallExpression(c) => call_value(c),
+        Expression::NewExpression(n) => Expr::Call(Box::new(expr_of(&n.callee))),
+        Expression::ImportExpression(i) => match &i.source {
+            Expression::StringLiteral(s) => Expr::Import(Spec::Js(s.value.display().to_string())),
+            _ => Expr::Unknown,
+        },
+        Expression::AwaitExpression(a) => expr_of(&a.argument),
+        Expression::ChainExpression(c) => match &c.expression {
+            ChainElement::CallExpression(call) => call_value(call),
+            ChainElement::StaticMemberExpression(m) => {
+                Expr::Member(Box::new(expr_of(&m.object)), m.property.name.to_string())
+            }
+            _ => Expr::Unknown,
+        },
+        _ => Expr::Unknown,
+    }
+}
+
+/// `require("x")` is an import; any other call is the value it returns.
+fn call_value(c: &CallExpression<'_>) -> Expr {
+    match require_spec(c) {
+        Some(spec) => Expr::Import(Spec::Js(spec)),
+        None => Expr::Call(Box::new(expr_of(&c.callee))),
+    }
+}
+
+fn require_spec(c: &CallExpression<'_>) -> Option<String> {
+    let Expression::Identifier(id) = c.callee.get_inner_expression() else {
+        return None;
+    };
+    if id.name != "require" {
+        return None;
+    }
+    match c.arguments.first()? {
+        Argument::StringLiteral(s) => Some(s.value.display().to_string()),
+        _ => None,
+    }
+}
+
+/// `module.exports.x` as its names, `this` as `this`.
+fn member_parts(e: &Expression<'_>) -> Option<Vec<String>> {
+    let mut parts = Vec::new();
+    let mut cur = e;
+    loop {
+        match cur.get_inner_expression() {
+            Expression::StaticMemberExpression(m) => {
+                parts.push(m.property.name.to_string());
+                cur = &m.object;
+            }
+            Expression::Identifier(id) => {
+                parts.push(id.name.to_string());
+                break;
+            }
+            _ => return None,
+        }
+    }
+    parts.reverse();
+    Some(parts)
+}
+
 impl<'a> Visit<'a> for Finder {
     fn visit_function(&mut self, it: &Function<'a>, flags: ScopeFlags) {
         let name = it
@@ -177,14 +320,32 @@ impl<'a> Visit<'a> for Finder {
             .map(|id| id.name.to_string())
             .or_else(|| self.pending.take());
         let name = name.map(|n| self.qualified(&n));
+        self.depth += 1;
         self.named(name, it.span, |me| walk::walk_function(me, it, flags));
+        self.depth -= 1;
     }
 
     fn visit_arrow_function_expression(&mut self, it: &ArrowFunctionExpression<'a>) {
         let name = self.pending.take().map(|n| self.qualified(&n));
+        self.depth += 1;
         self.named(name, it.span, |me| {
+            if me.current.is_some() && me.depth == me.current_depth {
+                if let Some(e) = it.get_expression() {
+                    let (scope, value) = (me.scope(), expr_of(e));
+                    me.facts.ret(&scope, value);
+                }
+            }
             walk::walk_arrow_function_expression(me, it);
         });
+        self.depth -= 1;
+    }
+
+    fn visit_return_statement(&mut self, it: &ReturnStatement<'a>) {
+        if let (Some(arg), true) = (&it.argument, self.depth == self.current_depth) {
+            let (scope, value) = (self.scope(), expr_of(arg));
+            self.facts.ret(&scope, value);
+        }
+        walk::walk_return_statement(self, it);
     }
 
     fn visit_variable_declarator(&mut self, it: &VariableDeclarator<'a>) {
@@ -193,6 +354,33 @@ impl<'a> Visit<'a> for Finder {
                 self.pending = Some(name.name.to_string());
             } else if let Expression::ClassExpression(_) = init.without_parentheses() {
                 self.pending = Some(name.name.to_string());
+            }
+        }
+        if let Some(init) = &it.init {
+            let value = expr_of(init);
+            match &it.id {
+                BindingPattern::BindingIdentifier(id) => self.bind(id.name.to_string(), value),
+                BindingPattern::ObjectPattern(o) => {
+                    for p in &o.properties {
+                        let Some(key) = p.key.static_name() else {
+                            continue;
+                        };
+                        let local = match &p.value {
+                            BindingPattern::BindingIdentifier(id) => Some(id.name.to_string()),
+                            BindingPattern::AssignmentPattern(a) => a
+                                .left
+                                .get_binding_identifier()
+                                .map(|id| id.name.to_string()),
+                            _ => None,
+                        };
+                        if let Some(local) = local {
+                            let member =
+                                Expr::Member(Box::new(value.clone()), key.display().to_string());
+                            self.bind(local, member);
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         walk::walk_variable_declarator(self, it);
@@ -235,7 +423,200 @@ impl<'a> Visit<'a> for Finder {
                 }
             });
         }
+        let target = it
+            .left
+            .as_simple_assignment_target()
+            .and_then(|t| t.as_member_expression())
+            .and_then(|m| {
+                let mut parts = member_parts(m.object())?;
+                parts.push(m.static_property_name()?.display().to_string());
+                Some(parts)
+            });
+        let value = |k: &str| {
+            if is_function_value(&it.right) {
+                Expr::Name(k.to_string())
+            } else {
+                expr_of(&it.right)
+            }
+        };
+        match target
+            .as_deref()
+            .map(|v| v.iter().map(String::as_str).collect::<Vec<_>>())
+        {
+            Some(parts) if parts == ["module", "exports"] => {
+                let whole = expr_of(&it.right);
+                if let Expression::ObjectExpression(o) = it.right.get_inner_expression() {
+                    for prop in &o.properties {
+                        if let ObjectPropertyKind::ObjectProperty(p) = prop {
+                            if let Some(k) = p.key.static_name() {
+                                let k = k.display().to_string();
+                                let v = if is_function_value(&p.value) {
+                                    Expr::Name(k.clone())
+                                } else {
+                                    expr_of(&p.value)
+                                };
+                                self.export(k, v);
+                            }
+                        }
+                    }
+                } else {
+                    self.facts.star.push(whole.clone());
+                    self.export("default".to_string(), whole);
+                }
+            }
+            Some(parts)
+                if matches!(parts.as_slice(), ["exports", _] | ["module", "exports", _]) =>
+            {
+                if let Some(k) = parts.last() {
+                    let v = value(k);
+                    self.export((*k).to_string(), v);
+                }
+            }
+            _ => {
+                if let Some(name) = it.left.get_identifier_name() {
+                    let v = expr_of(&it.right);
+                    self.bind(name.to_string(), v);
+                }
+            }
+        }
         walk::walk_assignment_expression(self, it);
+        self.pending = None;
+    }
+
+    fn visit_call_expression(&mut self, it: &CallExpression<'a>) {
+        if let Some(spec) = require_spec(it) {
+            let (scope, line) = (self.scope(), self.line(it.span));
+            self.facts.import(&scope, Spec::Js(spec), line);
+        } else {
+            let scope = self.scope();
+            let line = self.line(it.span);
+            self.facts.call(&scope, expr_of(&it.callee), line);
+        }
+        walk::walk_call_expression(self, it);
+    }
+
+    fn visit_new_expression(&mut self, it: &NewExpression<'a>) {
+        let scope = self.scope();
+        let line = self.line(it.span);
+        self.facts.call(&scope, expr_of(&it.callee), line);
+        walk::walk_new_expression(self, it);
+    }
+
+    fn visit_import_expression(&mut self, it: &ImportExpression<'a>) {
+        if let Expression::StringLiteral(s) = &it.source {
+            let (scope, line) = (self.scope(), self.line(it.span));
+            self.facts
+                .import(&scope, Spec::Js(s.value.display().to_string()), line);
+        }
+        walk::walk_import_expression(self, it);
+    }
+
+    fn visit_import_declaration(&mut self, it: &ImportDeclaration<'a>) {
+        let spec = Spec::Js(it.source.value.display().to_string());
+        let line = self.line(it.span);
+        self.facts.import("", spec.clone(), line);
+        for s in it.specifiers.iter().flatten() {
+            let (local, value) = match s {
+                ImportDeclarationSpecifier::ImportSpecifier(i) => (
+                    i.local.name.to_string(),
+                    Expr::Member(
+                        Box::new(Expr::Import(spec.clone())),
+                        i.imported.name().to_string(),
+                    ),
+                ),
+                ImportDeclarationSpecifier::ImportDefaultSpecifier(i) => (
+                    i.local.name.to_string(),
+                    Expr::Member(Box::new(Expr::Import(spec.clone())), "default".to_string()),
+                ),
+                ImportDeclarationSpecifier::ImportNamespaceSpecifier(i) => {
+                    (i.local.name.to_string(), Expr::Import(spec.clone()))
+                }
+            };
+            self.facts.bindings.insert(local, value);
+        }
+        walk::walk_import_declaration(self, it);
+    }
+
+    fn visit_export_declaration(&mut self, it: &ExportDeclaration<'a>) {
+        match &it.declaration {
+            Declaration::VariableDeclaration(v) => {
+                for d in &v.declarations {
+                    if let Some(id) = d.id.get_binding_identifier() {
+                        self.export(id.name.to_string(), Expr::Name(id.name.to_string()));
+                    }
+                }
+            }
+            d => {
+                if let Some(id) = d.id() {
+                    self.export(id.name.to_string(), Expr::Name(id.name.to_string()));
+                }
+            }
+        }
+        walk::walk_export_declaration(self, it);
+    }
+
+    fn visit_export_named_declaration(&mut self, it: &ExportNamedDeclaration<'a>) {
+        for s in &it.specifiers {
+            self.export(
+                s.exported.name().to_string(),
+                Expr::Name(s.local.name().to_string()),
+            );
+        }
+        walk::walk_export_named_declaration(self, it);
+    }
+
+    fn visit_export_from_declaration(&mut self, it: &ExportFromDeclaration<'a>) {
+        let spec = Spec::Js(it.source.value.display().to_string());
+        let line = self.line(it.span);
+        self.facts.import("", spec.clone(), line);
+        for s in &it.specifiers {
+            let v = Expr::Member(
+                Box::new(Expr::Import(spec.clone())),
+                s.local.name().to_string(),
+            );
+            self.export(s.exported.name().to_string(), v);
+        }
+        walk::walk_export_from_declaration(self, it);
+    }
+
+    fn visit_export_all_declaration(&mut self, it: &ExportAllDeclaration<'a>) {
+        let spec = Spec::Js(it.source.value.display().to_string());
+        let line = self.line(it.span);
+        self.facts.import("", spec.clone(), line);
+        match &it.exported {
+            Some(ns) => self.export(ns.name().to_string(), Expr::Import(spec)),
+            None => self.facts.star.push(Expr::Import(spec)),
+        }
+        walk::walk_export_all_declaration(self, it);
+    }
+
+    fn visit_export_default_declaration(&mut self, it: &ExportDefaultDeclaration<'a>) {
+        let value = match &it.declaration {
+            ExportDefaultDeclarationKind::FunctionDeclaration(f) => {
+                if f.id.is_none() {
+                    self.pending = Some("default".to_string());
+                }
+                Expr::Name(
+                    f.id.as_ref()
+                        .map_or("default".to_string(), |i| i.name.to_string()),
+                )
+            }
+            ExportDefaultDeclarationKind::ClassDeclaration(c) => Expr::Name(
+                c.id.as_ref()
+                    .map_or("default".to_string(), |i| i.name.to_string()),
+            ),
+            ExportDefaultDeclarationKind::TSInterfaceDeclaration(_) => Expr::Unknown,
+            other => match other.as_expression() {
+                Some(e) if is_function_value(e) => {
+                    self.pending = Some("default".to_string());
+                    Expr::Name("default".to_string())
+                }
+                Some(e) => expr_of(e),
+                None => Expr::Unknown,
+            },
+        };
+        self.export("default".to_string(), value);
+        walk::walk_export_default_declaration(self, it);
         self.pending = None;
     }
 
@@ -246,6 +627,10 @@ impl<'a> Visit<'a> for Finder {
             .map(|id| id.name.to_string())
             .or_else(|| self.pending.take())
             .unwrap_or_else(|| "default".to_string());
+        if self.inside == 0 {
+            let bases = it.heritage.iter().map(|h| expr_of(&h.expression)).collect();
+            self.facts.classes.insert(name.clone(), bases);
+        }
         self.classes.push(name);
         walk::walk_class(self, it);
         self.classes.pop();

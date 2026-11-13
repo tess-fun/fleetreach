@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3949-f494-cm99",
+  "aliases": [
+    "CVE-2022-23647"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "prismjs"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "e002e78c343154e1c0ddf9d6a0bb85689e1a5c7c"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

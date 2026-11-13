@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2p9h-ccw7-33gf",
+  "aliases": [
+    "CVE-2022-42966",
+    "PYSEC-2022-43178"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "cleo"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "cleo.ui.table.Table",
+      "method": "_render_cell"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "b5b9a04d2caf58bf7cf94eb7ae4a1ebbe60ea455"
+    ]
+  }
+}

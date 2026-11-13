@@ -1,0 +1,45 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-32g6-mg92-ghm2",
+  "aliases": [
+    "CVE-2025-0508",
+    "PYSEC-2026-1885"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "sagemaker"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "sagemaker.workflow.utilities",
+      "method": "_hash_dir"
+    },
+    {
+      "class": "sagemaker.workflow.utilities",
+      "method": "_hash_file"
+    },
+    {
+      "class": "sagemaker.workflow.utilities",
+      "method": "_hash_file_or_dir"
+    },
+    {
+      "class": "sagemaker.workflow.utilities",
+      "method": "hash_file"
+    },
+    {
+      "class": "sagemaker.workflow.utilities",
+      "method": "hash_files_or_dirs"
+    },
+    {
+      "class": "sagemaker.workflow.utilities",
+      "method": "hash_object"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "dcdd99f911e8b1a05d19cf1ad939b0fefae47864"
+    ]
+  }
+}

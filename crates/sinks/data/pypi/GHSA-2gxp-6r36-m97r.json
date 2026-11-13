@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2gxp-6r36-m97r",
+  "aliases": [
+    "CVE-2025-53528",
+    "PYSEC-2025-71"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "cadwyn"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "cadwyn.applications.Cadwyn",
+      "method": "redoc_dashboard"
+    },
+    {
+      "class": "cadwyn.applications.Cadwyn",
+      "method": "swagger_dashboard"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "b424ecd57cd8dabbc8fe39b8f8ccafea629c7728"
+    ]
+  }
+}

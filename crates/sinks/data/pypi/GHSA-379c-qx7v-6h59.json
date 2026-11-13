@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-379c-qx7v-6h59",
+  "aliases": [
+    "CVE-2026-66007",
+    "PYSEC-2026-3716"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "datasets"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "datasets.packaged_modules.folder_based_builder.folder_based_builder.FolderBasedBuilder",
+      "method": "_generate_examples"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "f989ef9b4cc6c0039a7a82458eebca49e2b58b4b"
+    ]
+  }
+}

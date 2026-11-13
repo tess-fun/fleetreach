@@ -1,0 +1,60 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2xp9-vwfh-vxw4",
+  "ecosystem": "npm",
+  "packages": [
+    "next"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/next/src/build/webpack/loaders/next-image-loader/blur.ts",
+      "method": "getBlurImage"
+    },
+    {
+      "class": "packages/next/src/build/webpack/loaders/next-image-loader/index.ts",
+      "method": "nextImageLoader"
+    },
+    {
+      "class": "packages/next/src/client/legacy/image.tsx",
+      "method": "Image"
+    },
+    {
+      "class": "packages/next/src/server/image-optimizer.ts",
+      "method": "imageOptimizer"
+    },
+    {
+      "class": "packages/next/src/server/image-optimizer.ts",
+      "method": "optimizeImage"
+    },
+    {
+      "class": "packages/next/src/shared/lib/get-img-props.ts",
+      "method": "getImgProps"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3a15b4ac6ac8e70b1a9b18ecc18e8434462899b3",
+      "409772ec807def20132d251ad48fd8d8ad4c73c2",
+      "7a5937a8ab20b89d0a961f75eabb11577f5d5998"
+    ],
+    "excluded": [
+      {
+        "class": "packages/next/src/build/webpack-config.ts",
+        "method": "getBaseWebpackConfig",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/next/src/server/config-shared.ts",
+        "method": "getNextConfigRuntime",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/next/src/server/image-optimizer.ts",
+        "method": "getSharp",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

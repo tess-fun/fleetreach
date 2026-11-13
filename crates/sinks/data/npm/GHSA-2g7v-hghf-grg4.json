@@ -1,0 +1,36 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2g7v-hghf-grg4",
+  "aliases": [
+    "CVE-2026-2130"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "mcp-maigret"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/index.ts.MaigretServer",
+      "method": "setupToolHandlers"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "b1ae073c4b3e789ab8de36dc6ca8111ae9399e7a"
+    ],
+    "excluded": [
+      {
+        "class": "src/index.ts.MaigretServer",
+        "method": "ensureSetup",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/index.ts.MaigretServer",
+        "method": "execCommand",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

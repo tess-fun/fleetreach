@@ -1,0 +1,127 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2jgc-f764-c5r2",
+  "aliases": [
+    "CVE-2026-55539",
+    "PYSEC-2026-3885"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "praisonai"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "praisonai.praisonai.jobs.server",
+      "method": "create_app"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "2f9677abb2ea68eab864ee8b6a828fd0141612e1"
+    ],
+    "excluded": [
+      {
+        "class": "praisonai.praisonai.browser.server.BrowserServer",
+        "method": "_get_app",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.browser.server.BrowserServer",
+        "method": "_handle_connection",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.cli.features.serve.ServeHandler",
+        "method": "_create_agents_app",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.cli.features.serve.ServeHandler",
+        "method": "_create_unified_app",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.code.utils.file_utils",
+        "method": "is_path_within_directory",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.jobs.models.Job",
+        "method": "validate_webhook_url",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.jobs.models.JobSubmitRequest",
+        "method": "validate_webhook_url",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.mcp_server.server.MCPServer",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.mcp_server.server.MCPServer",
+        "method": "handle_message",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.mcp_server.transports.http_stream.HTTPStreamTransport",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.mcp_server.transports.http_stream.HTTPStreamTransport",
+        "method": "_create_app",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.mcp_server.transports.http_stream.HTTPStreamTransport",
+        "method": "_validate_origin",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.recipe.serve",
+        "method": "create_auth_middleware",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonaiagents.memory.file_memory.FileMemory",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonaiagents.server.server.AgentServer",
+        "method": "_create_app",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonaiagents.tools.ast_grep_tool",
+        "method": "ast_grep_rewrite",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonaiagents.tools.spider_tools",
+        "method": "_host_is_blocked",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonaiagents.tools.web_crawl_tools",
+        "method": "_crawl_with_httpx",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonaiagents.tools.web_crawl_tools",
+        "method": "web_crawl",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonaiagents.workflows.workflows.AgentFlow",
+        "method": "_execute_include",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

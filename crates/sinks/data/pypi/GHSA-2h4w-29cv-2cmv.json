@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2h4w-29cv-2cmv",
+  "aliases": [
+    "CVE-2026-113663"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "ag2"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ag2.tools.sandbox.adapter.shell.ShellAdapter",
+      "method": "_exec_async"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3cd86726bb731eb11d6270f0ef9e50e42b5abb39"
+    ],
+    "excluded": [
+      {
+        "class": "ag2.tools.sandbox.adapter.shell.ShellAdapter",
+        "method": "_filter",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "ag2.tools.sandbox.adapter.shell.ShellAdapter",
+        "method": "run",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "ag2.tools.shell.tool.SandboxShellTool",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

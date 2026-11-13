@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-24rc-8hj2-v98c",
+  "aliases": [
+    "BIT-pillow-2026-96638",
+    "CVE-2026-96638"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pillow"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "PIL.BmpImagePlugin.BmpRleDecoder",
+      "method": "decode"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "e7794835e323ff2691d9b3a974cade1a44301b9a"
+    ]
+  }
+}

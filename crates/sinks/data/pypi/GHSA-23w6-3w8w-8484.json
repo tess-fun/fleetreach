@@ -1,0 +1,33 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-23w6-3w8w-8484",
+  "aliases": [
+    "CVE-2026-84310",
+    "PYSEC-2026-3910"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pypdf"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "pypdf._doc_common.PdfDocCommon",
+      "method": "_get_outline"
+    },
+    {
+      "class": "pypdf._page.PageObject",
+      "method": "_extract_text"
+    },
+    {
+      "class": "pypdf._page.PageObject",
+      "method": "extract_xform_text"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "d91ab705fd81ed1a9cec175c6958600dea1a4942"
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2fc2-6r4j-p65h",
+  "aliases": [
+    "CVE-2014-1859",
+    "PYSEC-2018-34"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "numpy"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "numpy.f2py",
+      "method": "compile"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "0bb46c1448b0d3f5453d5182a17ea7ac5854ee15"
+    ],
+    "excluded": [
+      {
+        "class": "numpy.f2py.f2py2e",
+        "method": "run_compile",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

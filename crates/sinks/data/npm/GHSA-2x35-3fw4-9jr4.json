@@ -1,0 +1,222 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2x35-3fw4-9jr4",
+  "aliases": [
+    "CVE-2026-72766"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "n8n"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/@n8n/ai-utilities/src/utils/http-proxy-agent.ts",
+      "method": "getProxyAgent"
+    },
+    {
+      "class": "packages/@n8n/computer-use/src/tools/filesystem/search-files.ts",
+      "method": "execute"
+    },
+    {
+      "class": "packages/@n8n/expression-runtime/src/bridge/isolated-vm-bridge.ts.IsolatedVmBridge",
+      "method": "createGetArrayElementRef"
+    },
+    {
+      "class": "packages/@n8n/nodes-langchain/nodes/embeddings/EmbeddingsHuggingFaceInference/EmbeddingsHuggingFaceInference.node.ts.EmbeddingsHuggingFaceInference",
+      "method": "supplyData"
+    },
+    {
+      "class": "packages/@n8n/nodes-langchain/nodes/llms/LMOpenAi/LmOpenAi.node.ts.LmOpenAi",
+      "method": "openAiModelSearch"
+    },
+    {
+      "class": "packages/@n8n/nodes-langchain/nodes/llms/LMOpenAi/LmOpenAi.node.ts.LmOpenAi",
+      "method": "supplyData"
+    },
+    {
+      "class": "packages/@n8n/nodes-langchain/nodes/llms/LMOpenHuggingFaceInference/LmOpenHuggingFaceInference.node.ts.LmOpenHuggingFaceInference",
+      "method": "supplyData"
+    },
+    {
+      "class": "packages/@n8n/nodes-langchain/nodes/mcp/shared/utils.ts",
+      "method": "connectMcpClient"
+    },
+    {
+      "class": "packages/@n8n/nodes-langchain/nodes/mcp/shared/utils.ts",
+      "method": "createAuthFetch"
+    },
+    {
+      "class": "packages/@n8n/nodes-langchain/nodes/tools/ToolHttpRequest/utils.ts",
+      "method": "genericCredentialRequest"
+    },
+    {
+      "class": "packages/cli/src/executions/pre-execution-checks/credentials-permission-checker.ts.CredentialsPermissionChecker",
+      "method": "getActiveCredentialTypes"
+    },
+    {
+      "class": "packages/cli/src/modules/redaction/executions/strategies/full-item-redaction.strategy.ts.FullItemRedactionStrategy",
+      "method": "apply"
+    },
+    {
+      "class": "packages/cli/src/modules/token-exchange/services/identity-resolution.service.ts.IdentityResolutionService",
+      "method": "resolveByEmail"
+    },
+    {
+      "class": "packages/cli/src/modules/token-exchange/services/trusted-key.service.ts.TrustedKeyService",
+      "method": "resolveStaticKeys"
+    },
+    {
+      "class": "packages/cli/src/workflow-execute-additional-data.ts",
+      "method": "startExecution"
+    },
+    {
+      "class": "packages/cli/src/workflows/workflow.service.ee.ts.EnterpriseWorkflowService",
+      "method": "getNodesWithInaccessibleCreds"
+    },
+    {
+      "class": "packages/frontend/editor-ui/src/features/ndv/shared/ndv.utils.ts",
+      "method": "setValue"
+    },
+    {
+      "class": "packages/nodes-base/nodes/EditImage/EditImage.node.ts.EditImage",
+      "method": "execute"
+    },
+    {
+      "class": "packages/nodes-base/nodes/EmailSend/v2/utils.ts",
+      "method": "configureTransport"
+    },
+    {
+      "class": "packages/nodes-base/nodes/Git/GenericFunctions.ts",
+      "method": "validateGitReference"
+    },
+    {
+      "class": "packages/nodes-base/nodes/Git/Git.node.ts.Git",
+      "method": "execute"
+    },
+    {
+      "class": "packages/nodes-base/nodes/Postgres/PostgresTrigger.functions.ts",
+      "method": "pgTriggerFunction"
+    },
+    {
+      "class": "packages/nodes-base/nodes/Postgres/PostgresTrigger.functions.ts",
+      "method": "prepareNames"
+    },
+    {
+      "class": "packages/nodes-base/nodes/Postgres/PostgresTrigger.node.ts.PostgresTrigger",
+      "method": "trigger"
+    },
+    {
+      "class": "packages/nodes-base/nodes/Snowflake/Snowflake.node.ts.Snowflake",
+      "method": "execute"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "f69dfc6dd2178a14ea1624d2e1d403c2e755042f"
+    ],
+    "excluded": [
+      {
+        "class": "packages/@n8n/ai-utilities/src/utils/http-proxy-agent.ts",
+        "method": "proxyFetch",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/@n8n/nodes-langchain/nodes/mcp/shared/utils.ts",
+        "method": "connectMcpClientForCredential",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/@n8n/nodes-langchain/nodes/tools/ToolHttpRequest/utils.ts",
+        "method": "predefinedCredentialRequest",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/@n8n/task-runner/src/js-task-runner/js-task-runner.ts.JsTaskRunner",
+        "method": "constructor",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/@n8n/task-runner/src/js-task-runner/require-resolver.ts",
+        "method": "createRequireResolver",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/@n8n/tournament/src/VariablePolyfill.ts",
+        "method": "jsVariablePolyfill",
+        "reason": "only comments, braces, imports or logging changed"
+      },
+      {
+        "class": "packages/cli/src/executions/pre-execution-checks/credentials-permission-checker.ts.CredentialsPermissionChecker",
+        "method": "constructor",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/cli/src/modules/token-exchange/services/identity-resolution.service.ts.IdentityResolutionService",
+        "method": "constructor",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/cli/src/modules/token-exchange/services/identity-resolution.service.ts.IdentityResolutionService",
+        "method": "provisionUser",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/cli/src/modules/token-exchange/services/identity-resolution.service.ts.IdentityResolutionService",
+        "method": "resolve",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/cli/src/modules/token-exchange/services/identity-resolution.service.ts.IdentityResolutionService",
+        "method": "resolveByIdentity",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/cli/src/modules/token-exchange/services/identity-resolution.service.ts.IdentityResolutionService",
+        "method": "syncProfile",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/cli/src/modules/token-exchange/services/token-exchange.service.ts.TokenExchangeService",
+        "method": "embedLogin",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/cli/src/modules/token-exchange/services/trusted-key.service.ts.TrustedKeyService",
+        "method": "getByKidAndIss",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/cli/src/modules/token-exchange/services/trusted-key.service.ts.TrustedKeyService",
+        "method": "resolveKeysForJwksSource",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/cli/src/workflow-execute-additional-data.ts",
+        "method": "executeWorkflow",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/nodes-base/nodes/EmailSend/v1/EmailSendV1.node.ts.EmailSendV1",
+        "method": "execute",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/nodes-base/nodes/EmailSend/v2/send.operation.ts",
+        "method": "execute",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/nodes-base/nodes/EmailSend/v2/sendAndWait.operation.ts",
+        "method": "execute",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/nodes-base/nodes/Snowflake/GenericFunctions.ts",
+        "method": "execute",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

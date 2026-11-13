@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-39qv-prmh-x37f",
+  "aliases": [
+    "CVE-2021-23497",
+    "SNYK-JS-STRIKEENTCOSET-2385945"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@strikeentco/set"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "main.js",
+      "method": "isProto"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "b2f942c"
+    ]
+  }
+}

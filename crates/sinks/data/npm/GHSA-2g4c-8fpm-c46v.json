@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2g4c-8fpm-c46v",
+  "aliases": [
+    "CVE-2024-21505"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "web3-utils"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/web3-utils/src/objects.ts",
+      "method": "mergeDeep"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "8ed041c6635d807b3da8960ad49e125e3d1b0e80"
+    ]
+  }
+}

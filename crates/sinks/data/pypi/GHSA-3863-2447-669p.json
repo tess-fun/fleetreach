@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3863-2447-669p",
+  "aliases": [
+    "CVE-2023-6730",
+    "PYSEC-2023-300"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "transformers"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "transformers.models.deprecated.transfo_xl.tokenization_transfo_xl.TransfoXLTokenizer",
+      "method": "__init__"
+    },
+    {
+      "class": "transformers.models.deprecated.transfo_xl.tokenization_transfo_xl",
+      "method": "get_lm_corpus"
+    },
+    {
+      "class": "transformers.models.rag.retrieval_rag.LegacyIndex",
+      "method": "_deserialize_index"
+    },
+    {
+      "class": "transformers.models.rag.retrieval_rag.LegacyIndex",
+      "method": "_load_passages"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "1d63b0ec361e7a38f1339385e8a5a855085532ce"
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-22wc-c9wj-6q2v",
+  "aliases": [
+    "CVE-2021-48020"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "vyper"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "11b7b5b7e59bc9dc859d51cd41a924b59fe47c9e"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

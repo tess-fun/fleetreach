@@ -1,0 +1,42 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2m8v-j782-fhvr",
+  "aliases": [
+    "CVE-2026-69185"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "socket.io-parser"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "index.js.Decoder",
+      "method": "add"
+    },
+    {
+      "class": "packages/socket.io-parser/lib/index.ts.Decoder",
+      "method": "add"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "7c6ef571a00656718e9e05e3b948fd1758b2a7b4",
+      "9c6323e5cde41bd75df3379b5fc9293664a5f240",
+      "ced94ffa3ac020a8f3c14eb98a3bf34acb14d291"
+    ],
+    "excluded": [
+      {
+        "class": "index.js",
+        "method": "decodeString",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/socket.io-parser/lib/index.ts.Decoder",
+        "method": "decodeString",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

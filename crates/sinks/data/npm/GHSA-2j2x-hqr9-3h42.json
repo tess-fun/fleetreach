@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2j2x-hqr9-3h42",
+  "aliases": [
+    "CVE-2026-40181"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "react-router"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/router/router.ts",
+      "method": "normalizeRedirectLocation"
+    },
+    {
+      "class": "packages/router/utils.ts",
+      "method": "joinPaths"
+    },
+    {
+      "class": "packages/router/utils.ts",
+      "method": "resolvePath"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "d77f6b1"
+    ]
+  }
+}

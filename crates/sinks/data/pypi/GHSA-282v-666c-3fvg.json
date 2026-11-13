@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-282v-666c-3fvg",
+  "aliases": [
+    "CVE-2023-2800",
+    "PYSEC-2023-299"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "transformers"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "transformers.utils.hub",
+      "method": "download_url"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "80ca92470938bbcc348e2d9cf4734c7c25cb1c43"
+    ]
+  }
+}

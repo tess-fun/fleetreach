@@ -1,0 +1,34 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-33c7-2mpw-hg34",
+  "aliases": [
+    "CVE-2020-7694",
+    "PYSEC-2020-150",
+    "SNYK-PYTHON-UVICORN-575560"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "uvicorn"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "uvicorn.logging.AccessFormatter",
+      "method": "get_full_path"
+    },
+    {
+      "class": "uvicorn.logging.AccessFormatter",
+      "method": "get_path"
+    },
+    {
+      "class": "uvicorn.protocols.utils",
+      "method": "get_path_with_query_string"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "895807f94ea9a8e588605c12076b7d7517cda503"
+    ]
+  }
+}

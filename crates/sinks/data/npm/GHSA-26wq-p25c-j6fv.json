@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-26wq-p25c-j6fv",
+  "aliases": [
+    "CVE-2026-107299"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "msgpack5"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/decoder.js",
+      "method": "tryDecode"
+    },
+    {
+      "class": "lib/streams.js.Decoder",
+      "method": "_transform"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "85da345bf1acc18ca441741e5cf4aa0ed0d69314"
+    ]
+  }
+}

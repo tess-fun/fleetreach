@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2m6q-8v3h-jqww",
+  "aliases": [
+    "CVE-2026-107718"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@adonisjs/http-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/client/helpers.ts",
+      "method": "createURL"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "4548a0631ce2ef1618f04c7b41465be42cad2f7d",
+      "ab607a2958327b6f0019d38f26081e431768877a"
+    ]
+  }
+}

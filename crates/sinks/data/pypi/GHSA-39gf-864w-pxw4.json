@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-39gf-864w-pxw4",
+  "aliases": [
+    "CVE-2022-2930",
+    "PYSEC-2022-43142"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "octoprint"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "octoprint.server.api.access",
+      "method": "change_password_for_user"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "1453076ee3e47fcab2dc73664ec2d61d3ef7fc4f"
+    ]
+  }
+}

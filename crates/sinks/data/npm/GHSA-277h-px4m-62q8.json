@@ -1,0 +1,21 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-277h-px4m-62q8",
+  "ecosystem": "npm",
+  "packages": [
+    "@saltcorn/server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/plugins-loader/download_utils.js",
+      "method": "gitPullOrClone"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "024f19a7e079913f62f4a2335ab04116ddb68192"
+    ]
+  }
+}

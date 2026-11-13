@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-254f-3936-288h",
+  "aliases": [
+    "BIT-pillow-2026-112391",
+    "CVE-2026-112391"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pillow"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "PIL.PdfParser.PdfParser",
+      "method": "get_value"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "94cb11c44ff7345414da17ebfea1598a529ad9cd"
+    ],
+    "excluded": [
+      {
+        "class": "PIL.PdfParser.PdfParser",
+        "method": "read_indirect",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

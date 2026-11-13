@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2xv9-ghh9-xc69",
+  "aliases": [
+    "CVE-2025-48054"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "radashi"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/object/set.ts",
+      "method": "set"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "8147abc8cfc3cfe9b9a17cd389076a5d97235a66"
+    ]
+  }
+}

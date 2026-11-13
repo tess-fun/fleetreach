@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-34r7-q49f-h37c",
+  "aliases": [
+    "CVE-2015-8857"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "uglify-js"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/uglify.js",
+      "method": "mangle_properties"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "4677bfe38142937ff952f95605bcec4618892c3e"
+    ]
+  }
+}

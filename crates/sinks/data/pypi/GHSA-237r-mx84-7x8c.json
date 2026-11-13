@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-237r-mx84-7x8c",
+  "aliases": [
+    "CVE-2022-36436",
+    "PYSEC-2022-267"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "vncauthproxy"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "vncap.vnc.protocol.VNCServerAuthenticator",
+      "method": "select_security_type"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "edc149af29242178091b2d6fcd42c3ef0851644b"
+    ],
+    "excluded": [
+      {
+        "class": "vncap.vnc.protocol.VNCServerAuthenticator",
+        "method": "check_version",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

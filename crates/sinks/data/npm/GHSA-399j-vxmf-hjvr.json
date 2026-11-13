@@ -1,0 +1,27 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-399j-vxmf-hjvr",
+  "aliases": [
+    "CVE-2025-11953"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@react-native-community/cli-server-api"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/cli-server-api/src/openURLMiddleware.ts",
+      "method": "openURLMiddleware"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "15089907d1f1301b22c72d7f68846a2ef20df547",
+      "5a792169d9883e0b0fb1ddf1ea46778f21510d18",
+      "9e1fa8cc633e5dcf32244ffa60a871880be56722",
+      "a8293dc29425f56249753507bc24d87b698d46e1"
+    ]
+  }
+}

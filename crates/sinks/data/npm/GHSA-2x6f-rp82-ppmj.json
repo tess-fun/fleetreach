@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2x6f-rp82-ppmj",
+  "aliases": [
+    "CVE-2026-102527"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "nuxt-og-image"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/module.ts",
+      "method": "setup"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "e6c5b53ce7f434ab8cbc91298dccfb2b515c56a5"
+    ]
+  }
+}

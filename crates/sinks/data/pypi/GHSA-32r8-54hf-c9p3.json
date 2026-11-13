@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-32r8-54hf-c9p3",
+  "aliases": [
+    "CVE-2024-46455",
+    "GO-2024-3315",
+    "PYSEC-2026-1993"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "unstructured"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "unstructured.partition.xml",
+      "method": "_get_leaf_elements"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "171b5df09fc3346aba8ce91c04de5b3e094a86bd"
+    ]
+  }
+}

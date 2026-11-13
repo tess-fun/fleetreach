@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-29pf-2h5f-8g72",
+  "aliases": [
+    "CVE-2026-4372",
+    "PYSEC-2026-2289"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "transformers"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "transformers.configuration_utils.PreTrainedConfig",
+      "method": "__init__"
+    },
+    {
+      "class": "transformers.integrations.hub_kernels",
+      "method": "is_kernel"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "a7f8e7ff37d87d1a1a0c8cf607971c607741452f"
+    ]
+  }
+}

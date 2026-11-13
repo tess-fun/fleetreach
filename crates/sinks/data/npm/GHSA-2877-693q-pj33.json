@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2877-693q-pj33",
+  "aliases": [
+    "CVE-2021-46704"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "genieacs"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/ping.ts",
+      "method": "ping"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "7f295beeecc1c1f14308a93c82413bb334045af6"
+    ]
+  }
+}

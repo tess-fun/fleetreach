@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-39m8-27wv-hr27",
+  "aliases": [
+    "CVE-2026-110871"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "nodemailer"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/dkim/message-parser.ts.MessageParser",
+      "method": "parseHeaders"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "28a5909cec27646cb001dc7e97a8f5d26c973078"
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2823-qmq8-rwvj",
+  "aliases": [
+    "CVE-2026-105756",
+    "PYSEC-2026-4306"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "vllm"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "e962733e08d10f7ca65dac4df99e116460b8b174"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

@@ -1,0 +1,138 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2943-5xfg-gq5f",
+  "aliases": [
+    "CVE-2026-77414"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "jsonata"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/functions.js",
+      "method": "spread"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "59e25144fc3b7125f6befd71b8a6e14e1fa610d2",
+      "c41ef185136a7b96ca1049c7745a7503b82193de",
+      "f09df8416eab8ff44926fc6527c80fb8701de159"
+    ],
+    "excluded": [
+      {
+        "class": "src/datetime.js",
+        "method": "generateRegex",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/datetime.js",
+        "method": "parseDateTime",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/functions.js",
+        "method": "each",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/functions.js",
+        "method": "keys",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/functions.js",
+        "method": "merge",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/functions.js",
+        "method": "sift",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/jsonata.js",
+        "method": "applyProcedure",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/jsonata.js",
+        "method": "createFrame",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/jsonata.js",
+        "method": "createFrameFromTuple",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/jsonata.js",
+        "method": "evaluateFilter",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/jsonata.js",
+        "method": "evaluateGroupExpression",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/jsonata.js",
+        "method": "evaluatePath",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/jsonata.js",
+        "method": "evaluateStep",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/jsonata.js",
+        "method": "evaluateTransformExpression",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/jsonata.js",
+        "method": "evaluateTupleStep",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/jsonata.js",
+        "method": "flatten",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/jsonata.js",
+        "method": "jsonata",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/jsonata.js",
+        "method": "partialApplyProcedure",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/jsonata.js",
+        "method": "recurseDescendants",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/jsonata.js",
+        "method": "reduceTupleStream",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/parser.js",
+        "method": "parser",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/signature.js",
+        "method": "parseSignature",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

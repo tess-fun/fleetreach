@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2522-mrjc-m688",
+  "aliases": [
+    "BIT-airflow-2024-31869",
+    "CVE-2024-31869",
+    "PYSEC-2026-1128"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "apache-airflow"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "airflow.www.gunicorn_config",
+      "method": "on_starting"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "042c2acaed7c01933d37c2f8434640ce140a4b27"
+    ]
+  }
+}

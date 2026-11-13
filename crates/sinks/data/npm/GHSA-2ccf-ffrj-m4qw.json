@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2ccf-ffrj-m4qw",
+  "aliases": [
+    "CVE-2023-29020"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@fastify/passport"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/Authenticator.ts.Authenticator",
+      "method": "constructor"
+    },
+    {
+      "class": "src/session-managers/SecureSessionManager.ts.SecureSessionManager",
+      "method": "constructor"
+    },
+    {
+      "class": "src/session-managers/SecureSessionManager.ts.SecureSessionManager",
+      "method": "logIn"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "07c90feab9cba0dd4779e47cfb0717a7e2f01d3d"
+    ]
+  }
+}

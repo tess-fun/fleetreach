@@ -1,0 +1,33 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2299-ghjr-6vjp",
+  "aliases": [
+    "BIT-parse-2026-33624",
+    "CVE-2026-33624"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "parse-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/Routers/UsersRouter.js.UsersRouter",
+      "method": "handleLogIn"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "5e70094250a36bfcc14ecd49592be2b94fba66ff",
+      "fc3da35a81d5083b453e8967cabcc880f1a3bd0c"
+    ],
+    "excluded": [
+      {
+        "class": "src/Adapters/Storage/Mongo/MongoTransform.js",
+        "method": "transformQueryKeyValue",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

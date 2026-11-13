@@ -1,0 +1,36 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2wqw-hr4f-xrhh",
+  "aliases": [
+    "CVE-2024-27926"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "rsshub"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/routes/telegram/tglib/channel.ts",
+      "method": "getMedia"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "4d3e5d79c1c17837e931b4cd253d2013b487aa87"
+    ],
+    "excluded": [
+      {
+        "class": "lib/config.ts",
+        "method": "calculateValue",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "lib/routes/telegram/tglib/client.ts",
+        "method": "getMediaLink",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-37cf-r3w2-gjfw",
+  "aliases": [
+    "CVE-2019-10682",
+    "PYSEC-2020-229"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "django-nopassword"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "nopassword.backends.base.NoPasswordBackend",
+      "method": "authenticate"
+    },
+    {
+      "class": "nopassword.forms.LoginCodeForm",
+      "method": "clean_code"
+    },
+    {
+      "class": "nopassword.forms.LoginCodeForm",
+      "method": "save"
+    },
+    {
+      "class": "nopassword.models.LoginCode",
+      "method": "generate_code"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "d8b4615f5fbfe3997d96cf4cb3e342406396193c"
+    ],
+    "excluded": [
+      {
+        "class": "nopassword.forms.LoginForm",
+        "method": "save",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "nopassword.models.LoginCode",
+        "method": "create_code_for_user",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "nopassword.rest.views.LoginCodeView",
+        "method": "get_response",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

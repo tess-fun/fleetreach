@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2v95-h47v-g4x9",
+  "aliases": [
+    "CVE-2026-107394",
+    "PYSEC-2026-4225"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "indico"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "indico.util.network",
+      "method": "is_private_url"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "44540e70ab4e20a12f14ddba5218a33749a86736"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-39vm-p9mr-4r27",
+  "aliases": [
+    "CVE-2012-3458",
+    "PYSEC-2012-1"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "beaker"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "beaker.crypto.pycrypto",
+      "method": "aesDecrypt"
+    },
+    {
+      "class": "beaker.crypto.pycrypto",
+      "method": "aesEncrypt"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "91becae76101cf87ce8cbfabe3af2622fc328fe5"
+    ]
+  }
+}

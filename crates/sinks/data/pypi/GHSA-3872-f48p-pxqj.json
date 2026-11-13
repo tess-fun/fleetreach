@@ -1,0 +1,55 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3872-f48p-pxqj",
+  "aliases": [
+    "BIT-weblate-2022-23915",
+    "CVE-2022-23915",
+    "CVE-2022-24727",
+    "GHSA-h2g5-2rhx-ffgj",
+    "PYSEC-2022-162",
+    "PYSEC-2022-31",
+    "SNYK-PYTHON-WEBLATE-2414088"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "weblate"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "weblate.vcs.git.GitRepository",
+      "method": "_clone"
+    },
+    {
+      "class": "weblate.vcs.git.GitRepository",
+      "method": "get_remote_branch"
+    },
+    {
+      "class": "weblate.vcs.git.SubversionRepository",
+      "method": "get_remote_args"
+    },
+    {
+      "class": "weblate.vcs.mercurial.HgRepository",
+      "method": "_clone"
+    },
+    {
+      "class": "weblate.vcs.mercurial.HgRepository",
+      "method": "configure_branch"
+    },
+    {
+      "class": "weblate.vcs.mercurial.HgRepository",
+      "method": "push"
+    },
+    {
+      "class": "weblate.vcs.mercurial.HgRepository",
+      "method": "update_remote"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "35d59f1f040541c358cece0a8d4a63183ca919b8",
+      "d83672a3e7415da1490334e2c9431e5da1966842"
+    ]
+  }
+}

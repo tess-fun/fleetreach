@@ -1,0 +1,36 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-38c7-23hj-2wgq",
+  "aliases": [
+    "CVE-2026-56360"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "n8n"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/nodes-base/nodes/Zendesk/ZendeskTrigger.node.ts.ZendeskTrigger",
+      "method": "create"
+    },
+    {
+      "class": "packages/nodes-base/nodes/Zendesk/ZendeskTrigger.node.ts.ZendeskTrigger",
+      "method": "webhook"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3839e310bd4c3002c646c363d1411916fa195151",
+      "c6520e4e87614fa60c9433e93019e211f19f65f9"
+    ],
+    "excluded": [
+      {
+        "class": "packages/nodes-base/nodes/Zendesk/ZendeskTrigger.node.ts.ZendeskTrigger",
+        "method": "delete",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

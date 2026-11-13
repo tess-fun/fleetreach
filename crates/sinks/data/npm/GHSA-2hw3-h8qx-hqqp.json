@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2hw3-h8qx-hqqp",
+  "aliases": [
+    "CVE-2025-50183"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@openlist-frontend/openlist-frontend"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/pages/home/previews/markdown_with_word_wrap.tsx",
+      "method": "MdPreview"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "7b5ed20c608c7b9b36d1950a386678e0a89f8175"
+    ]
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-239g-whfq-7xj9",
+  "aliases": [
+    "CVE-2026-87817",
+    "PYSEC-2026-3982"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "gitpython"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "git.repo.base.Repo",
+      "method": "__init__"
+    },
+    {
+      "class": "git.repo.fun",
+      "method": "is_git_dir"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "c7cf4d13b1ed0a2e70f2a1f3c6b4fc6c2652cf0b"
+    ],
+    "excluded": [
+      {
+        "class": "git.repo.base.Repo",
+        "method": "_get_alternates",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "git.repo.base.Repo",
+        "method": "_set_alternates",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "git.repo.fun",
+        "method": "find_submodule_git_dir",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "git.repo.fun",
+        "method": "find_worktree_git_dir",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

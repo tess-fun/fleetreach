@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2qj5-gwg2-xwc4",
+  "aliases": [
+    "CVE-2026-27001"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/agents/workspace-run.ts",
+      "method": "resolveRunWorkspaceDir"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "6254e96acf16e70ceccc8f9b2abecee44d606f79"
+    ],
+    "excluded": [
+      {
+        "class": "src/agents/system-prompt.ts",
+        "method": "buildAgentSystemPrompt",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

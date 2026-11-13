@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-35m5-8cvj-8783",
+  "aliases": [
+    "CVE-2021-39182",
+    "PYSEC-2021-385"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "enrocrypt"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "enrocrypt.hashing.Hashing",
+      "method": "MD5"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "e652d56ac60eadfc26489ab83927af13a9b9d8ce"
+    ]
+  }
+}

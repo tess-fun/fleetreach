@@ -1,0 +1,61 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-27vj-qcqg-25rc",
+  "aliases": [
+    "CVE-2026-104851",
+    "PYSEC-2026-4217"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "fsspec"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "fsspec.implementations.dbfs.DatabricksFile",
+      "method": "__init__"
+    },
+    {
+      "class": "fsspec.implementations.reference.ReferenceFileSystem",
+      "method": "_process_gen"
+    },
+    {
+      "class": "fsspec.implementations.reference.ReferenceFileSystem",
+      "method": "_process_references1"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "86438783f93b1398ef245b92f0e6063b445b611c",
+      "a1c16ab3f07f354aa371c38f7b1b07ea7fd4c5c8"
+    ],
+    "excluded": [
+      {
+        "class": "fsspec.asyn",
+        "method": "_run_coros_in_chunks",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "fsspec.implementations.cache_metadata.CacheMetadata",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "fsspec.implementations.cache_metadata.CacheMetadata",
+        "method": "_load",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "fsspec.implementations.cache_metadata.CacheMetadata",
+        "method": "_save",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "fsspec.implementations.reference.ReferenceFileSystem",
+        "method": "_process_templates",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

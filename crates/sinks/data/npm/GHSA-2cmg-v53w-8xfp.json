@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2cmg-v53w-8xfp",
+  "aliases": [
+    "CVE-2026-106560"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@backstage/plugin-scaffolder-backend-module-confluence-to-markdown"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "plugins/scaffolder-backend-module-confluence-to-markdown/src/actions/confluence/confluenceToMarkdown.ts",
+      "method": "createConfluenceToMarkdownAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-confluence-to-markdown/src/actions/confluence/helpers.ts",
+      "method": "getAndWriteAttachments"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "5f0000c1d0af05571e357926b3fa33a453337ff0"
+    ]
+  }
+}

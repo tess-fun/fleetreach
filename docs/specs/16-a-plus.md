@@ -1361,8 +1361,27 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   right on the sample used while tuning (PyPI 17 of 20, npm 14 of 20), 14 of 20 on a fresh
   sample (PyPI 9 of 10, npm 5 of 10), against 45% for Java (E2b). The npm misses are anonymous
   callbacks (socket and hook handlers have no name to key on), commits that fix something
-  else, and frontend functions. None of these records ship yet: the scan's reachability reads
-  Maven records only, and they stay witnesses-only until JS and Python call graphs exist.
+  else, and frontend functions. The 573 records ship as `proposed` in `crates/sinks/data/pypi`
+  and `npm`, witnesses only.
+- **JS and Python call graphs (2026-11-13, row 13 for 1.8.0)**: `fleetreach_sinks::calls`
+  builds a call graph from source, resolving calls by name through imports, module exports,
+  classes and base classes, the value a local was assigned (`x = new C()`), and what a
+  function returns (factories). Dependency source is read when installed (`node_modules`, a
+  virtualenv's `site-packages`), only as far as calls lead; without it a call into a package
+  is an external name matched against the record's sinks. Every first-party function and
+  module top level is an entry point, production code before tests; an
+  `if __name__ == "__main__":` block runs only as a first-party script. `scan --reachability`
+  runs it after the npm and PyPI import graphs: a chain to a sink makes the finding `Reachable`
+  with that chain (engine `fleetreach-js-calls` or `fleetreach-py-calls`); anything else keeps
+  the import graph's verdict. **Positive-only**: calls through values the graph cannot see
+  (callbacks, `getattr`, framework dispatch) are dropped, so no chain proves nothing.
+  Proposed records with more than 10 sinks are skipped as too broad. Measured on 40 real
+  repos (20 npm, 20 PyPI, dependencies installed with scripts off and wheels only): 33 chains,
+  139 of 140 hops land on a real call line (the other is a function's edge to its own module's
+  top level, which has no line), every chain read by hand matches the code, 0.1 to 3 s per
+  repo. Misses are mostly framework dispatch: Django's request handler and model managers,
+  Pillow's plugin registry, DRF parsers from settings, requests' adapters. On the OSS fleet
+  it found posthog's pyjwt and urllib3 chains. Still open in row 13: the .NET IL reader.
 
 #### 14. Import-graph witness chains (A- to A+)
 

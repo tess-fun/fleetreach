@@ -1,0 +1,51 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3633-r77q-h3v3",
+  "aliases": [
+    "CVE-2026-116588"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "ddtrace"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ddtrace.appsec._iast._evidence_redaction.url_sensitive_analyzer",
+      "method": "find_query_string_matches"
+    },
+    {
+      "class": "ddtrace.contrib.internal.trace_utils_base",
+      "method": "_set_url_tag"
+    },
+    {
+      "class": "ddtrace.internal.utils.http",
+      "method": "redact_query_string"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "63ddc3cb07d8813ded7a8b3ab5b8d0f5470e4bfd",
+      "83ea39845dd95bfb9b8e247c62b3d22fc5dce1ce",
+      "a6d73607ea45ecd67152630f64b0945556972ed8"
+    ],
+    "excluded": [
+      {
+        "class": "ddtrace.internal.settings._config.Config",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "ddtrace.internal.utils.http",
+        "method": "redact_url",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "ddtrace.settings._config.Config",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

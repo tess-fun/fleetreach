@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2qv6-9wx5-cwv4",
+  "aliases": [
+    "CVE-2026-44644"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "liquidjs"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/filters/html.ts",
+      "method": "strip_html"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "26ea2856c7a90aec892b98d94a9b7a3e18539045"
+    ]
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-38c3-wv3c-v3xj",
+  "aliases": [
+    "CVE-2026-54661"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "swagger-typescript-api"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/resolved-swagger-schema.ts.ResolvedSwaggerSchema",
+      "method": "create"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "306d59acb8ffbb00f953f807b97234b21f51d9de"
+    ],
+    "excluded": [
+      {
+        "class": "src/configuration.ts.CodeGenConfig",
+        "method": "StringValue",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/resolved-swagger-schema.ts.ResolvedSwaggerSchema",
+        "method": "fetchRemoteSchemaDocument",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/resolved-swagger-schema.ts.ResolvedSwaggerSchema",
+        "method": "getRemoteRequestHeaders",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "src/resolved-swagger-schema.ts.ResolvedSwaggerSchema",
+        "method": "warmUpRemoteSchemasCache",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

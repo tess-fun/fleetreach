@@ -1,0 +1,30 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-273r-mgr4-v34f",
+  "aliases": [
+    "CVE-2022-21676"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "engine.io"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/server.js.Server",
+      "method": "onWebSocket"
+    },
+    {
+      "class": "lib/server.ts.Server",
+      "method": "onWebSocket"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "66f889fc1d966bf5bfa0de1939069153643874ab",
+      "a70800d7e96da32f6e6622804ef659ebc58659db",
+      "c0e194d44933bd83bf9a4b126fca68ba7bf5098c"
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-332q-7ff2-57h2",
+  "aliases": [
+    "CVE-2019-10795",
+    "SNYK-JS-UNDEFSAFE-548940"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "undefsafe"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/undefsafe.js",
+      "method": "undefsafe"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "f272681b3a50e2c4cbb6a8533795e1453382c822"
+    ]
+  }
+}

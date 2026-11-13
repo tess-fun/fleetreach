@@ -1,0 +1,43 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-32cc-x95p-fxcg",
+  "aliases": [
+    "CVE-2026-25894"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "fuxa-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "client/src/app/_services/settings.service.ts.SettingsService",
+      "method": "setSettings"
+    },
+    {
+      "class": "client/src/app/editor/app-settings/app-settings.component.ts.AppSettingsComponent",
+      "method": "onOkClick"
+    },
+    {
+      "class": "server/api/index.js",
+      "method": "init"
+    },
+    {
+      "class": "server/api/index.js",
+      "method": "mergeUserSettings"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "ea7b3df066f9fdef8ecdce318398ae40546bc50d"
+    ],
+    "excluded": [
+      {
+        "class": "client/src/app/editor/app-settings/app-settings.component.ts.AppSettingsComponent",
+        "method": "ngOnInit",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

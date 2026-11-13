@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-29h4-r29x-hchv",
+  "aliases": [
+    "CVE-2026-8838",
+    "PYSEC-2026-521"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "redshift-connector"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "redshift_connector.utils.type_utils",
+      "method": "vector_in"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "69a69dfdead75918e20384da52bcd760ded8dbca"
+    ]
+  }
+}

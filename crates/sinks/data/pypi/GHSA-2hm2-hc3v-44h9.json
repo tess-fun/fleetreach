@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2hm2-hc3v-44h9",
+  "aliases": [
+    "CVE-2026-59930",
+    "PYSEC-2026-2218"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "mistune"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "mistune.toc",
+      "method": "add_toc_hook"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "c4093c4742ed0d10d9332fb8edb455869b7b581b"
+    ]
+  }
+}

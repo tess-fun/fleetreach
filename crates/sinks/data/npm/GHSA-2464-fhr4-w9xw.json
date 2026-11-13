@@ -1,0 +1,17 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2464-fhr4-w9xw",
+  "ecosystem": "npm",
+  "packages": [
+    "next"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "5e3b687b5edb868b064bdc058d768a7021e7f6ad",
+      "9571ec899f063df6533351bec390ccb2cc0af6a3"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

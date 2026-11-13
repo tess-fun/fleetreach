@@ -1,0 +1,43 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-27q4-38qf-m25h",
+  "aliases": [
+    "CVE-2013-4497",
+    "PYSEC-2026-859"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "nova"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "nova.virt.xenapi.vmops.VMOps",
+      "method": "_spawn"
+    },
+    {
+      "class": "nova.virt.xenapi.vmops.VMOps",
+      "method": "finish_migration"
+    },
+    {
+      "class": "nova.virt.xenapi.vmops.VMOps",
+      "method": "spawn"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "01de658210fd65171bfbf5450c93673b5ce0bd9e",
+      "5cced7a6dd32d231c606e25dbf762d199bf9cca7",
+      "ba0d007fb78bd1182c3c0b808dbd7ccc84640e80",
+      "df2ea2e3acdede21b40d47b7adbeac04213d031b"
+    ],
+    "excluded": [
+      {
+        "class": "nova.virt.xenapi.driver.XenAPIDriver",
+        "method": "post_live_migration_at_destination",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

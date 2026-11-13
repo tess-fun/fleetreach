@@ -1,0 +1,56 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-238x-w2j9-gwwr",
+  "aliases": [
+    "CVE-2026-105849"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "payload"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/payload/src/auth/baseFields/apiKey.ts",
+      "method": "decryptKey"
+    },
+    {
+      "class": "packages/payload/src/auth/baseFields/apiKey.ts",
+      "method": "encryptKey"
+    },
+    {
+      "class": "packages/payload/src/auth/baseFields/apiKey.ts",
+      "method": "label"
+    },
+    {
+      "class": "packages/payload/src/collections/config/sanitize.ts",
+      "method": "sanitizeCollection"
+    },
+    {
+      "class": "packages/ui/src/elements/GenerateConfirmation/index.tsx",
+      "method": "GenerateConfirmation"
+    },
+    {
+      "class": "packages/ui/src/views/Edit/Auth/APIKey.tsx",
+      "method": "APIKey"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "880d2e900be22cd66a9e939f2b3e702fa413180f"
+    ],
+    "excluded": [
+      {
+        "class": "packages/payload/src/auth/getAuthFields.ts",
+        "method": "getBaseAuthFields",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "packages/ui/src/views/Edit/Auth/index.tsx",
+        "method": "Auth",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

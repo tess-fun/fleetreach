@@ -1,0 +1,128 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2956-977x-2w3r",
+  "aliases": [
+    "CVE-2026-67429",
+    "PYSEC-2026-3568"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "flyto-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "core.modules.atomic.browser.pagination.BrowserPaginationModule",
+      "method": "execute"
+    },
+    {
+      "class": "core.modules.atomic.document.excel_write",
+      "method": "excel_write"
+    },
+    {
+      "class": "core.modules.atomic.document.pdf_fill_form",
+      "method": "pdf_fill_form"
+    },
+    {
+      "class": "core.modules.atomic.document.pdf_to_word",
+      "method": "pdf_to_word"
+    },
+    {
+      "class": "core.modules.atomic.document.word_to_pdf",
+      "method": "word_to_pdf"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "d5f89d71303e3c1e6418d347c5c55fcd173cc8cc"
+    ],
+    "excluded": [
+      {
+        "class": "core.engine.variable_resolver.VariableResolver",
+        "method": "_get_variable_value",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.ai.model",
+        "method": "ai_model",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.image.compress",
+        "method": "image_compress",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.image.convert",
+        "method": "_resolve_convert_paths",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.image.convert",
+        "method": "image_convert",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.image.crop",
+        "method": "image_crop",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.image.download",
+        "method": "_validate_and_prepare_download",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.image.download",
+        "method": "image_download",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.image.qrcode_generate",
+        "method": "_create_qr_code",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.image.resize",
+        "method": "image_resize",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.image.rotate",
+        "method": "image_rotate",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.image.watermark",
+        "method": "image_watermark",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.llm.agent",
+        "method": "_resolve_chat_model",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.llm.agent",
+        "method": "llm_agent",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.llm.chat",
+        "method": "llm_chat",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.vector.connector.VectorDBConnector",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "core.modules.atomic.vector.connector.VectorDBConnector",
+        "method": "connect",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

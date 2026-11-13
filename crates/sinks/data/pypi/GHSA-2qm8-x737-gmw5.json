@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2qm8-x737-gmw5",
+  "aliases": [
+    "CVE-2026-119196"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "pyasn1"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "pyasn1.codec.ber.decoder.BitStringPayloadDecoder",
+      "method": "indefLenValueDecoder"
+    },
+    {
+      "class": "pyasn1.codec.ber.decoder.BitStringPayloadDecoder",
+      "method": "valueDecoder"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "73ba7b043cc7e92cb37f16f2c955bff93b0e6f6c"
+    ]
+  }
+}

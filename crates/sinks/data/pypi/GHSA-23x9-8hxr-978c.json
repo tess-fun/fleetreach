@@ -1,0 +1,87 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-23x9-8hxr-978c",
+  "aliases": [
+    "CVE-2014-2237",
+    "PYSEC-2014-105"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "keystone"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "keystone.token.backends.kvs.Token",
+      "method": "flush_expired_tokens"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "__init__"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "_add_to_revocation_list"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "_convert_user_index_from_json"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "_get_memcache_client"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "_list_tokens"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "_prefix_token_id"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "_prefix_user_id"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "_update_user_list_with_cas"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "client"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "create_token"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "delete_token"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "delete_tokens"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "flush_expired_tokens"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "get_token"
+    },
+    {
+      "class": "keystone.token.backends.memcache.Token",
+      "method": "list_revoked_tokens"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "813d1254eb4f7a7d40009b23bbadbc4c5cc5daac",
+      "a411c944af78c36f2fdb87d305ba452dc52d7ed3",
+      "b6f0e26da0e2ab0892a5658da281a065e668637b"
+    ]
+  }
+}

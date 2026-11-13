@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-384w-5v3f-q499",
+  "aliases": [
+    "CVE-2020-26250",
+    "PYSEC-2020-68"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "oauthenticator"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "a4aac191c16cf6281f3d346615aefa75702b02d7"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

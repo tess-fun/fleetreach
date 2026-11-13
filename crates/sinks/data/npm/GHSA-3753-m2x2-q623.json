@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3753-m2x2-q623",
+  "aliases": [
+    "CVE-2026-91127"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "msdoc-viewer"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/renderers/word/src/wordDoc.ts",
+      "method": "render"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "ef045680f8d9830a3eee9612f7df46a734361b07"
+    ]
+  }
+}

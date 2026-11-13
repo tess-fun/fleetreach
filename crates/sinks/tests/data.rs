@@ -13,8 +13,13 @@ fn shipped_records_are_valid() {
     assert!(set.records.len() >= 100);
     // Every record's file sits under the directory of its ecosystem.
     for r in set.records.values() {
-        assert_eq!(r.ecosystem, "Maven");
-        let file = dir.join("maven").join(format!("{}.json", r.id));
+        let sub = match r.ecosystem.as_str() {
+            "Maven" => "maven",
+            "PyPI" => "pypi",
+            "npm" => "npm",
+            other => panic!("unexpected ecosystem {other}"),
+        };
+        let file = dir.join(sub).join(format!("{}.json", r.id));
         assert!(file.is_file(), "{}", file.display());
         if r.status == Status::Reviewed {
             assert!(r.review.is_some());

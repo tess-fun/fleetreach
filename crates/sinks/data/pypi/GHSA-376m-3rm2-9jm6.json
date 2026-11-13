@@ -1,0 +1,70 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-376m-3rm2-9jm6",
+  "aliases": [
+    "CVE-2016-8638",
+    "PYSEC-2026-360"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "ipsilon"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ipsilon.login.common.Logout",
+      "method": "root"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "1c48414877fc110652b6078a29529972c7ec9122",
+      "64fc366c054fc6af1d9d2692902db169884b5f78",
+      "a33303b6beb5c316d7c18b23566b7666a4e307a4",
+      "b4744a92d4fa7f6d7ade0ae2d99a2dc0ea94734d"
+    ],
+    "excluded": [
+      {
+        "class": "ipsilon.providers.saml2.logout.LogoutRequest",
+        "method": "logout",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "ipsilon.providers.saml2.sessions.SAMLSessionFactory",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "ipsilon.providers.saml2.sessions.SAMLSessionFactory",
+        "method": "add_session",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "ipsilon.providers.saml2.sessions.SAMLSessionFactory",
+        "method": "dump",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "ipsilon.providers.saml2.sessions.SAMLSessionFactory",
+        "method": "get_initial_logout",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "ipsilon.providers.saml2.sessions.SAMLSessionFactory",
+        "method": "get_next_logout",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "ipsilon.providers.saml2.sessions.SAMLSessionFactory",
+        "method": "get_session_id_by_provider_id",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "ipsilon.providers.saml2idp.IdpProvider",
+        "method": "idp_initiated_logout",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

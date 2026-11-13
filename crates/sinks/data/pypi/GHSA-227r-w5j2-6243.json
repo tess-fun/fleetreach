@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-227r-w5j2-6243",
+  "aliases": [
+    "CVE-2024-11042",
+    "PYSEC-2026-358"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "invokeai"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "invokeai.app.services.image_files.image_files_disk.DiskImageFileStorage",
+      "method": "get_path"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "5440c037674882b2ab7acd59087e9bb04b49657a"
+    ]
+  }
+}

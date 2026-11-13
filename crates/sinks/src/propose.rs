@@ -92,7 +92,7 @@ pub fn is_candidate_source(path: &str) -> bool {
 }
 
 /// Tests, examples, docs, benchmarks and built bundles, which never hold a library's sinks.
-fn is_non_library_path(path: &str) -> bool {
+pub(crate) fn is_non_library_path(path: &str) -> bool {
     if java::is_test_path(path) {
         return true;
     }

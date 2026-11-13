@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-27g9-p43v-cw3v",
+  "aliases": [
+    "CVE-2026-92944"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "vm2"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "c7df2e21d2c74038a1f1750f40f9fe603ec69c6a"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

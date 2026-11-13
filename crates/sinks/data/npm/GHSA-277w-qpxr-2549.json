@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-277w-qpxr-2549",
+  "aliases": [
+    "CVE-2016-4567"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "mediaelement"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/js/me-shim.js",
+      "method": "createPlugin"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "34834eef8ac830b9145df169ec22016a4350f06e"
+    ]
+  }
+}

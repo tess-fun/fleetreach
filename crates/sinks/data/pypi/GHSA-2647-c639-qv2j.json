@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2647-c639-qv2j",
+  "aliases": [
+    "CVE-2022-0766",
+    "PYSEC-2026-304"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "calibreweb"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "cps.helper",
+      "method": "save_cover_from_url"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "965352c8d96c9eae7a6867ff76b0db137d04b0b8"
+    ]
+  }
+}

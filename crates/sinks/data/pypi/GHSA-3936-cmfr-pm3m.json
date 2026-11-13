@@ -1,0 +1,49 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3936-cmfr-pm3m",
+  "aliases": [
+    "CVE-2026-32274",
+    "PYSEC-2026-2121"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "black"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "black.cache.Cache",
+      "method": "read"
+    },
+    {
+      "class": "black.handle_ipynb_magics",
+      "method": "create_token"
+    },
+    {
+      "class": "black.handle_ipynb_magics",
+      "method": "replace_magics"
+    },
+    {
+      "class": "black.handle_ipynb_magics",
+      "method": "unmask_cell"
+    },
+    {
+      "class": "black.mode.Mode",
+      "method": "get_cache_key"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "4937fe6cf241139ddbfc16b0bdbb5b422798909d",
+      "ed770ba4dd50c419148a0fca2b43937a7447e1f9"
+    ],
+    "excluded": [
+      {
+        "class": "black.handle_ipynb_magics",
+        "method": "get_token",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

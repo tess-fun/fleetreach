@@ -1,0 +1,128 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2gpf-2492-q9jh",
+  "aliases": [
+    "CVE-2026-61435",
+    "PYSEC-2026-4247"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "praisonai"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "praisonai.praisonai.api.agent_invoke",
+      "method": "verify_token"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "2a855c470077c7d2e2479a575f7ef7f548d51c33",
+      "846568c7a5d8ce9e71e56e4c213f027c04909753"
+    ],
+    "excluded": [
+      {
+        "class": "praisonai.praisonai.api.call",
+        "method": "handle_incoming_call",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.api.call",
+        "method": "handle_media_stream",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.cli.features.recipe.RecipeHandler",
+        "method": "cmd_run",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.cli.features.serve.ServeHandler",
+        "method": "cmd_a2u",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.recipe.core",
+        "method": "_check_tool_policy",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.recipe.core",
+        "method": "_execute_steps_workflow",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.recipe.core",
+        "method": "run",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.recipe.core",
+        "method": "run_stream",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.sandbox.sandlock.SandlockSandbox",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "praisonai.praisonai.sandbox.sandlock.SandlockSandbox",
+        "method": "execute",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.sandbox.sandlock.SandlockSandbox",
+        "method": "get_status",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.sandbox.sandlock.SandlockSandbox",
+        "method": "run_command",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai.praisonai.tools.multiedit",
+        "method": "multiedit",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai_platform.api.routes.issues",
+        "method": "create_issue",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai_platform.api.routes.issues",
+        "method": "update_issue",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai_platform.api.routes.projects",
+        "method": "project_stats",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonai_platform.services.project_service.ProjectService",
+        "method": "get_stats",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonaiagents.tools.searxng_tools",
+        "method": "searxng_search",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonaiagents.tools.web_search",
+        "method": "_search_searxng",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "praisonaiagents.workflows.workflows.AgentFlow",
+        "method": "run",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

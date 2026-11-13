@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2wm5-q62r-hmrv",
+  "aliases": [
+    "CVE-2026-85062"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "colord"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "87018089515ed66a85b1a95c3c7c3fd69a25bac2"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

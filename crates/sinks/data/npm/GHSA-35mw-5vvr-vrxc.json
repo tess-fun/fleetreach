@@ -1,0 +1,53 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-35mw-5vvr-vrxc",
+  "aliases": [
+    "CVE-2026-43570",
+    "GHSA-cr8r-7g2h-6wr6"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/plugins/marketplace.ts",
+      "method": "resolveMarketplaceEntryInstallPath"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "94b0062e90467e1582b47cc971f308457c537f3a",
+      "b1dd3ded3589f6fa60ab85b3930a82d538edaeae"
+    ],
+    "excluded": [
+      {
+        "class": "src/plugins/marketplace.ts",
+        "method": "ensureInsideMarketplaceRoot",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/plugins/marketplace.ts",
+        "method": "installPluginFromMarketplace",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/plugins/marketplace.ts",
+        "method": "loadMarketplace",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/plugins/marketplace.ts",
+        "method": "resolveLocalMarketplaceSource",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/plugins/marketplace.ts",
+        "method": "validateMarketplaceManifest",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2q2q-jr9g-v9rf",
+  "aliases": [
+    "CVE-2026-55228",
+    "PYSEC-2026-3942"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "weblate"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "weblate.api.views.GroupViewSet",
+      "method": "componentlists"
+    },
+    {
+      "class": "weblate.api.views.GroupViewSet",
+      "method": "components"
+    },
+    {
+      "class": "weblate.api.views.GroupViewSet",
+      "method": "delete_componentlists"
+    },
+    {
+      "class": "weblate.api.views.GroupViewSet",
+      "method": "delete_components"
+    },
+    {
+      "class": "weblate.api.views.GroupViewSet",
+      "method": "delete_projects"
+    },
+    {
+      "class": "weblate.api.views.GroupViewSet",
+      "method": "projects"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "19babc99b05f2cc299b5090f90f79d8181f25d79"
+    ],
+    "excluded": [
+      {
+        "class": "weblate.api.serializers.GroupSerializer",
+        "method": "validate",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "weblate.api.tests.GroupAPITest",
+        "method": "test_add_component",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "weblate.api.tests.GroupAPITest",
+        "method": "test_add_componentlist",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "weblate.api.tests.GroupAPITest",
+        "method": "test_add_project",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "weblate.api.tests.GroupAPITest",
+        "method": "test_create_project",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "weblate.api.tests.GroupAPITest",
+        "method": "test_project_admin_group_visibility",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "weblate.api.tests.GroupAPITest",
+        "method": "test_workspace_admin_group_roles",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

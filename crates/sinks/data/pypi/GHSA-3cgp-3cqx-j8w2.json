@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3cgp-3cqx-j8w2",
+  "aliases": [
+    "CVE-2026-88000",
+    "PYSEC-2026-3877"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "open-webui"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "backend.open_webui.models.chats.ChatTable",
+      "method": "delete_message_from_history"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "b933292d63d12be3fd1416fe55519ddc7aa336bc"
+    ]
+  }
+}

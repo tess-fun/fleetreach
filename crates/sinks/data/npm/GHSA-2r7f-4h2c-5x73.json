@@ -1,0 +1,65 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2r7f-4h2c-5x73",
+  "aliases": [
+    "CVE-2016-1000249"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "fury-adapter-swagger"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/adapter.js",
+      "method": "convertParameterToElement"
+    },
+    {
+      "class": "src/adapter.js",
+      "method": "convertParameterToMember"
+    },
+    {
+      "class": "src/adapter.js",
+      "method": "createAssetFromJsonSchema"
+    },
+    {
+      "class": "src/adapter.js",
+      "method": "createTransaction"
+    },
+    {
+      "class": "src/adapter.js",
+      "method": "getPosition"
+    },
+    {
+      "class": "src/adapter.js",
+      "method": "isExtension"
+    },
+    {
+      "class": "src/adapter.js",
+      "method": "makeAnnotation"
+    },
+    {
+      "class": "src/adapter.js",
+      "method": "makeSourceMap"
+    },
+    {
+      "class": "src/adapter.js",
+      "method": "parse"
+    },
+    {
+      "class": "src/adapter.js",
+      "method": "useResourceGroups"
+    },
+    {
+      "class": "src/parser.js.Parser",
+      "method": "parse"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "777e2d68f03546a88f3203bbd4725df8b1f662a7",
+      "f4407e3a5323bc31123d45dbc93b8417002e4d51"
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2cf7-hpwf-47h9",
+  "aliases": [
+    "CVE-2026-55608"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "n8n-mcp"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/mcp/handlers-n8n-manager.ts",
+      "method": "handleWorkflowVersions"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "c1ca1e73697feaec5ec2a5fb7e6992a2892b62c9"
+    ],
+    "excluded": [
+      {
+        "class": "src/http-server-single-session.ts.SingleSessionHTTPServer",
+        "method": "start",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

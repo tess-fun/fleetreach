@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-39w2-rjm5-chcv",
+  "aliases": [
+    "CVE-2026-94486"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "next"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/next/src/server/lib/router-utils/block-cross-site-dev.ts",
+      "method": "isInternalEndpoint"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "2d9f50a409312696145b82b3157aadb6b1fef476"
+    ],
+    "excluded": [
+      {
+        "class": "packages/next/src/server/mcp/get-mcp-middleware.ts",
+        "method": "getMcpMiddleware",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

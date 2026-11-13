@@ -1,0 +1,252 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2g87-pp6c-29x5",
+  "aliases": [
+    "CVE-2026-123817"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "aiohttp"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "aiohttp._cookie_helpers",
+      "method": "parse_set_cookie_headers"
+    },
+    {
+      "class": "aiohttp._websocket.reader_py.WebSocketDataQueue",
+      "method": "_read_from_buffer"
+    },
+    {
+      "class": "aiohttp._websocket.reader_py.WebSocketReader",
+      "method": "__init__"
+    },
+    {
+      "class": "aiohttp._websocket.reader_py.WebSocketReader",
+      "method": "_feed_data"
+    },
+    {
+      "class": "aiohttp._websocket.reader_py.WebSocketReader",
+      "method": "_handle_frame"
+    },
+    {
+      "class": "aiohttp.client_ws.ClientWebSocketResponse",
+      "method": "close"
+    },
+    {
+      "class": "aiohttp.compression_utils.ZLibDecompressor",
+      "method": "decompress_sync"
+    },
+    {
+      "class": "aiohttp.compression_utils.ZSTDDecompressor",
+      "method": "decompress_sync"
+    },
+    {
+      "class": "aiohttp.cookiejar.CookieJar",
+      "method": "__len__"
+    },
+    {
+      "class": "aiohttp.cookiejar.CookieJar",
+      "method": "_delete_cookies"
+    },
+    {
+      "class": "aiohttp.cookiejar.CookieJar",
+      "method": "_load_json_data"
+    },
+    {
+      "class": "aiohttp.cookiejar.CookieJar",
+      "method": "_update_cookies"
+    },
+    {
+      "class": "aiohttp.cookiejar.CookieJar",
+      "method": "clear"
+    },
+    {
+      "class": "aiohttp.cookiejar.CookieJar",
+      "method": "filter_cookies"
+    },
+    {
+      "class": "aiohttp.cookiejar.CookieJar",
+      "method": "load"
+    },
+    {
+      "class": "aiohttp.cookiejar.CookieJar",
+      "method": "update_cookies_from_headers"
+    },
+    {
+      "class": "aiohttp.multipart.BodyPartReader",
+      "method": "read_chunk"
+    },
+    {
+      "class": "aiohttp.web_protocol.RequestHandler",
+      "method": "_resume_msg_queue_reading"
+    },
+    {
+      "class": "aiohttp.web_protocol.RequestHandler",
+      "method": "data_received"
+    },
+    {
+      "class": "aiohttp.web_protocol.RequestHandler",
+      "method": "finish_response"
+    },
+    {
+      "class": "aiohttp.web_protocol.RequestHandler",
+      "method": "set_parser"
+    },
+    {
+      "class": "aiohttp.web_request.BaseRequest",
+      "method": "clone"
+    },
+    {
+      "class": "aiohttp.web_request.BaseRequest",
+      "method": "post"
+    },
+    {
+      "class": "aiohttp.web_urldispatcher.MaskDomain",
+      "method": "match_domain"
+    },
+    {
+      "class": "aiohttp.web_ws.WebSocketResponse",
+      "method": "close"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "09bcaa73ff084a0c539bbf16a0a78743acb7141f",
+      "0ae507423f681161efa77d20052b4054397c7fb6",
+      "3d850ee9b92573c7e913821cbcb96005beb3f4df",
+      "47babd8c23ca79e2bae6cc8dcb5752b61e369fc7",
+      "615fec3d4f088f30d2ee72cad760152e92aa1c53",
+      "6963ee0befec1502b6bb7b4db6c72d044c08f4fa",
+      "6a4f6682817839313b04b8e5cea2b39c1a88ab4f",
+      "8cfbe9abe5e11b84006a10f9bdf82bf607671dab",
+      "a555ab698e08e9baea7386d5b4c0761cb8956fdd",
+      "c6ac0e44c3c573ff9616f4a6a532992538b31e43",
+      "d925a80539ffd227da1d93ab4a5bff123cc777db"
+    ],
+    "excluded": [
+      {
+        "class": "aiohttp._cookie_helpers",
+        "method": "preserve_morsel_with_coded_value",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp._websocket.reader_py.WebSocketDataQueue",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp._websocket.reader_py.WebSocketDataQueue",
+        "method": "feed_data",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.client.ClientSession",
+        "method": "_request",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.client.ClientSession",
+        "method": "_ws_connect",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.client_ws.ClientWebSocketResponse",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.client_ws.ClientWebSocketResponse",
+        "method": "_handle_ping_pong_exception",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.client_ws.ClientWebSocketResponse",
+        "method": "receive",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.compression_utils.ZLibDecompressor",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.compression_utils.ZSTDDecompressor",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.compression_utils.ZSTDDecompressor",
+        "method": "data_available",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.cookiejar.CookieJar",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.cookiejar.CookieJar",
+        "method": "_do_expiration",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.http_parser.HttpParser",
+        "method": "feed_data",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.multipart.BodyPartReader",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.web_app.Application",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.web_app.Application",
+        "method": "_make_request",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.web_protocol.RequestHandler",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.web_request.BaseRequest",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.web_request.Request",
+        "method": "clone",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.web_urldispatcher.MaskDomain",
+        "method": "__init__",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.web_urldispatcher.MaskDomain",
+        "method": "canonical",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.web_ws.WebSocketResponse",
+        "method": "_handle_ping_pong_exception",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "aiohttp.web_ws.WebSocketResponse",
+        "method": "_post_start",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

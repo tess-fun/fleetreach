@@ -1,0 +1,33 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-38jr-29fh-w9vm",
+  "aliases": [
+    "CVE-2024-29189",
+    "PYSEC-2026-1127"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "ansys-geometry-core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ansys.geometry.core.connection.product_instance",
+      "method": "_start_program"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "902071701c4f3a8258cbaa46c28dc0a65442d1bc",
+      "f82346b9432b06532e84f3278125f5879b4e9f3f"
+    ],
+    "excluded": [
+      {
+        "class": "ansys.geometry.core.connection.product_instance",
+        "method": "prepare_and_start_backend",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

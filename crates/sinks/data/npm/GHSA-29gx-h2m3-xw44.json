@@ -1,0 +1,193 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-29gx-h2m3-xw44",
+  "aliases": [
+    "CVE-2026-106462"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@backstage/plugin-scaffolder-backend-module-gitlab"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "plugins/scaffolder-backend-module-azure/src/actions/azure.ts",
+      "method": "createPublishAzureAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-bitbucket-cloud/src/actions/bitbucketCloud.ts",
+      "method": "createPublishBitbucketCloudAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-bitbucket-cloud/src/actions/bitbucketCloudBranchRestriction.ts",
+      "method": "createBitbucketCloudBranchRestrictionAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-bitbucket-cloud/src/actions/bitbucketCloudPipelinesRun.ts",
+      "method": "createBitbucketPipelinesRunAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-bitbucket-cloud/src/actions/bitbucketCloudPullRequest.ts",
+      "method": "createPublishBitbucketCloudPullRequestAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-bitbucket-cloud/src/module.ts",
+      "method": "register"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-bitbucket-server/src/actions/bitbucketServer.ts",
+      "method": "createPublishBitbucketServerAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-bitbucket-server/src/actions/bitbucketServerPullRequest.ts",
+      "method": "createPublishBitbucketServerPullRequestAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/actions/github.ts",
+      "method": "createPublishGithubAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/actions/githubActionsDispatch.ts",
+      "method": "createGithubActionsDispatchAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/actions/githubAutolinks.ts",
+      "method": "createGithubAutolinksAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/actions/githubBranchProtection.ts",
+      "method": "createGithubBranchProtectionAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/actions/githubDeployKey.ts",
+      "method": "createGithubDeployKeyAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/actions/githubEnvironment.ts",
+      "method": "createGithubEnvironmentAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/actions/githubIssuesCreate.ts",
+      "method": "createGithubIssuesCreateAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/actions/githubIssuesLabel.ts",
+      "method": "createGithubIssuesLabelAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/actions/githubPagesEnable.ts",
+      "method": "createGithubPagesEnableAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/actions/githubPullRequest.ts",
+      "method": "createPublishGithubPullRequestAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/actions/githubRepoCreate.ts",
+      "method": "createGithubRepoCreateAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/actions/githubRepoPush.ts",
+      "method": "createGithubRepoPushAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/actions/githubWebhook.ts",
+      "method": "createGithubWebhookAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/module.ts",
+      "method": "register"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-github/src/util.ts",
+      "method": "getOctokitOptions"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/actions/gitlab.ts",
+      "method": "createPublishGitlabAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/actions/gitlabGroupAccessAction.ts",
+      "method": "createGitlabGroupAccessAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/actions/gitlabGroupEnsureExists.ts",
+      "method": "createGitlabGroupEnsureExistsAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/actions/gitlabIssueCreate.ts",
+      "method": "createGitlabIssueAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/actions/gitlabIssueEdit.ts",
+      "method": "editGitlabIssueAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/actions/gitlabMergeRequest.ts",
+      "method": "createPublishGitlabMergeRequestAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/actions/gitlabPipelineTrigger.ts",
+      "method": "createTriggerGitlabPipelineAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/actions/gitlabProjectAccessTokenCreate.ts",
+      "method": "createGitlabProjectAccessTokenAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/actions/gitlabProjectDeployTokenCreate.ts",
+      "method": "createGitlabProjectDeployTokenAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/actions/gitlabProjectVariableCreate.ts",
+      "method": "createGitlabProjectVariableAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/actions/gitlabRepoPush.ts",
+      "method": "createGitlabRepoPushAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/actions/helpers.ts",
+      "method": "createGitlabApi"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/module.ts",
+      "method": "register"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/util.ts",
+      "method": "getClient"
+    },
+    {
+      "class": "plugins/scaffolder-backend-module-gitlab/src/util.ts",
+      "method": "getToken"
+    },
+    {
+      "class": "plugins/scaffolder-backend/src/ScaffolderPlugin.ts",
+      "method": "register"
+    },
+    {
+      "class": "plugins/scaffolder-backend/src/scaffolder/actions/builtin/fetch/plain.ts",
+      "method": "createFetchPlainAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend/src/scaffolder/actions/builtin/fetch/plainFile.ts",
+      "method": "createFetchPlainFileAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend/src/scaffolder/actions/builtin/fetch/template.ts",
+      "method": "createFetchTemplateAction"
+    },
+    {
+      "class": "plugins/scaffolder-backend/src/scaffolder/actions/builtin/fetch/templateFile.ts",
+      "method": "createFetchTemplateFileAction"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "6fb2a41ea47da37eafe5ea744050",
+      "6fb2a41ea47da37eafe5ea744050ef90be6820c0"
+    ]
+  }
+}

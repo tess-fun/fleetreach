@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2j79-8pqc-r7x6",
+  "aliases": [
+    "CVE-2022-24373"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "react-native-reanimated"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "7adf06d0c59382d884a04be86a96eede3d0432fa",
+      "8a927904366fa2d02df7a11553f8b0aa93471279"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

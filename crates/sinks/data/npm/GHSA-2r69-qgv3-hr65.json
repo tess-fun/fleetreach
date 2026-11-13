@@ -1,0 +1,28 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2r69-qgv3-hr65",
+  "aliases": [
+    "CVE-2026-45245"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@steipete/summarize"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "apps/chrome-extension/src/entrypoints/background/hover-controller.ts",
+      "method": "createHoverController"
+    },
+    {
+      "class": "apps/chrome-extension/src/entrypoints/hover.content.ts",
+      "method": "main"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "ecbb2c414255aa480a15d0d8b205224c14cfdbcb"
+    ]
+  }
+}

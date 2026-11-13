@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2cm2-m3w5-gp2f",
+  "aliases": [
+    "CVE-2026-92963"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "vm2"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/setup-sandbox.js",
+      "method": "isHostFrameFileName"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "99d410bb7e0d607c56e68b420720a586dc0dd300"
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-32pc-xphx-q4f6",
+  "aliases": [
+    "CVE-2018-1000164",
+    "PYSEC-2018-55"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "gunicorn"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "gunicorn.http.wsgi.Response",
+      "method": "process_headers"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "1e10a02e73c87dfadc394b361af33864d0e59e24"
+    ]
+  }
+}

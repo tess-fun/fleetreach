@@ -1,0 +1,44 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-339m-4qw5-j2g3",
+  "aliases": [
+    "CVE-2026-23946",
+    "PYSEC-2026-1950"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "tendenci"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "tendenci.apps.helpdesk.views.staff",
+      "method": "run_report"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "23d9fd85ab7654e9c83cfc86cb4175c0bd7a77f1",
+      "2ff0a457614944a1b417081c543ea4c5bb95d636",
+      "63e1b84a5b163466d1d8d811d35e7021a7ca0d0e"
+    ],
+    "excluded": [
+      {
+        "class": "tendenci.apps.helpdesk.views.staff",
+        "method": "save_query",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "tendenci.apps.imports.views",
+        "method": "user_upload_recap",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "tendenci.apps.imports.views",
+        "method": "user_upload_subprocess",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

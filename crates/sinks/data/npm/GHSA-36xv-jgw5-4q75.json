@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-36xv-jgw5-4q75",
+  "aliases": [
+    "CVE-2026-35515"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@nestjs/core"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "83558ae774a990a7916141d3abe0b6548ff3a8b2"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-25g8-2mcf-fcx9",
+  "aliases": [
+    "CVE-2026-29065",
+    "PYSEC-2026-2129"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "changedetection-io"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "changedetectionio.blueprint.backups",
+      "method": "construct_blueprint"
+    },
+    {
+      "class": "changedetectionio.blueprint.backups",
+      "method": "create_backup"
+    },
+    {
+      "class": "changedetectionio.blueprint.backups.restore",
+      "method": "construct_restore_blueprint"
+    },
+    {
+      "class": "changedetectionio.blueprint.backups.restore",
+      "method": "import_from_zip"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "1d7d812eb0faab37042246e2fbce04f29bb1b3aa"
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2j2x-2gpw-g8fm",
+  "aliases": [
+    "CVE-2020-36632"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "flat"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "index.js",
+      "method": "unflatten"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "20ef0ef55dfa028caddaedbcb33efbdb04d18e13"
+    ]
+  }
+}

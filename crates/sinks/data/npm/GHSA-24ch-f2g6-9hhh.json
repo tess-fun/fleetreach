@@ -1,0 +1,49 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-24ch-f2g6-9hhh",
+  "aliases": [
+    "CVE-2026-107298"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "msgpack5"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/decoder.js",
+      "method": "buildDecode"
+    },
+    {
+      "class": "lib/decoder.js",
+      "method": "decodeArray"
+    },
+    {
+      "class": "lib/decoder.js",
+      "method": "decodeMap"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "1e2b5874e555dd7c99417f64788a03b0590bb102"
+    ],
+    "excluded": [
+      {
+        "class": "index.js",
+        "method": "msgpack",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "lib/decoder.js",
+        "method": "decodeItems",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "lib/decoder.js",
+        "method": "tryDecode",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

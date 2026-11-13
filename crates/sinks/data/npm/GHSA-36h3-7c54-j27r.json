@@ -1,0 +1,40 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-36h3-7c54-j27r",
+  "aliases": [
+    "CVE-2026-32054"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/browser/routes/agent.act.ts",
+      "method": "resolveDownloadPathOrRespond"
+    },
+    {
+      "class": "src/infra/tmp-openclaw-dir.ts",
+      "method": "resolvePreferredOpenClawTmpDir"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "496a76c03ba85e15ea715e5a583e498ae04d36e3"
+    ],
+    "excluded": [
+      {
+        "class": "src/browser/routes/agent.act.ts",
+        "method": "registerBrowserAgentActRoutes",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/browser/routes/agent.debug.ts",
+        "method": "registerBrowserAgentDebugRoutes",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

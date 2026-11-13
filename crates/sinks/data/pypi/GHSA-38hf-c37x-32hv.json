@@ -1,0 +1,21 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-38hf-c37x-32hv",
+  "aliases": [
+    "CVE-2022-40922",
+    "PYSEC-2022-43138"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "lief"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "ad811916670e83947560b6f3c45df6e71d3885af",
+      "fde2c48986739fabd2cf9b40b9af149a89c57850"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

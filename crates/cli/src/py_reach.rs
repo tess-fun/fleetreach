@@ -147,9 +147,9 @@ fn analyze(repo_dir: &Path) -> Analysis {
 }
 
 /// Where a repo's first-party Python source and installed environments are.
-struct Layout {
-    source_files: Vec<PathBuf>,
-    site_dirs: Vec<PathBuf>,
+pub(crate) struct Layout {
+    pub(crate) source_files: Vec<PathBuf>,
+    pub(crate) site_dirs: Vec<PathBuf>,
     /// Top-level module names the repo itself provides: every entry at the repo root and
     /// directly under a `src/` directory (`posthog`, `products`, …). An import of one of these
     /// is first-party code, never a distribution.
@@ -160,7 +160,7 @@ impl Layout {
     /// Walk `repo_dir`: a directory holding `pyvenv.cfg` is a virtualenv, whose
     /// `site-packages` is read as an environment and which is not searched for source; every
     /// other `.py` file is first-party.
-    fn discover(repo_dir: &Path) -> Layout {
+    pub(crate) fn discover(repo_dir: &Path) -> Layout {
         let mut layout = Layout {
             source_files: Vec::new(),
             site_dirs: Vec::new(),

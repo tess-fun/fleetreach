@@ -1,0 +1,35 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2933-q333-qg83",
+  "aliases": [
+    "CVE-2026-48713"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "i18next-fs-backend"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/utils.js",
+      "method": "getLastOfPath"
+    },
+    {
+      "class": "lib/utils.js",
+      "method": "setPath"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "3ab0448087da6935a40117f904b7457281f963f4"
+    ],
+    "excluded": [
+      {
+        "class": "lib/utils.js",
+        "method": "pushPath",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

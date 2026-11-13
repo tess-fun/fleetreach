@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-356w-63v5-8wf4",
+  "aliases": [
+    "CVE-2025-32395"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "vite"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "packages/vite/src/node/server/index.ts",
+      "method": "_createServer"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "175a83909f02d3b554452a7bd02b9f340cdfef70"
+    ]
+  }
+}

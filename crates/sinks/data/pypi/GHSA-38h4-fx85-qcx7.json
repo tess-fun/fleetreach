@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-38h4-fx85-qcx7",
+  "aliases": [
+    "CVE-2025-26623",
+    "PYSEC-2026-1353"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "exiv2"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "4cc875e392f9e0bc705fe03d929b9a382b78dae4"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

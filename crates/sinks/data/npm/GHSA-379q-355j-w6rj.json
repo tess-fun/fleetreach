@@ -1,0 +1,46 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-379q-355j-w6rj",
+  "aliases": [
+    "CVE-2025-69264"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "pnpm"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "pkg-manager/resolve-dependencies/src/resolveDependencies.ts",
+      "method": "resolveDependency"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "73cc63504d9bc360c43e4b2feb9080677f03c5b5"
+    ],
+    "excluded": [
+      {
+        "class": "config/config/src/index.ts",
+        "method": "getConfig",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "pkg-manager/core/src/install/extendInstallOptions.ts",
+        "method": "defaults",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "pkg-manager/core/src/install/index.ts",
+        "method": "_installInContext",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "pkg-manager/resolve-dependencies/src/resolveDependencyTree.ts",
+        "method": "resolveDependencyTree",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2473-9hgq-j7xw",
+  "aliases": [
+    "CVE-2020-15118",
+    "PYSEC-2020-154"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "wagtail"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "wagtail.contrib.forms.forms.FormBuilder",
+      "method": "get_field_options"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "d9a41e7f24d08c024acc9a3094940199df94db34"
+    ]
+  }
+}

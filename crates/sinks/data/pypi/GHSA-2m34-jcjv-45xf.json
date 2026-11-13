@@ -1,0 +1,27 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2m34-jcjv-45xf",
+  "aliases": [
+    "BIT-django-2020-13596",
+    "CVE-2020-13596",
+    "PYSEC-2020-32"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "django"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "django.contrib.admin.widgets.ForeignKeyRawIdWidget",
+      "method": "get_context"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "1f2dd37f6fcefdd10ed44cb233b2e62b520afb38",
+      "6d61860b22875f358fac83d903dc629897934815"
+    ]
+  }
+}

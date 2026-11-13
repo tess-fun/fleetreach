@@ -1,0 +1,39 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-29hq-23m2-2j47",
+  "aliases": [
+    "CVE-2026-58272"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@sync-in/server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "backend/src/authentication/providers/ldap/auth-provider-ldap.service.ts.AuthProviderLDAP",
+      "method": "validateUser"
+    },
+    {
+      "class": "backend/src/authentication/providers/mysql/auth-provider-mysql.service.ts.AuthProviderMySQL",
+      "method": "validateUser"
+    },
+    {
+      "class": "backend/src/authentication/providers/oidc/auth-provider-oidc.service.ts.AuthProviderOIDC",
+      "method": "validateUser"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "b80efe04574039a7a302c0e1007f03a7dbe6a633"
+    ],
+    "excluded": [
+      {
+        "class": "backend/src/applications/users/services/users-manager.service.ts.UsersManager",
+        "method": "validateAppPassword",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

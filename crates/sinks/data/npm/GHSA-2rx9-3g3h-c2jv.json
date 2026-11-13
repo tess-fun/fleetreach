@@ -1,0 +1,41 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2rx9-3g3h-c2jv",
+  "ecosystem": "npm",
+  "packages": [
+    "pnpm"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "pnpm11/deps/graph-builder/src/lockfileToDepGraph.ts",
+      "method": "buildGraphFromPackages"
+    },
+    {
+      "class": "pnpm11/deps/graph-hasher/src/index.ts",
+      "method": "formatGlobalVirtualStorePath"
+    },
+    {
+      "class": "pnpm11/installing/deps-resolver/src/index.ts",
+      "method": "extendGraph"
+    },
+    {
+      "class": "pnpm11/installing/deps-resolver/src/resolvePeers.ts",
+      "method": "resolvePeersOfNode"
+    },
+    {
+      "class": "pnpm11/installing/env-installer/src/installConfigDeps.ts",
+      "method": "installOptionalSubdeps"
+    },
+    {
+      "class": "pnpm11/lockfile/to-pnp/src/index.ts",
+      "method": "lockfileToPackageRegistry"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "51300fd41c5e4c8f47635108e373cc3d1f324fa7"
+    ]
+  }
+}

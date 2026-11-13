@@ -1,0 +1,81 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2xp3-57p7-qf4v",
+  "aliases": [
+    "CVE-2024-32962"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "xml-crypto"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/file-key-info.js",
+      "method": "FileKeyInfo"
+    },
+    {
+      "class": "lib/signed-xml.js",
+      "method": "SignedXml"
+    },
+    {
+      "class": "lib/signed-xml.js.SignedXml",
+      "method": "checkSignature"
+    },
+    {
+      "class": "lib/signed-xml.js.SignedXml",
+      "method": "getKeyInfo"
+    },
+    {
+      "class": "lib/string-key-info.js",
+      "method": "StringKeyInfo"
+    },
+    {
+      "class": "lib/string-key-info.js.StringKeyInfo",
+      "method": "getKey"
+    },
+    {
+      "class": "lib/string-key-info.js.StringKeyInfo",
+      "method": "getKeyInfo"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "21201723d2ca9bc11288f62cf72552b7d659b000",
+      "c2b83f984049edb68ad1d7c6ad0739ec92af11ca"
+    ],
+    "excluded": [
+      {
+        "class": "lib/signed-xml.js.SignedXml",
+        "method": "enableHMAC",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "lib/signed-xml.js.SignedXml",
+        "method": "findCanonicalizationAlgorithm",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "lib/signed-xml.js.SignedXml",
+        "method": "findHashAlgorithm",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "lib/signed-xml.js.SignedXml",
+        "method": "findSignatureAlgorithm",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "lib/signed-xml.js.SignedXml",
+        "method": "validateSignatureValue",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "src/signed-xml.ts.SignedXml",
+        "method": "constructor",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

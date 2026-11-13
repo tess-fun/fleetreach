@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-247c-9743-5963",
+  "aliases": [
+    "CVE-2025-32442",
+    "CVE-2026-33806",
+    "GHSA-mg2h-6x62-wpwc"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "fastify"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "lib/validation.js",
+      "method": "getEssenceMediaType"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "f3d2bcb3963cd570a582e5d39aab01a9ae692fe4"
+    ]
+  }
+}

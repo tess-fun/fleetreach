@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-25wv-8phj-8p7r",
+  "aliases": [
+    "CVE-2026-41913"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "d7c3210cd6f5fdfdc1beff4c9541673e814354d5"
+    ],
+    "excluded": [
+      {
+        "class": "src/infra/net/fetch-guard.ts",
+        "method": "fetchWithSsrFGuard",
+        "reason": "only comments, braces, imports or logging changed"
+      }
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

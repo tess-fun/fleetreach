@@ -1,0 +1,87 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2g95-wg33-c5x2",
+  "aliases": [
+    "CVE-2026-112906"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "filelock"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "filelock._lease.SoftFileLease",
+      "method": "_try_break_stale_lock"
+    },
+    {
+      "class": "filelock._marker.MarkerSoftFileLock",
+      "method": "_try_break_stale_lock"
+    },
+    {
+      "class": "filelock._soft.SoftFileLock",
+      "method": "_acquire"
+    },
+    {
+      "class": "filelock._soft.SoftFileLock",
+      "method": "_try_break_stale_lock"
+    },
+    {
+      "class": "filelock._soft.SoftFileLock",
+      "method": "_unlink_open_marker"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "740ff666b62a88496c8d7394e4e6230605e4d62b"
+    ],
+    "excluded": [
+      {
+        "class": "filelock._api.BaseFileLock",
+        "method": "_try_break_expired_lock",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "filelock._lease.SoftFileLease",
+        "method": "_read_peer",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "filelock._lease._RefreshLoop",
+        "method": "run",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "filelock._soft",
+        "method": "_read_lock_file",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "filelock._soft.SoftFileLock",
+        "method": "_marker_unchanged_for",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "filelock._soft.SoftFileLock",
+        "method": "_release",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "filelock._soft.SoftFileLock",
+        "method": "_unlink_held_marker",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "filelock._unix.UnixFileLock",
+        "method": "_switch_to_soft_lock",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "filelock._util",
+        "method": "break_lock_file",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

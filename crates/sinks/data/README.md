@@ -10,8 +10,10 @@ person: neither jar diffs nor fix-commit diffs find sinks precisely enough to ac
 unreviewed. JVM reachability may use a `proposed` record only to say a sink is reached, never
 that it is not.
 
-Records for PyPI (`module.Class.name`) and npm (`repo/path.js.Class.name`) validate too,
-without descriptors or deny lists, but none are shipped yet: scans read Maven records only.
+Records for PyPI (`pypi/`, `module.Class.name`) and npm (`npm/`, `repo/path.js.Class.name`)
+have no descriptors or deny lists. The 284 PyPI and 289 npm records are `sinkpropose` output,
+all `proposed`: `scan --reachability` uses them only for call-chain witnesses, and skips a
+proposed record with more than 10 sinks as too broad.
 
 ## Status of the seed data
 

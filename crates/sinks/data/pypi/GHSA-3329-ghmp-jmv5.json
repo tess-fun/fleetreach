@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3329-ghmp-jmv5",
+  "aliases": [
+    "CVE-2025-71365",
+    "PYSEC-2026-4131"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "picklescan"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "picklescan.scanner",
+      "method": "_build_scan_result_from_raw_globals"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "70c1c6c31beb6baaf52c8db1b6c3c0e84a6f9dab"
+    ]
+  }
+}

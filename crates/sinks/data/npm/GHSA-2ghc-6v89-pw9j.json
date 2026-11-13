@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2ghc-6v89-pw9j",
+  "aliases": [
+    "CVE-2021-3666"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "body-parser-xml"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "d46ca622560f7c9a033cd9321c61e92558150d63"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

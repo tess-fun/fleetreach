@@ -1,0 +1,42 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-33qv-c5qm-799v",
+  "aliases": [
+    "CVE-2026-10223",
+    "PYSEC-2026-3575"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "hermes-agent"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "tools.memory_tool",
+      "method": "_scan_memory_content"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "0dee92df22bdc0cfbcad90ca954aa14916f018de"
+    ],
+    "excluded": [
+      {
+        "class": "agent.prompt_builder",
+        "method": "_scan_context_content",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "agent.tool_dispatch_helpers",
+        "method": "make_tool_result_message",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "tools.memory_tool.MemoryStore",
+        "method": "load_from_disk",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

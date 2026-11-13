@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2rgf-hm63-5qph",
+  "aliases": [
+    "CVE-2026-32029"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/gateway/net.ts",
+      "method": "parseForwardedForClientIp"
+    },
+    {
+      "class": "src/gateway/net.ts",
+      "method": "resolveGatewayClientIp"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "07039dc089e51589a213ec0d16f8d6f2cd871fa1",
+      "8877bfd11ec7760b115b2d0d7500a45da2749747"
+    ]
+  }
+}

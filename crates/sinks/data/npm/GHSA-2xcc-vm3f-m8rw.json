@@ -1,0 +1,31 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2xcc-vm3f-m8rw",
+  "aliases": [
+    "CVE-2024-32965"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@lobehub/chat"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/app/api/proxy/route.ts",
+      "method": "POST"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "e960a23b0c69a5762eb27d776d33dac443058faf"
+    ],
+    "excluded": [
+      {
+        "class": "src/services/user/client.ts.ClientService",
+        "method": "getUserState",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

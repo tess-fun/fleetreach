@@ -1,0 +1,743 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2qmj-7962-cjq8",
+  "aliases": [
+    "CVE-2023-36258",
+    "PYSEC-2023-98"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "langchain"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "langchain.chains.pal.base.PALChain",
+      "method": "_call"
+    },
+    {
+      "class": "langchain.chains.pal.base.PALChain",
+      "method": "from_colored_object_prompt"
+    },
+    {
+      "class": "langchain.chains.pal.base.PALChain",
+      "method": "from_math_prompt"
+    },
+    {
+      "class": "libs.experimental.langchain_experimental.pal_chain.base.PALChain",
+      "method": "raise_deprecation"
+    },
+    {
+      "class": "libs.langchain.langchain.chains.pal.base.PALChain",
+      "method": "_call"
+    },
+    {
+      "class": "libs.langchain.langchain.chains.pal.base.PALChain",
+      "method": "_chain_type"
+    },
+    {
+      "class": "libs.langchain.langchain.chains.pal.base.PALChain",
+      "method": "from_colored_object_prompt"
+    },
+    {
+      "class": "libs.langchain.langchain.chains.pal.base.PALChain",
+      "method": "from_math_prompt"
+    },
+    {
+      "class": "libs.langchain.langchain.chains.pal.base.PALChain",
+      "method": "input_keys"
+    },
+    {
+      "class": "libs.langchain.langchain.chains.pal.base.PALChain",
+      "method": "output_keys"
+    },
+    {
+      "class": "libs.langchain.langchain.chains.pal.base.PALChain",
+      "method": "raise_deprecation"
+    },
+    {
+      "class": "libs.langchain.langchain.chains.pal.base.PALChain",
+      "method": "validate_code"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "8ba9835b925473655914f63822775679e03ea137",
+      "e294ba475a355feb95003ed8f1a2b99942509a9e",
+      "fab24457bcf8ede882abd11419769c92bc4e7751"
+    ],
+    "excluded": [
+      {
+        "class": "langchain.chains.pal.base.PALChain",
+        "method": "raise_deprecation",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "langchain.utilities.python.PythonREPL",
+        "method": "run",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.experimental.langchain_experimental.pal_chain.base.PALChain",
+        "method": "input_keys",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      },
+      {
+        "class": "libs.langchain.langchain.agents.load_tools",
+        "method": "_get_pal_colored_objects",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.agents.load_tools",
+        "method": "_get_pal_math",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.chains.loading",
+        "method": "_load_pal_chain",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.chains.loading",
+        "method": "_load_sql_database_chain",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.chains.pal.base.PALValidation",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.chains.sql_database.base.SQLDatabaseChain",
+        "method": "_call",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.chains.sql_database.base.SQLDatabaseChain",
+        "method": "_chain_type",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.chains.sql_database.base.SQLDatabaseChain",
+        "method": "from_llm",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.chains.sql_database.base.SQLDatabaseChain",
+        "method": "input_keys",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.chains.sql_database.base.SQLDatabaseChain",
+        "method": "output_keys",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.chains.sql_database.base.SQLDatabaseChain",
+        "method": "raise_deprecation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.chains.sql_database.base.SQLDatabaseSequentialChain",
+        "method": "_call",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.chains.sql_database.base.SQLDatabaseSequentialChain",
+        "method": "_chain_type",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.chains.sql_database.base.SQLDatabaseSequentialChain",
+        "method": "from_llm",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.chains.sql_database.base.SQLDatabaseSequentialChain",
+        "method": "input_keys",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.chains.sql_database.base.SQLDatabaseSequentialChain",
+        "method": "output_keys",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.agent.AutoGPT",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.agent.AutoGPT",
+        "method": "from_llm_and_tools",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.agent.AutoGPT",
+        "method": "run",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.memory.AutoGPTMemory",
+        "method": "_get_prompt_input_key",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.memory.AutoGPTMemory",
+        "method": "load_memory_variables",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.memory.AutoGPTMemory",
+        "method": "memory_variables",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.output_parser",
+        "method": "preprocess_json_input",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.output_parser.AutoGPTOutputParser",
+        "method": "parse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.output_parser.BaseAutoGPTOutputParser",
+        "method": "parse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.prompt.AutoGPTPrompt",
+        "method": "construct_full_prompt",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.prompt.AutoGPTPrompt",
+        "method": "format_messages",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.prompt_generator",
+        "method": "get_prompt",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.prompt_generator.PromptGenerator",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.prompt_generator.PromptGenerator",
+        "method": "_generate_command_string",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.prompt_generator.PromptGenerator",
+        "method": "_generate_numbered_list",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.prompt_generator.PromptGenerator",
+        "method": "add_constraint",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.prompt_generator.PromptGenerator",
+        "method": "add_performance_evaluation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.prompt_generator.PromptGenerator",
+        "method": "add_resource",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.prompt_generator.PromptGenerator",
+        "method": "add_tool",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.autogpt.prompt_generator.PromptGenerator",
+        "method": "generate_prompt_string",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.baby_agi.BabyAGI",
+        "method": "_call",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.baby_agi.BabyAGI",
+        "method": "_get_top_tasks",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.baby_agi.BabyAGI",
+        "method": "add_task",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.baby_agi.BabyAGI",
+        "method": "execute_task",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.baby_agi.BabyAGI",
+        "method": "from_llm",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.baby_agi.BabyAGI",
+        "method": "get_next_task",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.baby_agi.BabyAGI",
+        "method": "input_keys",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.baby_agi.BabyAGI",
+        "method": "output_keys",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.baby_agi.BabyAGI",
+        "method": "print_next_task",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.baby_agi.BabyAGI",
+        "method": "print_task_list",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.baby_agi.BabyAGI",
+        "method": "print_task_result",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.baby_agi.BabyAGI",
+        "method": "prioritize_tasks",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.task_creation.TaskCreationChain",
+        "method": "from_llm",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.task_execution.TaskExecutionChain",
+        "method": "from_llm",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.autonomous_agents.baby_agi.task_prioritization.TaskPrioritizationChain",
+        "method": "from_llm",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.base.CPALChain",
+        "method": "_call",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.base.CPALChain",
+        "method": "draw",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.base.CPALChain",
+        "method": "from_univariate_prompt",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.base._BaseStoryElementChain",
+        "method": "_call",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.base._BaseStoryElementChain",
+        "method": "from_univariate_prompt",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.base._BaseStoryElementChain",
+        "method": "input_keys",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.base._BaseStoryElementChain",
+        "method": "output_keys",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.base._BaseStoryElementChain",
+        "method": "parser",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.models.EntityModel",
+        "method": "lower_case_name",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.models.EntitySettingModel",
+        "method": "lower_case_transform",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.models.InterventionModel",
+        "method": "lower_case_name",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.models.NarrativeModel",
+        "method": "empty_str_to_none",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.models.StoryModel",
+        "method": "__init__",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.models.StoryModel",
+        "method": "_block_back_door_paths",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.models.StoryModel",
+        "method": "_compute",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.models.StoryModel",
+        "method": "_forward_propagate",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.models.StoryModel",
+        "method": "_make_graph",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.models.StoryModel",
+        "method": "_run_query",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.models.StoryModel",
+        "method": "_set_initial_conditions",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.models.StoryModel",
+        "method": "_sort_entities",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.models.StoryModel",
+        "method": "check_intervention_is_valid",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.cpal.models.StoryModel",
+        "method": "print_debug_report",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.generative_agent.GenerativeAgent",
+        "method": "_clean_response",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.generative_agent.GenerativeAgent",
+        "method": "_compute_agent_summary",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.generative_agent.GenerativeAgent",
+        "method": "_generate_reaction",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.generative_agent.GenerativeAgent",
+        "method": "_get_entity_action",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.generative_agent.GenerativeAgent",
+        "method": "_get_entity_from_observation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.generative_agent.GenerativeAgent",
+        "method": "_parse_list",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.generative_agent.GenerativeAgent",
+        "method": "chain",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.generative_agent.GenerativeAgent",
+        "method": "generate_dialogue_response",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.generative_agent.GenerativeAgent",
+        "method": "generate_reaction",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.generative_agent.GenerativeAgent",
+        "method": "get_full_header",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.generative_agent.GenerativeAgent",
+        "method": "get_summary",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.generative_agent.GenerativeAgent",
+        "method": "summarize_related_memories",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "_format_memory_detail",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "_get_insights_on_topic",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "_get_memories_until_limit",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "_get_topics_of_reflection",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "_parse_list",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "_score_memories_importance",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "_score_memory_importance",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "add_memories",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "add_memory",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "chain",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "clear",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "fetch_memories",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "format_memories_detail",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "format_memories_simple",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "load_memory_variables",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "memory_variables",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "pause_to_reflect",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.generative_agents.memory.GenerativeAgentMemory",
+        "method": "save_context",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.llms.jsonformer_decoder",
+        "method": "import_jsonformer",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.llms.jsonformer_decoder.JsonFormer",
+        "method": "_call",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.llms.jsonformer_decoder.JsonFormer",
+        "method": "check_jsonformer_installation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.llms.rellm_decoder",
+        "method": "import_rellm",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.llms.rellm_decoder.RELLM",
+        "method": "_call",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.llms.rellm_decoder.RELLM",
+        "method": "check_rellm_installation",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.agent_executor.PlanAndExecute",
+        "method": "_acall",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.agent_executor.PlanAndExecute",
+        "method": "_call",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.agent_executor.PlanAndExecute",
+        "method": "input_keys",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.agent_executor.PlanAndExecute",
+        "method": "output_keys",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.executors.agent_executor",
+        "method": "load_agent_executor",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.executors.base.BaseExecutor",
+        "method": "astep",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.executors.base.BaseExecutor",
+        "method": "step",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.executors.base.ChainExecutor",
+        "method": "astep",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.executors.base.ChainExecutor",
+        "method": "step",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.planners.base.BasePlanner",
+        "method": "aplan",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.planners.base.BasePlanner",
+        "method": "plan",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.planners.base.LLMPlanner",
+        "method": "aplan",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.planners.base.LLMPlanner",
+        "method": "plan",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.planners.chat_planner",
+        "method": "load_chat_planner",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.planners.chat_planner.PlanningOutputParser",
+        "method": "parse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.schema.BaseStepContainer",
+        "method": "add_step",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.schema.BaseStepContainer",
+        "method": "get_final_response",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.schema.ListStepContainer",
+        "method": "add_step",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.schema.ListStepContainer",
+        "method": "get_final_response",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.schema.ListStepContainer",
+        "method": "get_steps",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.experimental.plan_and_execute.schema.PlanOutputParser",
+        "method": "parse",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "libs.langchain.langchain.prompts.loading",
+        "method": "_load_prompt_from_file",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

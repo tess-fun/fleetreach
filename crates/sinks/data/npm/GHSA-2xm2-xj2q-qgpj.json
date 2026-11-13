@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2xm2-xj2q-qgpj",
+  "aliases": [
+    "BIT-parse-2020-15270",
+    "CVE-2020-15270"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "parse-server"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "78b59fb26b1c36e3cdbd42ba9fec025003267f58"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2rcp-jvr4-r259",
+  "aliases": [
+    "CVE-2023-46115"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "@tauri-apps/cli"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "8b166e9bf82e69ddb3200a3a825614980bd8d433"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

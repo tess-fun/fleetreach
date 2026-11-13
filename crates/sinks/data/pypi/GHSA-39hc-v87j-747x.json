@@ -1,0 +1,17 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-39hc-v87j-747x",
+  "ecosystem": "PyPI",
+  "packages": [
+    "cryptography"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "382e759bcded5773330eeed748c86b213ec618c5",
+      "cf2ada625d1188d6cd46396f301b98095da577f7"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

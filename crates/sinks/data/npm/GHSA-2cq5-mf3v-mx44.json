@@ -1,0 +1,36 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2cq5-mf3v-mx44",
+  "aliases": [
+    "CVE-2026-43530"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/node-host/invoke-system-run-plan.ts",
+      "method": "isMutableScriptRunner"
+    },
+    {
+      "class": "src/node-host/invoke-system-run-plan.ts",
+      "method": "requiresStableInterpreterApprovalBindingWithShellCommand"
+    },
+    {
+      "class": "src/node-host/invoke-system-run-plan.ts",
+      "method": "resolveMutableFileOperandIndex"
+    },
+    {
+      "class": "src/node-host/invoke-system-run-plan.ts",
+      "method": "unwrapArgvForMutableOperand"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "666f48d9b882a8a1415ca53f9567c72499d850c9"
+    ]
+  }
+}

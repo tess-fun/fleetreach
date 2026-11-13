@@ -1,0 +1,39 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-22jm-4hxw-35jf",
+  "aliases": [
+    "CVE-2015-9543",
+    "PYSEC-2026-857"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "nova"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "nova.console.websocketproxy.NovaProxyRequestHandlerBase",
+      "method": "new_websocket_client"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "08f1f914cc219cf526adfb08c46b8f40b4e78232",
+      "26d4047e17eba9bc271f8868f1d0ffeec97b555e",
+      "d8fbf04f325f593836f8d44b6bbf42b85bde94e3"
+    ],
+    "excluded": [
+      {
+        "class": "nova.consoleauth.manager.ConsoleAuthManager",
+        "method": "authorize_console",
+        "reason": "the advisory names other methods of this fix"
+      },
+      {
+        "class": "nova.consoleauth.manager.ConsoleAuthManager",
+        "method": "check_token",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

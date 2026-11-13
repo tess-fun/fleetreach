@@ -1,0 +1,21 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-22hf-vx2v-gjff",
+  "aliases": [
+    "BIT-airflow-2026-49487",
+    "CVE-2026-49487",
+    "PYSEC-2026-2088"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "apache-airflow"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "9101aa66754af052ba5010a5fce9f8fa4140e6c7"
+    ]
+  },
+  "note": "the fix changes no Python function that exists in the vulnerable version; it also changes JavaScript files, which this ecosystem's call graph does not read"
+}

@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-22c2-9gwg-mj59",
+  "aliases": [
+    "CVE-2025-46725",
+    "PYSEC-2026-1531"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "langroid"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "langroid.vector_store.base.VectorStore",
+      "method": "compute_from_docs"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "0d9e4a7bb3ae2eef8d38f2e970ff916599a2b2a6"
+    ],
+    "excluded": [
+      {
+        "class": "langroid.agent.special.table_chat_agent.TableChatAgent",
+        "method": "pandas_eval",
+        "reason": "the advisory names other methods of this fix"
+      }
+    ]
+  }
+}

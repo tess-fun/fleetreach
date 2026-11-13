@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2mc2-g238-722j",
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/auto-reply/reply/stage-sandbox-media.ts",
+      "method": "scpFile"
+    },
+    {
+      "class": "src/imessage/monitor/monitor-provider.ts",
+      "method": "monitorIMessageProvider"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "49d0def6d1e88f002026b1d2a35aa615d48a751a"
+    ],
+    "excluded": [
+      {
+        "class": "src/infra/ssh-tunnel.ts",
+        "method": "startSshPortForward",
+        "reason": "plumbing: only passes a new argument or renames a call"
+      }
+    ]
+  }
+}

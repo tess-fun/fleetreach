@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2ww6-868g-2c56",
+  "aliases": [
+    "CVE-2026-32040"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "f3adf142c195000cbde31200626a1d8c8b716df9"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

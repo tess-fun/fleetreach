@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-23r4-5mxp-c7g5",
+  "aliases": [
+    "BIT-parse-2021-39138",
+    "CVE-2021-39138"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "parse-server"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "src/RestWrite.js.RestWrite",
+      "method": "createSessionToken"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "147bd9a3dc43391e92c36e05d5db860b04ca27db"
+    ]
+  }
+}

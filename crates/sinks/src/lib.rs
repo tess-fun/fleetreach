@@ -17,9 +17,14 @@
 //! or npm; Python and JS sinks are module or file paths plus a function name, and only ever
 //! produce witnesses, since name-based call graphs in those languages are positive-only.
 //!
+//! `calls` builds name-resolved call graphs over JavaScript/TypeScript and Python source (and
+//! installed dependency source) and looks for a chain from the project's own code to a
+//! record's sinks. It is positive-only: a chain is a witness, and no chain proves nothing.
+//!
 //! The curated records under `data/` are built into the crate: [`record::bundled`] returns
 //! them, checked as [`record::load_dir`] checks a directory.
 
+pub mod calls;
 pub mod java;
 pub mod js;
 pub mod propose;

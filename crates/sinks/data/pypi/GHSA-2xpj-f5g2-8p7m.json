@@ -1,0 +1,20 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2xpj-f5g2-8p7m",
+  "aliases": [
+    "CVE-2020-17446",
+    "PYSEC-2020-24"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "asyncpg"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "69bcdf5bf7696b98ee708be5408fd7d854e910d0"
+    ]
+  },
+  "note": "the fix changes no method that exists in the vulnerable version"
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-37h2-6p4f-mp3q",
+  "aliases": [
+    "CVE-2026-49471",
+    "PYSEC-2026-3061"
+  ],
+  "ecosystem": "PyPI",
+  "packages": [
+    "serena-agent"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "serena.dashboard.SerenaDashboardAPI",
+      "method": "run"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "016ccbe1c095a3eed7967737ac1d4df2754f5d96"
+    ]
+  }
+}

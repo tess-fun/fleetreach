@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-33rq-m5x2-fvgf",
+  "aliases": [
+    "CVE-2026-28448"
+  ],
+  "ecosystem": "npm",
+  "packages": [
+    "openclaw"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "extensions/twitch/src/access-control.ts",
+      "method": "checkTwitchAccessControl"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "8c7901c984866a776eb59662dc9d8b028de4f0d0"
+    ]
+  }
+}
