@@ -8,18 +8,31 @@
   "packages": [
     "PeterO.Cbor"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "PeterO.Cbor.CBORObject",
       "method": "MapCompare"
+    },
+    {
+      "class": "PeterO.Cbor.CBORObject",
+      "method": "DecodeFromBytes"
+    },
+    {
+      "class": "PeterO.Cbor.CBORObject",
+      "method": "Read"
     }
   ],
   "evidence": {
     "commits": [
       "https://github.com/peteroupc/CBOR/commit/b4117dbbb4cd5a4a963f9d0c9aa132f033e15b95"
-    ]
+    ],
+    "excluded": []
   },
-  "note": "Proposed from the IL diff of PeterO.Cbor 4.5.0 -> 4.5.1 (net40): methods of the files the fix commits changed."
+  "note": "The fix keeps map keys in a SortedDictionary (PropertyMap) and has MapCompare use them instead of sorting key lists on every comparison. The advisory names DecodeFromBytes and other decoding entry points, so DecodeFromBytes and Read are sinks too: an over-count, never a miss. Reached wherever the app decodes CBOR.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

@@ -5,18 +5,33 @@
   "packages": [
     "DotVVM"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "DotVVM.Framework.ResourceManagement.LocalResourceUrlManager",
-      "method": ".ctor"
+      "method": "FindResource"
+    },
+    {
+      "class": "DotVVM.Framework.ResourceManagement.LocalResourceUrlManager",
+      "method": "TryLoadAlternativeFile"
     }
   ],
   "evidence": {
     "commits": [
       "https://github.com/riganti/dotvvm/commit/68db0110beeda4e8e4be1b7c4e480ef876895bb5"
+    ],
+    "excluded": [
+      {
+        "class": "DotVVM.Framework.ResourceManagement.LocalResourceUrlManager",
+        "method": ".ctor",
+        "reason": "not the path the URL name reaches"
+      }
     ]
   },
-  "note": "Proposed from the IL diff of DotVVM 4.3.18 -> 5.0.0-preview03-final (net8.0): methods of the files the fix commits changed."
+  "note": "The fix adds IsAllowedFileName to TryLoadAlternativeFile, which FindResource calls with the resource name from the URL and joins to a directory. Only apps started in Debug mode with a FileResourceLocation resource are affected, and a code scan cannot see the mode.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

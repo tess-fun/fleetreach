@@ -8,7 +8,7 @@
   "packages": [
     "Steeltoe.Discovery.Consul"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -19,7 +19,12 @@
   "evidence": {
     "commits": [
       "https://github.com/SteeltoeOSS/Steeltoe/commit/028569c4f4f0e9e393e3c22a4fa5d07987dd8673"
-    ]
+    ],
+    "excluded": []
   },
-  "note": "Proposed from the IL diff of Steeltoe.Discovery.Consul 4.2.0 -> 4.3.0 (net8.0): methods of the files the fix commits changed."
+  "note": "From the 4.2.0 -> 4.3.0 IL diff. ConsulServiceInstance's constructor parses the secure metadata with bool.Parse, so one malformed value aborts the whole instance list. Reached wherever the app discovers services through Consul.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

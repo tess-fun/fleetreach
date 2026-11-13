@@ -9,18 +9,23 @@
     "Serenity.Net.Core",
     "Serenity.Net.Web"
   ],
-  "status": "proposed",
-  "verdict": "sinks",
-  "sinks": [
-    {
-      "class": "Serenity.ComponentModel.BaseUploadEditorAttribute",
-      "method": ".ctor"
-    }
-  ],
+  "status": "reviewed",
+  "verdict": "no-method-sink",
   "evidence": {
     "commits": [
       "https://github.com/serenity-is/Serenity/commit/11b9d267f840513d04b4f4d4876de7823a6e48d2"
+    ],
+    "excluded": [
+      {
+        "class": "Serenity.ComponentModel.BaseUploadEditorAttribute",
+        "method": ".ctor",
+        "reason": "unrelated change between 6.6.6 and 6.7.0"
+      }
     ]
   },
-  "note": "Proposed from the IL diff of Serenity.Net.Core 6.6.6 -> 6.7.0 (netstandard2.1): every changed method (the fix commits could not be read)."
+  "note": "The linked commit is only the 6.7.0 version bump. The password reset flow lives in the Serene and StartSharp application templates, not in a Serenity.Net library method, so no method can be named.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

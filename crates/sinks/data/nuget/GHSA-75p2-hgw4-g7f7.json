@@ -8,7 +8,7 @@
   "packages": [
     "Autoupdater.NET.Official"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -19,7 +19,12 @@
   "evidence": {
     "commits": [
       "https://github.com/ravibpatel/AutoUpdater.NET/commit/1dc25f2bea6ea522dbac1512b5563c4746d539c3"
-    ]
+    ],
+    "excluded": []
   },
-  "note": "Proposed from the IL diff of Autoupdater.NET.Official 1.5.7 -> 1.5.8 (net40): methods of the files the fix commits changed."
+  "note": "From the 1.5.7 -> 1.5.8 IL diff. AutoUpdater.BackgroundWorkerDoWork reads the update XML with DTD processing left on. Reached wherever the app checks for updates with AutoUpdater.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
