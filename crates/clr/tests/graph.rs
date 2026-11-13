@@ -255,3 +255,83 @@ fn a_new_slot_is_outside_only_under_a_name_the_outside_interface_declares() {
         "IDisposable declares no Accept"
     );
 }
+
+// A package can ship its own internal copy of a type the runtime defines too. A call inside
+// the runtime means the runtime's copy, and a record for the package's copy is judged in the
+// package's assembly only.
+#[test]
+fn a_call_to_a_type_its_own_assembly_defines_stays_in_that_assembly() {
+    use fleetreach_clr::verdict::judge_in;
+    use fleetreach_clr::{Invoke, Op, Target};
+    let call = |kind, type_name: &str, name: &str| Op::Invoke {
+        kind,
+        target: Target {
+            type_name: type_name.into(),
+            name: name.into(),
+        },
+    };
+    let socket = |assembly_name: &str| {
+        assembly(
+            assembly_name,
+            vec![class(
+                "Net.ManagedSocket",
+                &[],
+                vec![
+                    method(".ctor", 0x0006, Vec::new()),
+                    method("Receive", 0x0006, Vec::new()),
+                ],
+            )],
+        )
+    };
+    let mut runtime = socket("Net.Sockets");
+    runtime.types.push(class(
+        "Net.Socket",
+        &[],
+        vec![method(
+            "Create",
+            0x0016,
+            vec![
+                call(Invoke::NewObj, "Net.ManagedSocket", ".ctor"),
+                call(Invoke::Call, "Net.ManagedSocket", "Receive"),
+            ],
+        )],
+    ));
+    let inputs = vec![
+        (
+            assembly(
+                "App",
+                vec![class(
+                    "App.Program",
+                    &[],
+                    vec![method(
+                        "Main",
+                        0x0010,
+                        vec![call(Invoke::Call, "Net.Socket", "Create")],
+                    )],
+                )],
+            ),
+            Role::App,
+        ),
+        (runtime, Role::Dependency),
+        (socket("Net.Sockets.Protocol"), Role::Dependency),
+    ];
+    let a = analyze(&inputs);
+    let only = |name: &'static str| move |assembly: &str| assembly == name;
+    assert!(a
+        .witness_in("Net.ManagedSocket", "Receive", &only("Net.Sockets"))
+        .is_some());
+    assert!(a
+        .witness_in(
+            "Net.ManagedSocket",
+            "Receive",
+            &only("Net.Sockets.Protocol")
+        )
+        .is_none());
+    let mut rec = record("Net.ManagedSocket");
+    rec.sinks[0].method = "Receive".into();
+    assert!(matches!(
+        judge_in(&rec, &a, false, &only("Net.Sockets.Protocol")),
+        Verdict::NotReached(_)
+    ));
+    assert!(matches!(judge(&rec, &a, false), Verdict::Reached(_)));
+}

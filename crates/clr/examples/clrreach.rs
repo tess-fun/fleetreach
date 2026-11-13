@@ -93,7 +93,8 @@ fn main() {
     let Some(ran) = rest.first() else { return };
     let reached = analysis.reached_methods();
     // `Assembly\tType::Method`; `?` when the runtime loaded the module before the oracle
-    // started listening.
+    // started listening: the framework's or the app's own assembly, never a dependency (they
+    // load later), so a `?` line counts only when the app's assembly defines it.
     let defined: BTreeSet<(String, String)> = inputs
         .iter()
         .flat_map(|(a, _)| {
@@ -104,7 +105,16 @@ fn main() {
             })
         })
         .collect();
-    let by_name: BTreeSet<&str> = defined.iter().map(|(_, m)| m.as_str()).collect();
+    let app_names: BTreeSet<&str> = inputs
+        .iter()
+        .filter(|(_, role)| *role == Role::App)
+        .map(|(a, _)| a.name.as_str())
+        .collect();
+    let by_name: BTreeSet<&str> = defined
+        .iter()
+        .filter(|(a, _)| app_names.contains(a.as_str()))
+        .map(|(_, m)| m.as_str())
+        .collect();
     let text = std::fs::read_to_string(ran).unwrap_or_default();
     let mut ran_in = 0;
     let mut missed = Vec::new();

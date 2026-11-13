@@ -386,30 +386,67 @@ impl<'a> Analysis<'a> {
     /// Whether the inputs define `type_name::method`.
     #[must_use]
     pub fn has_method(&self, type_name: &str, method: &str) -> bool {
-        self.ids(type_name, method).next().is_some()
+        self.has_method_in(type_name, method, &|_| true)
     }
 
-    fn ids<'s>(&'s self, type_name: &str, method: &'s str) -> impl Iterator<Item = Id> + 's {
+    /// [`Analysis::has_method`], counting only the assemblies whose name `keep` accepts.
+    #[must_use]
+    pub fn has_method_in(
+        &self,
+        type_name: &str,
+        method: &str,
+        keep: &dyn Fn(&str) -> bool,
+    ) -> bool {
+        self.ids(type_name, method, keep).next().is_some()
+    }
+
+    fn ids<'s>(
+        &'s self,
+        type_name: &str,
+        method: &'s str,
+        keep: &'s dyn Fn(&str) -> bool,
+    ) -> impl Iterator<Item = Id> + 's {
         let types = self
             .sym(type_name)
             .and_then(|s| self.by_name.get(&s))
             .map_or(&[][..], Vec::as_slice);
-        types.iter().flat_map(move |&t| {
-            let info = &self.types[t as usize];
-            info.ty
-                .methods
-                .iter()
-                .enumerate()
-                .filter(move |(_, m)| m.name == method)
-                .map(move |(i, _)| info.first + u32::try_from(i).unwrap_or(0))
-        })
+        types
+            .iter()
+            .filter(move |&&t| {
+                let assembly = self.types[t as usize].assembly as usize;
+                self.inputs
+                    .get(assembly)
+                    .is_some_and(|(a, _)| keep(&a.name))
+            })
+            .flat_map(move |&t| {
+                let info = &self.types[t as usize];
+                info.ty
+                    .methods
+                    .iter()
+                    .enumerate()
+                    .filter(move |(_, m)| m.name == method)
+                    .map(move |(i, _)| info.first + u32::try_from(i).unwrap_or(0))
+            })
     }
 
     /// A path from an entry point to `type_name::method`, if the graph reaches it.
     #[must_use]
     pub fn witness(&self, type_name: &str, method: &str) -> Option<Witness> {
+        self.witness_in(type_name, method, &|_| true)
+    }
+
+    /// [`Analysis::witness`], to the method as defined in an assembly whose name `keep`
+    /// accepts. A package can carry a copy of a type the runtime also defines
+    /// (`System.Net.WebSockets.ManagedWebSocket`), and only the package's copy is its flaw.
+    #[must_use]
+    pub fn witness_in(
+        &self,
+        type_name: &str,
+        method: &str,
+        keep: &dyn Fn(&str) -> bool,
+    ) -> Option<Witness> {
         let id = self
-            .ids(type_name, method)
+            .ids(type_name, method, keep)
             .filter(|id| self.reached.contains_key(id))
             .min_by_key(|id| self.depth(*id))?;
         let mut steps = Vec::new();
@@ -590,6 +627,35 @@ impl<'g, 'a> Walk<'g, 'a> {
         self.g.by_name.get(&name).map_or(&[][..], Vec::as_slice)
     }
 
+    /// The types named `name` that a reference in method `from` can mean. When `from`'s own
+    /// assembly defines one, only that: the reference is then a TypeDef token, as for a
+    /// package's internal copy of a type the runtime also defines, or the attributes every
+    /// compiler output embeds. Otherwise every input's.
+    fn types_from(&self, name: Sym, from: Id) -> &'g [u32] {
+        match self.g.owner.get(from as usize) {
+            Some(&t) => self.types_in(name, self.g.types[t as usize].assembly),
+            None => self.types_named(name),
+        }
+    }
+
+    /// The types named `name` that a reference in assembly `own` means: its own when it
+    /// defines one, else every input's.
+    fn types_in(&self, name: Sym, own: u32) -> &'g [u32] {
+        let all = self.types_named(name);
+        if all.len() < 2 {
+            return all;
+        }
+        let assembly = |t: &u32| self.g.types[*t as usize].assembly;
+        // A type's index grows with its assembly's, so one assembly's are a run.
+        let start = all.partition_point(|t| assembly(t) < own);
+        let end = all.partition_point(|t| assembly(t) <= own);
+        if start < end {
+            &all[start..end]
+        } else {
+            all
+        }
+    }
+
     fn compute_ancestors(&self, start: u32) -> Vec<Sym> {
         let mut out: Vec<Sym> = Vec::new();
         let mut seen: HashSet<u32> = HashSet::new();
@@ -733,7 +799,7 @@ impl<'g, 'a> Walk<'g, 'a> {
             };
             let (_, m) = self.g.method(id);
             for name in &m.type_args {
-                self.make_named(name, Some(id), RootKind::Outside);
+                self.make_token(name, id);
             }
             for name in &m.mentions {
                 if let Some(ty) = self.sym(name) {
@@ -768,7 +834,7 @@ impl<'g, 'a> Walk<'g, 'a> {
                 let Some(name) = name else { return };
                 match kind {
                     Invoke::NewObj => {
-                        for &t in self.types_named(ty) {
+                        for &t in self.types_from(ty, from) {
                             self.make(t, false, Some(from));
                         }
                         self.resolve(ty, name, from);
@@ -777,7 +843,7 @@ impl<'g, 'a> Walk<'g, 'a> {
                         if Some(name) == self.ctor {
                             // `call .ctor` builds a value type in place or chains a base
                             // constructor.
-                            for &t in self.types_named(ty) {
+                            for &t in self.types_from(ty, from) {
                                 if self.g.types[t as usize].value_type {
                                     self.make(t, false, Some(from));
                                 }
@@ -805,7 +871,7 @@ impl<'g, 'a> Walk<'g, 'a> {
                     }
                 }
             }
-            Op::TypeToken(t) => self.make_named(t, Some(from), RootKind::Outside),
+            Op::TypeToken(t) => self.make_token(t, from),
             Op::MethodToken(target) => {
                 if let (Some(ty), Some(name)) =
                     (self.sym(&target.type_name), self.sym(&target.name))
@@ -824,7 +890,7 @@ impl<'g, 'a> Walk<'g, 'a> {
 
     /// A value type mentioned in reached code may exist: locals of it need no `newobj`.
     fn value_types(&mut self, ty: Sym, from: Id) {
-        for &t in self.types_named(ty) {
+        for &t in self.types_from(ty, from) {
             if self.g.types[t as usize].value_type {
                 self.make(t, false, Some(from));
             }
@@ -835,6 +901,15 @@ impl<'g, 'a> Walk<'g, 'a> {
         let Some(ty) = self.sym(name) else { return };
         for &t in self.types_named(ty) {
             self.make_via(t, true, from, kind);
+        }
+    }
+
+    /// [`Walk::make_named`] for a type token in `from`'s code (`ldtoken`, a generic argument):
+    /// like a call, it means `from`'s own assembly's type when there is one.
+    fn make_token(&mut self, name: &str, from: Id) {
+        let Some(ty) = self.sym(name) else { return };
+        for &t in self.types_from(ty, from) {
+            self.make_via(t, true, Some(from), RootKind::Outside);
         }
     }
 
@@ -874,7 +949,7 @@ impl<'g, 'a> Walk<'g, 'a> {
                 .field_types
                 .iter()
                 .filter_map(|f| self.sym(f))
-                .flat_map(|ft| self.types_named(ft).iter().copied())
+                .flat_map(|ft| self.types_in(ft, info.assembly).iter().copied())
                 .filter(|x| !self.filled.contains(x))
                 .collect();
             self.pending
@@ -927,8 +1002,11 @@ impl<'g, 'a> Walk<'g, 'a> {
 
     /// The first in-graph type `t` extends.
     fn base_of(&self, t: u32) -> Option<u32> {
-        let base = self.g.types[t as usize].ty.extends.as_deref()?;
-        self.types_named(self.sym(base)?).first().copied()
+        let info = &self.g.types[t as usize];
+        let base = info.ty.extends.as_deref()?;
+        self.types_in(self.sym(base)?, info.assembly)
+            .first()
+            .copied()
     }
 
     /// Whether code outside the graph may call `m`, declared by `t`, on a made instance: its
@@ -974,7 +1052,7 @@ impl<'g, 'a> Walk<'g, 'a> {
     }
 
     fn init(&mut self, ty: Sym, from: Id) {
-        for &t in self.types_named(ty) {
+        for &t in self.types_from(ty, from) {
             self.init_type(t, Via::Call(from));
         }
     }
@@ -995,7 +1073,7 @@ impl<'g, 'a> Walk<'g, 'a> {
     /// The methods named `name` that a call written against `ty` resolves to, up the base
     /// types.
     fn resolve(&mut self, ty: Sym, name: Sym, from: Id) {
-        for &t in self.types_named(ty) {
+        for &t in self.types_from(ty, from) {
             self.resolve_from(t, name, from);
         }
     }
@@ -1017,10 +1095,11 @@ impl<'g, 'a> Walk<'g, 'a> {
             else {
                 return;
             };
-            let Some(&next) = self.types_named(base).first() else {
+            let bases = self.types_in(base, self.g.types[t as usize].assembly);
+            let Some(&next) = bases.first() else {
                 return;
             };
-            for &other in &self.types_named(base)[1..] {
+            for &other in &bases[1..] {
                 self.resolve_from(other, name, from);
             }
             t = next;
@@ -1055,12 +1134,7 @@ impl<'g, 'a> Walk<'g, 'a> {
             if guard > 64 {
                 break;
             }
-            at = self.g.types[x as usize]
-                .ty
-                .extends
-                .as_deref()
-                .and_then(|b| self.sym(b))
-                .and_then(|b| self.types_named(b).first().copied());
+            at = self.base_of(x);
         }
     }
 

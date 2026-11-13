@@ -8,15 +8,17 @@
 //! service's code. Type names in its configuration files (`appsettings*.json`, `*.config`) are
 //! made, since reflection loads them. The shared frameworks' assemblies are read for their
 //! interfaces only: a method can be the runtime's way in only under a name an outside interface
-//! declares. Every bundled NuGet record is judged against that graph,
-//! and a NuGet finding takes the verdict of its advisory's record in each image it occurs in,
+//! declares. Every bundled NuGet record is judged against that graph, its sinks looked for
+//! only in the assemblies the deps files list for the record's packages (anywhere when none
+//! lists them): a package's copy of a type the runtime also defines is not the runtime's.
+//! A NuGet finding takes the verdict of its advisory's record in each image it occurs in,
 //! combined as for the JVM (`graph_reach`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
 
 use fleetreach_clr::graph::{analyze_outside, OutsideInterfaces, Role, Root};
-use fleetreach_clr::verdict::{judge, Verdict, Why};
+use fleetreach_clr::verdict::{judge, judge_in, Verdict, Why};
 use fleetreach_core::{Ecosystem, FleetReport, RepoId};
 use fleetreach_os::image::DotnetAssemblies;
 use fleetreach_os::ImageFs;
@@ -46,10 +48,16 @@ fn is_config(path: &str) -> bool {
     (name.starts_with("appsettings") && name.ends_with(".json")) || name.ends_with(".config")
 }
 
+/// Lower-case names by lower-case names: a service folder's own assemblies, or a package's.
+type Names = BTreeMap<String, BTreeSet<String>>;
+
 /// The services in an image: each `*.deps.json` folder, with its own assembly names (lower
-/// case) from the file name and the deps file's `project` libraries.
-fn services(fs: &ImageFs) -> BTreeMap<String, BTreeSet<String>> {
-    let mut out: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+/// case) from the file name and the deps file's `project` libraries. Also, over every
+/// service, the assemblies each package ships (lower case, from the deps file's `runtime` and
+/// `runtimeTargets` assets; a runtime pack `runtimepack.X` under `X`).
+fn services(fs: &ImageFs) -> (Names, Names) {
+    let mut out = Names::new();
+    let mut packages = Names::new();
     for (path, data) in fs.files() {
         let Some(stem) = path.strip_suffix(".deps.json") else {
             continue;
@@ -73,12 +81,39 @@ fn services(fs: &ImageFs) -> BTreeMap<String, BTreeSet<String>> {
                 }
             }
         }
+        let target = json
+            .pointer("/runtimeTarget/name")
+            .and_then(|n| n.as_str())
+            .and_then(|n| json.get("targets")?.get(n)?.as_object());
+        for (key, assets) in target.into_iter().flatten() {
+            let id = key.split('/').next().unwrap_or(key).to_ascii_lowercase();
+            let id = id.strip_prefix("runtimepack.").unwrap_or(&id).to_string();
+            let shipped = packages.entry(id).or_default();
+            for kind in ["runtime", "runtimeTargets"] {
+                for file in assets
+                    .get(kind)
+                    .and_then(|f| f.as_object())
+                    .into_iter()
+                    .flatten()
+                {
+                    let name = file
+                        .0
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or(file.0)
+                        .to_ascii_lowercase();
+                    if let Some(stem) = name.strip_suffix(".dll") {
+                        shipped.insert(stem.to_string());
+                    }
+                }
+            }
+        }
     }
-    out
+    (out, packages)
 }
 
 /// The service a path belongs to: the deepest service folder holding it.
-fn service_of<'a>(services: &'a BTreeMap<String, BTreeSet<String>>, path: &str) -> Option<&'a str> {
+fn service_of<'a>(services: &'a Names, path: &str) -> Option<&'a str> {
     services
         .keys()
         .filter(|dir| dir.is_empty() || path.starts_with(&format!("{dir}/")))
@@ -87,7 +122,7 @@ fn service_of<'a>(services: &'a BTreeMap<String, BTreeSet<String>>, path: &str) 
 }
 
 /// Dotted words in a configuration file, which may name types.
-fn config_names(fs: &ImageFs, services: &BTreeMap<String, BTreeSet<String>>) -> Vec<String> {
+fn config_names(fs: &ImageFs, services: &Names) -> Vec<String> {
     let mut names = BTreeSet::new();
     for (path, data) in fs.files() {
         if !is_config(path) || service_of(services, path).is_none() {
@@ -113,7 +148,7 @@ pub(crate) fn analyze_image(fs: &ImageFs, set: &SinkSet) -> GraphOutcome {
     if assemblies.files.is_empty() {
         return Err("the image holds no .NET assembly".to_string());
     }
-    let services = services(fs);
+    let (services, packages) = services(fs);
     let _one = ONE_AT_A_TIME
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -149,7 +184,15 @@ pub(crate) fn analyze_image(fs: &ImageFs, set: &SinkSet) -> GraphOutcome {
         .records
         .values()
         .filter(|r| r.ecosystem == "NuGet")
-        .map(|record| (record.id.clone(), judged(judge(record, &analysis, partial))))
+        .map(|record| {
+            let verdict = match shipped_by(&packages, &record.packages) {
+                Some(names) => judge_in(record, &analysis, partial, &|assembly: &str| {
+                    names.contains(&assembly.to_ascii_lowercase())
+                }),
+                None => judge(record, &analysis, partial),
+            };
+            (record.id.clone(), judged(verdict))
+        })
         .collect();
     let summary = format!(
         "{} assemblies in {} service(s), {} entry points, {} of {} methods reached{}",
@@ -175,6 +218,11 @@ pub(crate) fn analyze_image(fs: &ImageFs, set: &SinkSet) -> GraphOutcome {
         .flat_map(|(dir, own)| own.iter().map(move |n| format!("{dir}/{n}")))
         .collect();
     rule.extend(names);
+    rule.extend(
+        packages
+            .iter()
+            .flat_map(|(p, names)| names.iter().map(move |n| format!("package:{p}/{n}"))),
+    );
     // A framework is named by its versioned folder, so its paths stand for its content.
     rule.extend(
         assemblies
@@ -187,6 +235,20 @@ pub(crate) fn analyze_image(fs: &ImageFs, set: &SinkSet) -> GraphOutcome {
         inputs: inputs_hash(&assemblies.files, &rule)?,
         summary,
     })
+}
+
+/// The assemblies the image's deps files say `record_packages` ship, or `None` when no deps
+/// file lists any of them (then a sink counts in any assembly).
+fn shipped_by(packages: &Names, record_packages: &[String]) -> Option<BTreeSet<String>> {
+    let mut listed = false;
+    let mut names = BTreeSet::new();
+    for p in record_packages {
+        if let Some(shipped) = packages.get(&p.to_ascii_lowercase()) {
+            listed = true;
+            names.extend(shipped.iter().cloned());
+        }
+    }
+    listed.then_some(names)
 }
 
 /// The .NET verdict in report terms.
@@ -331,7 +393,13 @@ mod tests {
 
     #[test]
     fn services_come_from_deps_files_outside_the_runtime() {
-        let deps = br#"{"libraries":{"Api/1.0.0":{"type":"project"},"Shared/1.0.0":{"type":"project"},"Newtonsoft.Json/13.0.3":{"type":"package"}}}"#;
+        let deps = br#"{"runtimeTarget":{"name":"net8.0/linux-x64"},
+            "targets":{"net8.0/linux-x64":{
+                "Newtonsoft.Json/13.0.3":{"runtime":{"lib/net6.0/Newtonsoft.Json.dll":{}}},
+                "runtimepack.Microsoft.NETCore.App.Runtime.linux-x64/8.0.1":{"runtime":{"System.IO.Compression.dll":{},"System.Net.WebSockets.dll":{}}},
+                "SQLitePCLRaw.lib.e_sqlite3/2.1.6":{"runtimeTargets":{"runtimes/linux-x64/native/libe_sqlite3.so":{}}}},
+              "net8.0":{"Other/1.0.0":{"runtime":{"lib/Other.dll":{}}}}},
+            "libraries":{"Api/1.0.0":{"type":"project"},"Shared/1.0.0":{"type":"project"},"Newtonsoft.Json/13.0.3":{"type":"package"}}}"#;
         let fs = ImageFs::from_files([
             ("app/Api.deps.json", &deps[..]),
             (
@@ -340,8 +408,33 @@ mod tests {
             ),
             ("app/appsettings.json", br#"{"Serilog":{"Using":["Serilog.Sinks.File"]}}"#),
         ]);
-        let s = services(&fs);
+        let (s, packages) = services(&fs);
         assert_eq!(s.len(), 1);
+        // Only the runtime target counts; a runtime pack is listed under its package id, and a
+        // native-only package ships no assembly.
+        assert_eq!(
+            packages.keys().cloned().collect::<Vec<_>>(),
+            [
+                "microsoft.netcore.app.runtime.linux-x64",
+                "newtonsoft.json",
+                "sqlitepclraw.lib.e_sqlite3"
+            ]
+        );
+        assert_eq!(
+            shipped_by(
+                &packages,
+                &["Microsoft.NETCore.App.Runtime.linux-x64".to_string()]
+            ),
+            Some(BTreeSet::from([
+                "system.io.compression".to_string(),
+                "system.net.websockets".to_string()
+            ]))
+        );
+        assert_eq!(
+            shipped_by(&packages, &["SQLitePCLRaw.lib.e_sqlite3".to_string()]),
+            Some(BTreeSet::new())
+        );
+        assert_eq!(shipped_by(&packages, &["Not.Listed".to_string()]), None);
         assert_eq!(
             s["app"].iter().cloned().collect::<Vec<_>>(),
             ["api", "shared"]

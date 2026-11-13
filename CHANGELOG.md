@@ -17,13 +17,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   arguments such as dependency injection and serializers, type names in strings, attributes
   and `appsettings.json`), and what the runtime calls on its own (`ToString`, `Dispose`, async
   state machines, ASP.NET Core interfaces). Checked against the runtime: on 11 apps built from
-  real NuGet packages, every one of the 6,758 methods the JIT compiled in their assemblies is
-  in the graph. 91 reviewed NuGet sink records ship, each narrowed by hand from its fix commit
-  and the IL of the releases either side of it, with its sinks checked across every affected
-  release line. On 11 public .NET app images (Jellyfin, Sonarr, Radarr, Lidarr, Prowlarr,
-  Jackett, Squidex, Duplicati, Kavita, EventStore) 14 NuGet findings had a record: 8 reached
-  with a chain, 1 not reached (OpenTelemetry's propagators, which nothing in EventStore calls),
-  5 unknown with the reason.
+  real NuGet packages, every one of the 6,727 methods the JIT compiled in their assemblies is
+  in the graph. 97 NuGet sink records ship (91 reviewed, 6 proposed), each narrowed by hand
+  from its fix commit and the IL of the releases either side of it, with its sinks checked
+  across every affected release line. A record's sinks count only in the assemblies its
+  packages ship, as the image's deps files list them. On 11 public .NET app images (Jellyfin,
+  Sonarr, Radarr, Lidarr, Prowlarr, Jackett, Squidex, Duplicati, Kavita, EventStore) 20 of 34
+  NuGet findings had a record: 10 reached with a chain, 1 not reached (OpenTelemetry's
+  propagators, which nothing in EventStore calls), 9 unknown with the reason.
 
 - **Signed webhooks.** `fleetreach notify --webhook-secret-env VAR` signs each post as
   Standard Webhooks specifies (`webhook-id`, `webhook-timestamp`, `webhook-signature`: HMAC-SHA256
@@ -249,6 +250,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the image's shared frameworks (metadata only) and keeps such a method only under a name one
   of them declares; an interface it cannot read may still declare anything. The JIT check
   still misses nothing.
+- **.NET graphs mixed up copies of one type in different assemblies.** A package can carry
+  its own internal copy of a type the runtime defines too (`ManagedWebSocket` in
+  `System.Net.WebSockets.WebSocketProtocol` and in `System.Net.WebSockets`), and compilers
+  embed the same helper types in every assembly. A call, type token, field or base type
+  resolved by name to every copy, so Kavita's WebSocket code reached the old package's
+  `ReceiveAsyncPrivate` through the runtime's own copy, and a base type could resolve to the
+  wrong assembly's copy and lose its overrides. A reference now means the referring assembly's
+  own type when it defines one, and a record's sinks count only in its packages' assemblies.
+  The JIT check still misses nothing; reached methods fell (33,373 to 32,761 on the SqlClient
+  app) and rose where the right base type was found (2,598 to 2,610).
 
 - **JVM witnesses named a temporary file.** A chain that started at a resource (a
   `META-INF/services` file, `web.xml`) named the scan's temporary copy of its archive, a path

@@ -6,18 +6,21 @@ loader events, with `DOTNET_ReadyToRun=0` so precompiled code is compiled too), 
 what ran with `cargo run -p fleetreach-clr --example clrreach`: every method that ran in one of
 the app's output assemblies must be in the graph. A `MISS` line is a hole in the graph.
 
-A line whose assembly is `?` ran in a module the runtime loaded before the hook was listening
-(`System.Private.CoreLib`). Matched by name only, these are false alarms where a package
-embeds its own copy of a CoreLib-internal helper (`System.IO.PathInternal`,
-`System.Text.ValueStringBuilder`, inside `Microsoft.Data.SqlClient` and
-`System.Configuration.ConfigurationManager`).
+A line whose assembly is `?` ran in a module the runtime loaded before the hook was listening:
+the framework (`System.Private.CoreLib`) or the app's own assembly, never a dependency, which
+loads later. `clrreach` counts such a line only when the app's assembly defines it. Matched
+against every assembly, 10 of them were false alarms where a package embeds its own copy of a
+CoreLib-internal helper (`System.IO.PathInternal`, `System.Text.ValueStringBuilder`, inside
+`Microsoft.Data.SqlClient` and `System.Configuration.ConfigurationManager`).
 
 `run.sh` passes the local runtime's shared frameworks (`dotnet --list-runtimes`) as
 `--framework` folders: their interfaces narrow which new-slot methods count as the runtime's
 way in, as the image scan does with the frameworks an image ships.
 
-Result (2026-11-13, .NET SDK 10.0.301): 11 apps, 6,758 methods ran in their output
-assemblies, 0 missed apart from the 10 `?` lines above. With the frameworks' interfaces the
+Result (2026-11-13, .NET SDK 10.0.301): 11 apps, 6,727 methods ran in their output
+assemblies, 0 missed. A reference to a type the calling assembly defines resolves to that
+assembly's copy only, so a package's internal copy of a runtime type is reached only from the
+package. With the frameworks' interfaces the
 graphs shrink (the ImageSharp app 8,510 to 8,439 reached methods, Newtonsoft 3,344 to 3,245)
 and still miss nothing. Each rule in `crates/clr/src/graph.rs`
 came from a miss here: private `Main`, explicit interface implementations of outside
