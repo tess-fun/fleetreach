@@ -255,6 +255,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **JVM witness chains changed from run to run.** Which caller a chain named depended on the
   hash seed; the graph now resolves calls in the order it saw them, so the same image gives
   the same chain.
+- **`-f vex` and `-f csaf-vex` without an author failed only after the scan.** The missing
+  author (`--vex-author` or `settings.vex.author`) is now reported before any repo is read,
+  with the same usage error.
 - **Unread .NET and Composer files in images were filed under RubyGems.** A `.deps.json` or
   Composer `installed.json` an image holds but that does not parse is a coverage gap; it now
   names NuGet or Packagist instead of RubyGems.

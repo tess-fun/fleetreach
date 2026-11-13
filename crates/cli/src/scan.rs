@@ -686,6 +686,10 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         return Ok(crate::why::run_versions(&config, package, json));
     }
     let triage = crate::triage::load_or_fail(&config, args.triage_dir.as_deref())?;
+    // A VEX document needs an author; say so before the scan, not after it.
+    if matches!(args.format, Format::Vex | Format::CsafVex) {
+        vex_author(args, &config).map_err(|e| usage_fail(&e))?;
+    }
     let db = advisory_db(args, &config)?;
     let vex_policy = oci_vex_policy(args, &config).map_err(|e| fail(&e))?;
     let vex_files = vex_files(args, &config).map_err(|e| fail(&e))?;
@@ -2036,6 +2040,14 @@ fn vulnrichment_fetch(_: &[String], _: bool) -> crate::vulnrichment::Vulnrichmen
     Default::default()
 }
 
+/// The VEX document's author, from the flag or `settings.vex.author`.
+fn vex_author(args: &ScanArgs, config: &Config) -> Result<String, String> {
+    args.vex_author
+        .clone()
+        .or_else(|| config.vex.author.clone())
+        .ok_or_else(|| "no VEX author: set --vex-author or settings.vex.author".to_string())
+}
+
 /// Resolve `-f vex` parameters from flags + `settings.vex` + the report, failing
 /// closed when no author or timestamp resolves.
 fn build_vex_params(
@@ -2044,11 +2056,7 @@ fn build_vex_params(
     fleet_report: &FleetReport,
     suppressed: &[SuppressedOccurrence],
 ) -> Result<report::VexParams, String> {
-    let author = args
-        .vex_author
-        .clone()
-        .or_else(|| config.vex.author.clone())
-        .ok_or_else(|| "no VEX author: set --vex-author or settings.vex.author".to_string())?;
+    let author = vex_author(args, config)?;
 
     // Per-statement provenance lives in `status_notes`; this is the document role.
     let role = args

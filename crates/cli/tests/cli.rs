@@ -2666,6 +2666,26 @@ fn vex_never_emits_affected_without_reachability() {
     }
 }
 
+/// No author is a usage error, found before any repo is scanned.
+#[test]
+fn vex_without_an_author_stops_before_the_scan() {
+    for format in ["vex", "csaf-vex"] {
+        let out = run(&[
+            "scan",
+            "-c",
+            &cfg("fleet-vuln.toml"),
+            "--db",
+            &db(),
+            "-f",
+            format,
+        ]);
+        assert_eq!(code(&out), 3, "{format}: {}", stderr(&out));
+        assert!(stderr(&out).contains("no VEX author"), "{}", stderr(&out));
+        assert!(!stderr(&out).contains("Scanned"), "{}", stderr(&out));
+        assert!(stdout(&out).is_empty());
+    }
+}
+
 #[test]
 fn vex_emits_valid_openvex_under_investigation_by_default() {
     // A default scan ran no reachability, so every live finding is the
