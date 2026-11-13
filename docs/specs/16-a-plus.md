@@ -881,7 +881,18 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   init script over the four classpaths: PetClinic 163 of 173, Aeron 17 of 18, Airflow Java SDK
   71 of 109. Misses are Gradle module metadata (`-jvm` artifacts, BOM nodes) and a Kotlin version
   set by a convention plugin. Android builds need the Android SDK and Google's repository and
-  are untested. Reading `.module` files is the next step.
+  are untested. **`.module` files read, 2026-11-13** (`crates/maven/src/gradle_module.rs`):
+  for Gradle builds, a POM marked `published-with-gradle-metadata` is replaced by the JVM
+  runtime variant of its `.module` (usage `java-runtime`, category library else platform,
+  Kotlin `jvm`, `standard-jvm`, `external` bundling, the component's own capability),
+  `available-at` followed, `dependencyConstraints` raising versions and a platform's
+  constraints managing an imported BOM. Three traps found on real builds: kotlin-test's
+  JUnit/TestNG variants (capability-only feature variants), moshi's `shadowRuntimeElements`
+  (no dependencies), and BOMs with only constraints (bouncycastle). On ideavim, okhttp and
+  bitwarden it adds 32, 36 and 27 packages (`-jvm` artifacts, BOM nodes) and drops only iOS/JS
+  artifacts and API-only dependencies, as Gradle does on a JVM runtime classpath; PetClinic is
+  unchanged. **Not yet measured against real Gradle**: the Gradle image was removed with the
+  Docker cleanup and pulling it again needs the user's OK.
 - **Result (1.7.0, Python)**: `scan --resolve-python` (named so, not `--resolve`, since the
   consent is per ecosystem) on 185 repos (110 popular GitHub Python repos with no lockfile, by
   their root manifests, plus the testbed): 143 sets, 90 resolved, 44 fail for a package with no

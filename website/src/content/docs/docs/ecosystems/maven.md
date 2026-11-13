@@ -61,10 +61,13 @@ Kotlin plugin's standard library are added when those plugins are applied.
 The result is always marked partial, because a build script is a program. A helper call, an
 undefined variable or a dynamic version such as `1.+` is named in the coverage note. Catalog
 entries no build file names, and anything in `buildSrc` or `build-logic`, count as development
-only. Variants that only Gradle module metadata describes, such as the `-jvm` artifacts of Kotlin
-multiplatform libraries, are not followed. Against real Gradle, 163 of 173 packages matched on
-Spring PetClinic, 17 of 18 on Aeron, and 71 of 109 on the Kotlin-heavy Airflow Java SDK. For the
-exact set, commit a lockfile:
+only. Where a library was published with Gradle module metadata (a `.module` file next to its
+POM), that file is read instead of the POM, as Gradle does: the JVM runtime variant is taken
+(the `-jvm` artifact of a Kotlin multiplatform library, the standard-JVM flavour over Android,
+never a shadowed jar or a test-framework feature variant), its dependencies and constraints are
+followed, and a platform's constraints manage versions like a BOM. Before module metadata was
+read, 163 of 173 packages matched real Gradle on Spring PetClinic, 17 of 18 on Aeron, and 71
+of 109 on the Kotlin-heavy Airflow Java SDK. For the exact set, commit a lockfile:
 
 ```sh
 gradle dependencies --write-locks

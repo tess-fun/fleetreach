@@ -1075,6 +1075,9 @@ set = ["a-b", "e"]
         fn metadata(&self, _: &str, _: &str) -> Option<String> {
             None
         }
+        fn module(&self, g: &str, a: &str, v: &str) -> Option<String> {
+            self.0.get(&format!("{g}:{a}:{v}.module")).cloned()
+        }
     }
 
     fn pom(a: &str, v: &str, deps: &[(&str, &str)]) -> (String, String) {
@@ -1130,6 +1133,81 @@ set = ["a-b", "e"]
         assert_eq!(versions(&r, "g:c"), ["2.0"]);
         assert_eq!(versions(&r, "g:d"), ["1"]);
         assert!(r.missing.is_empty(), "{:?}", r.missing);
+    }
+
+    #[test]
+    fn module_metadata_redirects_and_constrains() {
+        let marker = "<!-- do_not_remove: published-with-gradle-metadata -->";
+        let gradle_pom = |a: &str, v: &str| {
+            (
+                format!("g:{a}:{v}"),
+                format!("<project>{marker}<groupId>g</groupId><artifactId>{a}</artifactId><version>{v}</version></project>"),
+            )
+        };
+        let module = |a: &str, v: &str, body: &str| {
+            (
+                format!("g:{a}:{v}.module"),
+                format!(r#"{{"formatVersion":"1.1","variants":[{body}]}}"#),
+            )
+        };
+        let runtime = r#""attributes":{"org.gradle.usage":"java-runtime","org.gradle.category":"library","org.jetbrains.kotlin.platform.type":"jvm"}"#;
+        let repo = Mem(BTreeMap::from([
+            gradle_pom("kmp", "1.0"),
+            module(
+                "kmp",
+                "1.0",
+                &format!(
+                    r#"{{"name":"jvmRuntimeElements",{runtime},"available-at":{{"group":"g","module":"kmp-jvm","version":"1.0"}}}}"#
+                ),
+            ),
+            gradle_pom("kmp-jvm", "1.0"),
+            module(
+                "kmp-jvm",
+                "1.0",
+                &format!(
+                    r#"{{"name":"jvmRuntimeElements",{runtime},"dependencies":[
+                {{"group":"g","module":"dep","version":{{"requires":"1.0"}}}},
+                {{"group":"g","module":"bom","version":{{"requires":"1.0"}},"attributes":{{"org.gradle.category":"platform"}}}}]}}"#
+                ),
+            ),
+            gradle_pom("bom", "1.0"),
+            module(
+                "bom",
+                "1.0",
+                r#"{"name":"platformRuntimeElements","attributes":{"org.gradle.usage":"java-runtime","org.gradle.category":"platform"},
+                "dependencyConstraints":[{"group":"g","module":"dep","version":{"requires":"2.0"}}]}"#,
+            ),
+            pom("dep", "1.0", &[]),
+            pom("dep", "2.0", &[]),
+            // A BOM with only module metadata, imported by the build: its constraints manage.
+            gradle_pom("bom2", "1.0"),
+            module(
+                "bom2",
+                "1.0",
+                r#"{"name":"platformRuntimeElements","attributes":{"org.gradle.usage":"java-runtime","org.gradle.category":"platform"},
+                "dependencyConstraints":[{"group":"g","module":"unversioned","version":{"requires":"3.0"}}]}"#,
+            ),
+            pom("unversioned", "3.0", &[]),
+            // Published with metadata, but the file is not there: the POM is read.
+            gradle_pom("nomod", "1.0"),
+        ]));
+        let dir = tree(
+            "module-metadata",
+            &[(
+                "build.gradle",
+                "dependencies {\n  implementation 'g:kmp:1.0'\n  implementation 'g:nomod:1.0'\n  implementation platform('g:bom2:1.0')\n  implementation 'g:unversioned'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:kmp-jvm"), ["1.0"]);
+        assert_eq!(versions(&r, "g:bom"), ["1.0"]);
+        assert_eq!(versions(&r, "g:dep"), ["2.0"]);
+        assert_eq!(versions(&r, "g:nomod"), ["1.0"]);
+        assert_eq!(versions(&r, "g:unversioned"), ["3.0"]);
+        assert_eq!(
+            r.missing,
+            ["g:nomod:1.0: Gradle module metadata not available, read the POM instead"]
+        );
     }
 
     #[test]

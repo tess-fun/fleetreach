@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Gradle module metadata is read.** For a Gradle build without a lockfile, a library
+  published with a `.module` file is resolved from it instead of its POM, as Gradle does: the
+  JVM runtime variant (Kotlin multiplatform `-jvm` artifacts, standard-JVM over Android, never
+  a shadowed jar or a test-framework feature variant), its dependencies, and constraints that
+  raise versions or manage an imported BOM. On three Kotlin builds this adds 27 to 36 packages
+  the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **Poetry projects without a lock, and `-e .`, are read.** A `pyproject.toml` with only
   `[tool.poetry.dependencies]` and no `poetry.lock` was an errored gap; its constraints are
   now written as PEP 440 (`^`, `~`, wildcards, exact versions, `python` and `markers`) and read

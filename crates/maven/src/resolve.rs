@@ -35,6 +35,11 @@ pub trait PomSource {
     fn pom(&self, group: &str, artifact: &str, version: &str) -> Option<String>;
     /// The `maven-metadata.xml` text of `group:artifact`, if available.
     fn metadata(&self, group: &str, artifact: &str) -> Option<String>;
+    /// The Gradle module metadata (`.module`) of `group:artifact:version`, if available. Read
+    /// only for Gradle builds, and only when the POM says one was published.
+    fn module(&self, _group: &str, _artifact: &str, _version: &str) -> Option<String> {
+        None
+    }
 }
 
 /// POMs from local Maven repository layouts (`~/.m2/repository`, a cache), first hit wins.
@@ -71,6 +76,15 @@ impl PomSource for LocalRepositories {
                 .find_map(|f| fleetreach_core::repofile::read_to_string(dir.join(f)).ok())
         })
     }
+
+    fn module(&self, group: &str, artifact: &str, version: &str) -> Option<String> {
+        self.roots.iter().find_map(|root| {
+            let path = Self::dir(root, group, artifact)
+                .join(version)
+                .join(format!("{artifact}-{version}.module"));
+            fleetreach_core::repofile::read_to_string(path).ok()
+        })
+    }
 }
 
 /// Try each source in order.
@@ -82,6 +96,9 @@ impl PomSource for Chain<'_> {
     }
     fn metadata(&self, g: &str, a: &str) -> Option<String> {
         self.0.iter().find_map(|s| s.metadata(g, a))
+    }
+    fn module(&self, g: &str, a: &str, v: &str) -> Option<String> {
+        self.0.iter().find_map(|s| s.module(g, a, v))
     }
 }
 
@@ -119,6 +136,9 @@ struct Dep {
     classifier: Option<String>,
     optional: bool,
     exclusions: Vec<(String, String)>,
+    /// From Gradle module metadata: a `platform` dependency, whose managed versions and
+    /// constraints count as requests.
+    platform: bool,
 }
 
 impl Dep {
@@ -185,6 +205,7 @@ fn parse_deps(list: Option<Node<'_, '_>>) -> Vec<Dep> {
                             .collect()
                     })
                     .unwrap_or_default(),
+                platform: false,
             })
         })
         .collect()
@@ -254,6 +275,8 @@ struct Effective {
     modules: Vec<String>,
     /// Properties after this POM (inherited by its children).
     props: BTreeMap<String, String>,
+    /// Gradle `dependencyConstraints`: versions requested for artifacts that are present.
+    constraints: Vec<Dep>,
 }
 
 const MAX_DEPTH: usize = 24;
@@ -262,6 +285,8 @@ struct Resolver<'s> {
     source: &'s dyn PomSource,
     cache: BTreeMap<(String, String, String), Option<Effective>>,
     missing: BTreeSet<String>,
+    /// Resolving for Gradle: module metadata is read where published.
+    gradle: bool,
 }
 
 impl Resolver<'_> {
@@ -376,6 +401,7 @@ impl Resolver<'_> {
             mgmt,
             modules: raw.modules,
             props,
+            constraints: Vec::new(),
         })
     }
 
@@ -402,6 +428,18 @@ impl Resolver<'_> {
         // Guard against cycles while this POM is being built.
         self.cache.insert(key.clone(), None);
         let result = match self.source.pom(g, a, v) {
+            Some(xml) if self.gradle && crate::gradle_module::pom_points_to_module(&xml) => {
+                match self.module_effective(g, a, v) {
+                    Some(eff) => Some(eff),
+                    None => match self.effective(&xml, None, depth) {
+                        Ok(eff) => Some(eff),
+                        Err(e) => {
+                            self.missing.insert(format!("{g}:{a}:{v}: {e}"));
+                            None
+                        }
+                    },
+                }
+            }
             Some(xml) => match self.effective(&xml, None, depth) {
                 Ok(eff) => Some(eff),
                 Err(e) => {
@@ -417,6 +455,47 @@ impl Resolver<'_> {
         };
         self.cache.insert(key, result.clone());
         result
+    }
+
+    /// The runtime variant of `g:a:v`'s Gradle module metadata as an effective model; `None`
+    /// (with a note) when it is not available or has no such variant, so the POM is read.
+    fn module_effective(&mut self, g: &str, a: &str, v: &str) -> Option<Effective> {
+        let Some(json) = self.source.module(g, a, v) else {
+            self.missing.insert(format!(
+                "{g}:{a}:{v}: Gradle module metadata not available, read the POM instead"
+            ));
+            return None;
+        };
+        let variant = match crate::gradle_module::runtime_variant(&json) {
+            Ok(variant) => variant,
+            Err(e) => {
+                self.missing
+                    .insert(format!("{g}:{a}:{v}: {e}, read the POM instead"));
+                return None;
+            }
+        };
+        let dep = |d: crate::gradle_module::ModuleDep| Dep {
+            group: d.group,
+            artifact: d.module,
+            version: d.version,
+            exclusions: d.excludes,
+            platform: d.platform,
+            ..Dep::default()
+        };
+        let constraints: Vec<Dep> = variant.constraints.into_iter().map(dep).collect();
+        // A platform's constraints are its managed versions, for a BOM imported by the build.
+        let mgmt = constraints
+            .iter()
+            .map(|c| (c.mgmt_key(), c.clone()))
+            .collect();
+        Some(Effective {
+            group: g.to_string(),
+            artifact: a.to_string(),
+            deps: variant.dependencies.into_iter().map(dep).collect(),
+            mgmt,
+            constraints,
+            ..Effective::default()
+        })
     }
 
     /// A concrete version for a declared one: as is, or the highest listed match of a range.
@@ -621,6 +700,7 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
         source,
         cache: BTreeMap::new(),
         missing: BTreeSet::new(),
+        gradle: false,
     };
     // The reactor: the root POM and every module below it, from local files.
     let mut modules: Vec<Effective> = Vec::new();
@@ -670,6 +750,7 @@ pub(crate) fn resolve_gradle_module(
         source,
         cache: BTreeMap::new(),
         missing: BTreeSet::new(),
+        gradle: true,
     };
     let modules = vec![r.effective(xml, None, 0)?];
     let local = BTreeMap::new();
@@ -710,6 +791,20 @@ fn raise(pins: &mut Pins, key: MgmtKey, version: &str) -> bool {
         _ => {
             pins.insert(key, version.to_string());
             true
+        }
+    }
+}
+
+/// Gradle constraints count as requests for the artifacts they name: a module's own
+/// `dependencyConstraints`, and for a platform (BOM) also its managed versions.
+fn request_constraints(eff: &Effective, platform: bool, requests: Option<&mut Pins>) {
+    let Some(requests) = requests else {
+        return;
+    };
+    let managed = eff.mgmt.values().filter(|_| platform);
+    for c in eff.constraints.iter().chain(managed) {
+        if let Some(v) = c.version.as_ref().filter(|v| !v.starts_with(['[', '('])) {
+            raise(requests, c.mgmt_key(), v);
         }
     }
 }
@@ -778,6 +873,7 @@ fn walk(
                     None => r.remote(&dep.group, &dep.artifact, &version, 0),
                 };
                 if let Some(eff) = eff {
+                    request_constraints(&eff, dep.platform, requests.as_deref_mut());
                     enqueue_children(&eff, &scope, &exclusions, depth, &name, root_ix, &mut queue);
                 }
             }
@@ -820,6 +916,7 @@ fn walk(
             None => r.remote(&dep.group, &dep.artifact, &version, 0),
         };
         let Some(eff) = eff else { continue };
+        request_constraints(&eff, dep.platform, requests.as_deref_mut());
         enqueue_children(&eff, &scope, &exclusions, depth, &name, root_ix, &mut queue);
     }
     let packages = order

@@ -166,6 +166,16 @@ impl PomSource for Remote {
         }
         self.get(&format!("{}/maven-metadata.xml", layout(group, artifact)))
     }
+
+    fn module(&self, group: &str, artifact: &str, version: &str) -> Option<String> {
+        if !safe(group) || !safe(artifact) || !safe(version) {
+            return None;
+        }
+        self.get(&format!(
+            "{}/{version}/{artifact}-{version}.module",
+            layout(group, artifact)
+        ))
+    }
 }
 
 /// Whether a `<mirrorOf>` value covers Maven Central (repository id `central`, an external

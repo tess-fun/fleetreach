@@ -45,6 +45,7 @@
 mod db;
 mod error;
 mod gradle;
+mod gradle_module;
 mod lockfile;
 mod resolve;
 mod scan;
