@@ -21,6 +21,7 @@ members = [
     "crates/cli",
     "crates/jvm",
     "crates/sinks",
+    "crates/clr",
 ]
 # `reach-driver` links `rustc_private` and builds ONLY on its own pinned nightly
 # (see crates/reach-driver/rust-toolchain.toml). It is deliberately excluded from

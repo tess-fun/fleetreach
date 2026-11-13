@@ -1041,6 +1041,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fleetreach-clr"
+version = "1.6.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "fleetreach-core"
 version = "1.6.0"
 dependencies = [

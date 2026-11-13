@@ -1,0 +1,18 @@
+[package]
+name = "fleetreach-clr"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description = ".NET assemblies for fleetreach: reads ECMA-335 metadata and IL as data, for call graphs."
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
