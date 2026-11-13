@@ -36,6 +36,19 @@ def methods(pkg, v):
                     if len(parts)!=3: continue
                     out=os.path.join(d, parts[1]+'__'+os.path.basename(parts[2]))
                     with open(out,'wb') as f: f.write(nz.read(m))
+        # Split libraries keep the code in sibling packages (HotChocolate.Language.Utf8).
+        with zipfile.ZipFile(n) as nz:
+            spec=next((m for m in nz.namelist() if m.endswith('.nuspec') and '/' not in m),None)
+            text=nz.read(spec).decode('utf-8','replace') if spec else ''
+        for dep,ver in sorted(set(re.findall(r'<dependency id="([^"]+)" version="\[?([0-9A-Za-z.+-]+)', text))):
+            if not dep.lower().startswith(pkg.lower()+'.'): continue
+            dn=os.path.join(d,'sib.nupkg')
+            urllib.request.urlretrieve(f'https://api.nuget.org/v3-flatcontainer/{dep.lower()}/{ver.lower()}/{dep.lower()}.{ver.lower()}.nupkg', dn)
+            with zipfile.ZipFile(dn) as sz:
+                for m in sz.namelist():
+                    parts=m.split('/')
+                    if m.startswith('lib/') and m.lower().endswith('.dll') and len(parts)==3:
+                        with open(os.path.join(d, parts[1]+'__'+os.path.basename(parts[2])),'wb') as f: f.write(sz.read(m))
     dlls=[p for p in glob.glob(os.path.join(d,'*.dll'))]
     ms=set()
     for p in dlls:

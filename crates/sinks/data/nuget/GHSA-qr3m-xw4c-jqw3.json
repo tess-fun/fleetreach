@@ -9,7 +9,129 @@
     "HotChocolate.Language"
   ],
   "status": "proposed",
-  "verdict": "no-method-sink",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "HotChocolate.Language.ParserOptions",
+      "method": ".ctor"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": ".ctor"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "Parse"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseDirectives"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseEnumTypeDefinition"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseEnumTypeExtension"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseEnumValueDefinition"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseField"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseFieldDefinition"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseFragmentDefinition"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseFragmentSpread"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseInlineFragment"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseInputObjectTypeDefinition"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseInputObjectTypeExtension"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseInputValueDefinition"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseInterfaceTypeDefinition"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseInterfaceTypeExtension"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseObjectTypeDefinition"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseObjectTypeExtension"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseOperationDefinition"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseScalarTypeDefinition"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseScalarTypeExtension"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseSchemaDefinition"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseSchemaExtension"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseSelectionSet"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseTypeReference"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseUnionTypeDefinition"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseUnionTypeExtension"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseValueLiteral"
+    },
+    {
+      "class": "HotChocolate.Language.Utf8GraphQLParser",
+      "method": "ParseVariableDefinition"
+    }
+  ],
   "evidence": {
     "commits": [
       "https://github.com/ChilliCream/graphql-platform/pull/9528",
@@ -19,7 +141,39 @@
       "https://github.com/ChilliCream/graphql-platform/commit/4cbaf67d366f800fc1e484bc5c06dfcf27b45023",
       "https://github.com/ChilliCream/graphql-platform/commit/b185eb276c9ee227bd44616ff113be7f01a66c69",
       "https://github.com/ChilliCream/graphql-platform/commit/b9271e6a500484c002fd528dcd34d1a9b445480f"
+    ],
+    "excluded": [
+      {
+        "class": "HotChocolate.Language.ParserOptions",
+        "method": "get_MaxAllowedDirectives",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "HotChocolate.Language.ParserOptions",
+        "method": "get_MaxAllowedRecursionDepth",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "HotChocolate.Language.Properties.LangUtf8Resources",
+        "method": "get_Utf8GraphQLParser_ParseDirective_MaxAllowedDirectivesReached",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "HotChocolate.Language.Properties.LangUtf8Resources",
+        "method": "get_Utf8GraphQLParser_Start_MaxAllowedRecursionDepthReached",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "DecreaseDepth",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "IncreaseDepth",
+        "reason": "added by the fix"
+      }
     ]
   },
-  "note": "Proposed: no managed method of a source file the fix changed differs between HotChocolate.Language 15.1.13 -> 15.1.14 (net8.0); the flaw may be in native code, configuration or another package."
+  "note": "Proposed from the IL diff of HotChocolate.Language 15.1.13 -> 15.1.14 (net8.0): methods of the files the fix commits changed."
 }

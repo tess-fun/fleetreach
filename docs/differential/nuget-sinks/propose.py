@@ -36,26 +36,51 @@ def vkey(v):
 
 
 def pick_releases(record, package, versions):
-    """(last vulnerable, first fixed) of the advisory's latest fixed line, or None."""
-    fixes = []
+    """(last vulnerable, first fixed) of the advisory's latest fixed range, or None.
+
+    The vulnerable release is the highest one inside that same range: the highest before the
+    fix overall can sit in another line that was already fixed (YARP 1.0.1 against the
+    1.1.0-rc fix)."""
+    ranges = []
     for a in record.get("affected", []):
         if a["package"]["name"] != package:
             continue
         for r in a.get("ranges", []):
+            if r.get("type") != "ECOSYSTEM":
+                continue
+            intro = next((e["introduced"] for e in r["events"] if "introduced" in e), "0")
             for e in r.get("events", []):
                 if "fixed" in e:
-                    fixes.append(e["fixed"])
+                    ranges.append((intro, e["fixed"]))
     published = {v.lower(): v for v in versions}
-    fixes = [f for f in fixes if f.lower() in published]
-    if not fixes:
+    ranges = [(i, f) for i, f in ranges if f.lower() in published]
+    if not ranges:
         return None
-    fixed = max(fixes, key=vkey)
-    before = [v for v in versions if vkey(v) < vkey(fixed)]
+    intro, fixed = max(ranges, key=lambda r: vkey(r[1]))
+    before = [v for v in versions
+              if vkey(v) < vkey(fixed) and (intro == "0" or vkey(v) >= vkey(intro))]
     stable = [v for v in before if "-" not in v]
     pool = stable or before
     if not pool:
         return None
     return max(pool, key=vkey), published[fixed.lower()]
+
+
+def siblings(nupkg, package):
+    """(id, version) of the dependencies that are parts of the same library: ids under the
+    package's own (`HotChocolate.Language` -> `HotChocolate.Language.Utf8`), where split
+    libraries keep the code a meta-package only points at."""
+    with zipfile.ZipFile(nupkg) as z:
+        spec = next((n for n in z.namelist() if n.endswith(".nuspec") and "/" not in n), None)
+        text = z.read(spec).decode("utf-8", "replace") if spec else ""
+    out = set()
+    for dep, ver in re.findall(r'<dependency id="([^"]+)" version="([^"]+)"', text):
+        if not dep.lower().startswith(package.lower() + "."):
+            continue
+        m = re.fullmatch(r"\[?([0-9A-Za-z.+-]+)(?:\s*,\s*\)|\])?", ver.strip())
+        if m:
+            out.add((dep, m.group(1)))
+    return sorted(out)
 
 
 def extract(nupkg, dest):
@@ -139,7 +164,14 @@ def main():
                 if not os.path.exists(nupkg):
                     os.makedirs(os.path.dirname(nupkg), exist_ok=True)
                     get(f"{FLAT}/{lower}/{v.lower()}/{lower}.{v.lower()}.nupkg", nupkg)
-                dirs.append(extract(nupkg, d))
+                got = extract(nupkg, d)
+                for dep, dv in siblings(nupkg, package):
+                    dl = dep.lower()
+                    dn = os.path.join(work, "pkgs", f"{dl}.{dv.lower()}.nupkg")
+                    if not os.path.exists(dn):
+                        get(f"{FLAT}/{dl}/{dv.lower()}/{dl}.{dv.lower()}.nupkg", dn)
+                    got.update(extract(dn, d))
+                dirs.append(got)
             tfm = best_tfm(*dirs)
             if not tfm:
                 print(f"{rid}\tskip\tno shared lib target framework ({pair[0]} -> {pair[1]})", file=log, flush=True)

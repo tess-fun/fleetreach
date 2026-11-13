@@ -9,11 +9,24 @@
     "Yarp.ReverseProxy"
   ],
   "status": "proposed",
-  "verdict": "no-method-sink",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Yarp.ReverseProxy.Health.TransportFailureRateHealthPolicy",
+      "method": "RequestProxied"
+    }
+  ],
   "evidence": {
     "commits": [
       "https://github.com/microsoft/reverse-proxy/commit/11e6272da17beb03d0b44a19d3c4f1ffa52b7c38"
+    ],
+    "excluded": [
+      {
+        "class": "Yarp.ReverseProxy.Health.TransportFailureRateHealthPolicy",
+        "method": "DetermineIfDestinationFailed",
+        "reason": "added by the fix"
+      }
     ]
   },
-  "note": "Proposed: no managed method of a source file the fix changed differs between Yarp.ReverseProxy 1.0.1 -> 1.1.0-rc.1.22211.2 (net6.0); the flaw may be in native code, configuration or another package."
+  "note": "Proposed from the IL diff of Yarp.ReverseProxy 1.1.0-rc.1.22152.1 -> 1.1.0-rc.1.22211.2 (net6.0): methods of the files the fix commits changed."
 }

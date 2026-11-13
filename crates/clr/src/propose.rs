@@ -142,20 +142,32 @@ fn file_stem_of(type_name: &str) -> &str {
     simple.split('`').next().unwrap_or(simple)
 }
 
-/// The type names a changed C# file can hold: `Formats/Gif/GifDecoderCore.cs` holds
+/// The type names a changed source file can hold: `Formats/Gif/GifDecoderCore.cs` holds
 /// `GifDecoderCore`, a partial `Foo.Bar.cs` holds `Foo`, a generic `Foo{T}.cs` or
-/// `Foo`1.cs` holds `Foo`. Test sources and non-C# files hold none.
+/// `Foo`1.cs` holds `Foo`. Java sources count too: IKVM compiles them to assemblies
+/// (MPXJ.Net). Test sources and other files hold none.
 #[must_use]
 pub fn file_types(paths: &[String]) -> BTreeSet<String> {
     paths
         .iter()
-        .filter(|p| p.ends_with(".cs") && !is_test_path(p))
+        .filter(|p| !is_test_path(p))
         .filter_map(|p| {
-            let file = p.rsplit('/').next()?.strip_suffix(".cs")?;
+            let name = p.rsplit('/').next()?;
+            let file = name
+                .strip_suffix(".cs")
+                .or_else(|| name.strip_suffix(".java"))?;
             let stem = file.split(['.', '{', '`', '-']).next()?;
             (!stem.is_empty()).then(|| stem.to_string())
         })
         .collect()
+}
+
+/// Whether a type can come from one of the changed files: its own file, or a file whose
+/// name starts its name (`CompactBinary.cs` holds `CompactBinaryReader`1` and
+/// `CompactBinaryWriter`1`). Only changed methods are ever kept, so a loose match costs a
+/// reviewer a line, while a missed one hides the fix.
+fn in_changed_file(types: &BTreeSet<String>, stem: &str) -> bool {
+    types.contains(stem) || types.iter().any(|t| stem.starts_with(t.as_str()))
 }
 
 /// A path under a test or benchmark project.
@@ -202,7 +214,7 @@ pub fn propose(advisory: &Advisory, changes: &BTreeMap<(String, String), Change>
     for ((class, method), change) in changes {
         // Only the excluded methods of the changed files help a reviewer; the rest of a
         // release diff would bury them.
-        if narrow && !types.contains(file_stem_of(class)) {
+        if narrow && !in_changed_file(&types, file_stem_of(class)) {
             continue;
         }
         let reason = if *change == Change::Added {
@@ -309,6 +321,7 @@ mod tests {
             "src/ImageSharp/Formats/Gif/GifDecoderCore.cs",
             "src/Lib/Buffer{T}.cs",
             "src/Lib/Parser.Tokens.cs",
+            "src/main/java/net/sf/mpxj/merlin/MerlinReader.java",
             "tests/ImageSharp.Tests/Formats/GifTests.cs",
             "README.md",
         ]
@@ -317,9 +330,18 @@ mod tests {
         let types = file_types(&paths);
         assert_eq!(
             types.into_iter().collect::<Vec<_>>(),
-            ["Buffer", "GifDecoderCore", "Parser"]
+            ["Buffer", "GifDecoderCore", "MerlinReader", "Parser"]
         );
         assert_eq!(file_stem_of("Ns.Outer`1+Inner"), "Outer");
+        let one: BTreeSet<String> = ["CompactBinary".to_string()].into();
+        assert!(in_changed_file(
+            &one,
+            file_stem_of("Bond.Protocols.CompactBinaryReader`1")
+        ));
+        assert!(!in_changed_file(
+            &one,
+            file_stem_of("Bond.Protocols.SimpleBinaryReader`1")
+        ));
     }
 
     #[test]
