@@ -83,6 +83,28 @@ impl NpmDb {
             .map_err(|e| NpmError::db(e.path, e.source))
     }
 
+    /// [`NpmDb::load_with_overlay`], keeping only the packages `names` (as installed), and
+    /// remembering them: see [`NpmDb::missed`].
+    ///
+    /// # Errors
+    ///
+    /// As [`NpmDb::load_with_overlay`].
+    pub fn load_names<'n>(
+        root: &Path,
+        overlay: Option<&Path>,
+        names: impl IntoIterator<Item = &'n str>,
+    ) -> Result<NpmDb, NpmError> {
+        osv::load_names(root, overlay, &spec(), names)
+            .map(NpmDb)
+            .map_err(|e| NpmError::db(e.path, e.source))
+    }
+
+    /// Whether a DB from [`NpmDb::load_names`] was asked for a package outside its names.
+    #[must_use]
+    pub fn missed(&self) -> bool {
+        self.0.missed()
+    }
+
     /// [`NpmDb::load_with_overlay`], keeping only the packages `keep` accepts (by index key).
     ///
     /// # Errors

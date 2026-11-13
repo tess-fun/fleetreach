@@ -209,6 +209,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   memory. A scan of one npm repo peaks at 453 MB instead of 832 MB, a PyPI repo at 323 MB
   instead of 392 MB, with the same speed and byte-identical reports; distro exports for images
   no longer re-read the central directory per chunk.
+- **Scans load only the npm and PyPI advisories the fleet needs.** The package names each npm
+  and PyPI source declares are read first, and only their records are loaded from the two
+  largest exports. A lookup of any other name is noticed, and the repos are then scanned
+  again with the whole exports, so a missed name costs time, never a finding. On 10,471 repos
+  the scan peaks at 436 MB instead of 1,266 MB (22 polyglot repos: 155 MB instead of
+  1,020 MB) at the same speed, with byte-identical reports. Image scans, SBOM inputs and
+  `--incremental` load the whole exports as before.
 - **Faster image scans.** A distro record is first read for its package names only, and in full
   only when it names a package installed in the images: one Debian image scans in 1.6 s and
   350 MB instead of 2.6 s and 588 MB; 25 mixed images peak at 1.9 GB instead of 2.6 GB, with

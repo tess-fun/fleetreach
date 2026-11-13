@@ -135,6 +135,7 @@ impl Dbs {
         m: &Mirrors,
         overlay: Option<&Path>,
         rustsec: &AdvisoryDb,
+        names: &Names,
     ) -> Dbs {
         // Every OSV feeder layers the organization's own records (`[settings.advisories]`)
         // over its export; Go's offline matcher reads its own format and does not.
@@ -167,9 +168,16 @@ impl Dbs {
         let root = |mirror: Option<&str>, path: fn(&str) -> Option<PathBuf>| mirror.and_then(path);
         rayon::scope(|s| {
             use Ecosystem as E;
-            spawn(s, npm, has(E::Npm), root(m.npm, npm_db_path), |r: &Path| {
-                NpmDb::load_with_overlay(r, overlay)
-            });
+            spawn(
+                s,
+                npm,
+                has(E::Npm),
+                root(m.npm, npm_db_path),
+                |r: &Path| match &names.npm {
+                    Some(n) => NpmDb::load_names(r, overlay, n.iter().map(String::as_str)),
+                    None => NpmDb::load_with_overlay(r, overlay),
+                },
+            );
             // The Go mirror is only the Tier-C fallback, unused when govulncheck runs.
             let go_wanted = go.govulncheck.is_none() && has(E::Go);
             let go_root = root(go.vuln_db, fleetreach_go::offline_db_path);
@@ -179,7 +187,10 @@ impl Dbs {
                 pypi,
                 has(E::Pypi),
                 root(m.pypi, pypi_db_path),
-                |r: &Path| PyPiDb::load_with_overlay(r, overlay),
+                |r: &Path| match &names.pypi {
+                    Some(n) => PyPiDb::load_names(r, overlay, n.iter().map(String::as_str)),
+                    None => PyPiDb::load_with_overlay(r, overlay),
+                },
             );
             let rubygems_root = root(m.rubygems, rubygems_db_path);
             spawn(s, rubygems, has(E::RubyGems), rubygems_root, |r: &Path| {
@@ -234,6 +245,50 @@ impl Dbs {
             );
         });
         dbs
+    }
+
+    /// Whether a DB loaded for named packages only was asked about another one.
+    fn missed(&self) -> bool {
+        matches!(&self.npm, Some(Ok(db)) if db.missed())
+            || matches!(&self.pypi, Some(Ok(db)) if db.missed())
+    }
+}
+
+/// The package names the fleet's npm and PyPI units declare, read before the scan so only
+/// their advisories are loaded from the two largest exports. `None` loads the whole export.
+#[derive(Default)]
+struct Names {
+    npm: Option<BTreeSet<String>>,
+    pypi: Option<BTreeSet<String>>,
+}
+
+impl Names {
+    /// Read the names from each unit's own sources, as `sbom` does. A unit that cannot be read
+    /// here leaves its ecosystem whole: the scan reports the error itself.
+    fn of(units: &[&ScanUnit]) -> Names {
+        let read = |eco: Ecosystem| -> Option<BTreeSet<String>> {
+            let lists: Vec<Option<Vec<String>>> = units
+                .par_iter()
+                .filter(|u| u.ecosystem == eco)
+                .map(|u| {
+                    let sources = crate::inventory::unit_inventory(u, None).ok()?;
+                    Some(
+                        sources
+                            .into_iter()
+                            .flat_map(|s| s.packages.into_iter().map(|p| p.name))
+                            .collect(),
+                    )
+                })
+                .collect();
+            lists
+                .into_iter()
+                .collect::<Option<Vec<_>>>()
+                .map(|l| l.into_iter().flatten().collect())
+        };
+        Names {
+            npm: read(Ecosystem::Npm),
+            pypi: read(Ecosystem::Pypi),
+        }
     }
 }
 
@@ -319,23 +374,38 @@ pub(crate) fn scan_fleet_with(
         .collect();
     data.reused = reused.iter().flatten().count();
     // What was reused needs no advisory database.
-    let has = |eco: Ecosystem| {
-        image_ecosystems.contains(&eco)
-            || plans
-                .iter()
-                .zip(&reused)
-                .filter(|(_, hit)| hit.is_none())
-                .any(|(p, _)| p.units.iter().any(|u| u.ecosystem == eco))
-    };
+    let needed: BTreeSet<Ecosystem> = plans
+        .iter()
+        .zip(&reused)
+        .filter(|(_, hit)| hit.is_none())
+        .flat_map(|(p, _)| p.units.iter().map(|u| u.ecosystem))
+        .collect();
+    let has = |eco: Ecosystem| image_ecosystems.contains(&eco) || needed.contains(&eco);
 
-    let dbs = Dbs::load(&has, go, mirrors, config.osv.advisories.as_deref(), db);
+    // Without images, SBOMs or a result cache (whose writes would land before the check
+    // below), npm and PyPI load only the packages the units declare. A lookup outside those
+    // marks the DB, and the repos are scanned again with the whole exports.
+    let overlay = config.osv.advisories.as_deref();
+    let filtered = images.prepared.is_empty()
+        && images.sboms.is_empty()
+        && session.is_none()
+        && plans
+            .iter()
+            .all(|p| p.units.iter().all(|u| u.sbom.is_none()));
+    let names = if filtered {
+        let units: Vec<&ScanUnit> = plans.iter().flat_map(|p| p.units.iter()).collect();
+        Names::of(&units)
+    } else {
+        Names::default()
+    };
+    let mut dbs = Dbs::load(&has, go, mirrors, overlay, db, &names);
     let distro_db = load_distro_db(images);
 
     // Each repo is independent and shares only the read-only advisory DBs, so the
     // per-repo scan (dominated by lockfile parsing) fans out across cores. Results
     // are collected in config order and merged serially, so the assembled output
     // is byte-identical to a serial scan regardless of completion order.
-    let scan_unit_with = |unit: &ScanUnit| {
+    let scan_unit_in = |unit: &ScanUnit, dbs: &Dbs| {
         if let Some(sbom) = &unit.sbom {
             if matches!(
                 unit.ecosystem,
@@ -343,7 +413,7 @@ pub(crate) fn scan_fleet_with(
             ) {
                 return scan_sbom_os(&unit.repo.id, sbom, images, distro_db.as_ref());
             }
-            return scan_sbom_unit(db, &unit.repo, unit.ecosystem, sbom, &dbs);
+            return scan_sbom_unit(db, &unit.repo, unit.ecosystem, sbom, dbs);
         }
         if unit.alongside && dbs.ghactions.is_none() {
             return RepoResult::scanned(&unit.repo.id, Vec::new(), Vec::new()).with_coverage(
@@ -365,27 +435,36 @@ pub(crate) fn scan_fleet_with(
             unit.ecosystem,
             host_triple,
             go,
-            &dbs,
+            dbs,
             mirrors.maven_remote,
         )
     };
-    let per_repo: Vec<RepoResult> = plans
-        .par_iter()
-        .zip(reused.par_iter_mut())
-        .zip(keys.par_iter().zip(&config.repos))
-        .map(|((plan, hit), (key, repo))| {
-            if let Some(result) = hit.take() {
-                return result;
-            }
-            let result = merge_units(plan, plan.units.iter().map(|u| (u, scan_unit_with(u))));
-            if let (Some(session), Some(key)) = (&session, key) {
-                if matches!(result.outcome.status, ScanStatus::Scanned { .. }) {
-                    session.store.put(repo, key, &result);
+    let scan_repos = |dbs: &Dbs, reused: &mut [Option<RepoResult>]| -> Vec<RepoResult> {
+        plans
+            .par_iter()
+            .zip(reused.par_iter_mut())
+            .zip(keys.par_iter().zip(&config.repos))
+            .map(|((plan, hit), (key, repo))| {
+                if let Some(result) = hit.take() {
+                    return result;
                 }
-            }
-            result
-        })
-        .collect();
+                let units = plan.units.iter().map(|u| (u, scan_unit_in(u, dbs)));
+                let result = merge_units(plan, units);
+                if let (Some(session), Some(key)) = (&session, key) {
+                    if matches!(result.outcome.status, ScanStatus::Scanned { .. }) {
+                        session.store.put(repo, key, &result);
+                    }
+                }
+                result
+            })
+            .collect()
+    };
+    let mut per_repo = scan_repos(&dbs, &mut reused);
+    if filtered && dbs.missed() {
+        dbs = Dbs::load(&has, go, mirrors, overlay, db, &Names::default());
+        per_repo = scan_repos(&dbs, &mut reused);
+    }
+    let scan_unit_with = |unit: &ScanUnit| scan_unit_in(unit, &dbs);
 
     for (plan, result) in plans.iter().zip(per_repo) {
         data.vulnerabilities.extend(result.vulnerabilities);

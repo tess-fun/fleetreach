@@ -55,7 +55,10 @@ pub fn repo_inventory_with(repo: &Repo, maven: Option<&Remote>) -> RepoInventory
     inv
 }
 
-fn unit_inventory(unit: &ScanUnit, maven: Option<&Remote>) -> Result<Vec<SourceInventory>, String> {
+pub(crate) fn unit_inventory(
+    unit: &ScanUnit,
+    maven: Option<&Remote>,
+) -> Result<Vec<SourceInventory>, String> {
     let dir = unit.repo.path.as_path();
     let one = |source: SourceInventory| Ok(vec![source]);
     match unit.ecosystem {

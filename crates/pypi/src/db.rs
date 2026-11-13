@@ -90,6 +90,28 @@ impl PyPiDb {
             .map_err(|e| PyPiError::db(e.path, e.source))
     }
 
+    /// [`PyPiDb::load_with_overlay`], keeping only the packages `names` (as installed), and
+    /// remembering them: see [`PyPiDb::missed`].
+    ///
+    /// # Errors
+    ///
+    /// As [`PyPiDb::load_with_overlay`].
+    pub fn load_names<'n>(
+        root: &Path,
+        overlay: Option<&Path>,
+        names: impl IntoIterator<Item = &'n str>,
+    ) -> Result<PyPiDb, PyPiError> {
+        osv::load_names(root, overlay, &spec(), names)
+            .map(PyPiDb)
+            .map_err(|e| PyPiError::db(e.path, e.source))
+    }
+
+    /// Whether a DB from [`PyPiDb::load_names`] was asked for a package outside its names.
+    #[must_use]
+    pub fn missed(&self) -> bool {
+        self.0.missed()
+    }
+
     /// [`PyPiDb::load_with_overlay`], keeping only the packages `keep` accepts (by index key).
     ///
     /// # Errors

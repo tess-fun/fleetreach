@@ -289,10 +289,11 @@ pub fn affected_fixed<V: Ord + Clone>(
 // the wire schema, the parallel dir/zip reader, the by-package index, and the parse-once
 // range building all live here, once — the place where a missed case is a false-clean.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use rayon::prelude::*;
 use serde::Deserialize;
@@ -328,12 +329,21 @@ pub struct Advisory<V> {
 #[derive(Debug)]
 pub struct OsvDb<V> {
     by_package: BTreeMap<String, Vec<Advisory<V>>>,
+    /// Set by [`load_names`]: the keys kept, and whether anything else was asked for.
+    kept: Option<Kept>,
+}
+
+#[derive(Debug)]
+struct Kept {
+    keys: HashSet<String>,
+    missed: AtomicBool,
 }
 
 impl<V> Default for OsvDb<V> {
     fn default() -> Self {
         OsvDb {
             by_package: BTreeMap::new(),
+            kept: None,
         }
     }
 }
@@ -342,7 +352,19 @@ impl<V> OsvDb<V> {
     /// The advisories indexed under `key` (a name already run through
     /// [`Spec::normalize_name`]), or an empty slice if none.
     pub fn advisories_for(&self, key: &str) -> &[Advisory<V>] {
+        if let Some(kept) = &self.kept {
+            if !kept.keys.contains(key) {
+                kept.missed.store(true, Ordering::Relaxed);
+            }
+        }
         self.by_package.get(key).map_or(&[], Vec::as_slice)
+    }
+    /// Whether a DB from [`load_names`] was asked for a package it did not keep: its answers
+    /// may then be incomplete, and the caller must load the full DB and ask again.
+    pub fn missed(&self) -> bool {
+        self.kept
+            .as_ref()
+            .is_some_and(|k| k.missed.load(Ordering::Relaxed))
     }
     /// Total advisory-package index entries — for diagnostics/tests.
     pub fn len(&self) -> usize {
@@ -513,6 +535,31 @@ where
     Ok(db)
 }
 
+/// [`load_only`] for the packages `names` (as installed; normalized here with the spec), which
+/// also remembers the kept keys: a lookup of any other key marks the DB [`OsvDb::missed`], so
+/// a caller that guessed the names wrong learns it instead of reporting clean.
+///
+/// # Errors
+///
+/// As [`load_only`].
+pub fn load_names<'n, V>(
+    root: &Path,
+    overlay: Option<&Path>,
+    spec: &Spec<V>,
+    names: impl IntoIterator<Item = &'n str>,
+) -> Result<OsvDb<V>, LoadError>
+where
+    V: Ord + Clone + Send,
+{
+    let keys: HashSet<String> = names.into_iter().map(spec.normalize_name).collect();
+    let mut db = load_only(root, overlay, spec, &|key: &str| keys.contains(key))?;
+    db.kept = Some(Kept {
+        keys,
+        missed: AtomicBool::new(false),
+    });
+    Ok(db)
+}
+
 /// Every `*.json` OSV record under `dir` (recursively, in path order, hidden entries
 /// skipped), as layered by [`load_with_overlay`].
 ///
@@ -654,6 +701,7 @@ where
         .collect::<Result<_, LoadError>>()?;
 
     Ok(OsvDb {
+        kept: None,
         by_package: merge(per_file),
     })
 }
@@ -681,6 +729,7 @@ where
         .collect::<Result<_, LoadError>>()?;
 
     Ok(OsvDb {
+        kept: None,
         by_package: merge(per_entry),
     })
 }
@@ -1562,6 +1611,29 @@ mod tests {
             r#"{{"id":"{id}"{extra},"affected":[{{"package":{{"ecosystem":"npm","name":"{name}"}},
             "ranges":[{{"type":"SEMVER","events":[{{"introduced":"0"}},{{"fixed":"{fixed}"}}]}}]}}]}}"#
         )
+    }
+
+    #[test]
+    fn a_db_loaded_for_named_packages_notices_any_other_lookup() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("GHSA-1.json"),
+            record("GHSA-1", "a", "1.0.0", ""),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("GHSA-2.json"),
+            record("GHSA-2", "b", "2.0.0", ""),
+        )
+        .unwrap();
+        let db = load_names(dir.path(), None, &semver_spec(), ["a"]).unwrap();
+        assert_eq!(db.advisories_for("a").len(), 1);
+        assert!(!db.missed(), "a kept name is no miss");
+        assert!(db.advisories_for("b").is_empty(), "b was not loaded");
+        assert!(db.missed(), "asking for b must be noticed");
+        let full = load(dir.path(), &semver_spec()).unwrap();
+        assert_eq!(full.advisories_for("b").len(), 1);
+        assert!(!full.missed(), "a full DB never misses");
     }
 
     #[test]
