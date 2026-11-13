@@ -19,6 +19,7 @@ pub mod db;
 pub mod db_cmd;
 pub mod depsdev;
 pub mod diff;
+pub mod ecosystems;
 pub mod enrich;
 pub mod evidence;
 pub mod exploits;

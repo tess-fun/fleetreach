@@ -66,6 +66,8 @@ enum Commands {
     Serve(crate::serve::ServeArgs),
     /// What a set of bumps would clear, leave and add, from a saved report, before any edit.
     Whatif(crate::whatif::WhatifArgs),
+    /// The coverage matrix: files read per ecosystem, comparators and how each was checked.
+    Ecosystems(crate::ecosystems::EcosystemsArgs),
 }
 
 #[derive(Subcommand)]
@@ -130,6 +132,7 @@ pub fn dispatch(cli: Cli) -> u8 {
         Commands::Triage(command) => crate::triage::run_triage(command),
         Commands::Serve(args) => crate::serve::run_serve(args),
         Commands::Whatif(args) => crate::whatif::run_whatif(&args),
+        Commands::Ecosystems(args) => crate::ecosystems::run_ecosystems(&args),
     }
 }
 

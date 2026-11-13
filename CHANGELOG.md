@@ -8,6 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`fleetreach ecosystems` prints the coverage matrix.** Per ecosystem: the files read and
+  the coverage each gives, where advisories come from, the version rules, what they were
+  checked against and the result (table, `-f markdown` or `-f json`). The website's ecosystem
+  overview is generated from it and CI fails when the page is out of date; a test runs every
+  listed file through the scan's own detection.
 - **Gradle module metadata is read.** For a Gradle build without a lockfile, a library
   published with a `.module` file is resolved from it instead of its POM, as Gradle does: the
   JVM runtime variant (Kotlin multiplatform `-jvm` artifacts, standard-JVM over Android, never

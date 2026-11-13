@@ -23,6 +23,7 @@ Generated from `fleetreach --help`; each command's page has its full help.
 | [`triage`](/fleetreach/docs/reference/cli/triage/) | Decisions on findings, kept as files in git: set, list and export them |
 | [`serve`](/fleetreach/docs/reference/cli/serve/) | Browse the history report and record triage decisions in a browser (plain HTTP) |
 | [`whatif`](/fleetreach/docs/reference/cli/whatif/) | What a set of bumps would clear, leave and add, from a saved report, before any edit |
+| [`ecosystems`](/fleetreach/docs/reference/cli/ecosystems/) | The coverage matrix: files read per ecosystem, comparators and how each was checked |
 
 ```text
 Fleet-native dependency security audit across 12 ecosystems
@@ -30,21 +31,22 @@ Fleet-native dependency security audit across 12 ecosystems
 Usage: fleetreach <COMMAND>
 
 Commands:
-  scan      Scan the fleet for advisories
-  diff      Compare two saved JSON reports: new vs. fixed vs. still-open findings
-  vex       Operate on OpenVEX documents (drift gate, witness verification)
-  db        Manage the advisory data: osv.dev exports, CVE 5.x and vendor CSAF indexes, quality
-  fleet     Discover and check out the repos named by `[[source]]` entries
-  sbom      Write a CycloneDX 1.7, SPDX 2.3 or SPDX 3 SBOM per repo from the same sources `scan` reads
-  licenses  License inventory and policy violations across the fleet
-  fix       Plan and apply verified dependency fixes from the remediation queue
-  history   Trends, age, SLA breaches and time to fix from `scan --history-dir` snapshots
-  notify    Send what the newest history run changed, and SLA breaches, to a webhook or issues
-  report    Publishable reports from the scan history
-  triage    Decisions on findings, kept as files in git: set, list and export them
-  serve     Browse the history report and record triage decisions in a browser (plain HTTP)
-  whatif    What a set of bumps would clear, leave and add, from a saved report, before any edit
-  help      Print this message or the help of the given subcommand(s)
+  scan        Scan the fleet for advisories
+  diff        Compare two saved JSON reports: new vs. fixed vs. still-open findings
+  vex         Operate on OpenVEX documents (drift gate, witness verification)
+  db          Manage the advisory data: osv.dev exports, CVE 5.x and vendor CSAF indexes, quality
+  fleet       Discover and check out the repos named by `[[source]]` entries
+  sbom        Write a CycloneDX 1.7, SPDX 2.3 or SPDX 3 SBOM per repo from the same sources `scan` reads
+  licenses    License inventory and policy violations across the fleet
+  fix         Plan and apply verified dependency fixes from the remediation queue
+  history     Trends, age, SLA breaches and time to fix from `scan --history-dir` snapshots
+  notify      Send what the newest history run changed, and SLA breaches, to a webhook or issues
+  report      Publishable reports from the scan history
+  triage      Decisions on findings, kept as files in git: set, list and export them
+  serve       Browse the history report and record triage decisions in a browser (plain HTTP)
+  whatif      What a set of bumps would clear, leave and add, from a saved report, before any edit
+  ecosystems  The coverage matrix: files read per ecosystem, comparators and how each was checked
+  help        Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help     Print help

@@ -8,7 +8,8 @@
     "preview": "astro preview",
     "examples": "node scripts/examples.mjs",
     "cli-reference": "node scripts/cli-reference.mjs",
-    "check": "node scripts/examples.mjs --check && node scripts/cli-reference.mjs --check"
+    "ecosystems": "node scripts/ecosystems.mjs",
+    "check": "node scripts/examples.mjs --check && node scripts/cli-reference.mjs --check && node scripts/ecosystems.mjs --check"
   },
   "engines": {
     "node": ">=22.22.0"

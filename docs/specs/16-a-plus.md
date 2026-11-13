@@ -846,6 +846,10 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   (96 records together); the decision is recorded and revisited if osv.dev volume changes.
 - **Effort**: S on its own, XL with row 10. **Release**: 1.6.0 (deb, apk) and 1.7.0 (rpm).
 - **Proof**: per-ecosystem comparator oracle (row 10).
+- **Status (1.7.0)**: the coverage matrix is done. It lives in code (`crates/cli/src/ecosystems.rs`),
+  `fleetreach ecosystems` prints it, `website/scripts/ecosystems.mjs` writes it into the ecosystem
+  overview with a `--check` that CI runs, and a test runs every listed file through `plan_repo`.
+  The other ecosystems remain the work of row 10.
 
 #### 8. yarn / pnpm / bun (A to A+)
 
