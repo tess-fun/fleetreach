@@ -180,6 +180,12 @@ fn composer_packages(data: &[u8]) -> Option<Vec<(String, String)>> {
 
 /// The NuGet packages a `.deps.json` lists: its `libraries` keys are `Name/Version`, and those
 /// of type `project` are the application itself. `None` if it does not parse.
+///
+/// A package that puts no code into the application is left out: in the runtime target's
+/// entry for it, no `runtime`, `runtimeTargets` or `native` assets (Trivy's rule). The build
+/// dropped its assemblies, most often because the runtime pack ships a newer copy
+/// (`System.Private.Uri/4.3.0` beside .NET 6), so its advisories are about code that is not
+/// there. A package is kept whenever that cannot be told: no runtime target, or no entry for it.
 fn dotnet_packages(data: &[u8]) -> Option<Vec<(String, String)>> {
     #[derive(serde::Deserialize)]
     struct Library {
@@ -187,15 +193,39 @@ fn dotnet_packages(data: &[u8]) -> Option<Vec<(String, String)>> {
         kind: Option<String>,
     }
     #[derive(serde::Deserialize)]
+    struct Target {
+        name: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct Assets {
+        runtime: Option<serde::de::IgnoredAny>,
+        #[serde(rename = "runtimeTargets")]
+        runtime_targets: Option<serde::de::IgnoredAny>,
+        native: Option<serde::de::IgnoredAny>,
+    }
+    #[derive(serde::Deserialize)]
     struct Deps {
         #[serde(default)]
         libraries: BTreeMap<String, Library>,
+        #[serde(rename = "runtimeTarget")]
+        runtime_target: Option<Target>,
+        #[serde(default)]
+        targets: BTreeMap<String, BTreeMap<String, Assets>>,
     }
     let deps: Deps = serde_json::from_slice(data).ok()?;
+    let target = deps
+        .runtime_target
+        .as_ref()
+        .and_then(|t| deps.targets.get(&t.name));
     Some(
         deps.libraries
-            .into_iter()
+            .iter()
             .filter(|(_, l)| l.kind.as_deref() != Some("project"))
+            .filter(|(key, _)| {
+                target.and_then(|t| t.get(*key)).is_none_or(|a| {
+                    a.runtime.is_some() || a.runtime_targets.is_some() || a.native.is_some()
+                })
+            })
             .filter_map(|(key, _)| {
                 let (name, version) = key.split_once('/')?;
                 Some((name.to_string(), version.to_string()))
@@ -495,6 +525,44 @@ mod tests {
         );
         assert_eq!(dotnet_packages(b"not json"), None);
         assert!(wanted("app/MyApp.deps.json"));
+    }
+
+    // A package whose assemblies the build dropped (the runtime pack ships a newer copy) puts
+    // no code into the app; one the target does not describe is kept.
+    #[test]
+    fn dotnet_packages_without_assets_are_left_out() {
+        let deps = br#"{
+            "runtimeTarget": {"name": ".NETCoreApp,Version=v6.0/linux-x64"},
+            "targets": {".NETCoreApp,Version=v6.0/linux-x64": {
+                "System.Private.Uri/4.3.0": {"dependencies": {"runtime.unix.System.Private.Uri": "4.3.0"}},
+                "System.Text.Json/6.0.10": {"runtime": {"lib/net6.0/System.Text.Json.dll": {}}},
+                "SQLitePCLRaw.lib.e_sqlite3/2.1.6": {"runtimeTargets": {"runtimes/linux-x64/native/libe_sqlite3.so": {}}},
+                "Native.Only/1.0.0": {"native": {"x.so": {}}}
+            }},
+            "libraries": {
+                "System.Private.Uri/4.3.0": {"type": "package"},
+                "System.Text.Json/6.0.10": {"type": "package"},
+                "SQLitePCLRaw.lib.e_sqlite3/2.1.6": {"type": "package"},
+                "Native.Only/1.0.0": {"type": "package"},
+                "Not.In.Target/2.0.0": {"type": "package"}
+            }}"#;
+        let names: Vec<String> = dotnet_packages(deps)
+            .unwrap()
+            .into_iter()
+            .map(|(n, _)| n)
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "Native.Only",
+                "Not.In.Target",
+                "SQLitePCLRaw.lib.e_sqlite3",
+                "System.Text.Json"
+            ]
+        );
+        // No runtime target: nothing can be told, so nothing is left out.
+        let bare = br#"{"targets": {"x": {"A/1.0.0": {}}}, "libraries": {"A/1.0.0": {"type": "package"}}}"#;
+        assert_eq!(dotnet_packages(bare).unwrap().len(), 1);
     }
 
     #[test]

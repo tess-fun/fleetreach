@@ -18,8 +18,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and `appsettings.json`), and what the runtime calls on its own (`ToString`, `Dispose`, async
   state machines, ASP.NET Core interfaces). Checked against the runtime: on 11 apps built from
   real NuGet packages, every one of the 6,758 methods the JIT compiled in their assemblies is
-  in the graph. No NuGet sink records ship yet, so findings get a verdict only once records are
-  added.
+  in the graph. 91 reviewed NuGet sink records ship, each narrowed by hand from its fix commit
+  and the IL of the releases either side of it, with its sinks checked across every affected
+  release line. On 11 public .NET app images (Jellyfin, Sonarr, Radarr, Lidarr, Prowlarr,
+  Jackett, Squidex, Duplicati, Kavita, EventStore) 14 NuGet findings had a record: 8 reached
+  with a chain, 1 not reached (OpenTelemetry's propagators, which nothing in EventStore calls),
+  5 unknown with the reason.
 
 - **Signed webhooks.** `fleetreach notify --webhook-secret-env VAR` signs each post as
   Standard Webhooks specifies (`webhook-id`, `webhook-timestamp`, `webhook-signature`: HMAC-SHA256
@@ -230,6 +234,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   about 600 MB for `whatif` and from 836 MB to 607 MB for `fix plan`, with byte-identical output.
 
 ### Fixed
+
+- **NuGet packages that put no code into an image were reported.** A `.deps.json` lists every
+  package the build resolved, also those whose assemblies it dropped because the runtime pack
+  ships a newer copy (`System.Private.Uri/4.3.0` beside .NET 6, `System.Text.Encodings.Web`
+  4.7.0 in a plugin of an 8.0 host) and build-only tools (`Microsoft.Build.Tasks.Git`). A
+  package with no `runtime`, `runtimeTargets` or `native` assets in the runtime target is now
+  left out, as Trivy does; one the target does not describe is kept. On 11 .NET app images, 22
+  of 82 NuGet findings went, 8 advisories entirely, and nothing else changed.
+- **.NET graphs reached a method the runtime could not call.** A new virtual method on a type
+  implementing any interface from outside the graph counted as the runtime's way in, so
+  ImageSharp's `Image<T>.Accept` was reached as soon as an image was made (`Image` is
+  `IDisposable`), with a chain that skipped real calls. The graph now reads the interfaces of
+  the image's shared frameworks (metadata only) and keeps such a method only under a name one
+  of them declares; an interface it cannot read may still declare anything. The JIT check
+  still misses nothing.
 
 - **JVM witnesses named a temporary file.** A chain that started at a resource (a
   `META-INF/services` file, `web.xml`) named the scan's temporary copy of its archive, a path
