@@ -8,32 +8,16 @@
   "packages": [
     "Sustainsys.Saml2"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
-    {
-      "class": "Sustainsys.Saml2.Configuration.SPOptions",
-      "method": ".ctor"
-    },
-    {
-      "class": "Sustainsys.Saml2.Saml2P.Saml2Response",
-      "method": ".ctor"
-    },
     {
       "class": "Sustainsys.Saml2.Saml2P.Saml2Response",
       "method": "CreateClaims"
     },
     {
       "class": "Sustainsys.Saml2.Saml2P.Saml2Response",
-      "method": "GetAllAssertionElementNodes"
-    },
-    {
-      "class": "Sustainsys.Saml2.Saml2P.Saml2Response",
       "method": "GetClaims"
-    },
-    {
-      "class": "Sustainsys.Saml2.Saml2P.Saml2Response",
-      "method": "ValidateSignature"
     }
   ],
   "evidence": {
@@ -85,8 +69,32 @@
         "class": "Sustainsys.Saml2.Saml2P.Saml2Response",
         "method": "set_ExpectedInResponseTo",
         "reason": "added by the fix"
+      },
+      {
+        "class": "Sustainsys.Saml2.Configuration.SPOptions",
+        "method": ".ctor",
+        "reason": "not the token validation"
+      },
+      {
+        "class": "Sustainsys.Saml2.Saml2P.Saml2Response",
+        "method": ".ctor",
+        "reason": "not the token validation"
+      },
+      {
+        "class": "Sustainsys.Saml2.Saml2P.Saml2Response",
+        "method": "GetAllAssertionElementNodes",
+        "reason": "not the token validation"
+      },
+      {
+        "class": "Sustainsys.Saml2.Saml2P.Saml2Response",
+        "method": "ValidateSignature",
+        "reason": "not the token validation"
       }
     ]
   },
-  "note": "Proposed from the IL diff of Sustainsys.Saml2 2.4.0 -> 2.5.0 (netstandard2.0): methods of the files the fix commits changed."
+  "note": "The fix turns on ValidateTokenReplay with the SPOptions replay cache in Saml2Response.CreateClaims and removes a Saml2PSecurityTokenHandler.ValidateTokenReplay override. GetClaims is the public entry. Reached wherever the app accepts SAML2 responses.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

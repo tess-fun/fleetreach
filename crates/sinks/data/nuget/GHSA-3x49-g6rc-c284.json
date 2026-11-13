@@ -8,7 +8,7 @@
   "packages": [
     "LiteDB"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -34,5 +34,9 @@
       }
     ]
   },
-  "note": "Proposed from the IL diff of LiteDB 5.0.12 -> 5.0.13 (netstandard2.0): methods of the files the fix commits changed."
+  "note": "From the 5.0.12 -> 5.0.13 IL diff. BsonMapper.Deserialize loads the class named by a document's _type field. Reached wherever the app maps documents to objects, a risk when end users can supply the JSON.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

@@ -8,30 +8,39 @@
   "packages": [
     "Lucene.Net.Replicator"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "Lucene.Net.Replicator.Http.HttpClientBase",
-      "method": "ExecutePost"
-    },
-    {
-      "class": "Lucene.Net.Replicator.Http.HttpClientBase",
       "method": "ThrowKnownError"
-    },
-    {
-      "class": "Lucene.Net.Replicator.Http.HttpClientBase+ConsumingStream",
-      "method": "Write"
-    },
-    {
-      "class": "Lucene.Net.Replicator.Http.ReplicationService",
-      "method": "Perform"
     }
   ],
   "evidence": {
     "commits": [
       "https://github.com/apache/lucenenet/commit/1f61dd0fdb465e17141a79d22eb2f2bc02059acc"
+    ],
+    "excluded": [
+      {
+        "class": "Lucene.Net.Replicator.Http.HttpClientBase",
+        "method": "ExecutePost",
+        "reason": "not the client-side deserialization"
+      },
+      {
+        "class": "Lucene.Net.Replicator.Http.HttpClientBase+ConsumingStream",
+        "method": "Write",
+        "reason": "not the client-side deserialization"
+      },
+      {
+        "class": "Lucene.Net.Replicator.Http.ReplicationService",
+        "method": "Perform",
+        "reason": "not the client-side deserialization"
+      }
     ]
   },
-  "note": "Proposed from the IL diff of Lucene.Net.Replicator 4.8.0-beta00016 -> 4.8.0-beta00017 (net6.0): methods of the files the fix commits changed."
+  "note": "The fix deletes a static JsonSerializerSettings with TypeNameHandling.All, which the method diff cannot see. HttpClientBase.ThrowKnownError deserializes an error response with those settings, so a server or interceptor picks the type. Reached wherever the app runs a replication client.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

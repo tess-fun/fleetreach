@@ -8,7 +8,7 @@
   "packages": [
     "Refit"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -28,5 +28,9 @@
       }
     ]
   },
-  "note": "Proposed from the IL diff of Refit 7.2.1 -> 7.2.22 (net8.0): methods of the files the fix commits changed."
+  "note": "From the 7.2.1 -> 7.2.22 IL diff. RequestBuilderImplementation.SetHeader adds Header, HeaderCollection and Authorize values with TryAddWithoutValidation, which lets CR and LF through. Reached wherever a Refit interface sends a header from those attributes.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

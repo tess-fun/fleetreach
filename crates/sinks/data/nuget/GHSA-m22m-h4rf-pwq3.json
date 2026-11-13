@@ -8,56 +8,12 @@
   "packages": [
     "SharpZipLib"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
-      "class": "ICSharpCode.SharpZipLib.GZip.GZipOutputStream",
-      "method": "CleanFilename"
-    },
-    {
       "class": "ICSharpCode.SharpZipLib.Tar.TarArchive",
       "method": "ExtractEntry"
-    },
-    {
-      "class": "ICSharpCode.SharpZipLib.Tar.TarArchive",
-      "method": "WriteEntryCore"
-    },
-    {
-      "class": "ICSharpCode.SharpZipLib.Zip.FastZip",
-      "method": "CreateZip"
-    },
-    {
-      "class": "ICSharpCode.SharpZipLib.Zip.ZipFile",
-      "method": "CopyDescriptorBytes"
-    },
-    {
-      "class": "ICSharpCode.SharpZipLib.Zip.ZipFile",
-      "method": "CopyDescriptorBytesDirect"
-    },
-    {
-      "class": "ICSharpCode.SharpZipLib.Zip.ZipFile",
-      "method": "CopyEntryDirect"
-    },
-    {
-      "class": "ICSharpCode.SharpZipLib.Zip.ZipFile",
-      "method": "GetDescriptorSize"
-    },
-    {
-      "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
-      "method": "PutNextEntry"
-    },
-    {
-      "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
-      "method": "Write"
-    },
-    {
-      "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
-      "method": "WriteAESHeader"
-    },
-    {
-      "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
-      "method": "WriteEncryptionHeader"
     }
   ],
   "evidence": {
@@ -94,8 +50,67 @@
         "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
         "method": "set_Password",
         "reason": "added by the fix"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.GZip.GZipOutputStream",
+        "method": "CleanFilename",
+        "reason": "changed between 1.3.2 and 1.3.3 for other reasons"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Tar.TarArchive",
+        "method": "WriteEntryCore",
+        "reason": "changed between 1.3.2 and 1.3.3 for other reasons"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Zip.FastZip",
+        "method": "CreateZip",
+        "reason": "changed between 1.3.2 and 1.3.3 for other reasons"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Zip.ZipFile",
+        "method": "CopyDescriptorBytes",
+        "reason": "changed between 1.3.2 and 1.3.3 for other reasons"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Zip.ZipFile",
+        "method": "CopyDescriptorBytesDirect",
+        "reason": "changed between 1.3.2 and 1.3.3 for other reasons"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Zip.ZipFile",
+        "method": "CopyEntryDirect",
+        "reason": "changed between 1.3.2 and 1.3.3 for other reasons"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Zip.ZipFile",
+        "method": "GetDescriptorSize",
+        "reason": "changed between 1.3.2 and 1.3.3 for other reasons"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
+        "method": "PutNextEntry",
+        "reason": "changed between 1.3.2 and 1.3.3 for other reasons"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
+        "method": "Write",
+        "reason": "changed between 1.3.2 and 1.3.3 for other reasons"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
+        "method": "WriteAESHeader",
+        "reason": "changed between 1.3.2 and 1.3.3 for other reasons"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
+        "method": "WriteEncryptionHeader",
+        "reason": "changed between 1.3.2 and 1.3.3 for other reasons"
       }
     ]
   },
-  "note": "Proposed from the IL diff of SharpZipLib 1.3.2 -> 1.3.3 (netstandard2.1): every changed method (the fix commits could not be read)."
+  "note": "The linked commit changes only tests, so the IL diff kept every changed method. TarArchive.ExtractEntry writes each entry under the destination folder without keeping ../ names inside it; reached wherever the app extracts TAR archives through TarArchive.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
