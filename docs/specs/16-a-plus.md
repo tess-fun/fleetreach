@@ -1347,6 +1347,22 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   exist), including all 4 Jackson deny lists, which it proposes as gadget rules. Seed data:
   100 `proposed` Maven records in `crates/sinks/data/` (40 with E2b labels, 60 straight from
   the proposer), none reviewed yet; `data/README.md` has the review steps.
+- **Python and JavaScript sink proposals (2026-11-13, row 13 for 1.8.0)**: `sinkpropose
+  --ecosystem PyPI|npm` reads the fix commit's Python or JS/TS functions, keyed
+  `module.Class.name` for Python and `repo/path.ts.Class.name` for JS. JS is parsed with
+  `oxc_parser` (MIT, pure Rust). Python is read by a hand-written reader (strings, brackets,
+  indentation, decorators), because `rustpython-parser` and the ruff parser pull in
+  `stacker`/`psm` assembly or a license outside `deny.toml`. Only the ecosystem's own
+  language counts (a PyPI repo's JS frontend is left out), and for these languages a function
+  named in the advisory beats a class named there, when the name looks like code and is not
+  the package's own. Run on the fix commits that `db ranges` found for 300 PyPI and 300 npm
+  advisories (fetched from each project's repository, read as data): 284 PyPI records (206 with
+  sinks, median 1) and 289 npm records (248 with sinks, median 1). Labelled by hand: 31 of 40
+  right on the sample used while tuning (PyPI 17 of 20, npm 14 of 20), 14 of 20 on a fresh
+  sample (PyPI 9 of 10, npm 5 of 10), against 45% for Java (E2b). The npm misses are anonymous
+  callbacks (socket and hook handlers have no name to key on), commits that fix something
+  else, and frontend functions. None of these records ship yet: the scan's reachability reads
+  Maven records only, and they stay witnesses-only until JS and Python call graphs exist.
 
 #### 14. Import-graph witness chains (A- to A+)
 

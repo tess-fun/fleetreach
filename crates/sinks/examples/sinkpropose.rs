@@ -3,7 +3,7 @@
 //! From a local clone (only `git` runs, reading objects; nothing in the repository runs):
 //!
 //! `cargo run -p fleetreach-sinks --example sinkpropose -- --id GHSA-... [--alias CVE-...]
-//!  --package group:artifact [--text FILE] --git REPO --commit SHA [--commit SHA ...]`
+//!  --package NAME [--ecosystem Maven|PyPI|npm] [--text FILE] --git REPO --commit SHA [--commit SHA ...]`
 //!
 //! Or from a manifest of already-fetched files (`--manifest FILE`), a JSON object with
 //! `id`, `aliases`, `packages`, `text`, `commits` and `files: [{path, old, new}]`, where `old`
@@ -36,6 +36,7 @@ fn run(args: Vec<String>) -> Result<String, String> {
             "--id" => advisory.id = value()?,
             "--alias" => advisory.aliases.push(value()?),
             "--package" => advisory.packages.push(value()?),
+            "--ecosystem" => advisory.ecosystem = value()?,
             "--text" => {
                 let path = value()?;
                 advisory.text =
@@ -107,7 +108,7 @@ fn git_files(repo: &Path, sha: &str) -> Result<Vec<FileChange>, String> {
             _ => continue,
         };
         let path = new_path.or(old_path).unwrap_or_default();
-        if !path.ends_with(".java") {
+        if !fleetreach_sinks::propose::is_candidate_source(path) {
             continue;
         }
         let show = |rev: &str, p: Option<&str>| -> Result<Option<String>, String> {
@@ -136,6 +137,8 @@ struct Manifest {
     #[serde(default)]
     commits: Vec<String>,
     files: Vec<ManifestFile>,
+    #[serde(default)]
+    ecosystem: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -155,6 +158,7 @@ fn read_manifest(path: &Path, advisory: &mut Advisory) -> Result<Vec<FileChange>
         packages: m.packages,
         text: m.text,
         commits: m.commits,
+        ecosystem: m.ecosystem,
     };
     let base = path.parent().unwrap_or(Path::new("."));
     let read = |p: Option<PathBuf>| -> Result<Option<String>, String> {

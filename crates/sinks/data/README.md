@@ -10,6 +10,9 @@ person: neither jar diffs nor fix-commit diffs find sinks precisely enough to ac
 unreviewed. JVM reachability may use a `proposed` record only to say a sink is reached, never
 that it is not.
 
+Records for PyPI (`module.Class.name`) and npm (`repo/path.js.Class.name`) validate too,
+without descriptors or deny lists, but none are shipped yet: scans read Maven records only.
+
 ## Status of the seed data
 
 The 100 records cover a seeded sample of high and critical Maven advisories that have SAP

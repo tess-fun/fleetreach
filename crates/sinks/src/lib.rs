@@ -12,11 +12,18 @@
 //! into a `proposed` [`record`], a person reviews it, and only reviewed records may ever
 //! support "not reached".
 //!
+//! The proposer reads Java, Python and JavaScript/TypeScript fixes: the `java` and `python`
+//! modules are small hand-written readers, `js` uses `oxc_parser`. Records are for Maven, PyPI
+//! or npm; Python and JS sinks are module or file paths plus a function name, and only ever
+//! produce witnesses, since name-based call graphs in those languages are positive-only.
+//!
 //! The curated records under `data/` are built into the crate: [`record::bundled`] returns
 //! them, checked as [`record::load_dir`] checks a directory.
 
 pub mod java;
+pub mod js;
 pub mod propose;
+pub mod python;
 pub mod record;
 
 use std::borrow::Cow;

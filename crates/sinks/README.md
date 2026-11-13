@@ -22,6 +22,11 @@ E2 and E2b experiments in spec 16), so sinks are curated data: [`propose`](https
 into a `proposed` [`record`](https://docs.rs/fleetreach-sinks/latest/fleetreach_sinks/record/), a person reviews it, and only reviewed records may ever
 support "not reached".
 
+The proposer reads Java, Python and JavaScript/TypeScript fixes: the `java` and `python`
+modules are small hand-written readers, `js` uses `oxc_parser`. Records are for Maven, PyPI
+or npm; Python and JS sinks are module or file paths plus a function name, and only ever
+produce witnesses, since name-based call graphs in those languages are positive-only.
+
 The curated records under `data/` are built into the crate: [`record::bundled`](https://docs.rs/fleetreach-sinks/latest/fleetreach_sinks/record/fn.bundled.html) returns
 them, checked as [`record::load_dir`](https://docs.rs/fleetreach-sinks/latest/fleetreach_sinks/record/fn.load_dir.html) checks a directory.
 

@@ -177,20 +177,33 @@ impl SinkRecord {
         if let Some(a) = self.aliases.iter().find(|a| !valid_id(a) || **a == self.id) {
             return Err(format!("alias `{a}` is not a distinct advisory id"));
         }
-        if self.ecosystem != "Maven" {
-            return Err(format!(
-                "ecosystem `{}` is not supported yet (only Maven)",
-                self.ecosystem
-            ));
-        }
+        let eco = self.ecosystem.as_str();
+        let (valid_package, package_form): (fn(&str) -> bool, &str) = match eco {
+            "Maven" => (valid_maven_package, "`group:artifact`"),
+            "PyPI" => (valid_pypi_package, "a PyPI project name"),
+            "npm" => (valid_npm_package, "an npm package name"),
+            other => {
+                return Err(format!(
+                    "ecosystem `{other}` is not supported (Maven, PyPI or npm)"
+                ))
+            }
+        };
         if self.packages.is_empty() {
             return Err("packages is empty".into());
         }
-        if let Some(p) = self.packages.iter().find(|p| !valid_maven_package(p)) {
-            return Err(format!("package `{p}` is not `group:artifact`"));
+        if let Some(p) = self.packages.iter().find(|p| !valid_package(p)) {
+            return Err(format!("package `{p}` is not {package_form}"));
+        }
+        if eco != "Maven" {
+            if self.sinks.iter().any(|s| s.descriptor.is_some()) {
+                return Err("only Maven sinks carry a JVM descriptor".into());
+            }
+            if self.verdict == Verdict::DenyList {
+                return Err("verdict `deny-list` is for Maven deserialization fixes".into());
+            }
         }
         for s in &self.sinks {
-            check_method(&s.class, &s.method)?;
+            check_member(eco, &s.class, &s.method)?;
             if let Some(d) = &s.descriptor {
                 if !valid_descriptor(d) {
                     return Err(format!(
@@ -208,7 +221,7 @@ impl SinkRecord {
             return Err(format!("gadget `{g}` is not a class name"));
         }
         for e in &self.evidence.excluded {
-            check_method(&e.class, &e.method)?;
+            check_member(eco, &e.class, &e.method)?;
         }
         match self.verdict {
             Verdict::Sinks if self.sinks.is_empty() => {
@@ -369,6 +382,42 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), RecordError> {
     Ok(())
 }
 
+/// A sink's owner and name in the ecosystem's form: a JVM class and method; a Python module
+/// (with any classes) and function; a JS file path inside the repo (with any class) and
+/// function.
+fn check_member(eco: &str, class: &str, method: &str) -> Result<(), String> {
+    match eco {
+        "PyPI" => {
+            if !class.split('.').all(valid_identifier) || class.contains('$') {
+                return Err(format!("`{class}` is not a Python module path"));
+            }
+        }
+        "npm" => {
+            let file_ok = !class.is_empty()
+                && !class.starts_with('/')
+                && !class.split('/').any(|seg| seg.is_empty() || seg == "..")
+                && class.chars().all(|c| {
+                    c.is_ascii_alphanumeric()
+                        || matches!(
+                            c,
+                            '/' | '.' | '_' | '-' | '@' | '$' | '[' | ']' | '(' | ')' | '+'
+                        )
+                });
+            if !file_ok {
+                return Err(format!(
+                    "`{class}` is not a file path inside the repository"
+                ));
+            }
+        }
+        _ => return check_method(class, method),
+    }
+    if valid_identifier(method) || method == "[computed]" {
+        Ok(())
+    } else {
+        Err(format!("`{method}` is not a function name"))
+    }
+}
+
 fn check_method(class: &str, method: &str) -> Result<(), String> {
     if !valid_class(class) {
         return Err(format!("`{class}` is not a class binary name"));
@@ -390,6 +439,31 @@ fn valid_identifier(s: &str) -> bool {
 /// `org.a.Outer$Inner`: dot-separated identifiers, `$` allowed inside them.
 fn valid_class(s: &str) -> bool {
     !s.is_empty() && s.split('.').all(valid_identifier)
+}
+
+/// A PyPI project name (PEP 508 name characters).
+fn valid_pypi_package(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 214
+        && s.starts_with(|c: char| c.is_ascii_alphanumeric())
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+}
+
+/// An npm package name: `name` or `@scope/name`, URL-safe characters.
+fn valid_npm_package(s: &str) -> bool {
+    let ok = |p: &str| {
+        !p.is_empty()
+            && !p.starts_with('.')
+            && p.chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '~'))
+    };
+    match s.strip_prefix('@') {
+        Some(rest) => rest
+            .split_once('/')
+            .is_some_and(|(scope, name)| ok(scope) && ok(name)),
+        None => s.len() <= 214 && ok(s),
+    }
 }
 
 fn valid_maven_package(s: &str) -> bool {
@@ -498,6 +572,43 @@ mod tests {
     #[test]
     fn a_proposed_record_is_valid() {
         assert_eq!(record().validate(), Ok(()));
+    }
+
+    #[test]
+    fn pypi_and_npm_records_use_their_own_names() {
+        let sink = |class: &str, method: &str| Sink {
+            class: class.into(),
+            method: method.into(),
+            descriptor: None,
+        };
+        let mut py = record();
+        py.ecosystem = "PyPI".into();
+        py.packages = vec!["Jinja2".into()];
+        py.sinks = vec![sink("jinja2.sandbox.SandboxedEnvironment", "call")];
+        assert_eq!(py.validate(), Ok(()));
+        py.packages = vec!["org.ex:lib".into()];
+        assert!(py.validate().is_err());
+
+        let mut js = record();
+        js.ecosystem = "npm".into();
+        js.packages = vec!["@scope/lib".into(), "lodash".into()];
+        js.sinks = vec![
+            sink("lib/merge.js", "merge"),
+            sink("src/a.ts.Parser", "parse"),
+            sink("app/api/[provider]/(auth)/route.js", "GET"),
+        ];
+        assert_eq!(js.validate(), Ok(()));
+        js.sinks = vec![sink("../outside.js", "f")];
+        assert!(js.validate().is_err());
+        js.sinks = vec![Sink {
+            descriptor: Some("()V".into()),
+            ..sink("lib/a.js", "f")
+        }];
+        assert!(js.validate().is_err());
+
+        let mut other = record();
+        other.ecosystem = "Go".into();
+        assert!(other.validate().is_err());
     }
 
     #[test]

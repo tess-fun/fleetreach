@@ -8,6 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Sink proposals for Python and npm advisories.** The `sinkpropose` example takes
+  `--ecosystem PyPI|npm` and proposes the functions a fix commit changed, read from Python
+  (a hand-written reader) and JavaScript/TypeScript (`oxc_parser`) source. Sink records now
+  validate PyPI and npm names. On fix commits for 600 advisories, a fresh hand-labelled sample
+  was right for 9 of 10 PyPI and 5 of 10 npm records. These records are not used by scans yet.
 - **`scan --resolve-python` resolves unlocked Python dependency sets with uv.** A
   requirements file with unpinned names, or a `pyproject.toml` with no lockfile, is compiled
   with `uv pip compile --no-build --universal`, so transitive packages are matched too. uv
