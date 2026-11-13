@@ -27,8 +27,8 @@ and commit file lists and runs it. 90 are `reviewed`: 66 name sinks, 24 are
 service ships the runtime. Where a class moved between
 release lines the record names each spelling; `docs/differential/nuget-sinks/span.py` checks
 that every affected line holds at least one of a record's sinks, or none (then the verdict is
-unknown). Packages with no library assemblies (native code, tools, runtime packs) have no
-record.
+unknown). Packages with no library assemblies (native code, tools) have no record, unless the
+advisory names managed entry points of the runtime, as Brotli's does.
 
 ## Status of the seed data
 
