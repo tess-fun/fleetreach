@@ -45,7 +45,7 @@ pub struct SinkRecord {
     /// Other ids of the same advisory.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub aliases: Vec<String>,
-    /// OSV ecosystem name. Only `Maven` for now.
+    /// OSV ecosystem name: `Maven`, `PyPI`, `npm` or `NuGet`.
     pub ecosystem: String,
     /// The advisory's affected packages, as OSV names them (`group:artifact` for Maven). The
     /// sinks may live in a sibling artifact; a sink is found by its class name.
@@ -182,9 +182,10 @@ impl SinkRecord {
             "Maven" => (valid_maven_package, "`group:artifact`"),
             "PyPI" => (valid_pypi_package, "a PyPI project name"),
             "npm" => (valid_npm_package, "an npm package name"),
+            "NuGet" => (valid_nuget_package, "a NuGet package id"),
             other => {
                 return Err(format!(
-                    "ecosystem `{other}` is not supported (Maven, PyPI or npm)"
+                    "ecosystem `{other}` is not supported (Maven, PyPI, npm or NuGet)"
                 ))
             }
         };
@@ -409,6 +410,16 @@ fn check_member(eco: &str, class: &str, method: &str) -> Result<(), String> {
                 ));
             }
         }
+        "NuGet" => {
+            if !valid_dotnet_type(class) {
+                return Err(format!("`{class}` is not a .NET type name"));
+            }
+            return if valid_dotnet_method(method) {
+                Ok(())
+            } else {
+                Err(format!("`{method}` is not a .NET method name"))
+            };
+        }
         _ => return check_method(class, method),
     }
     if valid_identifier(method) || method == "[computed]" {
@@ -448,6 +459,35 @@ fn valid_pypi_package(s: &str) -> bool {
         && s.starts_with(|c: char| c.is_ascii_alphanumeric())
         && s.chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+}
+
+/// A NuGet package id: letters, digits, `.`, `-`, `_`, at most 100 characters.
+fn valid_nuget_package(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 100
+        && s.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+}
+
+/// A .NET type as reflection names it: `Ns.Type`, `Ns.Outer+Inner`, `Ns.Generic`1`.
+fn valid_dotnet_type(s: &str) -> bool {
+    let part = |p: &str| {
+        let (name, arity) = p.split_once('`').unwrap_or((p, "1"));
+        valid_identifier(name) && !arity.is_empty() && arity.chars().all(|c| c.is_ascii_digit())
+    };
+    !s.is_empty() && s.split(['.', '+']).all(part)
+}
+
+/// A .NET method name: an identifier, `.ctor`, `.cctor`, or an explicit interface
+/// implementation (`System.IDisposable.Dispose`, `IEnumerable<T>.GetEnumerator`).
+fn valid_dotnet_method(s: &str) -> bool {
+    matches!(s, ".ctor" | ".cctor")
+        || (!s.is_empty()
+            && !s.starts_with('.')
+            && s.chars().all(|c| {
+                c.is_alphanumeric() || matches!(c, '_' | '.' | '<' | '>' | ',' | '`' | '+' | '$')
+            }))
 }
 
 /// An npm package name: `name` or `@scope/name`, URL-safe characters.
@@ -605,6 +645,23 @@ mod tests {
             ..sink("lib/a.js", "f")
         }];
         assert!(js.validate().is_err());
+
+        let mut net = record();
+        net.ecosystem = "NuGet".into();
+        net.packages = vec!["Newtonsoft.Json".into()];
+        net.sinks = vec![
+            sink(
+                "Newtonsoft.Json.Serialization.JsonSerializerInternalReader",
+                "CreateObject",
+            ),
+            sink("Acme.Outer+Inner`1", ".ctor"),
+            sink("Acme.Reader", "System.IDisposable.Dispose"),
+        ];
+        assert_eq!(net.validate(), Ok(()));
+        net.sinks = vec![sink("Acme..Bad", "f")];
+        assert!(net.validate().is_err());
+        net.packages = vec!["org.ex:lib".into()];
+        assert!(net.validate().is_err());
 
         let mut other = record();
         other.ecosystem = "Go".into();

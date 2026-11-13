@@ -1,0 +1,6 @@
+out/
+obj/
+bin/
+*.log
+ran.txt
+cmp.txt

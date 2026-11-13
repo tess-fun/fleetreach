@@ -16,6 +16,10 @@ pub(crate) enum Raw {
     Token(u32),
     /// `ldsfld`, `ldsflda`, `stsfld`: a field token; the field's type is initialized.
     StaticField(u32),
+    /// A type token that may bring a value type into being without `newobj`: `initobj`,
+    /// `box`, `newarr`, `constrained.`, `ldobj`, `stobj`, `cpobj`, `unbox`, `unbox.any`,
+    /// `ldelem`, `stelem`, `ldelema`, `sizeof`. Not an op of its own.
+    Mention(u32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,6 +157,8 @@ pub(crate) fn decode(code: &[u8]) -> Result<Vec<Raw>, ClrError> {
             (None, 0x72) => Some(Raw::Str(token()? & 0x00FF_FFFF)),
             (None, 0xD0) => Some(Raw::Token(token()?)),
             (None, 0x7E..=0x80) => Some(Raw::StaticField(token()?)),
+            (None, 0x70 | 0x71 | 0x79 | 0x81 | 0x8C | 0x8D | 0x8F | 0xA3..=0xA5)
+            | (Some(0x15 | 0x16 | 0x1C), _) => Some(Raw::Mention(token()?)),
             (Some(0x06), _) => Some(Raw::Method(Invoke::LdFtn, token()?)),
             (Some(0x07), _) => Some(Raw::Method(Invoke::LdVirtFtn, token()?)),
             _ => None,

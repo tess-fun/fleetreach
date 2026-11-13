@@ -21,6 +21,12 @@ every assembly in a .NET SDK and a NuGet package cache: same types, same methods
 instructions in the same order. A file outside the format (a truncated table, an opcode
 the standard does not define, a token past its table) is an error, never a partial answer.
 
+`graph::analyze` builds a rapid type analysis call graph over a service's assemblies,
+and `verdict::judge` answers one curated sink record against it, as `fleetreach-jvm`
+does for class files. The graph is checked against what the runtime itself ran: on 11
+apps built from real NuGet packages, every method the JIT compiled in their assemblies is
+in the graph (`docs/differential/clr/jit`).
+
 <!-- cargo-rdme end -->
 
 ## Contributing
