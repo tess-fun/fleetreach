@@ -8,7 +8,7 @@
   "packages": [
     "SixLabors.ImageSharp"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -679,5 +679,9 @@
       }
     ]
   },
-  "note": "Commit 8de892a checks a CLUT's declared size against the data left before IccDataReader.ReadClut8, ReadClut16 and ReadClutF32 allocate it. Reached wherever the app parses an embedded ICC profile: 4.x on decode with ColorProfileHandling.Convert, 1.x to 3.x through IccProfile.Entries."
+  "note": "Commit 8de892a checks a CLUT's declared size against the data left before IccDataReader.ReadClut8, ReadClut16 and ReadClutF32 allocate it. Reached wherever the app parses an embedded ICC profile: 4.x on decode with ColorProfileHandling.Convert, 1.x to 3.x through IccProfile.Entries.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

@@ -5,7 +5,7 @@
   "packages": [
     "MySqlConnector"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -119,5 +119,9 @@
       }
     ]
   },
-  "note": "Commit 8650361 sends a clear-text password only once the server's identity is verified: SwitchAuthenticationAsync's mysql_clear_password branch and SendClearPasswordAsync now check the TLS certificate. Exposed only with SslMode VerifyCA or VerifyFull, no SslCa and a non-empty password; a reached sink says the code runs, not that the connection string sets that mode."
+  "note": "Commit 8650361 sends a clear-text password only once the server's identity is verified: SwitchAuthenticationAsync's mysql_clear_password branch and SendClearPasswordAsync now check the TLS certificate. Exposed only with SslMode VerifyCA or VerifyFull, no SslCa and a non-empty password; a reached sink says the code runs, not that the connection string sets that mode.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

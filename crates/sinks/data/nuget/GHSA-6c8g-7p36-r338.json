@@ -8,7 +8,7 @@
   "packages": [
     "SharpCompress"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -41,5 +41,9 @@
       }
     ]
   },
-  "note": "Commit 2021a06 bounds the directory-entry branch of WriteToDirectoryInternal and WriteToDirectoryAsyncInternal (IArchive.WriteToDirectory, 0.43 on) to the extraction root. 0.34 to 0.42 had the same unguarded Path.Combine and CreateDirectory on archive keys in IArchiveExtensions.ExtractToDirectory; 0.33 and earlier skip directory entries and send files through the guarded ExtractionMethods path, so no sink is there. Reached wherever the app extracts a ZIP or non-solid TAR archive with those methods."
+  "note": "Commit 2021a06 bounds the directory-entry branch of WriteToDirectoryInternal and WriteToDirectoryAsyncInternal (IArchive.WriteToDirectory, 0.43 on) to the extraction root. 0.34 to 0.42 had the same unguarded Path.Combine and CreateDirectory on archive keys in IArchiveExtensions.ExtractToDirectory; 0.33 and earlier skip directory entries and send files through the guarded ExtractionMethods path, so no sink is there. Reached wherever the app extracts a ZIP or non-solid TAR archive with those methods.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

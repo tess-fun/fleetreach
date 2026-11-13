@@ -90,7 +90,7 @@
       "https://github.com/dotnet/runtime/commit/f3d8b2f230bc7c9899df6eef2d41e2748107cffa"
     ]
   },
-  "note": "The fix updates the native Brotli decoder the runtime bundles (decode.c, 1.1.1). Managed code reaches it only through BrotliDecoder: Decompress for BrotliStream and HttpClient's automatic Brotli decompression, the static TryDecompress for one-shot buffers. The packages are runtime packs, so the finding and these assemblies are in a self-contained service's folder; names checked in the 10.0.9 shared framework.",
+  "note": "The fix updates the native Brotli decoder the runtime bundles (decode.c, 1.1.1). Managed code reaches it only through BrotliDecoder: Decompress for BrotliStream and HttpClient's automatic Brotli decompression, the static TryDecompress for one-shot buffers. Judged only where the service ships the runtime (self-contained); on a framework-dependent image the finding is the shared runtime, which the graph does not walk, so the verdict stays unknown. Names checked in the 10.0.9 shared framework.",
   "sinks": [
     {
       "class": "System.IO.Compression.BrotliDecoder",

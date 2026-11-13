@@ -1464,6 +1464,14 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   declares; an interface it cannot read may still declare anything. JIT oracle unchanged at 0
   missed, the witnesses now follow real calls (`Mutate`, `AcceptVisitor`, `Accept`,
   `EncodeVisitor.Visit`), every other finding identical over the 224 cached images.
+  The 8 third-party advisories then got records, drafted by the proposer and narrowed by hand
+  (MySqlConnector, SharpCompress with its 0.34 to 0.42 `ExtractToDirectory` spelling,
+  OpenTelemetry across both packages, two ImageSharp parsers, .NET's Brotli decoder;
+  Swashbuckle UI and SQLitePCLRaw no-method-sink), 7 reviewed by the user. Re-run: 14 findings
+  with a record, 8 reached, 1 not reached (OpenTelemetry in EventStore: nothing outside the
+  API calls its propagators; ASP.NET Core uses the runtime's own), 5 unknown (no-method-sink
+  records, SharpCompress 0.32.2 predating every sink, Brotli on a framework-dependent image
+  whose runtime the graph does not walk).
 
 #### 14. Import-graph witness chains (A- to A+)
 

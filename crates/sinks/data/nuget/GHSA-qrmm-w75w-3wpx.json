@@ -5,7 +5,7 @@
   "packages": [
     "Swashbuckle.AspNetCore.SwaggerUI"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "no-method-sink",
   "evidence": {
     "commits": [
@@ -45,5 +45,9 @@
       }
     ]
   },
-  "note": "The flaw is swagger-ui's ?url= parameter in the browser; Swashbuckle.AspNetCore.SwaggerUI serves that JavaScript and 6.3.0 bundles swagger-ui 4.1.3. No .NET method takes part, so none can be named."
+  "note": "The flaw is swagger-ui's ?url= parameter in the browser; Swashbuckle.AspNetCore.SwaggerUI serves that JavaScript and 6.3.0 bundles swagger-ui 4.1.3. No .NET method takes part, so none can be named.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

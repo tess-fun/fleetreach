@@ -9,7 +9,7 @@
     "OpenTelemetry.Api",
     "OpenTelemetry.Extensions.Propagators"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -145,5 +145,9 @@
       }
     ]
   },
-  "note": "PR 7061 stops parsing baggage, B3 and Jaeger headers eagerly: BaggagePropagator.Extract and Inject and B3Propagator.Extract in OpenTelemetry.Api, B3Propagator.Extract and JaegerPropagator.Extract in OpenTelemetry.Extensions.Propagators. Reached wherever a service extracts or injects those propagation headers."
+  "note": "PR 7061 stops parsing baggage, B3 and Jaeger headers eagerly: BaggagePropagator.Extract and Inject and B3Propagator.Extract in OpenTelemetry.Api, B3Propagator.Extract and JaegerPropagator.Extract in OpenTelemetry.Extensions.Propagators. Reached wherever a service extracts or injects those propagation headers.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

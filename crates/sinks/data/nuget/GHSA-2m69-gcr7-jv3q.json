@@ -11,12 +11,16 @@
     "SQLitePCLRaw.lib.e_sqlite3.android",
     "SQLitePCLRaw.lib.e_sqlite3.ios"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "no-method-sink",
   "evidence": {
     "commits": [
       "https://github.com/github/advisory-database/pull/7675"
     ]
   },
-  "note": "The flaw is in SQLite before 3.50.2 (aggregate terms past the column count), which SQLitePCLRaw.lib.e_sqlite3 ships as a native library; any SQL the app runs reaches it, so no method can be named."
+  "note": "The flaw is in SQLite before 3.50.2 (aggregate terms past the column count), which SQLitePCLRaw.lib.e_sqlite3 ships as a native library; any SQL the app runs reaches it, so no method can be named.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

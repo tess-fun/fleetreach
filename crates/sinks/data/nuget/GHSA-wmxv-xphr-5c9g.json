@@ -8,7 +8,7 @@
   "packages": [
     "SixLabors.ImageSharp"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -686,5 +686,9 @@
       }
     ]
   },
-  "note": "Commit 92b12d7 bounds the BigTIFF IFD entry count in BaseExifReader.ReadValues64, which looped once per declared entry without consuming input. Present from 2.0. Reached wherever the app decodes TIFF."
+  "note": "Commit 92b12d7 bounds the BigTIFF IFD entry count in BaseExifReader.ReadValues64, which looped once per declared entry without consuming input. Present from 2.0. Reached wherever the app decodes TIFF.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
