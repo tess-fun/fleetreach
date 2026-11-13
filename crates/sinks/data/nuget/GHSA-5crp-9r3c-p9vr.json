@@ -8,35 +8,11 @@
   "packages": [
     "Newtonsoft.Json"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "Newtonsoft.Json.JsonReader",
-      "method": ".ctor"
-    },
-    {
-      "class": "Newtonsoft.Json.JsonReader",
-      "method": "MoveToContentFromNonContentAsync"
-    },
-    {
-      "class": "Newtonsoft.Json.JsonReader",
-      "method": "ReadAndMoveToContentAsync"
-    },
-    {
-      "class": "Newtonsoft.Json.JsonReader",
-      "method": "ReadArrayIntoByteArrayAsync"
-    },
-    {
-      "class": "Newtonsoft.Json.JsonReader",
-      "method": "ReaderReadAndAssertAsync"
-    },
-    {
-      "class": "Newtonsoft.Json.JsonReader",
-      "method": "SkipAsync"
-    },
-    {
-      "class": "Newtonsoft.Json.JsonSerializerSettings",
       "method": ".ctor"
     }
   ],
@@ -55,8 +31,42 @@
         "class": "Newtonsoft.Json.JsonSerializerSettings",
         "method": "set_ReferenceResolver",
         "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "Newtonsoft.Json.JsonReader",
+        "method": "MoveToContentFromNonContentAsync",
+        "reason": "changed between 12.0.3 and 13.0.1 for other reasons"
+      },
+      {
+        "class": "Newtonsoft.Json.JsonReader",
+        "method": "ReadAndMoveToContentAsync",
+        "reason": "changed between 12.0.3 and 13.0.1 for other reasons"
+      },
+      {
+        "class": "Newtonsoft.Json.JsonReader",
+        "method": "ReadArrayIntoByteArrayAsync",
+        "reason": "changed between 12.0.3 and 13.0.1 for other reasons"
+      },
+      {
+        "class": "Newtonsoft.Json.JsonReader",
+        "method": "ReaderReadAndAssertAsync",
+        "reason": "changed between 12.0.3 and 13.0.1 for other reasons"
+      },
+      {
+        "class": "Newtonsoft.Json.JsonReader",
+        "method": "SkipAsync",
+        "reason": "changed between 12.0.3 and 13.0.1 for other reasons"
+      },
+      {
+        "class": "Newtonsoft.Json.JsonSerializerSettings",
+        "method": ".ctor",
+        "reason": "changed between 12.0.3 and 13.0.1 for other reasons"
       }
     ]
   },
-  "note": "Proposed from the IL diff of Newtonsoft.Json 12.0.3 -> 13.0.1 (netstandard2.0): methods of the files the fix commits changed."
+  "note": "From the 12.0.3 -> 13.0.1 IL diff. 13.0.1 gives JsonReader a default MaxDepth of 64 in its constructor, so every reader built by a vulnerable release parses arbitrarily deep nesting. Any Newtonsoft deserialization constructs a JsonReader. An app that sets MaxDepth itself is not affected, and a code scan cannot see that setting.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

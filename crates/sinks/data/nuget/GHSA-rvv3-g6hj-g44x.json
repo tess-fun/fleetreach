@@ -8,7 +8,7 @@
   "packages": [
     "AutoMapper"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -23,7 +23,12 @@
   "evidence": {
     "commits": [
       "https://github.com/LuckyPennySoftware/AutoMapper/commit/0afaf1e91648fca1a57512e94dd00a76ee016816"
-    ]
+    ],
+    "excluded": []
   },
-  "note": "Proposed from the IL diff of AutoMapper 16.1.0 -> 16.1.1 (net8.0): methods of the files the fix commits changed."
+  "note": "From the 16.1.0 -> 16.1.1 IL diff: the fix changes CheckForCycles and CreateAssignmentFunc, where the mapping plan for a self-referencing type recursed without a default depth limit. Reached wherever the app maps types through AutoMapper.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

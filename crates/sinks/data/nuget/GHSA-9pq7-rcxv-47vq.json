@@ -8,16 +8,16 @@
   "packages": [
     "RestSharp"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "RestSharp.Extensions.StringExtensions",
-      "method": "GetNameVariants"
+      "method": "ParseJsonDate"
     },
     {
       "class": "RestSharp.Extensions.StringExtensions",
-      "method": "ToPascalCase"
+      "method": "ExtractDate"
     }
   ],
   "evidence": {
@@ -34,8 +34,22 @@
         "class": "RestSharp.Extensions.StringExtensions",
         "method": "IsUpperCase",
         "reason": "added by the fix"
+      },
+      {
+        "class": "RestSharp.Extensions.StringExtensions",
+        "method": "GetNameVariants",
+        "reason": "changed between 106.11.7 and 106.11.8-alpha.0.13 for other reasons"
+      },
+      {
+        "class": "RestSharp.Extensions.StringExtensions",
+        "method": "ToPascalCase",
+        "reason": "changed between 106.11.7 and 106.11.8-alpha.0.13 for other reasons"
       }
     ]
   },
-  "note": "Proposed from the IL diff of RestSharp 106.11.7 -> 106.11.8-alpha.0.13 (netstandard2.0): methods of the files the fix commits changed."
+  "note": "The fix changes only the NewDateRegex static field (its pattern backtracks on long digit runs), so the IL diff of methods misses it. ParseJsonDate matches \"new Date(\" input through ExtractDate with that regex; reached wherever RestSharp deserializes a date from a response.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

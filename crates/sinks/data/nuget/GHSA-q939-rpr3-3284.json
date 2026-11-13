@@ -8,13 +8,9 @@
   "packages": [
     "SSH.NET"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
-    {
-      "class": "Renci.SshNet.ScpClient",
-      "method": ".ctor"
-    },
     {
       "class": "Renci.SshNet.ScpClient",
       "method": "Download"
@@ -22,10 +18,6 @@
     {
       "class": "Renci.SshNet.ScpClient",
       "method": "InternalDownload"
-    },
-    {
-      "class": "Renci.SshNet.ScpClient",
-      "method": "Upload"
     }
   ],
   "evidence": {
@@ -67,8 +59,22 @@
         "class": "Renci.SshNet.ScpClient",
         "method": "set_UseDirectoryFlag",
         "reason": "added by the fix"
+      },
+      {
+        "class": "Renci.SshNet.ScpClient",
+        "method": ".ctor",
+        "reason": "not the recursive download path"
+      },
+      {
+        "class": "Renci.SshNet.ScpClient",
+        "method": "Upload",
+        "reason": "not the recursive download path"
       }
     ]
   },
-  "note": "Proposed from the IL diff of SSH.NET 2025.1.0 -> 2026.0.0 (net8.0): methods of the files the fix commits changed."
+  "note": "From the 2025.1.0 -> 2026.0.0 IL diff. Recursive ScpClient.Download(string, DirectoryInfo) writes paths named by the server through InternalDownload without keeping them inside the target directory. Matching is by name, so the single-file Download overloads count as reached too: an over-count, never a miss.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

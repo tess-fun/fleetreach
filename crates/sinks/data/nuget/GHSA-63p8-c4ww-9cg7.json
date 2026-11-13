@@ -8,16 +8,12 @@
   "packages": [
     "SixLabors.ImageSharp"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "SixLabors.ImageSharp.Formats.Gif.LzwDecoder",
       "method": ".ctor"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Gif.LzwDecoder",
-      "method": "Dispose"
     },
     {
       "class": "SixLabors.ImageSharp.Formats.Gif.LzwDecoder",
@@ -41,8 +37,17 @@
         "class": "SixLabors.ImageSharp.Formats.Gif.LzwDecoder",
         "method": "IsValidMinCodeSize",
         "reason": "added by the fix"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Gif.LzwDecoder",
+        "method": "Dispose",
+        "reason": "disposal, not the out-of-bounds write"
       }
     ]
   },
-  "note": "Proposed from the IL diff of SixLabors.ImageSharp 3.1.4 -> 3.1.5 (net6.0): methods of the files the fix commits changed."
+  "note": "From the 3.1.4 -> 3.1.5 IL diff (PRs 2754 and 2756): the fix changes the GIF LZW decoder's constructor and SkipIndices, the out-of-bounds write on a crafted GIF. Reached wherever the app decodes GIF input.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
