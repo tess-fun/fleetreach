@@ -1439,7 +1439,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   narrowed to the types of the files the fix commits changed. 83 records, one per high or
   critical NuGet advisory with a GitHub fix commit and library assemblies, all reviewed by the
   user in batches: 61 name sinks (7 reached by name: pipeline middleware, DI-run actuators,
-  platform-loaded modules, mapping-driven SQL), 22 are no-method-sink (14 native libraries:
+  platform-loaded modules, mapping-driven SQL), 22 are no-method-sink (16 native libraries:
   ImageMagick, libwebp, Chromium; the rest app-level or client-script flaws). The drafts were
   often wrong: fixes in static fields or regexes, test-only or other-port commits, writer
   instead of reader, renamed classes across release lines. `span.py` checks every sink across

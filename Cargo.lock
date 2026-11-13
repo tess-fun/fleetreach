@@ -1046,6 +1046,7 @@ name = "fleetreach-clr"
 version = "1.6.0"
 dependencies = [
  "fleetreach-sinks",
+ "serde_json",
  "thiserror",
 ]
 
