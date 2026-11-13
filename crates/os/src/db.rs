@@ -278,18 +278,73 @@ fn title(r: &Record) -> String {
 }
 
 fn aliases(r: &Record) -> Vec<String> {
+    alias_set(&r.id, &r.aliases, &r.upstream, &r.related)
+}
+
+fn alias_set(id: &str, aliases: &[String], upstream: &[String], related: &[String]) -> Vec<String> {
     let mut out: BTreeSet<String> = BTreeSet::new();
-    out.extend(r.aliases.iter().cloned());
-    out.extend(r.upstream.iter().cloned());
-    out.extend(r.related.iter().filter(|a| a.starts_with("CVE-")).cloned());
-    if r.id.starts_with("CVE-") {
-        out.insert(r.id.clone());
+    out.extend(aliases.iter().cloned());
+    out.extend(upstream.iter().cloned());
+    out.extend(related.iter().filter(|a| a.starts_with("CVE-")).cloned());
+    if id.starts_with("CVE-") {
+        out.insert(id.to_string());
     }
     // Ubuntu writes `UBUNTU-CVE-2024-1234` and Debian `DEBIAN-CVE-...`: the CVE is in the id.
-    if let Some(cve) = r.id.find("CVE-").map(|i| &r.id[i..]) {
+    if let Some(cve) = id.find("CVE-").map(|i| &id[i..]) {
         out.insert(cve.to_string());
     }
     out.into_iter().collect()
+}
+
+/// The fields of a record that decide whether it is kept, read without its ranges, versions
+/// and text.
+#[derive(Deserialize)]
+struct Names {
+    id: String,
+    #[serde(default)]
+    aliases: Vec<String>,
+    #[serde(default)]
+    upstream: Vec<String>,
+    #[serde(default)]
+    related: Vec<String>,
+    withdrawn: Option<String>,
+    #[serde(default)]
+    affected: Vec<NamesAffected>,
+}
+
+#[derive(Deserialize)]
+struct NamesAffected {
+    package: Option<Package>,
+}
+
+/// With a package filter, what `entries_of` would give for a record naming none of the kept
+/// packages: nothing, with the same per-ecosystem counts. `None` when the record must be read
+/// in full.
+fn skipped(names: &Names, wanted: &Wanted) -> Option<BTreeMap<String, usize>> {
+    let packages = wanted.packages.as_ref()?;
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    if names.withdrawn.is_some() {
+        return Some(counts);
+    }
+    let aliases = alias_set(&names.id, &names.aliases, &names.upstream, &names.related);
+    if not_security(&names.id, &aliases) {
+        return Some(counts);
+    }
+    for a in &names.affected {
+        let Some(pkg) = &a.package else { continue };
+        let (Some(name), Some(eco)) = (pkg.name.as_deref(), pkg.ecosystem.as_deref()) else {
+            continue;
+        };
+        if !wanted.ecosystems.contains_key(eco) {
+            continue;
+        }
+        if packages.contains(name) {
+            return None;
+        }
+        let eco = wanted.relabel.as_deref().unwrap_or(eco);
+        *counts.entry(eco.to_string()).or_default() += 1;
+    }
+    Some(counts)
 }
 
 /// The Debian/Ubuntu urgency as a severity band, for records with no CVSS of their own.
@@ -559,6 +614,12 @@ fn parse_record(
     wanted: &Wanted,
     path: &Path,
 ) -> Result<(Vec<Entry>, BTreeMap<String, usize>), OsError> {
+    if wanted.packages.is_some() {
+        let names: Names = serde_json::from_slice(body).map_err(|e| OsError::db(path, e))?;
+        if let Some(counts) = skipped(&names, wanted) {
+            return Ok((Vec::new(), counts));
+        }
+    }
     let r: Record = serde_json::from_slice(body).map_err(|e| OsError::db(path, e))?;
     Ok(entries_of(r, wanted))
 }

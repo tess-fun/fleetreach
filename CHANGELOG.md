@@ -209,6 +209,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   memory. A scan of one npm repo peaks at 453 MB instead of 832 MB, a PyPI repo at 323 MB
   instead of 392 MB, with the same speed and byte-identical reports; distro exports for images
   no longer re-read the central directory per chunk.
+- **Faster image scans.** A distro record is first read for its package names only, and in full
+  only when it names a package installed in the images: one Debian image scans in 1.6 s and
+  350 MB instead of 2.6 s and 588 MB; 25 mixed images peak at 1.9 GB instead of 2.6 GB, with
+  byte-identical reports.
 - **`vex verify` leaves JVM witnesses out and says how many.** It re-derives the Rust engine's
   `not_affected` statements by building the repos. A JVM statement comes from scanning images,
   so `scan --reachability=jvm` derives it again; counted as re-derived, it would pass without
