@@ -52,6 +52,7 @@ pub mod repofile;
 mod report;
 mod severity;
 pub mod ssvc;
+pub mod zipdir;
 
 pub use depgraph::DepGraph;
 pub use finding::{

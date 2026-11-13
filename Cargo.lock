@@ -1053,7 +1053,9 @@ dependencies = [
 name = "fleetreach-core"
 version = "1.6.0"
 dependencies = [
+ "crc32fast",
  "cvss 3.0.0",
+ "flate2",
  "rayon",
  "semver",
  "serde",

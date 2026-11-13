@@ -290,10 +290,9 @@ pub fn affected_fixed<V: Ord + Clone>(
 // range building all live here, once — the place where a missed case is a false-clean.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{self, Cursor, Read as _};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
 
 use rayon::prelude::*;
 use serde::Deserialize;
@@ -395,6 +394,15 @@ pub enum DbError {
     /// The OSV mirror `.zip` could not be opened or decompressed.
     #[error("invalid zip archive: {0}")]
     Archive(String),
+}
+
+/// A `zipdir` failure: malformed data is an archive error, anything else a read error.
+pub fn zip_error(e: io::Error) -> DbError {
+    if e.kind() == io::ErrorKind::InvalidData {
+        DbError::Archive(e.to_string())
+    } else {
+        DbError::Read(e)
+    }
 }
 
 impl From<zip::result::ZipError> for DbError {
@@ -659,28 +667,17 @@ fn load_zip<V>(
 where
     V: Ord + Clone + Send,
 {
-    let bytes: Arc<[u8]> = std::fs::read(path)
-        .map_err(|e| LoadError::new(path, e))?
-        .into();
-    let archive = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|e| LoadError::new(path, e))?;
+    let archive = crate::zipdir::Archive::open(path, |name| name.ends_with(".json"))
+        .map_err(|e| LoadError::new(path, zip_error(e)))?;
 
     let per_entry: Vec<Vec<(String, Advisory<V>)>> = (0..archive.len())
         .into_par_iter()
-        .map_init(
-            || archive.clone(),
-            |archive, i| {
-                let mut entry = archive.by_index(i).map_err(|e| LoadError::new(path, e))?;
-                let name = entry.name().map_err(|e| LoadError::new(path, e))?;
-                if !name.ends_with(".json") {
-                    return Ok(Vec::new());
-                }
-                let mut body = String::new();
-                entry
-                    .read_to_string(&mut body)
-                    .map_err(|e| LoadError::new(path, e))?;
-                record_advisories(&body, spec, skip, keep).map_err(|e| LoadError::new(path, e))
-            },
-        )
+        .map(|i| {
+            let body = archive
+                .read_string(i)
+                .map_err(|e| LoadError::new(path, zip_error(e)))?;
+            record_advisories(&body, spec, skip, keep).map_err(|e| LoadError::new(path, e))
+        })
         .collect::<Result<_, LoadError>>()?;
 
     Ok(OsvDb {

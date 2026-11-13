@@ -11,7 +11,6 @@
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use fleetreach_core::osv::{self, Event, ParsedBound, ParsedRange, Range};
@@ -584,43 +583,18 @@ fn load_dir(root: &Path, wanted: &Wanted) -> Result<PerRecord, OsError> {
 }
 
 fn load_zip(path: &Path, wanted: &Wanted) -> Result<PerRecord, OsError> {
-    let open = || -> Result<zip::ZipArchive<std::io::BufReader<std::fs::File>>, OsError> {
-        let f = std::fs::File::open(path).map_err(|e| OsError::db(path, e))?;
-        zip::ZipArchive::new(std::io::BufReader::new(f)).map_err(|e| OsError::db(path, e))
-    };
-    let count = open()?.len();
-    // One archive handle per worker, each reading its own entries from disk.
-    let chunks: Vec<(usize, usize)> = {
-        let size = 2048;
-        (0..count.div_ceil(size))
-            .map(|i| (i * size, ((i + 1) * size).min(count)))
-            .collect()
-    };
-    let per_chunk: Vec<PerRecord> = chunks
-        .par_iter()
-        .map(|&(from, to)| {
-            let mut archive = open()?;
-            let mut out = Vec::with_capacity(to - from);
-            let mut body = Vec::new();
-            for i in from..to {
-                let mut entry = archive.by_index(i).map_err(|e| OsError::db(path, e))?;
-                if !entry
-                    .name()
-                    .map_err(|e| OsError::db(path, e))?
-                    .ends_with(".json")
-                {
-                    continue;
-                }
-                body.clear();
-                entry
-                    .read_to_end(&mut body)
-                    .map_err(|e| OsError::db(path, e))?;
-                out.push(parse_record(&body, wanted, path)?);
-            }
-            Ok(out)
+    use fleetreach_core::osv::zip_error;
+    let archive = fleetreach_core::zipdir::Archive::open(path, |name| name.ends_with(".json"))
+        .map_err(|e| OsError::db(path, zip_error(e)))?;
+    (0..archive.len())
+        .into_par_iter()
+        .map(|i| {
+            let body = archive
+                .read(i)
+                .map_err(|e| OsError::db(path, zip_error(e)))?;
+            parse_record(&body, wanted, path)
         })
-        .collect::<Result<_, OsError>>()?;
-    Ok(per_chunk.into_iter().flatten().collect())
+        .collect()
 }
 
 #[cfg(test)]

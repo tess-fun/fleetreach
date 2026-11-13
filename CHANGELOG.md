@@ -203,6 +203,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Less memory reading OSV exports.** The `all.zip` exports are now read member by member
+  from disk with an in-house ZIP reader (ZIP64 included, every member checked against its size
+  and CRC-32), instead of holding the whole archive and an index of every member name in
+  memory. A scan of one npm repo peaks at 453 MB instead of 832 MB, a PyPI repo at 323 MB
+  instead of 392 MB, with the same speed and byte-identical reports; distro exports for images
+  no longer re-read the central directory per chunk.
 - **`vex verify` leaves JVM witnesses out and says how many.** It re-derives the Rust engine's
   `not_affected` statements by building the repos. A JVM statement comes from scanning images,
   so `scan --reachability=jvm` derives it again; counted as re-derived, it would pass without
