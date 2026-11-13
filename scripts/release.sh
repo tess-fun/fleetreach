@@ -23,7 +23,7 @@ DRY="${2:-}"
 cd "$(git rev-parse --show-toplevel)"
 
 # Publish order: dependency-topological (core/reach first, cli last).
-ORDER=(core reach scan report correlate go npm pypi rubygems packagist nuget julia swift hex ghactions maven os sinks jvm cli)
+ORDER=(core reach scan report correlate go npm pypi rubygems packagist nuget julia swift hex ghactions maven os sinks jvm clr cli)
 # A publishable crate left out of ORDER fails cli's publish, after the others are already up.
 for m in crates/*/Cargo.toml; do
   grep -q '^publish = false' "$m" && continue
