@@ -1,0 +1,82 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-846f-f764-76mx",
+  "aliases": [
+    "CVE-2026-84008"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "System.Security.Cryptography.Pkcs"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "System.Security.Cryptography.Pkcs.SignerInfo",
+      "method": "FindSignerCertificate"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/dotnet/runtime/pull/135741"
+    ],
+    "excluded": [
+      {
+        "class": "System.Security.Cryptography.Pkcs.SignedCms",
+        "method": "FindCertificate",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "System.Security.Cryptography.Pkcs.SignedCms",
+        "method": "GetCertificatesNoClone",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "System.Security.Cryptography.Pkcs.SignedCms",
+        "method": "get_Certificates",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "System.Security.Cryptography.Pkcs.SignedCms+CertificateList",
+        "method": ".ctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "System.Security.Cryptography.Pkcs.SignedCms+CertificateList",
+        "method": "FindCertificate",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "System.Security.Cryptography.Pkcs.SignedCms+CertificateList",
+        "method": "GetCollection",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "System.Security.Cryptography.Pkcs.SignedCms",
+        "method": "UpdateCertificatesFromAddition",
+        "reason": "signing side (AddCertificate, ComputeSignature), not attacker input"
+      },
+      {
+        "class": "System.Security.Cryptography.Pkcs.Rfc3161TimestampRequest",
+        "method": "ValidateResponse",
+        "reason": "reads the certificates once; not the quadratic path"
+      },
+      {
+        "class": "System.Security.Cryptography.Pkcs.SignedCms",
+        "method": ".ctor",
+        "reason": "only creates the new certificate cache"
+      },
+      {
+        "class": "System.Security.Cryptography.Pkcs.SignedCms",
+        "method": "Decode",
+        "reason": "only resets the new certificate cache"
+      },
+      {
+        "class": "System.Security.Cryptography.Pkcs.SignedCms",
+        "method": "UpdateMetadata",
+        "reason": "only resets the new certificate cache"
+      }
+    ]
+  },
+  "note": "CheckSignature looks up each signer's certificate in SignedCms.Certificates, which reparses every certificate in the message on each call: signers times certificates. SignerInfo.FindSignerCertificate (instance and static overloads share the name) is the lookup the fix replaced with a cached index. Reached through SignedCms.CheckSignature or SignerInfo.CheckSignature on a message from outside."
+}

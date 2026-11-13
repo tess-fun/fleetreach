@@ -1,0 +1,14 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-rxg9-xrhp-64gj",
+  "aliases": [
+    "CVE-2021-24112"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "System.Drawing.Common"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "note": "The flaw is in parsing graphics files on Linux and macOS, where System.Drawing.Common hands images to the native libgdiplus. No managed method differs between 5.0.2 and 5.0.3, so no managed method holds it."
+}

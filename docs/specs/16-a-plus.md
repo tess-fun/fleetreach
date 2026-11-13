@@ -1472,6 +1472,27 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   API calls its propagators; ASP.NET Core uses the runtime's own), 5 unknown (no-method-sink
   records, SharpCompress 0.32.2 predating every sink, Brotli on a framework-dependent image
   whose runtime the graph does not walk).
+  Six more records followed for the library advisories still uncovered, `proposed` and
+  narrowed by hand from the fix (dotnet/runtime PRs 135741 and 135743, the System.Text.Json
+  8.0 servicing merge, corefx's 2.1 MSRC port, IdentityModel's JWE decompression cap):
+  Pkcs `SignerInfo.FindSignerCertificate`, System.Text.Json `JsonObjectConverter`
+  extension data, `JwtTokenUtilities.DecompressToken`, WebSocketProtocol
+  `ManagedWebSocket.ReceiveAsyncPrivate`; Pkcs on Windows and System.Drawing.Common
+  (libgdiplus) as no-method-sink. Every sink spans its affected lines (the JWT one lives in
+  JsonWebTokens, which System.IdentityModel.Tokens.Jwt hands it to as a delegate). The
+  WebSocket record exposed a second precision gap: Kavita ships both the runtime's
+  `System.Net.WebSockets.dll` and the old package, each with an internal `ManagedWebSocket`,
+  and calls, type tokens, field types and base types resolved to every copy by name, so the
+  runtime's fixed copy stood in for the package's. A reference now means the referring
+  assembly's own type when it defines one (one assembly's types are a run of the name index,
+  so no allocation), and a record's sinks count only in the assemblies the deps files list for
+  its packages (`runtimepack.X` under `X`). JIT oracle still 0 missed (its `?` lines now count
+  only against the app's own assembly, which retires the 10 known false alarms); the old
+  first-copy base lookup had been losing edges (`caching` rose 2,598 to 2,610 reached).
+  Re-run on the 11 images: 20 of 34 NuGet findings with a record, 10 reached, 1 not reached,
+  9 unknown; Kavita's WebSocket finding went from reached to unknown, nothing else changed.
+  On the 224 cached images one Pkcs finding is reached, through PowerShell's type catalog
+  (type names in strings, so reflection makes `SignerInfo`): weak, but a path the rules allow.
 
 #### 14. Import-graph witness chains (A- to A+)
 

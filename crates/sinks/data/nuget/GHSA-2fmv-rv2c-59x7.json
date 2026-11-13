@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2fmv-rv2c-59x7",
+  "aliases": [
+    "CVE-2026-70162"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "System.Security.Cryptography.Pkcs"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/dotnet/runtime/pull/135743"
+    ]
+  },
+  "note": "Windows only: the fix changes HelpersWindows.AddCryptAttribute in the Windows build (runtimes/win), where EnvelopedCms.Decode merged attributes with CryptographicAttributeObjectCollection.Add. The Linux and macOS builds do not have the flaw, so no method in the assemblies a Linux image runs holds it; a code scan cannot tell the platform."
+}

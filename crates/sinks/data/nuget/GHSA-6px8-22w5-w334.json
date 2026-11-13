@@ -1,0 +1,56 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-6px8-22w5-w334",
+  "aliases": [
+    "CVE-2019-0564"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "System.Net.WebSockets.WebSocketProtocol"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "System.Net.WebSockets.ManagedWebSocket",
+      "method": "ReceiveAsyncPrivate"
+    },
+    {
+      "class": "System.Net.WebSockets.ManagedWebSocket",
+      "method": "SendFrameFallbackAsync"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/dotnet/corefx/commit/b9288f41d1"
+    ],
+    "excluded": [
+      {
+        "class": "System.Net.WebSockets.ManagedWebSocket",
+        "method": "EnsureBufferContainsAsync",
+        "reason": "only passes the cancellation token along"
+      },
+      {
+        "class": "System.Net.WebSockets.ManagedWebSocket",
+        "method": "HandleReceivedCloseAsync",
+        "reason": "only passes the cancellation token along"
+      },
+      {
+        "class": "System.Net.WebSockets.ManagedWebSocket",
+        "method": "HandleReceivedPingPongAsync",
+        "reason": "only passes the cancellation token along"
+      },
+      {
+        "class": "System.Net.WebSockets.ManagedWebSocket",
+        "method": "SendCloseFrameAsync",
+        "reason": "only passes the cancellation token along"
+      },
+      {
+        "class": "System.Net.WebSockets.ManagedWebSocket",
+        "method": "WaitForServerToCloseConnectionAsync",
+        "reason": "only passes the cancellation token along"
+      }
+    ]
+  },
+  "note": "ManagedWebSocket read and wrote the stream without the caller's cancellation token, so a peer that stops sending holds a receive (and its buffers) forever. ReceiveAsyncPrivate behind every ReceiveAsync and SendFrameFallbackAsync behind a contended send are where the token was dropped. Proposed by hand from the IL diff of System.Net.WebSockets.WebSocketProtocol 4.5.2 -> 4.5.3 and the 2.1 servicing commit; the copies inside Kestrel and the shared framework have no record here."
+}

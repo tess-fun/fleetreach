@@ -1,0 +1,42 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-8g4q-xg66-9fp4",
+  "aliases": [
+    "CVE-2024-43485"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "System.Text.Json"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "System.Text.Json.Serialization.Converters.JsonObjectConverter",
+      "method": "ReadElementAndSetProperty"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/dotnet/runtime/commit/ef07c4f26e"
+    ],
+    "excluded": [
+      {
+        "class": "System.Text.Json.Serialization.Converters.ObjectDefaultConverter`1",
+        "method": "OnTryRead",
+        "reason": "only completes the new deferred copy"
+      },
+      {
+        "class": "System.Text.Json.Serialization.Converters.ObjectDefaultConverter`1",
+        "method": "PopulatePropertiesFastPath",
+        "reason": "only completes the new deferred copy"
+      },
+      {
+        "class": "System.Text.Json.Serialization.Converters.ObjectWithParameterizedConstructorConverter`1",
+        "method": "OnTryRead",
+        "reason": "only completes the new deferred copy"
+      }
+    ]
+  },
+  "note": "Extension data typed as JsonObject sets each unknown property with replace semantics, a linear search, so a body with many properties costs n squared. JsonObjectConverter.ReadElementAndSetProperty is that set; it is an override the serializer calls for any [JsonExtensionData] JsonObject property. Dictionary-typed extension data is not affected, and the graph cannot tell the two apart once JsonObjectConverter is in use."
+}
