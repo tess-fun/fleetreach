@@ -28,6 +28,11 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: test
         run: cargo test --workspace   # includes README doctests
+      # docs.rs renders these: a link to a private or missing item is a broken link there.
+      - name: rustdoc (deny warnings)
+        run: cargo doc --workspace --no-deps --features fleetreach-cli/network,fleetreach-cli/serve
+        env:
+          RUSTDOCFLAGS: -D warnings
       # The default build must stay pure-Rust: no vendored-C crypto (M-5). The
       # network feature (rustls/aws-lc/ring) is opt-in and covered separately.
       - name: pure-Rust guard (no vendored-C crypto by default)
@@ -50,9 +55,8 @@ jobs:
       - run: rustup show
       - name: install cargo-rdme
         run: cargo install cargo-rdme --locked
-      # cargo-rdme resolves intra-doc links with a specific nightly rustdoc; let it
-      # install the exact toolchain version it needs.
-      - run: cargo rdme install-rust-toolchain-for-intralinks
+      # Crate docs carry no intra-doc links (resolving them needs a pinned nightly), so
+      # the pinned stable toolchain is enough.
       # Library READMEs are generated from lib.rs doc comments; fail if stale.
       - name: library READMEs match lib.rs
         run: |
