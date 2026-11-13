@@ -773,9 +773,14 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     (repo.hex.pm registry checksums and requirements) and `Manifest.toml` (General registry
     tree hash), refused unless the manifest range, dependents' requirements and the new
     version's own requirements all hold and the dependency list is unchanged. Transitive
-    Swift pins are blocked (no graph in the lockfile). Tested against fixtures and a real git
-    repo for tags; not yet checked by `swift package resolve`, `mix deps.get --check-locked`
-    or `Pkg.instantiate` on real projects (needs downloads).
+    Swift pins are blocked (no graph in the lockfile). Validated live 2026-11-12, each edit byte-identical to the package
+    manager's own: SwiftPM 6.1 (`swift package resolve <pkg> --version`) on
+    swift-argument-parser 1.2.0 to 1.3.0 (v2 file) and 1.2.1 to 1.5.0 (v3, `originHash`
+    kept), then `resolve --force-resolved-versions` unchanged and `swift build`; Julia 1.12 Pkg
+    (`Pkg.add(version=)`) on JSON 0.21.3 to 0.21.4 and transitive Parsers 2.5.0 to 2.5.2, then
+    `instantiate` + `resolve` unchanged, Parsers 2.8.1 refused (dependencies changed); mix
+    1.18 on plug 1.14.0 to 1.14.2, then a fresh `mix deps.get --check-locked` passes and a
+    one-digit checksum change fails with "Registry checksum mismatch".
 - **Effort**: L. **Release**: 1.6.0 + 1.7.0. **Depends on**: forges (row 4) for phase B.
 - **Proof**: a 30-repo PR corpus across all managers on throwaway repos: every PR re-scanned
   clean, nothing new introduced, lockfile accepted by the package manager's frozen install.

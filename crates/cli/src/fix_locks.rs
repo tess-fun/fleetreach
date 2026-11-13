@@ -2329,4 +2329,33 @@ HTTP = "1.7"
         assert_eq!(General::dir("OpenSSL_jll"), "jll/O/OpenSSL_jll");
         assert_eq!(General::dir("HTTP"), "H/HTTP");
     }
+
+    /// A live lock edit on a real project, against the real registries: run with
+    /// `FR_LIVE=<dir>:<swift|hex|julia>:<package>:<from>:<to>` and `--ignored`, then check the
+    /// result with the package manager's own frozen install.
+    #[test]
+    #[ignore = "network: edits a real project against the real registries"]
+    fn live_lock_edit() {
+        let spec = std::env::var("FR_LIVE").unwrap();
+        let parts: Vec<&str> = spec.split(':').collect();
+        let [dir, eco, package, from, to] = parts.as_slice() else {
+            panic!("FR_LIVE=<dir>:<eco>:<package>:<from>:<to>")
+        };
+        let client = crate::health::registry_client();
+        let path = Path::new(dir);
+        let out = match *eco {
+            "swift" => swift_bump(path, &edit(Ecosystem::Swift, package, from, to)),
+            "hex" => hex_bump(
+                path,
+                &edit(Ecosystem::Hex, package, from, to),
+                client.as_deref(),
+            ),
+            _ => julia_bump(
+                path,
+                &edit(Ecosystem::Julia, package, from, to),
+                client.as_deref(),
+            ),
+        };
+        println!("LIVE {eco} {package} {from}->{to}: {out:?}");
+    }
 }
