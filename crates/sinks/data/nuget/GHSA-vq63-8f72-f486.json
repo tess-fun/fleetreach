@@ -8,13 +8,9 @@
   "packages": [
     "CIE.AspNetCore.Authentication"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
-    {
-      "class": "CIE.AspNetCore.Authentication.Helpers.XmlHelpers",
-      "method": "SignXMLDoc"
-    },
     {
       "class": "CIE.AspNetCore.Authentication.Helpers.XmlHelpers",
       "method": "VerifySignature"
@@ -29,8 +25,17 @@
         "class": "CIE.AspNetCore.Authentication.Helpers.XmlHelpers",
         "method": "VerifyAllSignatures",
         "reason": "added by the fix"
+      },
+      {
+        "class": "CIE.AspNetCore.Authentication.Helpers.XmlHelpers",
+        "method": "SignXMLDoc",
+        "reason": "signs outgoing requests, not the check"
       }
     ]
   },
-  "note": "Proposed from the IL diff of CIE.AspNetCore.Authentication 2.0.4 -> 2.1.0 (net7.0): methods of the files the fix commits changed."
+  "note": "From the 2.0.4 -> 2.1.0 IL diff. XmlHelpers.VerifySignature checked one signature of the SAML response; 2.1.0 adds VerifyAllSignatures. Reached wherever the app accepts CIE logins.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

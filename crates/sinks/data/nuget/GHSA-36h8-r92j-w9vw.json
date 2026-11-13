@@ -8,17 +8,9 @@
   "packages": [
     "SPID.AspNetCore.Authentication"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
-    {
-      "class": "SPID.AspNetCore.Authentication.Helpers.XmlHelpers",
-      "method": ".ctor"
-    },
-    {
-      "class": "SPID.AspNetCore.Authentication.Helpers.XmlHelpers",
-      "method": "SignXMLDoc"
-    },
     {
       "class": "SPID.AspNetCore.Authentication.Helpers.XmlHelpers",
       "method": "VerifySignature"
@@ -33,8 +25,22 @@
         "class": "SPID.AspNetCore.Authentication.Helpers.XmlHelpers",
         "method": "VerifyAllSignatures",
         "reason": "added by the fix"
+      },
+      {
+        "class": "SPID.AspNetCore.Authentication.Helpers.XmlHelpers",
+        "method": ".ctor",
+        "reason": "signs outgoing requests, not the check"
+      },
+      {
+        "class": "SPID.AspNetCore.Authentication.Helpers.XmlHelpers",
+        "method": "SignXMLDoc",
+        "reason": "signs outgoing requests, not the check"
       }
     ]
   },
-  "note": "Proposed from the IL diff of SPID.AspNetCore.Authentication 3.3.0 -> 3.4.0 (net8.0): methods of the files the fix commits changed."
+  "note": "From the 3.3.0 -> 3.4.0 IL diff. XmlHelpers.VerifySignature checked one signature of the SAML response; 3.4.0 adds VerifyAllSignatures. Present from 1.3.12; earlier releases read as unknown. Reached wherever the app accepts SPID logins.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

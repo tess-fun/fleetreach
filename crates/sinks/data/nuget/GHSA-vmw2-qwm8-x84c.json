@@ -8,7 +8,7 @@
   "packages": [
     "Marten"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -38,5 +38,9 @@
       }
     ]
   },
-  "note": "Proposed from the IL diff of Marten 8.36.0 -> 8.37.0 (net8.0): methods of the files the fix commits changed."
+  "note": "From the 8.36.0 -> 8.37.0 IL diff. FullTextWhereFragment puts regConfig into the SQL text; 8.37.0 adds ValidateRegConfig. Present from 7.x; Marten 6 and earlier lack the class and read as unknown. Reached wherever the app runs a full-text search with a regConfig from untrusted input.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

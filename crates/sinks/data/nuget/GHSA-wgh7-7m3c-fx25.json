@@ -9,27 +9,35 @@
     "Scriban.Signed",
     "scriban"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "Scriban.Parsing.Parser",
       "method": "EnterExpression"
-    },
-    {
-      "class": "Scriban.TemplateContext",
-      "method": ".ctor"
-    },
-    {
-      "class": "Scriban.TemplateContext",
-      "method": "FetchNamedArgumentsAsync"
     }
   ],
   "evidence": {
     "commits": [
       "https://github.com/scriban/scriban/commit/a6fe6074199e5c04f4d29dc8d8e652b24d33e3e4",
       "https://github.com/scriban/scriban/commit/b5ac4bf30459fdc76964e3f751e16f7e96079ea7"
+    ],
+    "excluded": [
+      {
+        "class": "Scriban.TemplateContext",
+        "method": ".ctor",
+        "reason": "another advisory's change in the same release"
+      },
+      {
+        "class": "Scriban.TemplateContext",
+        "method": "FetchNamedArgumentsAsync",
+        "reason": "another advisory's change in the same release"
+      }
     ]
   },
-  "note": "Proposed from the IL diff of Scriban.Signed 6.5.8 -> 6.6.0 (net8.0): methods of the files the fix commits changed."
+  "note": "The fix gives ParserOptions.ExpressionDepthLimit a default, checked in Parser.EnterExpression as the parser descends. Present from 0.16; earlier releases lack it and read as unknown. Reached wherever the app parses templates; an app that sets ExpressionDepthLimit itself is not affected, and a code scan cannot see that setting.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
