@@ -8,72 +8,12 @@
   "packages": [
     "Nerdbank.MessagePack"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
-      "class": "Nerdbank.MessagePack.Converters.ArrayConverter`1",
-      "method": "ReadAsync"
-    },
-    {
-      "class": "Nerdbank.MessagePack.Converters.ArrayWithFlattenedDimensionsConverter`2",
-      "method": "Read"
-    },
-    {
-      "class": "Nerdbank.MessagePack.Converters.ArrayWithNestedDimensionsConverter`2",
-      "method": "Read"
-    },
-    {
-      "class": "Nerdbank.MessagePack.Converters.ObjectArrayConverter`1",
-      "method": "Read"
-    },
-    {
-      "class": "Nerdbank.MessagePack.Converters.ObjectArrayConverter`1",
-      "method": "ReadAsync"
-    },
-    {
-      "class": "Nerdbank.MessagePack.Converters.ObjectArrayWithNonDefaultCtorConverter`2",
-      "method": "Read"
-    },
-    {
-      "class": "Nerdbank.MessagePack.Converters.ObjectArrayWithNonDefaultCtorConverter`2",
-      "method": "ReadAsync"
-    },
-    {
       "class": "Nerdbank.MessagePack.MessagePackPrimitives",
       "method": "TryRead"
-    },
-    {
-      "class": "Nerdbank.MessagePack.MessagePackReader",
-      "method": "ReadMapHeader"
-    },
-    {
-      "class": "Nerdbank.MessagePack.MessagePackSerializer",
-      "method": "ConvertToJson"
-    },
-    {
-      "class": "Nerdbank.MessagePack.MessagePackStreamingReader",
-      "method": "ReadStringSlow"
-    },
-    {
-      "class": "Nerdbank.MessagePack.SecureHash.CollisionResistantHasherLookup",
-      "method": "TryGetPrimitiveHasher"
-    },
-    {
-      "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+BigIntegerEqualityComparer",
-      "method": "GetSecureHashCode"
-    },
-    {
-      "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+ByteArrayEqualityComparer",
-      "method": "Equals"
-    },
-    {
-      "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+DecimalEqualityComparer",
-      "method": "GetSecureHashCode"
-    },
-    {
-      "class": "Nerdbank.MessagePack.SecureHash.SecureDictionaryEqualityComparer`3",
-      "method": "GetSecureHashCode"
     }
   ],
   "evidence": {
@@ -126,8 +66,87 @@
         "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+UriEqualityComparer",
         "method": "GetSecureHashCode",
         "reason": "added by the fix"
+      },
+      {
+        "class": "Nerdbank.MessagePack.Converters.ArrayConverter`1",
+        "method": "ReadAsync",
+        "reason": "other hardening in the same release"
+      },
+      {
+        "class": "Nerdbank.MessagePack.Converters.ArrayWithFlattenedDimensionsConverter`2",
+        "method": "Read",
+        "reason": "other hardening in the same release"
+      },
+      {
+        "class": "Nerdbank.MessagePack.Converters.ArrayWithNestedDimensionsConverter`2",
+        "method": "Read",
+        "reason": "other hardening in the same release"
+      },
+      {
+        "class": "Nerdbank.MessagePack.Converters.ObjectArrayConverter`1",
+        "method": "Read",
+        "reason": "other hardening in the same release"
+      },
+      {
+        "class": "Nerdbank.MessagePack.Converters.ObjectArrayConverter`1",
+        "method": "ReadAsync",
+        "reason": "other hardening in the same release"
+      },
+      {
+        "class": "Nerdbank.MessagePack.Converters.ObjectArrayWithNonDefaultCtorConverter`2",
+        "method": "Read",
+        "reason": "other hardening in the same release"
+      },
+      {
+        "class": "Nerdbank.MessagePack.Converters.ObjectArrayWithNonDefaultCtorConverter`2",
+        "method": "ReadAsync",
+        "reason": "other hardening in the same release"
+      },
+      {
+        "class": "Nerdbank.MessagePack.MessagePackReader",
+        "method": "ReadMapHeader",
+        "reason": "other hardening in the same release"
+      },
+      {
+        "class": "Nerdbank.MessagePack.MessagePackSerializer",
+        "method": "ConvertToJson",
+        "reason": "other hardening in the same release"
+      },
+      {
+        "class": "Nerdbank.MessagePack.MessagePackStreamingReader",
+        "method": "ReadStringSlow",
+        "reason": "other hardening in the same release"
+      },
+      {
+        "class": "Nerdbank.MessagePack.SecureHash.CollisionResistantHasherLookup",
+        "method": "TryGetPrimitiveHasher",
+        "reason": "other hardening in the same release"
+      },
+      {
+        "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+BigIntegerEqualityComparer",
+        "method": "GetSecureHashCode",
+        "reason": "other hardening in the same release"
+      },
+      {
+        "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+ByteArrayEqualityComparer",
+        "method": "Equals",
+        "reason": "other hardening in the same release"
+      },
+      {
+        "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+DecimalEqualityComparer",
+        "method": "GetSecureHashCode",
+        "reason": "other hardening in the same release"
+      },
+      {
+        "class": "Nerdbank.MessagePack.SecureHash.SecureDictionaryEqualityComparer`3",
+        "method": "GetSecureHashCode",
+        "reason": "other hardening in the same release"
       }
     ]
   },
-  "note": "Proposed from the IL diff of Nerdbank.MessagePack 1.1.25 -> 1.1.62 (net8.0): methods of the files the fix commits changed."
+  "note": "PR 941 bounds the stackalloc in the DateTime overload of MessagePackPrimitives.TryRead, sized by the timestamp extension length in the payload. The name covers every TryRead overload, so any MessagePack read counts: an over-count, never a miss. Present from 1.0.2.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

@@ -8,37 +8,9 @@
   "packages": [
     "Marten"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
-    {
-      "class": "Marten.Events.Daemon.Internals.EventLoader",
-      "method": ".ctor"
-    },
-    {
-      "class": "Marten.Events.Daemon.Internals.EventLoader",
-      "method": "LoadAsync"
-    },
-    {
-      "class": "Marten.Events.Daemon.Internals.EventLoader",
-      "method": "loadNormalAsync"
-    },
-    {
-      "class": "Marten.Events.Daemon.Internals.EventLoader",
-      "method": "loadWithSkipAheadAsync"
-    },
-    {
-      "class": "Marten.Events.Daemon.Internals.EventLoader",
-      "method": "loadWithWindowStepAsync"
-    },
-    {
-      "class": "Marten.Internal.Operations.DeleteAllForTenant",
-      "method": "ConfigureCommand"
-    },
-    {
-      "class": "Marten.Linq.Members.Dictionaries.DictionaryContainsKeyFilter",
-      "method": ".ctor"
-    },
     {
       "class": "Marten.Linq.Members.Dictionaries.DictionaryContainsKeyFilter",
       "method": "Apply"
@@ -50,6 +22,10 @@
     {
       "class": "Marten.Linq.Parsing.SelectParser",
       "method": "VisitConstant"
+    },
+    {
+      "class": "Marten.Internal.Operations.DeleteAllForTenant",
+      "method": "ConfigureCommand"
     }
   ],
   "evidence": {
@@ -142,8 +118,42 @@
         "class": "Marten.Schema.DatabaseScopedTenantPartitions+DatabaseSet",
         "method": ".ctor",
         "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Events.Daemon.Internals.EventLoader",
+        "method": ".ctor",
+        "reason": "event loading, not literal rendering"
+      },
+      {
+        "class": "Marten.Events.Daemon.Internals.EventLoader",
+        "method": "LoadAsync",
+        "reason": "event loading, not literal rendering"
+      },
+      {
+        "class": "Marten.Events.Daemon.Internals.EventLoader",
+        "method": "loadNormalAsync",
+        "reason": "event loading, not literal rendering"
+      },
+      {
+        "class": "Marten.Events.Daemon.Internals.EventLoader",
+        "method": "loadWithSkipAheadAsync",
+        "reason": "event loading, not literal rendering"
+      },
+      {
+        "class": "Marten.Events.Daemon.Internals.EventLoader",
+        "method": "loadWithWindowStepAsync",
+        "reason": "event loading, not literal rendering"
+      },
+      {
+        "class": "Marten.Linq.Members.Dictionaries.DictionaryContainsKeyFilter",
+        "method": ".ctor",
+        "reason": "event loading, not literal rendering"
       }
     ]
   },
-  "note": "Proposed from the IL diff of Marten 9.12.0 -> 9.13.0 (net9.0): methods of the files the fix commits changed."
+  "note": "The LINQ provider put dictionary keys and some constants into SQL as quoted literals without escaping; the primary vector is Where(x => x.Attributes[key] == v). DeleteAllForTenant exists only in 9.x; the three LINQ sinks are present from 7.0. Reached wherever the app filters on dictionary members with Marten LINQ.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

@@ -16,12 +16,16 @@ all `proposed`: `scan --reachability` uses them only for call-chain witnesses, a
 proposed record with more than 10 sinks as too broad.
 
 Records for NuGet (`nuget/`) name types as .NET reflection does (`Namespace.Outer+Inner`) and
-methods by their metadata name (`.ctor`, `ReadFrame`). The 83 records are `nugetpropose`
-output (`crates/clr/examples`), all `proposed`: for each high or critical NuGet advisory with a
-GitHub fix commit, the IL of the last vulnerable and the first fixed release, narrowed to the
-types of the source files the fix changed, with generated code charged to the method that
-owns it. `docs/differential/nuget-sinks/propose.py` fetches the packages and commit file lists
-and runs it. Packages with no library assemblies (native code, tools, runtime packs) have no
+methods by their metadata name (`.ctor`, `ReadFrame`). The 83 records started as
+`nugetpropose` output (`crates/clr/examples`): for each high or critical NuGet advisory with a
+GitHub fix commit, the IL of the last vulnerable and the first fixed release inside the fixed
+range, narrowed to the types of the source files the fix changed, with generated code charged
+to the method that owns it. `docs/differential/nuget-sinks/propose.py` fetches the packages
+and commit file lists and runs it. All 83 are `reviewed`: 61 name sinks, 22 are
+`no-method-sink` (mostly flaws in a bundled native library). Where a class moved between
+release lines the record names each spelling; `docs/differential/nuget-sinks/span.py` checks
+that every affected line holds at least one of a record's sinks, or none (then the verdict is
+unknown). Packages with no library assemblies (native code, tools, runtime packs) have no
 record.
 
 ## Status of the seed data

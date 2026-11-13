@@ -8,25 +8,9 @@
   "packages": [
     "NHibernate"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
-    {
-      "class": "NHibernate.Dialect.Dialect",
-      "method": "Configure"
-    },
-    {
-      "class": "NHibernate.Dialect.MySQLDialect",
-      "method": ".ctor"
-    },
-    {
-      "class": "NHibernate.Dialect.SybaseASA9Dialect",
-      "method": ".ctor"
-    },
-    {
-      "class": "NHibernate.Dialect.SybaseSQLAnywhere10Dialect",
-      "method": ".ctor"
-    },
     {
       "class": "NHibernate.Type.AbstractCharType",
       "method": "ObjectToSQLString"
@@ -117,6 +101,14 @@
     },
     {
       "class": "NHibernate.Type.UriType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.DateTimeType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.DateTimeOffsetType",
       "method": "ObjectToSQLString"
     }
   ],
@@ -211,8 +203,33 @@
         "class": "NHibernate.Dialect.SybaseSQLAnywhere10Dialect",
         "method": "set_EscapeBackslashInStrings",
         "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.Dialect",
+        "method": "Configure",
+        "reason": "dialect setup, not literal rendering"
+      },
+      {
+        "class": "NHibernate.Dialect.MySQLDialect",
+        "method": ".ctor",
+        "reason": "dialect setup, not literal rendering"
+      },
+      {
+        "class": "NHibernate.Dialect.SybaseASA9Dialect",
+        "method": ".ctor",
+        "reason": "dialect setup, not literal rendering"
+      },
+      {
+        "class": "NHibernate.Dialect.SybaseSQLAnywhere10Dialect",
+        "method": ".ctor",
+        "reason": "dialect setup, not literal rendering"
       }
     ]
   },
-  "note": "Proposed from the IL diff of NHibernate 5.5.1 -> 5.5.2 (net6.0): methods of the files the fix commits changed."
+  "note": "Several ILiteralType.ObjectToSQLString implementations wrote values into SQL without escaping or with the current culture; callers include discriminator mappings and static fields referenced in HQL. All of them are sinks (DateTimeType and DateTimeOffsetType stand in for AbstractDateTimeType in 3.x and 4.x). NHibernate calls them through the type interface while building SQL from mappings and HQL, not from the app's code: no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  },
+  "reached_by_name": true
 }

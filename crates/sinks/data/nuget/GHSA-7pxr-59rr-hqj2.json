@@ -9,16 +9,20 @@
     "Microsoft.OpenApi.Readers",
     "Microsoft.OpenApi.YamlReader"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
-      "class": "Microsoft.OpenApi.Readers.OpenApiReaderSettings",
-      "method": ".ctor"
+      "class": "Microsoft.OpenApi.YamlReader.OpenApiYamlReader",
+      "method": "Read"
     },
     {
-      "class": "Microsoft.OpenApi.Readers.OpenApiReaderSettings",
-      "method": "AddMicrosoftExtensionParsers"
+      "class": "Microsoft.OpenApi.YamlReader.OpenApiYamlReader",
+      "method": "ReadAsync"
+    },
+    {
+      "class": "Microsoft.OpenApi.YamlReader.OpenApiYamlReader",
+      "method": "ReadFragment"
     },
     {
       "class": "Microsoft.OpenApi.Readers.OpenApiYamlDocumentReader",
@@ -33,36 +37,12 @@
       "method": "ReadFragment"
     },
     {
-      "class": "Microsoft.OpenApi.Readers.ParseNodes.ListNode",
-      "method": "CreateAny"
+      "class": "Microsoft.OpenApi.Readers.OpenApiStreamReader",
+      "method": "Read"
     },
     {
-      "class": "Microsoft.OpenApi.Readers.ParseNodes.MapNode",
-      "method": "CreateAny"
-    },
-    {
-      "class": "Microsoft.OpenApi.Readers.ParseNodes.ParseNode",
-      "method": ".ctor"
-    },
-    {
-      "class": "Microsoft.OpenApi.Readers.ParseNodes.ParseNode",
-      "method": "CreateAny"
-    },
-    {
-      "class": "Microsoft.OpenApi.Readers.ParseNodes.PropertyNode",
-      "method": "CreateAny"
-    },
-    {
-      "class": "Microsoft.OpenApi.Readers.ParseNodes.ValueNode",
-      "method": "CreateAny"
-    },
-    {
-      "class": "Microsoft.OpenApi.Readers.ParsingContext",
-      "method": ".ctor"
-    },
-    {
-      "class": "Microsoft.OpenApi.Readers.ParsingContext",
-      "method": "GetLocation"
+      "class": "Microsoft.OpenApi.Readers.OpenApiStringReader",
+      "method": "Read"
     }
   ],
   "evidence": {
@@ -124,8 +104,62 @@
         "class": "Microsoft.OpenApi.Readers.ParsingContext",
         "method": "set_MaxNodeCount",
         "reason": "added by the fix"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.OpenApiReaderSettings",
+        "method": ".ctor",
+        "reason": "parse-node internals behind the read entries"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.OpenApiReaderSettings",
+        "method": "AddMicrosoftExtensionParsers",
+        "reason": "parse-node internals behind the read entries"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.ParseNodes.ListNode",
+        "method": "CreateAny",
+        "reason": "parse-node internals behind the read entries"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.ParseNodes.MapNode",
+        "method": "CreateAny",
+        "reason": "parse-node internals behind the read entries"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.ParseNodes.ParseNode",
+        "method": ".ctor",
+        "reason": "parse-node internals behind the read entries"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.ParseNodes.ParseNode",
+        "method": "CreateAny",
+        "reason": "parse-node internals behind the read entries"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.ParseNodes.PropertyNode",
+        "method": "CreateAny",
+        "reason": "parse-node internals behind the read entries"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.ParseNodes.ValueNode",
+        "method": "CreateAny",
+        "reason": "parse-node internals behind the read entries"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.ParsingContext",
+        "method": ".ctor",
+        "reason": "parse-node internals behind the read entries"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.ParsingContext",
+        "method": "GetLocation",
+        "reason": "parse-node internals behind the read entries"
       }
     ]
   },
-  "note": "Proposed from the IL diff of Microsoft.OpenApi.Readers 1.6.29 -> 1.6.30 (netstandard2.0): methods of the files the fix commits changed."
+  "note": "Nested YAML anchors and aliases expand without a bound when an OpenAPI document is read. The YAML entries are OpenApiYamlReader in Microsoft.OpenApi.YamlReader 2.x and 3.x, OpenApiYamlDocumentReader in Readers 1.6, and the stream and string readers in early 1.x. Reached wherever the app reads OpenAPI YAML it does not control.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

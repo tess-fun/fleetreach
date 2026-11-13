@@ -9,112 +9,20 @@
     "AlastairLundy.CliInvoke",
     "CliInvoke"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": ".ctor"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "ConfigureShellExecution"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "ConfigureWindowCreation"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "RedirectStandardError"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "RedirectStandardInput"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "RedirectStandardOutput"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "RequireAdministratorPrivileges"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "SetArguments"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "SetEnvironmentVariables"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "SetProcessResourcePolicy"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "SetStandardErrorEncoding"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "SetStandardErrorPipe"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "SetStandardInputEncoding"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "SetStandardInputPipe"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "SetStandardOutputEncoding"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "SetStandardOutputPipe"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "SetTargetFilePath"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "SetUserCredential"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
-      "method": "SetWorkingDirectory"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
-      "method": ".ctor"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
-      "method": "Equals"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
-      "method": "GetHashCode"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
-      "method": "ToString"
-    },
-    {
-      "class": "AlastairLundy.CliInvoke.Extensibility.Factories.RunnerProcessFactory",
-      "method": ".ctor"
-    },
     {
       "class": "AlastairLundy.CliInvoke.Extensibility.Factories.RunnerProcessFactory",
       "method": "CreateRunnerConfiguration"
     },
     {
-      "class": "AlastairLundy.CliInvoke.Helpers.Processes.ToStartInfoExtensions",
-      "method": "ToProcessStartInfo"
+      "class": "CliInvoke.Extensibility.Factories.RunnerProcessFactory",
+      "method": "CreateRunnerConfiguration"
+    },
+    {
+      "class": "CliInvoke.Extensibility.RunnerConfigurationFactory",
+      "method": "CreateRunnerConfiguration"
     }
   ],
   "evidence": {
@@ -147,8 +55,137 @@
         "class": "AlastairLundy.CliInvoke.Extensibility.Factories.RunnerProcessFactory",
         "method": ".cctor",
         "reason": "added by the fix"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": ".ctor",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "ConfigureShellExecution",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "ConfigureWindowCreation",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "RedirectStandardError",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "RedirectStandardInput",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "RedirectStandardOutput",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "RequireAdministratorPrivileges",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "SetArguments",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "SetEnvironmentVariables",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "SetProcessResourcePolicy",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "SetStandardErrorEncoding",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "SetStandardErrorPipe",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "SetStandardInputEncoding",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "SetStandardInputPipe",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "SetStandardOutputEncoding",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "SetStandardOutputPipe",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "SetTargetFilePath",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "SetUserCredential",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Builders.ProcessConfigurationBuilder",
+        "method": "SetWorkingDirectory",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
+        "method": ".ctor",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
+        "method": "Equals",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
+        "method": "GetHashCode",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Core.ProcessConfiguration",
+        "method": "ToString",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Extensibility.Factories.RunnerProcessFactory",
+        "method": ".ctor",
+        "reason": "builder and configuration plumbing"
+      },
+      {
+        "class": "AlastairLundy.CliInvoke.Helpers.Processes.ToStartInfoExtensions",
+        "method": "ToProcessStartInfo",
+        "reason": "builder and configuration plumbing"
       }
     ]
   },
-  "note": "Proposed from the IL diff of AlastairLundy.CliInvoke 2.0.0 -> 2.0.2 (net8.0): methods of the files the fix commits changed."
+  "note": "The runner factory joined the runner's arguments, the target and the caller's arguments into one ProcessStartInfo.Arguments string that the OS re-tokenizes, so a quote in an argument injects more. The factory is AlastairLundy.CliInvoke RunnerProcessFactory in 2.0, CliInvoke RunnerProcessFactory in the renamed 2.x package and RunnerConfigurationFactory in 3.x. Reached wherever the app runs a command through a runner.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

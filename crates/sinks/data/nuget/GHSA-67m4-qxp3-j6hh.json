@@ -8,21 +8,9 @@
   "packages": [
     "TrueLayer.Client"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
-    {
-      "class": "TrueLayer.ApiClient",
-      "method": ".ctor"
-    },
-    {
-      "class": "TrueLayer.ApiClient",
-      "method": "CreateResponseAsync"
-    },
-    {
-      "class": "TrueLayer.ApiClient",
-      "method": "DeserializeJsonAsync"
-    },
     {
       "class": "TrueLayer.ApiClient",
       "method": "GetAsync"
@@ -30,98 +18,6 @@
     {
       "class": "TrueLayer.ApiClient",
       "method": "PostAsync"
-    },
-    {
-      "class": "TrueLayer.Auth.AuthApi",
-      "method": ".ctor"
-    },
-    {
-      "class": "TrueLayer.Auth.AuthApi",
-      "method": "GetAuthToken"
-    },
-    {
-      "class": "TrueLayer.Extensions.UriExtensions",
-      "method": "Append"
-    },
-    {
-      "class": "TrueLayer.Mandates.MandatesApi",
-      "method": ".ctor"
-    },
-    {
-      "class": "TrueLayer.Mandates.MandatesApi",
-      "method": "CreateMandate"
-    },
-    {
-      "class": "TrueLayer.Mandates.MandatesApi",
-      "method": "GetConfirmationOfFunds"
-    },
-    {
-      "class": "TrueLayer.Mandates.MandatesApi",
-      "method": "GetMandate"
-    },
-    {
-      "class": "TrueLayer.Mandates.MandatesApi",
-      "method": "GetMandateConstraints"
-    },
-    {
-      "class": "TrueLayer.Mandates.MandatesApi",
-      "method": "ListMandates"
-    },
-    {
-      "class": "TrueLayer.Mandates.MandatesApi",
-      "method": "RevokeMandate"
-    },
-    {
-      "class": "TrueLayer.Mandates.MandatesApi",
-      "method": "StartAuthorizationFlow"
-    },
-    {
-      "class": "TrueLayer.Mandates.MandatesApi",
-      "method": "SubmitConsent"
-    },
-    {
-      "class": "TrueLayer.Mandates.MandatesApi",
-      "method": "SubmitProviderSelection"
-    },
-    {
-      "class": "TrueLayer.MerchantAccounts.MerchantAccountsApi",
-      "method": ".ctor"
-    },
-    {
-      "class": "TrueLayer.MerchantAccounts.MerchantAccountsApi",
-      "method": "GetMerchantAccount"
-    },
-    {
-      "class": "TrueLayer.MerchantAccounts.MerchantAccountsApi",
-      "method": "GetPaymentSources"
-    },
-    {
-      "class": "TrueLayer.MerchantAccounts.MerchantAccountsApi",
-      "method": "ListMerchantAccounts"
-    },
-    {
-      "class": "TrueLayer.Payments.PaymentsApi",
-      "method": ".ctor"
-    },
-    {
-      "class": "TrueLayer.Payments.PaymentsApi",
-      "method": "CreatePayment"
-    },
-    {
-      "class": "TrueLayer.Payments.PaymentsApi",
-      "method": "GetPayment"
-    },
-    {
-      "class": "TrueLayer.Payouts.PayoutsApi",
-      "method": ".ctor"
-    },
-    {
-      "class": "TrueLayer.Payouts.PayoutsApi",
-      "method": "CreatePayout"
-    },
-    {
-      "class": "TrueLayer.Payouts.PayoutsApi",
-      "method": "GetPayout"
     }
   ],
   "evidence": {
@@ -148,8 +44,142 @@
         "class": "TrueLayer.Guard",
         "method": "ThrowIfFalse",
         "reason": "added by the fix"
+      },
+      {
+        "class": "TrueLayer.ApiClient",
+        "method": ".ctor",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.ApiClient",
+        "method": "CreateResponseAsync",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.ApiClient",
+        "method": "DeserializeJsonAsync",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Auth.AuthApi",
+        "method": ".ctor",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Auth.AuthApi",
+        "method": "GetAuthToken",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Extensions.UriExtensions",
+        "method": "Append",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Mandates.MandatesApi",
+        "method": ".ctor",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Mandates.MandatesApi",
+        "method": "CreateMandate",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Mandates.MandatesApi",
+        "method": "GetConfirmationOfFunds",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Mandates.MandatesApi",
+        "method": "GetMandate",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Mandates.MandatesApi",
+        "method": "GetMandateConstraints",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Mandates.MandatesApi",
+        "method": "ListMandates",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Mandates.MandatesApi",
+        "method": "RevokeMandate",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Mandates.MandatesApi",
+        "method": "StartAuthorizationFlow",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Mandates.MandatesApi",
+        "method": "SubmitConsent",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Mandates.MandatesApi",
+        "method": "SubmitProviderSelection",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.MerchantAccounts.MerchantAccountsApi",
+        "method": ".ctor",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.MerchantAccounts.MerchantAccountsApi",
+        "method": "GetMerchantAccount",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.MerchantAccounts.MerchantAccountsApi",
+        "method": "GetPaymentSources",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.MerchantAccounts.MerchantAccountsApi",
+        "method": "ListMerchantAccounts",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Payments.PaymentsApi",
+        "method": ".ctor",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Payments.PaymentsApi",
+        "method": "CreatePayment",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Payments.PaymentsApi",
+        "method": "GetPayment",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Payouts.PayoutsApi",
+        "method": ".ctor",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Payouts.PayoutsApi",
+        "method": "CreatePayout",
+        "reason": "one of the API methods that all send through ApiClient"
+      },
+      {
+        "class": "TrueLayer.Payouts.PayoutsApi",
+        "method": "GetPayout",
+        "reason": "one of the API methods that all send through ApiClient"
       }
     ]
   },
-  "note": "Proposed from the IL diff of TrueLayer.Client 1.5.0 -> 1.6.0 (net6.0): methods of the files the fix commits changed."
+  "note": "Ids from responses went into request URLs unchecked, so the HttpClient could be pointed elsewhere; 1.6.0 validates them. Every API class sends through ApiClient.GetAsync or PostAsync. Present from 0.1.0. Reached wherever the app calls the TrueLayer API.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

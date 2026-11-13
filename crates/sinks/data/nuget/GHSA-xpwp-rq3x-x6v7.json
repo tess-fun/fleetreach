@@ -8,208 +8,12 @@
   "packages": [
     "recurly-api-client"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
-      "class": "Recurly.Account",
-      "method": "DeleteBillingInfo"
-    },
-    {
-      "class": "Recurly.Account",
-      "method": "GetActiveRedemptions"
-    },
-    {
-      "class": "Recurly.Account",
-      "method": "GetAdjustments"
-    },
-    {
-      "class": "Recurly.Account",
-      "method": "GetNotes"
-    },
-    {
-      "class": "Recurly.Account",
-      "method": "GetShippingAddresses"
-    },
-    {
-      "class": "Recurly.Account",
-      "method": "GetSubscriptions"
-    },
-    {
-      "class": "Recurly.Account",
-      "method": "GetTransactions"
-    },
-    {
-      "class": "Recurly.Account",
-      "method": "InvoicePendingCharges"
-    },
-    {
-      "class": "Recurly.Account",
-      "method": "PreviewInvoicePendingCharges"
-    },
-    {
-      "class": "Recurly.Account",
-      "method": "Update"
-    },
-    {
-      "class": "Recurly.AccountBalance",
-      "method": "Get"
-    },
-    {
-      "class": "Recurly.Accounts",
-      "method": "Close"
-    },
-    {
-      "class": "Recurly.Accounts",
-      "method": "Get"
-    },
-    {
-      "class": "Recurly.Accounts",
-      "method": "Reopen"
-    },
-    {
-      "class": "Recurly.AddOn",
-      "method": "Create"
-    },
-    {
-      "class": "Recurly.AddOn",
-      "method": "Delete"
-    },
-    {
-      "class": "Recurly.AddOn",
-      "method": "Update"
-    },
-    {
-      "class": "Recurly.Adjustment",
-      "method": "Create"
-    },
-    {
-      "class": "Recurly.Adjustment",
-      "method": "Delete"
-    },
-    {
-      "class": "Recurly.Adjustments",
-      "method": "Get"
-    },
-    {
-      "class": "Recurly.BillingInfo",
-      "method": "BillingInfoUrl"
-    },
-    {
-      "class": "Recurly.Coupon",
-      "method": "Deactivate"
-    },
-    {
-      "class": "Recurly.Coupon",
-      "method": "Restore"
-    },
-    {
-      "class": "Recurly.Coupon",
-      "method": "Update"
-    },
-    {
-      "class": "Recurly.CouponRedemption",
-      "method": "Delete"
-    },
-    {
-      "class": "Recurly.CouponRedemption",
-      "method": "Redeem"
-    },
-    {
-      "class": "Recurly.Coupons",
-      "method": "Get"
-    },
-    {
-      "class": "Recurly.Exports",
-      "method": "DownloadExportFile"
-    },
-    {
-      "class": "Recurly.GiftCards",
-      "method": "Get"
-    },
-    {
-      "class": "Recurly.Invoice",
-      "method": "Create"
-    },
-    {
-      "class": "Recurly.Invoice",
-      "method": "Preview"
-    },
-    {
-      "class": "Recurly.Invoices",
-      "method": "Create"
-    },
-    {
-      "class": "Recurly.Invoices",
-      "method": "List"
-    },
-    {
-      "class": "Recurly.MeasuredUnit",
-      "method": "Delete"
-    },
-    {
-      "class": "Recurly.MeasuredUnit",
-      "method": "Update"
-    },
-    {
-      "class": "Recurly.Plan",
-      "method": "Deactivate"
-    },
-    {
-      "class": "Recurly.Plan",
-      "method": "GetAddOn"
-    },
-    {
-      "class": "Recurly.Plan",
-      "method": "Update"
-    },
-    {
-      "class": "Recurly.Plans",
-      "method": "Get"
-    },
-    {
-      "class": "Recurly.Subscription",
-      "method": "Cancel"
-    },
-    {
-      "class": "Recurly.Subscription",
-      "method": "ChangeSubscription"
-    },
-    {
-      "class": "Recurly.Subscription",
-      "method": "GetRedemptions"
-    },
-    {
-      "class": "Recurly.Subscription",
-      "method": "Postpone"
-    },
-    {
-      "class": "Recurly.Subscription",
-      "method": "PreviewChange"
-    },
-    {
-      "class": "Recurly.Subscription",
-      "method": "Reactivate"
-    },
-    {
-      "class": "Recurly.Subscription",
-      "method": "Terminate"
-    },
-    {
-      "class": "Recurly.Subscription",
-      "method": "UpdateNotes"
-    },
-    {
-      "class": "Recurly.Subscriptions",
-      "method": "Get"
-    },
-    {
-      "class": "Recurly.Transaction",
-      "method": "Refund"
-    },
-    {
-      "class": "Recurly.Transactions",
-      "method": "Get"
+      "class": "Recurly.Client",
+      "method": "PerformRequest"
     }
   ],
   "evidence": {
@@ -221,8 +25,262 @@
         "class": "Recurly.Plan",
         "method": "get_AddOns",
         "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "Recurly.Account",
+        "method": "DeleteBillingInfo",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Account",
+        "method": "GetActiveRedemptions",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Account",
+        "method": "GetAdjustments",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Account",
+        "method": "GetNotes",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Account",
+        "method": "GetShippingAddresses",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Account",
+        "method": "GetSubscriptions",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Account",
+        "method": "GetTransactions",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Account",
+        "method": "InvoicePendingCharges",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Account",
+        "method": "PreviewInvoicePendingCharges",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Account",
+        "method": "Update",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.AccountBalance",
+        "method": "Get",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Accounts",
+        "method": "Close",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Accounts",
+        "method": "Get",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Accounts",
+        "method": "Reopen",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.AddOn",
+        "method": "Create",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.AddOn",
+        "method": "Delete",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.AddOn",
+        "method": "Update",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Adjustment",
+        "method": "Create",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Adjustment",
+        "method": "Delete",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Adjustments",
+        "method": "Get",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.BillingInfo",
+        "method": "BillingInfoUrl",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Coupon",
+        "method": "Deactivate",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Coupon",
+        "method": "Restore",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Coupon",
+        "method": "Update",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.CouponRedemption",
+        "method": "Delete",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.CouponRedemption",
+        "method": "Redeem",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Coupons",
+        "method": "Get",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Exports",
+        "method": "DownloadExportFile",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.GiftCards",
+        "method": "Get",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Invoice",
+        "method": "Create",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Invoice",
+        "method": "Preview",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Invoices",
+        "method": "Create",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Invoices",
+        "method": "List",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.MeasuredUnit",
+        "method": "Delete",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.MeasuredUnit",
+        "method": "Update",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Plan",
+        "method": "Deactivate",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Plan",
+        "method": "GetAddOn",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Plan",
+        "method": "Update",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Plans",
+        "method": "Get",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Subscription",
+        "method": "Cancel",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Subscription",
+        "method": "ChangeSubscription",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Subscription",
+        "method": "GetRedemptions",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Subscription",
+        "method": "Postpone",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Subscription",
+        "method": "PreviewChange",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Subscription",
+        "method": "Reactivate",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Subscription",
+        "method": "Terminate",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Subscription",
+        "method": "UpdateNotes",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Subscriptions",
+        "method": "Get",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Transaction",
+        "method": "Refund",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
+      },
+      {
+        "class": "Recurly.Transactions",
+        "method": "Get",
+        "reason": "one of the API methods that all send through Client.PerformRequest"
       }
     ]
   },
-  "note": "Proposed from the IL diff of recurly-api-client 1.8.0 -> 1.8.1 (net35): methods of the files the fix commits changed."
+  "note": "The fix replaces Uri.EscapeUriString with EscapeDataString in about 50 API methods that put codes into request paths; every one sends through Client.PerformRequest, the sink here. An over-count (every API call), never a miss. Present from 1.1.9; 1.0 and 1.1.0 ship no library assemblies.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

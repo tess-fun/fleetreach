@@ -1433,9 +1433,18 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   and its configuration reader, DI and logging, ImageSharp, JWT, Humanizer, NuGet.Versioning,
   MemoryCache, ASP.NET Core, Npgsql, SqlClient, Azure.Identity), 0 of 6,758 methods that ran
   are missing from the graph. Each rule came from a miss there. A rootfs with two published
-  services (35 assemblies, 56,840 methods) scans in 1.4 s, 190 MB peak. **Still open**: NuGet
-  sink records (none ship; a proposer from fix commits or nupkg diffs needs packages fetched,
-  which needs the user's OK), and a real-image corpus measurement of yield.
+  services (35 assemblies, 56,840 methods) scans in 1.4 s, 190 MB peak.
+- **NuGet sink records (2026-11-13)**: `fleetreach_clr::propose` diffs the IL of the last
+  vulnerable and first fixed release (inside the fixed range, sibling packages followed),
+  narrowed to the types of the files the fix commits changed. 83 records, one per high or
+  critical NuGet advisory with a GitHub fix commit and library assemblies, all reviewed by the
+  user in batches: 61 name sinks (7 reached by name: pipeline middleware, DI-run actuators,
+  platform-loaded modules, mapping-driven SQL), 22 are no-method-sink (14 native libraries:
+  ImageMagick, libwebp, Chromium; the rest app-level or client-script flaws). The drafts were
+  often wrong: fixes in static fields or regexes, test-only or other-port commits, writer
+  instead of reader, renamed classes across release lines. `span.py` checks every sink across
+  each affected line (376 release lines): where all of a record's sinks are absent the verdict
+  is unknown, never not reached. **Still open**: a real-image corpus measurement of yield.
 
 #### 14. Import-graph witness chains (A- to A+)
 
