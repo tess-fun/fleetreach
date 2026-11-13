@@ -756,8 +756,19 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     top of the last and leaves out any that do not verify. Automerge is the forge's native
     one pinned to the verified head, never for drafts or breaking bumps. Rollout waves gate
     on the campaign's merged, open and closed requests. Proven end to end with a fake `gh`
-    over real git remotes; not yet against github.com or GitLab. Still open: PRs on
-    Bitbucket, Azure DevOps and Gitea/Forgejo, and Swift/Hex/Julia lock edits.
+    over real git remotes, and on github.com (three private throwaway repos, 2026-11-12):
+    rollout waves (wait while open, next wave after a merge), `group = "repo"` with
+    `--close-obsolete`. Live findings: with no required checks pending, `gh pr merge --auto`
+    merges at once (now reported as `merged`); a free-plan private repo refuses auto-merge and
+    branch protection, so whether GitHub holds a waiting auto-merge to `--match-head-commit`
+    after a later push is unproven. GitLab is unproven (no account).
+    **PRs on Gitea/Forgejo, Bitbucket Cloud and Data Center, and Azure DevOps implemented
+    2026-11-12** (`crates/cli/src/fix_forges.rs`, REST through a `send` closure). Proven on a
+    real Forgejo 11 in Docker: open, update in place, `fix status`, grouped request, close with
+    a comment. Forgejo 11 merged a commit pushed after `merge_when_checks_succeed` with
+    `head_commit_id` was set, so auto-merge stays off on all four (none can be pinned).
+    Bitbucket and Azure are tested against their documented API shapes only (no accounts).
+    Still open: Swift/Hex/Julia lock edits.
 - **Effort**: L. **Release**: 1.6.0 + 1.7.0. **Depends on**: forges (row 4) for phase B.
 - **Proof**: a 30-repo PR corpus across all managers on throwaway repos: every PR re-scanned
   clean, nothing new introduced, lockfile accepted by the package manager's frozen install.

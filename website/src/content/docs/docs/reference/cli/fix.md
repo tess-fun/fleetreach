@@ -100,11 +100,19 @@ Options:
           Where the repos are hosted; `auto` reads each repo's `origin` remote
 
           Possible values:
-          - auto:   GitLab when the `origin` host names GitLab, GitHub otherwise
-          - github: GitHub pull requests through `gh`
-          - gitlab: GitLab merge requests through `glab`
+          - auto:             From the `origin` host: GitLab when it names GitLab, Bitbucket Cloud for bitbucket.org, Azure DevOps for dev.azure.com, GitHub otherwise
+          - github:           GitHub pull requests through `gh`
+          - gitlab:           GitLab merge requests through `glab`
+          - gitea:            Gitea pull requests through its API (`GITEA_TOKEN`)
+          - forgejo:          Forgejo pull requests through its API (`FORGEJO_TOKEN`)
+          - bitbucket:        Bitbucket Cloud pull requests through its API (`BITBUCKET_TOKEN`)
+          - bitbucket-server: Bitbucket Data Center pull requests through its API (`BITBUCKET_SERVER_TOKEN`)
+          - azure:            Azure DevOps pull requests through its API (`AZURE_DEVOPS_TOKEN`)
           
           [default: auto]
+
+      --forge-api <URL>
+          The forge's API base, when it cannot be read from `origin`
 
   -h, --help
           Print help (see a summary with '-h')
@@ -129,11 +137,19 @@ Options:
           Where the repos are hosted; `auto` reads each repo's `origin` remote
 
           Possible values:
-          - auto:   GitLab when the `origin` host names GitLab, GitHub otherwise
-          - github: GitHub pull requests through `gh`
-          - gitlab: GitLab merge requests through `glab`
+          - auto:             From the `origin` host: GitLab when it names GitLab, Bitbucket Cloud for bitbucket.org, Azure DevOps for dev.azure.com, GitHub otherwise
+          - github:           GitHub pull requests through `gh`
+          - gitlab:           GitLab merge requests through `glab`
+          - gitea:            Gitea pull requests through its API (`GITEA_TOKEN`)
+          - forgejo:          Forgejo pull requests through its API (`FORGEJO_TOKEN`)
+          - bitbucket:        Bitbucket Cloud pull requests through its API (`BITBUCKET_TOKEN`)
+          - bitbucket-server: Bitbucket Data Center pull requests through its API (`BITBUCKET_SERVER_TOKEN`)
+          - azure:            Azure DevOps pull requests through its API (`AZURE_DEVOPS_TOKEN`)
           
           [default: auto]
+
+      --forge-api <URL>
+          The forge's API base, when it cannot be read from `origin` (an ssh remote on another port, or a forge under a path), e.g. `https://git.example.com/api/v1`
 
   -h, --help
           Print help (see a summary with '-h')

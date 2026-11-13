@@ -1110,6 +1110,7 @@ case "$1 $2" in
     echo "https://forge.test/pr/1" ;;
   "pr close") sed 's/"OPEN"/"CLOSED"/' "$state" > "$state.new" && mv "$state.new" "$state" ;;
   "pr merge") echo "$*" >> "$PWD.merge" ;;
+  "pr view") echo OPEN ;;
 esac
 "#,
         )

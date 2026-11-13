@@ -175,7 +175,14 @@ fleetreach fix status
 
 `--push` pushes each verified branch, and `--open-pr` opens a pull request with `gh` (or a
 merge request with `glab` on GitLab), or updates the open one so re-running never
-duplicates it. Unverified branches are never pushed, and only `fleetreach/*` branches are
+duplicates it. On Gitea, Forgejo, Bitbucket Cloud and Data Center, and Azure DevOps, it calls
+their APIs with the token the matching [source](/fleetreach/docs/guides/scan-a-github-or-gitlab-org/)
+reads (`GITEA_TOKEN`, `FORGEJO_TOKEN`, `BITBUCKET_TOKEN`, `BITBUCKET_SERVER_TOKEN`,
+`AZURE_DEVOPS_TOKEN`), which needs pull request write scope; these need a network build.
+`--forge auto` picks GitLab, bitbucket.org and dev.azure.com from the `origin` host and GitHub
+otherwise; name a self-hosted forge with `--forge gitea`, `forgejo` or `bitbucket-server`,
+and pass `--forge-api https://host/api/v1` when `origin` is an ssh remote on another port or
+the forge runs under a path. Unverified branches are never pushed, and only `fleetreach/*` branches are
 ever pushed. A push leases on the commit fleetreach last saw, so it does not overwrite work
 someone else pushed. The description lists the advisories, flags a breaking jump, states the
 verification and names the other repos in the campaign. Nothing is merged for you unless
@@ -231,11 +238,15 @@ scan run with SSVC decisions). In a group, each bump is applied and re-scanned o
 ones before it. One that fails or does not verify is undone and left out, and the request
 lists it, so the branch only ever holds verified bumps, squashed into one commit.
 
-**Automerge.** With `automerge = "verified"`, each request fleetreach opens or updates turns on
-the forge's own auto-merge (`gh pr merge --auto`, `glab mr merge --auto-merge`), pinned to the
-commit fleetreach verified: a later push to the branch cancels it, and the forge's required
-checks and reviews still apply. A draft, or a request with a breaking bump, is left for a
-person.
+**Automerge.** With `automerge = "verified"`, each request fleetreach opens or updates on GitHub
+or GitLab turns on the forge's own auto-merge (`gh pr merge --auto --match-head-commit`,
+`glab mr merge --auto-merge --sha`), naming the commit fleetreach verified, and the forge's
+required checks and reviews still apply. On GitHub, a repo with no required checks pending is
+merged at once, and the summary says `merged`; a repo that does not allow auto-merge (a
+private repo on the free plan) says so and stays open. A draft, or a request with a breaking
+bump, is left for a person. On Gitea, Forgejo, Bitbucket and Azure DevOps, auto-merge stays
+off: their auto-merge cannot be held to the verified commit (Forgejo 11 merged a commit pushed
+after auto-merge was turned on), so a later push by anyone would merge unverified.
 
 **Rollout.** `rollout = [1, 5]` spreads each campaign in waves: one repo first, five more once
 that request has merged, then the rest once those five have. While a wave's requests are open,

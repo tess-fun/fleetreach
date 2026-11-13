@@ -8,12 +8,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`fix apply --open-pr` and `fix status` work on Gitea, Forgejo, Bitbucket Cloud and Data
+  Center, and Azure DevOps**, through their APIs with the same tokens as the forge sources
+  (`--forge gitea|forgejo|bitbucket|bitbucket-server|azure`, `--forge-api` for an unusual API
+  base). Requests are opened, updated in place, and closed with a comment by
+  `--close-obsolete`. Auto-merge stays off on these forges: none can hold it to the verified
+  commit, and Forgejo 11 merged a commit pushed after it was turned on. Proven against a real
+  Forgejo 11; Bitbucket and Azure against their documented API shapes only.
 - **`[settings.fix]` sets when and how `fix apply` publishes.** `schedule` windows (with an
   IANA `timezone`) keep `--push` and `--open-pr` to working hours; outside them a run publishes
   nothing and says when the next window opens. `group = "repo"` or `"ssvc"` puts a repo's bumps
   on one branch and request, each applied and re-scanned on top of the last, with any that do
-  not verify undone and left out. `automerge = "verified"` turns on the forge's own auto-merge,
-  pinned to the verified commit, except for drafts and breaking bumps. `rollout = [1, 5]`
+  not verify undone and left out. `automerge = "verified"` turns on GitHub's or GitLab's own
+  auto-merge for the verified commit, except for drafts and breaking bumps; on GitHub a repo
+  with no required checks pending is merged at once, and the summary says so. `rollout = [1, 5]`
   spreads a campaign in waves: the next wave opens once the last one merged, and a request
   closed unmerged stops it.
 - **`fleetreach serve` shows the history report and records triage decisions in a browser.**

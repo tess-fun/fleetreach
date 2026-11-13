@@ -243,7 +243,7 @@ impl SourceKind {
 }
 
 /// The Atlassian account email that an API token (not an access token) goes with.
-fn bitbucket_user() -> Option<String> {
+pub(crate) fn bitbucket_user() -> Option<String> {
     std::env::var("BITBUCKET_USER")
         .ok()
         .filter(|v| !v.is_empty())
@@ -854,7 +854,7 @@ impl Git<'_> {
     }
 }
 
-fn base64(input: &str) -> String {
+pub(crate) fn base64(input: &str) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let bytes = input.as_bytes();
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);

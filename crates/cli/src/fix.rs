@@ -41,7 +41,7 @@ use serde::{Deserialize, Serialize};
 use crate::cli::fail;
 use crate::config::{Config, Repo};
 use crate::fix_policy::{FixSettings, Group, RolloutGate};
-use crate::{fix_constraints, fix_managers, fix_targets, osvdb, sources};
+use crate::{fix_constraints, fix_forges, fix_managers, fix_targets, osvdb, sources};
 
 /// The plan file format.
 const PLAN_SCHEMA: &str = "fleetreach-fix-plan/1";
@@ -65,36 +65,83 @@ pub struct FixStatusArgs {
     /// Where the repos are hosted; `auto` reads each repo's `origin` remote
     #[arg(long, value_enum, default_value_t = ForgeArg::Auto)]
     forge: ForgeArg,
+    /// The forge's API base, when it cannot be read from `origin` (an ssh remote on another
+    /// port, or a forge under a path), e.g. `https://git.example.com/api/v1`
+    #[arg(long, value_name = "URL")]
+    forge_api: Option<String>,
 }
 
-/// `--forge`: which CLI opens and lists the requests.
+/// `--forge`: where the requests are opened and listed.
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum ForgeArg {
-    /// GitLab when the `origin` host names GitLab, GitHub otherwise
+    /// From the `origin` host: GitLab when it names GitLab, Bitbucket Cloud for bitbucket.org,
+    /// Azure DevOps for dev.azure.com, GitHub otherwise
     Auto,
     /// GitHub pull requests through `gh`
     Github,
     /// GitLab merge requests through `glab`
     Gitlab,
+    /// Gitea pull requests through its API (`GITEA_TOKEN`)
+    Gitea,
+    /// Forgejo pull requests through its API (`FORGEJO_TOKEN`)
+    Forgejo,
+    /// Bitbucket Cloud pull requests through its API (`BITBUCKET_TOKEN`)
+    Bitbucket,
+    /// Bitbucket Data Center pull requests through its API (`BITBUCKET_SERVER_TOKEN`)
+    BitbucketServer,
+    /// Azure DevOps pull requests through its API (`AZURE_DEVOPS_TOKEN`)
+    Azure,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Forge {
     GitHub,
     GitLab,
+    /// A forge reached through its REST API.
+    Api(fix_forges::Target),
 }
 
 impl ForgeArg {
     /// The forge for the repo checked out at `dir`.
-    fn resolve(self, dir: &Path) -> Forge {
+    fn resolve(self, dir: &Path, api: Option<&str>) -> Result<Forge, String> {
+        let origin = || git(dir, &["remote", "get-url", "origin"]);
+        let rest = |kind: fix_forges::Kind| -> Result<Forge, String> {
+            let url = origin().map_err(|e| format!("no origin remote: {e}"))?;
+            fix_forges::Target::from_remote(kind, &url, api).map(Forge::Api)
+        };
         match self {
-            ForgeArg::Github => Forge::GitHub,
-            ForgeArg::Gitlab => Forge::GitLab,
-            ForgeArg::Auto => git(dir, &["remote", "get-url", "origin"])
-                .ok()
-                .and_then(|url| remote_host(&url))
-                .filter(|host| host.contains("gitlab"))
-                .map_or(Forge::GitHub, |_| Forge::GitLab),
+            ForgeArg::Github => Ok(Forge::GitHub),
+            ForgeArg::Gitlab => Ok(Forge::GitLab),
+            ForgeArg::Gitea => rest(fix_forges::Kind::Gitea),
+            ForgeArg::Forgejo => rest(fix_forges::Kind::Forgejo),
+            ForgeArg::Bitbucket => rest(fix_forges::Kind::Bitbucket),
+            ForgeArg::BitbucketServer => rest(fix_forges::Kind::BitbucketServer),
+            ForgeArg::Azure => rest(fix_forges::Kind::Azure),
+            ForgeArg::Auto => {
+                let host = origin().ok().and_then(|url| remote_host(&url));
+                match host.as_deref() {
+                    Some(h) if h.contains("gitlab") => Ok(Forge::GitLab),
+                    Some("bitbucket.org") => rest(fix_forges::Kind::Bitbucket),
+                    Some(h)
+                        if h == "dev.azure.com"
+                            || h == "ssh.dev.azure.com"
+                            || h.ends_with(".visualstudio.com") =>
+                    {
+                        rest(fix_forges::Kind::Azure)
+                    }
+                    _ => Ok(Forge::GitHub),
+                }
+            }
+        }
+    }
+}
+
+impl Forge {
+    fn name(&self) -> &'static str {
+        match self {
+            Forge::GitHub => "github",
+            Forge::GitLab => "gitlab",
+            Forge::Api(t) => t.kind.name(),
         }
     }
 }
@@ -180,6 +227,9 @@ pub struct FixApplyArgs {
     /// Where the repos are hosted; `auto` reads each repo's `origin` remote
     #[arg(long, value_enum, default_value_t = ForgeArg::Auto)]
     forge: ForgeArg,
+    /// The forge's API base, when it cannot be read from `origin`
+    #[arg(long, value_name = "URL")]
+    forge_api: Option<String>,
     /// Flags for the verifying scan, after `--` (e.g. `-- --db ./advisory-db --osv-dir ./osv`)
     #[arg(last = true)]
     scan_args: Vec<String>,
@@ -612,9 +662,14 @@ struct Requests {
 }
 
 impl Requests {
-    fn of(&mut self, repo: &Repo, forge: ForgeArg) -> &Result<RepoRequests, String> {
+    fn of(
+        &mut self,
+        repo: &Repo,
+        forge: ForgeArg,
+        api: Option<&str>,
+    ) -> &Result<RepoRequests, String> {
         self.by_repo.entry(repo.id.0.clone()).or_insert_with(|| {
-            let listed = list_requests(forge.resolve(&repo.path), &repo.path)?;
+            let listed = list_requests(&forge.resolve(&repo.path, api)?, &repo.path)?;
             let text = |v: &serde_json::Value| v.as_str().unwrap_or_default().to_string();
             let mut out = RepoRequests::new();
             for request in listed {
@@ -685,6 +740,7 @@ fn campaign_requests(
     plan: &Plan,
     config: &Config,
     forge: ForgeArg,
+    api: Option<&str>,
     requests: &mut Requests,
 ) -> Result<(usize, usize, usize), String> {
     let (mut merged, mut open, mut closed) = (0, 0, 0);
@@ -693,7 +749,7 @@ fn campaign_requests(
             continue;
         };
         let known = requests
-            .of(repo, forge)
+            .of(repo, forge, api)
             .as_ref()
             .map_err(|e| format!("{}: {e}", edit.repo))?;
         match known
@@ -812,7 +868,7 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
         };
         let mut has_open = false;
         if args.open_pr {
-            match requests.of(repo, args.forge) {
+            match requests.of(repo, args.forge, args.forge_api.as_deref()) {
                 Ok(known) => {
                     let state = known.get(&unit.branch).map(|(state, _)| state.as_str());
                     if let Some(why) = state.and_then(settled) {
@@ -832,8 +888,14 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
         // Gradual rollout: a campaign opens its next wave only once the last one merged.
         if args.open_pr && !has_open && !policy.rollout.is_empty() {
             let campaign = &unit.edits[0].campaign;
-            let held = match campaign_requests(campaign, &plan, &config, args.forge, &mut requests)
-            {
+            let held = match campaign_requests(
+                campaign,
+                &plan,
+                &config,
+                args.forge,
+                args.forge_api.as_deref(),
+                &mut requests,
+            ) {
                 Err(e) => Some(format!("rollout: could not list requests: {e}")),
                 Ok((merged, open, closed)) => {
                     let opened = opened_by_campaign.get(campaign).copied().unwrap_or(0);
@@ -1471,8 +1533,14 @@ fn publish(
             group_body(&verified, applied, group),
         )
     };
-    let forge = args.forge.resolve(&top);
-    let (noun, opened) = match forge {
+    let forge = match args.forge.resolve(&top, args.forge_api.as_deref()) {
+        Ok(f) => f,
+        Err(e) => {
+            note(applied, &format!("; no request opened: {e}"));
+            return;
+        }
+    };
+    let (noun, opened) = match &forge {
         Forge::GitHub => (
             "pull request",
             github_request(&top, &branch, &title, &body, args.draft),
@@ -1480,6 +1548,10 @@ fn publish(
         Forge::GitLab => (
             "merge request",
             gitlab_request(&top, &branch, &title, &body, args.draft),
+        ),
+        Forge::Api(target) => (
+            "pull request",
+            api_request(target, &top, &branch, &title, &body, args.draft),
         ),
     };
     let url = match opened {
@@ -1524,7 +1596,11 @@ fn publish(
             return;
         }
     };
-    match enable_automerge(forge, &top, &url, &head, policy.merge_method) {
+    match enable_automerge(&forge, &top, &url, &head, policy.merge_method) {
+        // With no required checks pending, `gh pr merge --auto` merges at once.
+        Ok(()) if forge == Forge::GitHub && github_merged(&top, &url) => {
+            note(applied, "; merged (no required checks were pending)");
+        }
         Ok(()) => note(applied, "; auto-merge on"),
         Err(e) => note(applied, &format!("; auto-merge not enabled: {e}")),
     }
@@ -1533,7 +1609,7 @@ fn publish(
 /// Ask the forge to merge the request once its own checks pass, and only at `head`, the commit
 /// fleetreach verified: a later push to the branch cancels it.
 fn enable_automerge(
-    forge: Forge,
+    forge: &Forge,
     top: &Path,
     url: &str,
     head: &str,
@@ -1566,7 +1642,51 @@ fn enable_automerge(
             }
             run(&mut cmd).map(|_| ())
         }
+        Forge::Api(target) => {
+            let id = fix_forges::id_from_url(url).ok_or("no request id in its URL")?;
+            let method = match method {
+                crate::fix_policy::MergeMethod::Squash => "squash",
+                crate::fix_policy::MergeMethod::Merge => "merge",
+                crate::fix_policy::MergeMethod::Rebase => "rebase",
+            };
+            let mut send = fix_forges::http_send(target.kind)?;
+            fix_forges::automerge(target, &id, head, method, &mut send)
+        }
     }
+}
+
+/// Whether the pull request at `url` is merged.
+fn github_merged(top: &Path, url: &str) -> bool {
+    run(Command::new("gh")
+        .current_dir(top)
+        .args(["pr", "view", url, "--json", "state", "--jq", ".state"]))
+    .is_ok_and(|state| state.trim() == "MERGED")
+}
+
+/// The remote's default branch, which a new request targets.
+fn default_branch(top: &Path) -> Result<String, String> {
+    let symref = git(top, &["ls-remote", "--symref", "origin", "HEAD"])?;
+    symref
+        .lines()
+        .find_map(|l| l.strip_prefix("ref: refs/heads/"))
+        .and_then(|l| l.split_whitespace().next())
+        .map(str::to_string)
+        .ok_or_else(|| "the remote names no default branch".to_string())
+}
+
+/// [`github_request`] for a forge reached through its API.
+fn api_request(
+    target: &fix_forges::Target,
+    top: &Path,
+    branch: &str,
+    title: &str,
+    body: &str,
+    draft: bool,
+) -> Result<(String, bool), String> {
+    let base = default_branch(top)?;
+    let mut send = fix_forges::http_send(target.kind)?;
+    fix_forges::open_or_update(target, branch, &base, title, body, draft, &mut send)
+        .map(|(url, updated, _)| (url, updated))
 }
 
 /// A grouped request's title.
@@ -1607,8 +1727,13 @@ fn group_body(edits: &[&Edit], applied: &[Applied], group: Group) -> String {
         .map(|e| e.package.as_str())
         .collect();
     if !breaking.is_empty() {
+        let verb = if breaking.len() == 1 {
+            "crosses"
+        } else {
+            "cross"
+        };
         body.push_str(&format!(
-            "**Breaking:** {} cross a major version; review the changelogs.\n\n",
+            "**Breaking:** {} {verb} a major version; review the changelog.\n\n",
             breaking.join(", ")
         ));
     }
@@ -1651,26 +1776,39 @@ fn close_obsolete(
         let Some(repo) = config.repos.iter().find(|r| &r.id.0 == id) else {
             continue;
         };
-        let open: Vec<(String, String)> = match requests.of(repo, args.forge) {
-            Ok(known) => known
-                .iter()
-                .filter(|(branch, (state, _))| {
-                    state == "OPEN" && !wanted.contains(&(id.as_str(), (*branch).clone()))
-                })
-                .map(|(branch, (_, url))| (branch.clone(), url.clone()))
-                .collect(),
-            Err(e) => {
-                eprintln!("error: {id}: could not list requests: {e}");
-                continue;
-            }
-        };
+        let open: Vec<(String, String)> =
+            match requests.of(repo, args.forge, args.forge_api.as_deref()) {
+                Ok(known) => known
+                    .iter()
+                    .filter(|(branch, (state, _))| {
+                        state == "OPEN" && !wanted.contains(&(id.as_str(), (*branch).clone()))
+                    })
+                    .map(|(branch, (_, url))| (branch.clone(), url.clone()))
+                    .collect(),
+                Err(e) => {
+                    eprintln!("error: {id}: could not list requests: {e}");
+                    continue;
+                }
+            };
         for (branch, url) in open {
-            results.push(close_one(repo, &branch, url, args.forge));
+            results.push(close_one(
+                repo,
+                &branch,
+                url,
+                args.forge,
+                args.forge_api.as_deref(),
+            ));
         }
     }
 }
 
-fn close_one(repo: &Repo, branch: &str, url: String, forge: ForgeArg) -> Applied {
+fn close_one(
+    repo: &Repo,
+    branch: &str,
+    url: String,
+    forge: ForgeArg,
+    api: Option<&str>,
+) -> Applied {
     let mut out = Applied {
         repo: repo.id.0.clone(),
         package: String::new(),
@@ -1689,7 +1827,7 @@ fn close_one(repo: &Repo, branch: &str, url: String, forge: ForgeArg) -> Applied
         if !message.contains(VERIFIED) {
             return Err("someone else has pushed to this branch; left open".to_string());
         }
-        match forge.resolve(&repo.path) {
+        match forge.resolve(&repo.path, api)? {
             Forge::GitHub => run(Command::new("gh").current_dir(&repo.path).args([
                 "pr",
                 "close",
@@ -1709,6 +1847,11 @@ fn close_one(repo: &Repo, branch: &str, url: String, forge: ForgeArg) -> Applied
                 run(Command::new("glab")
                     .current_dir(&repo.path)
                     .args(["mr", "close", iid]))
+            }
+            Forge::Api(target) => {
+                let id = fix_forges::id_from_url(&url).ok_or("no request id in its URL")?;
+                let mut send = fix_forges::http_send(target.kind)?;
+                fix_forges::close(&target, &id, note, &mut send).map(|()| String::new())
             }
         }?;
         git(
@@ -1894,7 +2037,11 @@ fn run_status(args: &FixStatusArgs) -> u8 {
     let mut rows = Vec::new();
     let mut failed = 0usize;
     for repo in &config.repos {
-        match list_requests(args.forge.resolve(&repo.path), &repo.path) {
+        let listed = args
+            .forge
+            .resolve(&repo.path, args.forge_api.as_deref())
+            .and_then(|forge| list_requests(&forge, &repo.path));
+        match listed {
             Ok(requests) => {
                 for mut request in requests {
                     request["repo"] = serde_json::json!(repo.id.0);
@@ -1916,8 +2063,15 @@ fn run_status(args: &FixStatusArgs) -> u8 {
 
 /// Every `fleetreach/*` pull or merge request of the repo at `dir`, in any state, as
 /// `{branch, state, title, url}` (states as GitHub spells them: `OPEN`, `MERGED`, `CLOSED`).
-fn list_requests(forge: Forge, dir: &Path) -> Result<Vec<serde_json::Value>, String> {
+fn list_requests(forge: &Forge, dir: &Path) -> Result<Vec<serde_json::Value>, String> {
     let (listed, branch_key, url_key) = match forge {
+        Forge::Api(target) => {
+            let mut send = fix_forges::http_send(target.kind)?;
+            return Ok(fix_forges::list(target, &mut send)?
+                .iter()
+                .map(|r| r.to_json(target.kind))
+                .collect());
+        }
         Forge::GitHub => (
             run(Command::new("gh").current_dir(dir).args([
                 "pr",
@@ -1960,7 +2114,7 @@ fn list_requests(forge: Forge, dir: &Path) -> Result<Vec<serde_json::Value>, Str
                 };
                 serde_json::json!({
                     "branch": branch, "state": state, "title": r["title"], "url": r[url_key],
-                    "forge": match forge { Forge::GitHub => "github", Forge::GitLab => "gitlab" },
+                    "forge": forge.name(),
                 })
             })
         })
