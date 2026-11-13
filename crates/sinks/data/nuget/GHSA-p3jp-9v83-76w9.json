@@ -82,7 +82,7 @@
     "Microsoft.NETCore.App.Runtime.win-x64",
     "Microsoft.NETCore.App.Runtime.win-x86"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "evidence": {
     "commits": [
@@ -100,5 +100,9 @@
       "class": "System.IO.Compression.BrotliDecoder",
       "method": "TryDecompress"
     }
-  ]
+  ],
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
