@@ -257,8 +257,12 @@ struct Walk<'a> {
     cp: &'a ClassPath,
     /// A type to every class declaring it as superclass or interface, unknown types included.
     subtypes: HashMap<Sym, Vec<u32>>,
-    /// Per type, the virtual calls seen on it, each with its first caller.
-    sites: HashMap<Sym, HashMap<(Sym, Sym), Id>>,
+    /// Per type, the virtual calls seen on it, each with its first caller, in the order seen:
+    /// a new instance resolves them in that order, so which caller a witness names does not
+    /// hang on the hash seed.
+    sites: HashMap<Sym, Vec<(Sym, Sym, Id)>>,
+    /// The (type, name, descriptor) of every entry in `sites`.
+    site_seen: HashSet<(Sym, Sym, Sym)>,
     reached: HashMap<Id, Via>,
     queue: VecDeque<Id>,
     instantiated: HashSet<u32>,
@@ -396,6 +400,7 @@ impl<'a> Walk<'a> {
             nested,
             subtypes,
             sites: HashMap::new(),
+            site_seen: HashSet::new(),
             reached: HashMap::new(),
             queue: VecDeque::new(),
             instantiated: HashSet::new(),
@@ -840,7 +845,7 @@ impl<'a> Walk<'a> {
             };
             let found: Vec<(Id, Id)> = calls
                 .iter()
-                .flat_map(|((name, desc), from)| {
+                .flat_map(|(name, desc, from)| {
                     let found = self.resolve(class, *name, *desc);
                     found.into_iter().map(|target| (target, *from))
                 })
@@ -854,11 +859,13 @@ impl<'a> Walk<'a> {
     /// A virtual call: it lands on every instance of a subtype made so far, and
     /// [`Self::dispatch_new_instance`] covers the ones made later.
     fn virtual_call(&mut self, class: Sym, name: Sym, desc: Sym, from: Id) {
-        let calls = self.sites.entry(class).or_default();
-        if calls.contains_key(&(name, desc)) {
+        if !self.site_seen.insert((class, name, desc)) {
             return;
         }
-        calls.insert((name, desc), from);
+        self.sites
+            .entry(class)
+            .or_default()
+            .push((name, desc, from));
         // A repository proxy forwards a call on `OwnerRepository` to the implementation of the
         // interface declaring the method, which is no subtype of `OwnerRepository`.
         if let Some(i) = self.index(class) {

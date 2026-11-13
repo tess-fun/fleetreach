@@ -243,6 +243,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A crafted Java class could crash a JVM scan.** `cafebabe` 0.9 panics on a name entry that
+  is not valid modified UTF-8; such a class is now unread, a gap in the read like any other
+  class it rejects. 1.1 million mutated real class files read with no panic, the slowest in
+  3 ms.
+- **A Java archive could inflate without bound.** Entries that share one compressed stream,
+  or jars nested in a fat jar, could make a few megabytes inflate terabytes: a 3 MB jar held a
+  JVM scan for minutes. One archive now inflates to at most 64 MiB plus 32 times its size,
+  nested jars included, and the rest is one gap. 13,498 real jars inflate to at most 7 times
+  their size, and their graphs are unchanged.
+- **JVM witness chains changed from run to run.** Which caller a chain named depended on the
+  hash seed; the graph now resolves calls in the order it saw them, so the same image gives
+  the same chain.
 - **Unread .NET and Composer files in images were filed under RubyGems.** A `.deps.json` or
   Composer `installed.json` an image holds but that does not parse is a coverage gap; it now
   names NuGet or Packagist instead of RubyGems.

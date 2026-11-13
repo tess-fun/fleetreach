@@ -22,6 +22,12 @@ const MAX_ENTRY: u64 = 256 * 1024 * 1024;
 const MAX_TEXT: u64 = 4 * 1024 * 1024;
 /// Entries read from one input, nested jars included.
 const MAX_ENTRIES: usize = 2_000_000;
+/// One input archive may inflate to this many bytes, plus [`INFLATE_RATIO`] times its own size,
+/// nested jars included. Real jars inflate to at most 7 times their size (13,498 measured, the
+/// largest 120 MB); a zip bomb (entries that share one compressed stream, or jars nested in
+/// jars) would otherwise inflate terabytes from a few megabytes.
+const INFLATE_FLOOR: u64 = 64 * 1024 * 1024;
+const INFLATE_RATIO: u64 = 32;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -82,9 +88,11 @@ pub fn load(inputs: &[Input]) -> Result<ClassPath, Error> {
             read_dir(&input.path, input.role, &mut cp).map_err(err)?;
         } else {
             let file = std::fs::File::open(&input.path).map_err(|e| err(e.to_string()))?;
+            let size = file.metadata().map_err(|e| err(e.to_string()))?.len();
+            let mut budget = INFLATE_FLOOR.saturating_add(size.saturating_mul(INFLATE_RATIO));
             let label = input.path.display().to_string();
             // One archive this reader rejects is a gap in the read, not the end of it.
-            if let Err(e) = read_archive(file, &label, input.role, true, &mut cp) {
+            if let Err(e) = read_archive(file, &label, input.role, true, &mut budget, &mut cp) {
                 cp.unread.push(format!("{label}: {e}"));
             }
         }
@@ -124,6 +132,7 @@ fn read_archive<R: Read + Seek>(
     label: &str,
     role: Role,
     outer: bool,
+    budget: &mut u64,
     cp: &mut ClassPath,
 ) -> Result<(), String> {
     let mut zip = zip::ZipArchive::new(reader).map_err(|e| e.to_string())?;
@@ -152,8 +161,24 @@ fn read_archive<R: Read + Seek>(
             cp.unread.push(format!("{at}: {size} bytes"));
             continue;
         }
+        // Past the budget the rest of the archive is unread: one gap, not one per entry.
+        if size > *budget {
+            cp.unread.push(format!(
+                "{at}: the archive inflates past its budget, the rest is unread"
+            ));
+            return Ok(());
+        }
         let mut bytes = Vec::with_capacity(usize::try_from(size).unwrap_or(0));
-        if let Err(e) = entry.by_ref().take(MAX_ENTRY).read_to_end(&mut bytes) {
+        // The declared size may lie: the bytes read count, and never more than the budget.
+        let cap = MAX_ENTRY.min(*budget);
+        let read = entry.by_ref().take(cap).read_to_end(&mut bytes);
+        *budget = budget.saturating_sub(bytes.len() as u64);
+        if bytes.len() as u64 == cap && size < cap {
+            cp.unread
+                .push(format!("{at}: inflates past its declared {size} bytes"));
+            continue;
+        }
+        if let Err(e) = read {
             cp.unread.push(format!("{at}: {e}"));
             continue;
         }
@@ -169,7 +194,9 @@ fn read_archive<R: Read + Seek>(
             };
             add_class(&bytes, &at, role, cp);
         } else if is_jar {
-            if let Err(e) = read_archive(Cursor::new(bytes), &at, Role::Dependency, false, cp) {
+            if let Err(e) =
+                read_archive(Cursor::new(bytes), &at, Role::Dependency, false, budget, cp)
+            {
                 cp.unread.push(format!("{at}: {e}"));
             }
         } else if is_manifest {
@@ -300,7 +327,39 @@ fn merge(first: &mut Class, other: Class) {
     }
 }
 
+/// Parse one class file. `cafebabe` 0.9 panics on some malformed constant pools (a name entry
+/// that is not valid modified UTF-8), so a panic in it is caught and the class is unread, as
+/// for any other parse error. The panic message is not printed: only panics on a thread inside
+/// this call are kept quiet.
 fn parse(bytes: &[u8], role: Role, names: &mut Interner) -> Result<Class, String> {
+    quiet_panics_in_parse();
+    PARSING.with(|p| p.set(true));
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        parse_class(bytes, role, names)
+    }));
+    PARSING.with(|p| p.set(false));
+    outcome.unwrap_or_else(|_| Err("the class file parser rejected it".to_string()))
+}
+
+thread_local! {
+    static PARSING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Wrap the panic hook once, so a panic inside [`parse`] prints nothing and every other panic
+/// still reaches the hook that was there before.
+fn quiet_panics_in_parse() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            if !PARSING.with(std::cell::Cell::get) {
+                previous(info);
+            }
+        }));
+    });
+}
+
+fn parse_class(bytes: &[u8], role: Role, names: &mut Interner) -> Result<Class, String> {
     let file = cafebabe::parse_class_with_options(bytes, &ParseOptions::default())
         .map_err(|e| e.to_string())?;
     let bootstraps = file.attributes.iter().find_map(|a| match &a.data {
