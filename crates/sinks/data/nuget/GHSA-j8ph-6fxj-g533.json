@@ -8,7 +8,7 @@
   "packages": [
     "Steeltoe.Discovery.Eureka"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -20,7 +20,12 @@
     "commits": [
       "https://github.com/SteeltoeOSS/Steeltoe/commit/b8ed8557bb595863e4f340051d16b26ba40a75f4",
       "https://github.com/SteeltoeOSS/Steeltoe/commit/c34a7399e808d0d11dd977460e81df1f2722df28"
-    ]
+    ],
+    "excluded": []
   },
-  "note": "Proposed from the IL diff of Steeltoe.Discovery.Eureka 4.1.0 -> 4.2.0 (net8.0): methods of the files the fix commits changed."
+  "note": "From the 4.1.0 -> 4.2.0 IL diff. DataCenterInfo.FromJson throws on a data center name other than MyOwn or Amazon, which empties the whole registry fetch. Reached wherever the app fetches the registry from Eureka.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

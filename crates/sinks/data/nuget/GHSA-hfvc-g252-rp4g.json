@@ -8,12 +8,16 @@
   "packages": [
     "i18n"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "i18n.TextLocalizer",
       "method": "IsLanguageValid"
+    },
+    {
+      "class": "i18n.LocalizedApplication",
+      "method": "set_DefaultLanguage"
     }
   ],
   "evidence": {
@@ -23,15 +27,14 @@
     "excluded": [
       {
         "class": "i18n.LocalizedApplication",
-        "method": "set_DefaultLanguage",
-        "reason": "property accessor or static initializer"
-      },
-      {
-        "class": "i18n.LocalizedApplication",
         "method": "set_DefaultLanguageTag",
         "reason": "property accessor or static initializer"
       }
     ]
   },
-  "note": "Proposed from the IL diff of i18n 2.1.14 -> 2.1.15 (net40): methods of the files the fix commits changed."
+  "note": "The fix adds an empty-tag check to TextLocalizer.IsLanguageValid and keeps the LocalizedApplication.DefaultLanguage setter from storing a null tag when the value does not parse. Reached wherever the app localizes with i18n or sets DefaultLanguage.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

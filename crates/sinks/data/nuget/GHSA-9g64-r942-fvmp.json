@@ -8,7 +8,7 @@
   "packages": [
     "Apache.NMS.ActiveMQ"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -23,7 +23,12 @@
   "evidence": {
     "commits": [
       "https://github.com/apache/activemq-nms-openwire/commit/8944c41"
-    ]
+    ],
+    "excluded": []
   },
-  "note": "Proposed from the IL diff of Apache.NMS.ActiveMQ 2.1.0 -> 2.1.1 (netstandard2.0): methods of the files the fix commits changed."
+  "note": "From the 2.1.0 -> 2.1.1 IL diff. 2.1.0 added a trusted-type filter for deserializing broker responses; TrustedClassFilter.BindToType and NmsDefaultDeserializationPolicy.IsTrustedType still let untrusted types through. Reached wherever the client connects to a broker.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

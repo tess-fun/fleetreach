@@ -9,22 +9,29 @@
     "Scriban.Signed",
     "scriban"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "Scriban.TemplateContext",
       "method": ".ctor"
-    },
-    {
-      "class": "Scriban.TemplateContext",
-      "method": "FetchNamedArgumentsAsync"
     }
   ],
   "evidence": {
     "commits": [
       "https://github.com/scriban/scriban/commit/a6fe6074199e5c04f4d29dc8d8e652b24d33e3e4"
+    ],
+    "excluded": [
+      {
+        "class": "Scriban.TemplateContext",
+        "method": "FetchNamedArgumentsAsync",
+        "reason": "unrelated change between 6.5.8 and 6.6.0"
+      }
     ]
   },
-  "note": "Proposed from the IL diff of Scriban.Signed 6.5.8 -> 6.6.0 (net8.0): methods of the files the fix commits changed."
+  "note": "The fix changes the default ObjectRecursionLimit set in TemplateContext's constructor from 0 (no limit) to 20. Every render builds a TemplateContext. An app that sets ObjectRecursionLimit itself is not affected, and a code scan cannot see that setting.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

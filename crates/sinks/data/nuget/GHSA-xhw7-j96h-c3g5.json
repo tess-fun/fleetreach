@@ -8,14 +8,8 @@
   "packages": [
     "YAFNET.Core"
   ],
-  "status": "proposed",
-  "verdict": "sinks",
-  "sinks": [
-    {
-      "class": "YAF.Core.Services.BoardInfo",
-      "method": ".ctor"
-    }
-  ],
+  "status": "reviewed",
+  "verdict": "no-method-sink",
   "evidence": {
     "commits": [
       "https://github.com/YAFNET/YAFNET/commit/27f7e671f93698f7e014d5d0fb88320248b8aa20"
@@ -25,8 +19,17 @@
         "class": "YAF.Core.BasePages.ForumPage",
         "method": "OnPageHandlerExecutionAsync",
         "reason": "added by the fix"
+      },
+      {
+        "class": "YAF.Core.Services.BoardInfo",
+        "method": ".ctor",
+        "reason": "unrelated change between 4.0.4 and 4.0.5"
       }
     ]
   },
-  "note": "Proposed from the IL diff of YAFNET.Core 4.0.4 -> 4.0.5 (net10.0): methods of the files the fix commits changed."
+  "note": "The admin gate ran as a result filter after each page handler. The fix adds ForumPage.OnPageHandlerExecutionAsync to check before the handler runs. The flaw is a missing check across every admin page of the YAF forum application, not a method an app calls, so no method can be named.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
