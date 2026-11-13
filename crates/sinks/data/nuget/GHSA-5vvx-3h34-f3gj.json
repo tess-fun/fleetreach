@@ -11,12 +11,26 @@
     "net.sf.mpxj-for-csharp",
     "net.sf.mpxj-for-vb"
   ],
-  "status": "proposed",
-  "verdict": "no-method-sink",
+  "status": "reviewed",
+  "verdict": "sinks",
   "evidence": {
     "commits": [
       "https://github.com/joniles/mpxj/commit/6e8288bc4d1cd62842af298004dc74fe66fb0805"
     ]
   },
-  "note": "Proposed: no managed method of a source file the fix changed differs between MPXJ.Net 16.4.0 -> 16.4.1 (net6.0); the flaw may be in native code, configuration or another package."
+  "note": "MerlinReader.readFile built a DocumentBuilder with doctype declarations allowed for the ZTIMEINTERVALS XML; 16.4.1 disallows them. The Java package is net.sf.mpxj up to 13.x and org.mpxj from 14.0. The net.sf.mpxj NuGet packages ship the IKVM-compiled classes; MPXJ.Net compiles them into the app at build time, so a scan of the package alone reads as unknown. Reached wherever the app reads Merlin files.",
+  "sinks": [
+    {
+      "class": "net.sf.mpxj.merlin.MerlinReader",
+      "method": "readFile"
+    },
+    {
+      "class": "org.mpxj.merlin.MerlinReader",
+      "method": "readFile"
+    }
+  ],
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

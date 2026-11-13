@@ -9,7 +9,7 @@
     "Umbraco.Cms.Infrastructure",
     "Umbraco.Cms.Web.BackOffice"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "no-method-sink",
   "evidence": {
     "commits": [
@@ -18,5 +18,9 @@
       "https://github.com/umbraco/Umbraco-CMS/commit/82eae48d098b9deecbdf86cf288b2b18020e1fed"
     ]
   },
-  "note": "Proposed: no managed method of a source file the fix changed differs between Umbraco.Cms.Infrastructure 12.0.0 -> 12.0.1 (net7.0); the flaw may be in native code, configuration or another package."
+  "note": "Under rare conditions a restart could leave the backoffice in an install state that grants admin access; this is CMS startup state, not a method an app calls, so none can be named.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

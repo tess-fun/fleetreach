@@ -5,12 +5,16 @@
   "packages": [
     "MimeKit"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "no-method-sink",
   "evidence": {
     "commits": [
       "https://github.com/jstedfast/MimeKit/commit/aef4eda75525848b992ce5e1f9b87399000fffb6"
     ]
   },
-  "note": "Proposed: no managed method of a source file the fix changed differs between MimeKit 4.7.0 -> 4.7.1 (net8.0); the flaw may be in native code, configuration or another package."
+  "note": "The flaw is in the System.Security.Cryptography.Pkcs dependency (GHSA-447r-wph3-92pm), which carries its own finding; MimeKit 4.7.1 only raises the version it requires.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

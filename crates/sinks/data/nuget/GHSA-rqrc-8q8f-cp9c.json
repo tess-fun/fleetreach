@@ -8,7 +8,7 @@
   "packages": [
     "Bond.Core.CSharp"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -42,5 +42,9 @@
       }
     ]
   },
-  "note": "The fix (CVE-2020-1469, commit b0fd4a1) adds overflow checks to ReadContainerBegin of both the Compact Binary and Fast Binary readers and to InputBuffer.SkipBytes, so a huge container length no longer wraps the position and loops. CompactBinary.cs and FastBinary.cs hold reader types not named after the file. Reached wherever the app deserializes Compact or Fast Binary input."
+  "note": "The fix (CVE-2020-1469, commit b0fd4a1) adds overflow checks to ReadContainerBegin of both the Compact Binary and Fast Binary readers and to InputBuffer.SkipBytes, so a huge container length no longer wraps the position and loops. CompactBinary.cs and FastBinary.cs hold reader types not named after the file. Reached wherever the app deserializes Compact or Fast Binary input.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

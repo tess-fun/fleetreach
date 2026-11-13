@@ -8,12 +8,16 @@
   "packages": [
     "AjaxNetProfessional"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "no-method-sink",
   "evidence": {
     "commits": [
       "https://github.com/michaelschwarz/Ajax.NET-Professional/commit/c89e39b9679fcb8ab6644fe21cc7e652cb615e2b"
     ]
   },
-  "note": "Proposed: no managed method of a source file the fix changed differs between AjaxNetProfessional 21.12.21.1 -> 21.12.22.1 (net20); the flaw may be in native code, configuration or another package."
+  "note": "The fix changes only the browser-side core.js the handler serves (its JSON date parsing) and a version constant; no .NET method changed, so none can be named.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

@@ -8,120 +8,12 @@
   "packages": [
     "HotChocolate.Language"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
-      "class": "HotChocolate.Language.ParserOptions",
-      "method": ".ctor"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": ".ctor"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "Parse"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseDirectives"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseEnumTypeDefinition"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseEnumTypeExtension"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseEnumValueDefinition"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseField"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseFieldDefinition"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseFragmentDefinition"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseFragmentSpread"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseInlineFragment"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseInputObjectTypeDefinition"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseInputObjectTypeExtension"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseInputValueDefinition"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseInterfaceTypeDefinition"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseInterfaceTypeExtension"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseObjectTypeDefinition"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseObjectTypeExtension"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseOperationDefinition"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseScalarTypeDefinition"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseScalarTypeExtension"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseSchemaDefinition"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseSchemaExtension"
-    },
-    {
       "class": "HotChocolate.Language.Utf8GraphQLParser",
       "method": "ParseSelectionSet"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseTypeReference"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseUnionTypeDefinition"
-    },
-    {
-      "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseUnionTypeExtension"
     },
     {
       "class": "HotChocolate.Language.Utf8GraphQLParser",
@@ -129,7 +21,7 @@
     },
     {
       "class": "HotChocolate.Language.Utf8GraphQLParser",
-      "method": "ParseVariableDefinition"
+      "method": "ParseTypeReference"
     }
   ],
   "evidence": {
@@ -172,8 +64,148 @@
         "class": "HotChocolate.Language.Utf8GraphQLParser",
         "method": "IncreaseDepth",
         "reason": "added by the fix"
+      },
+      {
+        "class": "HotChocolate.Language.ParserOptions",
+        "method": ".ctor",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": ".ctor",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "Parse",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseDirectives",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseEnumTypeDefinition",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseEnumTypeExtension",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseEnumValueDefinition",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseField",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseFieldDefinition",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseFragmentDefinition",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseFragmentSpread",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseInlineFragment",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseInputObjectTypeDefinition",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseInputObjectTypeExtension",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseInputValueDefinition",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseInterfaceTypeDefinition",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseInterfaceTypeExtension",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseObjectTypeDefinition",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseObjectTypeExtension",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseOperationDefinition",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseScalarTypeDefinition",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseScalarTypeExtension",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseSchemaDefinition",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseSchemaExtension",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseUnionTypeDefinition",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseUnionTypeExtension",
+        "reason": "other parse methods the depth limit touched"
+      },
+      {
+        "class": "HotChocolate.Language.Utf8GraphQLParser",
+        "method": "ParseVariableDefinition",
+        "reason": "other parse methods the depth limit touched"
       }
     ]
   },
-  "note": "Proposed from the IL diff of HotChocolate.Language 15.1.13 -> 15.1.14 (net8.0): methods of the files the fix commits changed."
+  "note": "The parser lives in HotChocolate.Language.Utf8. Utf8GraphQLParser recursed without a depth limit through nested selection sets, object and list values and list types; 15.1.14 adds ParserOptions limits. Present from 9.x. The GraphQL server parses each request in its pipeline, not the app's code: no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  },
+  "reached_by_name": true
 }

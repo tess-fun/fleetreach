@@ -8,7 +8,7 @@
   "packages": [
     "Yarp.ReverseProxy"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -28,5 +28,10 @@
       }
     ]
   },
-  "note": "Proposed from the IL diff of Yarp.ReverseProxy 1.1.0-rc.1.22152.1 -> 1.1.0-rc.1.22211.2 (net6.0): methods of the files the fix commits changed."
+  "note": "From the 1.1.0-rc.1.22152.1 -> 1.1.0-rc.1.22211.2 IL diff; 1.0.1 fixed the 1.0 line. TransportFailureRateHealthPolicy.RequestProxied runs for each proxied request when passive health checks use that policy. YARP's proxy pipeline calls it, not the app's code: no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  },
+  "reached_by_name": true
 }

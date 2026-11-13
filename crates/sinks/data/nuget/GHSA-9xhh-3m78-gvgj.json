@@ -8,8 +8,8 @@
   "packages": [
     "Csla"
   ],
-  "status": "proposed",
-  "verdict": "no-method-sink",
+  "status": "reviewed",
+  "verdict": "sinks",
   "evidence": {
     "commits": [
       "https://github.com/MarimerLLC/csla/pull/3552",
@@ -19,5 +19,15 @@
       "https://github.com/MarimerLLC/csla/commit/f3a5c3474974f60ce3c8ffbd5d91c23a1e397ea4"
     ]
   },
-  "note": "Proposed: no managed method of a source file the fix changed differs between Csla 7.0.7 -> 8.0.0 (net7.0); the flaw may be in native code, configuration or another package."
+  "note": "The fix (backported to 5.5.4) rejects .. and : in the assembly path MethodCaller.GetType builds from a type name before loading it with AssemblyLoadContext, on .NET 5 and later builds; the netstandard2.0 build has no such branch. Present in 5.x, 6.x and 7.x. Reached wherever MobileFormatter or the data portal resolves a type name from input.",
+  "sinks": [
+    {
+      "class": "Csla.Reflection.MethodCaller",
+      "method": "GetType"
+    }
+  ],
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
