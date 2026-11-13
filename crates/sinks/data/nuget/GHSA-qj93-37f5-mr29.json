@@ -8,7 +8,7 @@
   "packages": [
     "IpMatcher"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -31,7 +31,12 @@
   "evidence": {
     "commits": [
       "https://github.com/jchristn/IpMatcher/commit/81d77c2f33aa912dbd032b34b9e184fc6e041d89"
-    ]
+    ],
+    "excluded": []
   },
-  "note": "Proposed from the IL diff of IpMatcher 1.0.4.1 -> 1.0.4.2 (net5.0): methods of the files the fix commits changed."
+  "note": "From the 1.0.4.1 -> 1.0.4.2 IL diff. Matcher.Add, Exists, MatchExists and Remove, the whole public matching API, took addresses and netmasks without validating them. Reached wherever the app matches IPs with IpMatcher (WatsonWebserver uses it for access control).",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

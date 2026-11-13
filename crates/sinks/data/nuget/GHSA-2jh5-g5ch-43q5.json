@@ -8,17 +8,9 @@
   "packages": [
     "YoutubeDLSharp"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
-    {
-      "class": "YoutubeDLSharp.YoutubeDL",
-      "method": "GetDownloadOptions"
-    },
-    {
-      "class": "YoutubeDLSharp.YoutubeDLProcess",
-      "method": ".ctor"
-    },
     {
       "class": "YoutubeDLSharp.YoutubeDLProcess",
       "method": "ConvertToArgs"
@@ -32,7 +24,23 @@
     "commits": [
       "https://github.com/Bluegrams/YoutubeDLSharp/commit/b6051372bd5af30f95f73de47d9bc71c3a07de0f",
       "https://github.com/Bluegrams/YoutubeDLSharp/commit/fdf3256da18d0e2da4a2f33ad4a1b72ff8273a50"
+    ],
+    "excluded": [
+      {
+        "class": "YoutubeDLSharp.YoutubeDL",
+        "method": "GetDownloadOptions",
+        "reason": "option plumbing, not the command line"
+      },
+      {
+        "class": "YoutubeDLSharp.YoutubeDLProcess",
+        "method": ".ctor",
+        "reason": "option plumbing, not the command line"
+      }
     ]
   },
-  "note": "Proposed from the IL diff of YoutubeDLSharp 1.1.1 -> 1.1.2 (net8.0): methods of the files the fix commits changed."
+  "note": "From the 1.1.1 -> 1.1.2 IL diff. YoutubeDLProcess.ConvertToArgs joins options into one command line that RunAsync starts through the Windows command prompt. Only Windows is affected, and a code scan cannot see the OS. Reached wherever the app runs yt-dlp through YoutubeDLSharp.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

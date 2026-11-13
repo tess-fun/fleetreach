@@ -9,7 +9,7 @@
     "Steeltoe.Management.Endpoint",
     "Steeltoe.Management.EndpointCore"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -18,11 +18,15 @@
     },
     {
       "class": "Steeltoe.Management.Endpoint.Actuators.Environment.Sanitizer",
-      "method": ".ctor"
+      "method": "Sanitize"
     },
     {
-      "class": "Steeltoe.Management.Endpoint.Actuators.Environment.Sanitizer",
+      "class": "Steeltoe.Management.Endpoint.Env.Sanitizer",
       "method": "Sanitize"
+    },
+    {
+      "class": "Steeltoe.Management.Endpoint.Env.EnvEndpointOptions",
+      "method": ".ctor"
     }
   ],
   "evidence": {
@@ -55,8 +59,18 @@
         "class": "Steeltoe.Management.Endpoint.Actuators.Environment.Sanitizer",
         "method": "UriUserInfoRegex",
         "reason": "added by the fix"
+      },
+      {
+        "class": "Steeltoe.Management.Endpoint.Actuators.Environment.Sanitizer",
+        "method": ".ctor",
+        "reason": "builds the sanitizer, not the key list or the check"
       }
     ]
   },
-  "note": "Proposed from the IL diff of Steeltoe.Management.Endpoint 4.1.0 -> 4.2.0 (net8.0): methods of the files the fix commits changed."
+  "note": "The env actuator redacts by key suffix, and the default list misses ConnectionStrings keys; 4.2.0 adds value patterns. 4.x names are under Actuators.Environment; in 2.x and 3.x the endpoint ships in Steeltoe.Management.EndpointBase as Env.Sanitizer and Env.EnvEndpointOptions. The app only registers the actuator and the HTTP pipeline runs it through dependency injection: no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  },
+  "reached_by_name": true
 }

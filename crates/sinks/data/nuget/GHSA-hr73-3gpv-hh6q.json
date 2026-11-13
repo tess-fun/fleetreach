@@ -8,16 +8,12 @@
   "packages": [
     "Steeltoe.Discovery.Eureka"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "Steeltoe.Discovery.Eureka.Transport.BoolStringJsonConverter",
       "method": "Read"
-    },
-    {
-      "class": "Steeltoe.Discovery.Eureka.Transport.EurekaJsonSerializerContext",
-      "method": "global::System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver.GetTypeInfo"
     },
     {
       "class": "Steeltoe.Discovery.Eureka.Transport.JsonInstanceInfoConverter",
@@ -37,8 +33,17 @@
         "class": "Steeltoe.Discovery.Eureka.Transport.JsonInstanceInfoConverter",
         "method": "TryDeserializeInstance",
         "reason": "added by the fix"
+      },
+      {
+        "class": "Steeltoe.Discovery.Eureka.Transport.EurekaJsonSerializerContext",
+        "method": "global::System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver.GetTypeInfo",
+        "reason": "source-generated serializer plumbing"
       }
     ]
   },
-  "note": "Proposed from the IL diff of Steeltoe.Discovery.Eureka 4.2.0 -> 4.3.0 (net8.0): methods of the files the fix commits changed."
+  "note": "From the 4.2.0 -> 4.3.0 IL diff. The registry converters throw on one malformed bool, timestamp or enum, and the whole fetch fails; 4.3.0 adds TryDeserializeInstance to skip the bad instance. Reached wherever the app fetches the registry from Eureka.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

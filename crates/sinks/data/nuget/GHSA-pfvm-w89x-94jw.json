@@ -5,13 +5,9 @@
   "packages": [
     "SIPSorcery"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
-    {
-      "class": "SIPSorcery.Net.TurnServer",
-      "method": "HandleTcpClientAsync"
-    },
     {
       "class": "SIPSorcery.Net.TurnServer",
       "method": "ReceiveUdpAsync"
@@ -24,7 +20,18 @@
   "evidence": {
     "commits": [
       "https://github.com/sipsorcery-org/sipsorcery/commit/ccb0b5a845efa2fb131fd00de4f5321bae627f29"
+    ],
+    "excluded": [
+      {
+        "class": "SIPSorcery.Net.TurnServer",
+        "method": "HandleTcpClientAsync",
+        "reason": "TCP path, not the UDP loop"
+      }
     ]
   },
-  "note": "Proposed from the IL diff of SIPSorcery 10.0.13 -> 10.0.14 (net8.0): methods of the files the fix commits changed."
+  "note": "From the 10.0.13 -> 10.0.14 IL diff. TurnServer.ReceiveUdpAsync caught exceptions outside its receive loop, and Start ran it unsupervised, so one malformed STUN datagram stopped the UDP relay. Reached wherever the app starts a TurnServer.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
