@@ -9,13 +9,9 @@
     "Steeltoe.Management.Endpoint",
     "Steeltoe.Management.EndpointCore"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
-    {
-      "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
-      "method": "HasMappedInstancePort"
-    },
     {
       "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
       "method": "InvokeAsync"
@@ -23,14 +19,6 @@
     {
       "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
       "method": "IsRequestAllowed"
-    },
-    {
-      "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
-      "method": "SetResponseError"
-    },
-    {
-      "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortStartupFilter",
-      "method": "Configure"
     }
   ],
   "evidence": {
@@ -58,8 +46,28 @@
         "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
         "method": "LogPortMappingAllowed",
         "reason": "added by the fix"
+      },
+      {
+        "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
+        "method": "HasMappedInstancePort",
+        "reason": "logging and setup around the check"
+      },
+      {
+        "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
+        "method": "SetResponseError",
+        "reason": "logging and setup around the check"
+      },
+      {
+        "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortStartupFilter",
+        "method": "Configure",
+        "reason": "logging and setup around the check"
       }
     ]
   },
-  "note": "Proposed from the IL diff of Steeltoe.Management.Endpoint 4.1.0 -> 4.2.0 (net8.0): methods of the files the fix commits changed."
+  "note": "The fix makes ManagementPortMiddleware.IsRequestAllowed compare Connection.LocalPort instead of the Host header's port. 3.x has only InvokeAsync, the middleware entry; 1.x has neither and reads as unknown. Only apps that set Management:Endpoints:Port are affected. The ASP.NET Core pipeline runs the middleware, not the app's code: no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  },
+  "reached_by_name": true
 }

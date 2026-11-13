@@ -8,7 +8,7 @@
   "packages": [
     "Amazon.IonDotnet"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -36,7 +36,12 @@
     "commits": [
       "https://github.com/amazon-ion/ion-dotnet/pull/160",
       "https://github.com/amazon-ion/ion-dotnet/commit/edaff75fe5abbb71e647bed812c608c0c5e2fbab"
-    ]
+    ],
+    "excluded": []
   },
-  "note": "Proposed from the IL diff of Amazon.IonDotnet 1.3.1 -> 1.3.2 (netstandard2.0): methods of the files the fix commits changed."
+  "note": "From the 1.3.1 -> 1.3.2 IL diff (PR 160). The TextScanner skip and blob methods could loop forever at the end of crafted Ion text. Present from 1.0.0. Reached wherever the app reads Ion text.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

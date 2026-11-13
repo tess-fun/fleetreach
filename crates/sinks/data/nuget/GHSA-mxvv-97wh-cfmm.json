@@ -13,30 +13,8 @@
     "Magick.NET-Q8-AnyCPU",
     "Magick.NET-Q8-x86"
   ],
-  "status": "proposed",
-  "verdict": "sinks",
-  "sinks": [
-    {
-      "class": "ImageMagick.Drawing.DrawableAffine",
-      "method": "TransformRotation"
-    },
-    {
-      "class": "ImageMagick.Drawing.DrawableAffine",
-      "method": "TransformSkewX"
-    },
-    {
-      "class": "ImageMagick.Drawing.DrawableAffine",
-      "method": "TransformSkewY"
-    },
-    {
-      "class": "ImageMagick.MagickImage+CloneMutator",
-      "method": "Splice"
-    },
-    {
-      "class": "ImageMagick.MagickImage+NativeMagickImage",
-      "method": "Splice"
-    }
-  ],
+  "status": "reviewed",
+  "verdict": "no-method-sink",
   "evidence": {
     "commits": [
       "https://github.com/ImageMagick/ImageMagick/commit/2c55221f4d38193adcb51056c14cf238fbcc35d7"
@@ -46,8 +24,37 @@
         "class": "ImageMagick.Drawing.DrawableAffine",
         "method": "NormalizeAngleToRadians",
         "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.Drawing.DrawableAffine",
+        "method": "TransformRotation",
+        "reason": "unrelated managed change between 14.8.0 and 14.8.1"
+      },
+      {
+        "class": "ImageMagick.Drawing.DrawableAffine",
+        "method": "TransformSkewX",
+        "reason": "unrelated managed change between 14.8.0 and 14.8.1"
+      },
+      {
+        "class": "ImageMagick.Drawing.DrawableAffine",
+        "method": "TransformSkewY",
+        "reason": "unrelated managed change between 14.8.0 and 14.8.1"
+      },
+      {
+        "class": "ImageMagick.MagickImage+CloneMutator",
+        "method": "Splice",
+        "reason": "unrelated managed change between 14.8.0 and 14.8.1"
+      },
+      {
+        "class": "ImageMagick.MagickImage+NativeMagickImage",
+        "method": "Splice",
+        "reason": "unrelated managed change between 14.8.0 and 14.8.1"
       }
     ]
   },
-  "note": "Proposed from the IL diff of Magick.NET-Q16-AnyCPU 14.8.0 -> 14.8.1 (net8.0): every changed method (the fix commits could not be read)."
+  "note": "The flaw is an integer overflow in the BMP writer (WriteBMPImage) in the native ImageMagick library that Magick.NET bundles. The managed methods that changed in the same release are unrelated, and the native code is reached through many C# entry points, so no method can be named.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

@@ -5,34 +5,8 @@
   "packages": [
     "TShock"
   ],
-  "status": "proposed",
-  "verdict": "sinks",
-  "sinks": [
-    {
-      "class": "TShockAPI.TShock",
-      "method": ".ctor"
-    },
-    {
-      "class": "TShockAPI.TShock",
-      "method": "HandleCommandLine"
-    },
-    {
-      "class": "TShockAPI.TShock",
-      "method": "HandleCommandLinePostConfigLoad"
-    },
-    {
-      "class": "TShockAPI.TShock",
-      "method": "Initialize"
-    },
-    {
-      "class": "TShockAPI.TShock",
-      "method": "NetHooks_NameCollision"
-    },
-    {
-      "class": "TShockAPI.TShock",
-      "method": "NetHooks_SendData"
-    }
-  ],
+  "status": "reviewed",
+  "verdict": "no-method-sink",
   "evidence": {
     "commits": [
       "https://github.com/Pryaxis/TShock/commit/5075997264b48e27960e3446a948ecb0ea0f5a03"
@@ -42,8 +16,42 @@
         "class": "TShockAPI.TShock",
         "method": "RemoteClient_Reset",
         "reason": "added by the fix"
+      },
+      {
+        "class": "TShockAPI.TShock",
+        "method": ".ctor",
+        "reason": "startup plumbing around the new reset hook"
+      },
+      {
+        "class": "TShockAPI.TShock",
+        "method": "HandleCommandLine",
+        "reason": "startup plumbing around the new reset hook"
+      },
+      {
+        "class": "TShockAPI.TShock",
+        "method": "HandleCommandLinePostConfigLoad",
+        "reason": "startup plumbing around the new reset hook"
+      },
+      {
+        "class": "TShockAPI.TShock",
+        "method": "Initialize",
+        "reason": "startup plumbing around the new reset hook"
+      },
+      {
+        "class": "TShockAPI.TShock",
+        "method": "NetHooks_NameCollision",
+        "reason": "startup plumbing around the new reset hook"
+      },
+      {
+        "class": "TShockAPI.TShock",
+        "method": "NetHooks_SendData",
+        "reason": "startup plumbing around the new reset hook"
       }
     ]
   },
-  "note": "Proposed from the IL diff of TShock 5.2.0 -> 5.2.1 (net6.0): methods of the files the fix commits changed."
+  "note": "Stale UUIDs stayed on OTAPI RemoteClient slots after a disconnect, so a later client could take over a UUID login; 5.2.1 resets them on disconnect. TShock is the game server itself and plugins take no part in connection handling, so no method can be named.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
