@@ -10,6 +10,7 @@
 //! anything else, and `db bundle` packs it into one tar that `db import --bundle` unpacks,
 //! checked against the manifest before any of it replaces what is there.
 
+use crate::hexenc::ToHex;
 use std::collections::BTreeMap;
 use std::io::Write as _;
 use std::path::{Component, Path, PathBuf};
@@ -506,10 +507,7 @@ pub fn install_file(
         last_modified,
         fetched_at: osvdb::now_rfc3339(),
         fetched_unix: osvdb::now_unix(),
-        sha256: Sha256::digest(bytes)
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect(),
+        sha256: Sha256::digest(bytes).to_hex(),
         size: bytes.len() as u64,
     };
     let json = serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?;

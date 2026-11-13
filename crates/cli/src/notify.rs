@@ -18,6 +18,7 @@
 //! delivery fails, `3` for a webhook URL that is not HTTPS or a signing secret that cannot be
 //! read.
 
+use crate::hexenc::ToHex;
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::PathBuf;
@@ -528,7 +529,7 @@ fn signed_headers(key: &[u8], body: &str, timestamp: i64) -> Vec<(&'static str, 
 }
 
 fn hex_prefix(bytes: &[u8], n: usize) -> String {
-    bytes.iter().take(n).map(|b| format!("{b:02x}")).collect()
+    bytes.get(..n).unwrap_or(bytes).to_hex()
 }
 
 /// `v1,` and the base64 HMAC-SHA256 of `id.timestamp.body`.

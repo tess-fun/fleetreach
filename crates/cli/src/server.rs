@@ -16,6 +16,7 @@
 //! - A decision is posted with a token the server made at start and put in its own forms, and
 //!   a post whose `Origin` is another site is refused, so a page elsewhere cannot post one.
 
+use crate::hexenc::ToHex;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::net::{IpAddr, SocketAddr};
@@ -139,7 +140,7 @@ pub(crate) fn check_listen(listen: SocketAddr, trust: &[IpAddr]) -> Result<(), S
 fn new_token() -> Result<String, String> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).map_err(|e| format!("no random source for the form token: {e}"))?;
-    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
+    Ok(bytes.to_hex())
 }
 
 pub(crate) fn router(app: Arc<App>) -> Router {

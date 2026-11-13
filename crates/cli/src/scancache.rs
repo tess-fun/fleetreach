@@ -13,6 +13,7 @@
 //! and a pip file including something `is_input` does not cover. An errored repo is not
 //! stored either, so it is tried again.
 
+use crate::hexenc::ToHex;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::ErrorKind::NotFound;
 use std::path::{Path, PathBuf};
@@ -47,11 +48,7 @@ impl Store {
     }
 
     fn path(&self, repo: &Repo) -> PathBuf {
-        let name = hex(Sha256::digest(format!(
-            "{}\0{}",
-            repo.id,
-            repo.path.display()
-        )));
+        let name = Sha256::digest(format!("{}\0{}", repo.id, repo.path.display())).to_hex();
         self.dir.join(name.get(..2).unwrap_or("00")).join(name)
     }
 
@@ -83,10 +80,6 @@ impl Store {
     }
 }
 
-fn hex(bytes: impl AsRef<[u8]>) -> String {
-    bytes.as_ref().iter().map(|b| format!("{b:02x}")).collect()
-}
-
 /// A file or tree of advisory data, by content. `None` when it cannot be read. A synced export
 /// has its hash on record, which saves reading it on every run.
 fn data_identity(path: &Path) -> Option<String> {
@@ -113,7 +106,7 @@ fn data_identity(path: &Path) -> Option<String> {
             hasher.update(sha);
         }
     }
-    Some(hex(hasher.finalize()))
+    Some(hasher.finalize().to_hex())
 }
 
 /// A mirror's identity: `Some("none")` with no mirror, `None` when it cannot be pinned down,
@@ -177,7 +170,7 @@ impl<'a> Session<'a> {
         if ecosystems.contains(&Ecosystem::NuGet) {
             hash_ancestor_props(&repo.path, &mut hasher)?;
         }
-        Some(hex(hasher.finalize()))
+        Some(hasher.finalize().to_hex())
     }
 }
 

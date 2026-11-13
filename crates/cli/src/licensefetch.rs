@@ -18,6 +18,7 @@
 //! license files are copied out, under names checked here, and the archive is dropped. The
 //! cache is keyed by hash, shared by every repo, and read by `--detect` with no network.
 
+use crate::hexenc::ToHex;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
@@ -56,7 +57,7 @@ impl Pin {
             }
             Pin::GoTree(h1) => {
                 let raw = base64::engine::general_purpose::STANDARD.decode(h1).ok()?;
-                Some(format!("go-h1-{}", to_hex(&raw)))
+                Some(format!("go-h1-{}", raw.to_hex()))
             }
         }
     }
@@ -222,15 +223,11 @@ fn pypi_url(release: &Value, sha256: &str) -> Option<String> {
     file.get("url")?.as_str().map(str::to_string)
 }
 
-fn to_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
 fn matches_file(sum: &Checksum, body: &[u8]) -> bool {
     let actual = match sum.algorithm {
-        "SHA-256" => to_hex(&Sha256::digest(body)),
-        "SHA-384" => to_hex(&Sha384::digest(body)),
-        "SHA-512" => to_hex(&Sha512::digest(body)),
+        "SHA-256" => Sha256::digest(body).to_hex(),
+        "SHA-384" => Sha384::digest(body).to_hex(),
+        "SHA-512" => Sha512::digest(body).to_hex(),
         _ => return false,
     };
     actual == sum.hex
@@ -352,7 +349,7 @@ fn go_tree(module: &str, version: &str, body: &[u8]) -> Result<(String, Files), 
     let mut lines = Vec::new();
     let mut out = Files::new();
     each_zip_file(body, |path, bytes| {
-        lines.push(format!("{}  {path}\n", to_hex(&Sha256::digest(&bytes))));
+        lines.push(format!("{}  {path}\n", Sha256::digest(&bytes).to_hex()));
         let name = path.strip_prefix(root.as_str()).and_then(kept_name);
         if let Some(name) = name.filter(|_| bytes.len() as u64 <= MAX_FILE) {
             out.insert(name, bytes);
@@ -513,7 +510,7 @@ mod tests {
     }
 
     fn sha256_pin(body: &[u8]) -> Pin {
-        Pin::File(Checksum::new("SHA-256", &to_hex(&Sha256::digest(body))).unwrap())
+        Pin::File(Checksum::new("SHA-256", &Sha256::digest(body).to_hex()).unwrap())
     }
 
     fn crate_wanted(pin: Pin) -> Wanted {
@@ -656,8 +653,8 @@ mod tests {
         let (tree, files) = go_tree("example.com/m", "v1.0.0", &body).unwrap();
         let listing = format!(
             "{}  example.com/m@v1.0.0/LICENSE\n{}  example.com/m@v1.0.0/go.mod\n",
-            to_hex(&Sha256::digest(b"mit")),
-            to_hex(&Sha256::digest(b"module example.com/m\n")),
+            Sha256::digest(b"mit").to_hex(),
+            Sha256::digest(b"module example.com/m\n").to_hex(),
         );
         let expected = base64::engine::general_purpose::STANDARD.encode(Sha256::digest(listing));
         assert_eq!(tree, expected);

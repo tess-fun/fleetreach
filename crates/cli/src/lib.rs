@@ -36,6 +36,7 @@ pub mod fn_reach;
 pub mod forges;
 pub mod graph_reach;
 pub mod health;
+pub(crate) mod hexenc;
 pub mod history;
 pub mod history_cmd;
 pub mod images;

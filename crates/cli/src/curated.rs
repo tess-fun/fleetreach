@@ -10,6 +10,7 @@
 //! network builds; `db import` indexes a local copy (a `cvelistV5` checkout or release zip, a
 //! CSAF directory or `.tar.zst`). A failed fetch or index never replaces a good index.
 
+use crate::hexenc::ToHex;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
@@ -136,14 +137,7 @@ pub(crate) fn sha256_file(path: &Path) -> std::io::Result<(String, u64)> {
         hasher.update(buf.get(..n).unwrap_or_default());
         size += n as u64;
     }
-    Ok((
-        hasher
-            .finalize()
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect(),
-        size,
-    ))
+    Ok((hasher.finalize().to_hex(), size))
 }
 
 /// An IMF-fixdate, the form [`osvdb::parse_http_date`] reads back.
@@ -293,6 +287,7 @@ mod net {
     use std::sync::OnceLock;
     use std::time::Duration;
 
+    use crate::hexenc::ToHex;
     use sha2::{Digest, Sha256};
 
     use super::{import_csaf, import_cve, Indexed, CVELIST_LATEST, REDHAT_VEX, SUSE_VEX};
@@ -391,11 +386,7 @@ mod net {
             last_modified,
             fetched_at: osvdb::now_rfc3339(),
             fetched_unix: osvdb::now_unix(),
-            sha256: hasher
-                .finalize()
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect(),
+            sha256: hasher.finalize().to_hex(),
             size: written,
         })
     }

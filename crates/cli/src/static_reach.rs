@@ -12,6 +12,7 @@
 //! failure, an unresolved sink, an opaque boundary, or a function we cannot
 //! attribute to a verdict all resolve to `Unknown` — never `NotReachable`.
 
+use crate::hexenc::ToHex;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -187,12 +188,7 @@ fn witness_hash(engine: &str, sinks: &[String], cache_keys: &BTreeSet<String>) -
         hasher.update(key.as_bytes());
     }
     let digest = hasher.finalize();
-    let mut out = String::with_capacity(7 + 64);
-    out.push_str("sha256:");
-    for byte in digest {
-        out.push_str(&format!("{byte:02x}"));
-    }
-    out
+    format!("sha256:{}", digest.to_hex())
 }
 
 /// The repo ids a finding occurs in.

@@ -494,6 +494,7 @@ mod net {
     use std::sync::OnceLock;
     use std::time::Duration;
 
+    use crate::hexenc::ToHex;
     use fleetreach_core::Ecosystem;
     use sha2::{Digest, Sha256};
 
@@ -638,11 +639,7 @@ mod net {
             let check =
                 std::fs::File::open(&tmp).map_err(|e| format!("reopening download: {e}"))?;
             zip::ZipArchive::new(check).map_err(|e| format!("{url}: not a valid zip: {e}"))?;
-            let sha256 = hasher
-                .finalize()
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect();
+            let sha256 = hasher.finalize().to_hex();
             Ok(Meta {
                 url: url.clone(),
                 etag,
@@ -859,10 +856,7 @@ mod net {
         }
         let records =
             fleetreach_os::feeds::convert(feed, &raw).map_err(|e| format!("{url}: {e}"))?;
-        let sha256 = Sha256::digest(&raw)
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect();
+        let sha256 = Sha256::digest(&raw).to_hex();
         let meta = Meta {
             url,
             etag,

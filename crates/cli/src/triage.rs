@@ -7,6 +7,7 @@
 //! A decision sets a finding aside only in `accepted_risk`, `false_positive` or `not_affected`,
 //! until it expires. An expired decision no longer hides its finding, and fails the scan.
 
+use crate::hexenc::ToHex;
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, ValueEnum};
@@ -675,7 +676,7 @@ fn export(args: &ExportArgs) -> Result<(), String> {
     }
     let body = serde_json::to_string(&statements).map_err(|e| e.to_string())?;
     let hash = Sha256::digest(body.as_bytes());
-    let id: String = hash.iter().take(16).map(|b| format!("{b:02x}")).collect();
+    let id: String = hash[..16].to_hex();
     let timestamp = decisions
         .iter()
         .flat_map(|d| d.log.last())

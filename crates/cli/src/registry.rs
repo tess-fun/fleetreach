@@ -21,6 +21,7 @@
 // Without `network` only the cache is read, and the login and challenge code goes unused.
 #![cfg_attr(not(feature = "network"), allow(dead_code))]
 
+use crate::hexenc::ToHex;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{self, Write};
@@ -276,10 +277,7 @@ fn hex_of(digest: &str) -> Result<&str, String> {
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    Sha256::digest(bytes).to_hex()
 }
 
 /// The content-addressed cache.
@@ -341,12 +339,7 @@ impl Store {
             };
             source.get(path, size.map_or(limit, |s| s.min(limit)), &mut out)?;
             out.flush().map_err(|e| format!("{}: {e}", tmp.display()))?;
-            let hex: String = out
-                .hasher
-                .finalize()
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect();
+            let hex: String = out.hasher.finalize().to_hex();
             let got = format!("sha256:{hex}");
             if want.is_some_and(|w| w != got) {
                 return Err(format!("{path}: the content does not match its digest"));

@@ -15,6 +15,7 @@
 //! path, another registry or a non-hexpm organization, and pre-release targets. Nothing is
 //! downloaded but metadata; no package archive and no package code.
 
+use crate::hexenc::ToHex;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::Path;
@@ -73,10 +74,6 @@ fn padded(s: &str) -> Option<Version> {
 
 fn triple(v: &Version) -> [u64; 3] {
     [v.major, v.minor, v.patch]
-}
-
-fn hex_string(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 fn text(fetch: &dyn Fetch, url: &str) -> Result<Option<String>, String> {
@@ -1167,8 +1164,8 @@ pub(crate) fn hex_bump(
         };
         let rendered = render_hex(
             &moved_entry,
-            &hex_string(&release.inner),
-            &hex_string(&release.outer),
+            &release.inner.to_hex(),
+            &release.outer.to_hex(),
         );
         let new = format!("{}{rendered}{}", &lock[..span.start], &lock[span.end..]);
         let back = mix_entries(&new)?;

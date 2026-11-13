@@ -10,6 +10,7 @@
 //! hardened: no hooks, no submodules, no `file://` transport, no prompts, and the token
 //! travels in an environment-supplied header, never in argv or the stored remote URL.
 
+use crate::hexenc::ToHex;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -485,11 +486,7 @@ fn listing_cache_path(source: &Source) -> Result<PathBuf, String> {
         source.org.as_deref().unwrap_or_default(),
         source.api_url.as_deref().unwrap_or_default()
     );
-    let hash: String = Sha256::digest(key.as_bytes())
-        .iter()
-        .take(12)
-        .map(|b| format!("{b:02x}"))
-        .collect();
+    let hash: String = Sha256::digest(key.as_bytes())[..12].to_hex();
     Ok(root.join(format!("{hash}.json")))
 }
 

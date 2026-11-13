@@ -5,6 +5,7 @@
 //! `ignore` requires a non-empty `reason`. A bad config is a hard error
 //! (exit `2`) surfaced up front, never a mid-run surprise.
 
+use crate::hexenc::ToHex;
 use std::path::{Path, PathBuf};
 
 use fleetreach_core::ssvc::{Exposure, MissionImpact, SafetyImpact};
@@ -1249,10 +1250,7 @@ impl Config {
                 let text = std::fs::read_to_string(&path).map_err(|e| {
                     ConfigError::InvalidSsvc(format!("table `{}`: {e}", path.display()))
                 })?;
-                let digest: String = Sha256::digest(text.as_bytes())
-                    .iter()
-                    .map(|b| format!("{b:02x}"))
-                    .collect();
+                let digest: String = Sha256::digest(text.as_bytes()).to_hex();
                 fleetreach_core::ssvc::DecisionTable::from_csv(&text, format!("custom:{digest}"))
                     .map_err(|e| ConfigError::InvalidSsvc(format!("table `{rel}`: {e}")))?
             }

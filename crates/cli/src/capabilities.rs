@@ -31,6 +31,7 @@
 //! run. Profiles are cached by archive hash, so a version is read once. Nothing here is a
 //! verdict: a capability is what code can reach, and most packages that add one are benign.
 
+use crate::hexenc::ToHex;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
@@ -764,10 +765,6 @@ pub fn alerts(profile: &Profile, previous: Option<(&str, &Profile)>) -> Vec<Aler
 
 // ---- registries, cache ----
 
-fn to_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
 /// An archive and the hash it must have.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Archive {
@@ -778,8 +775,8 @@ struct Archive {
 
 fn matches(sum: &Checksum, body: &[u8]) -> bool {
     match sum.algorithm {
-        "SHA-256" => to_hex(&Sha256::digest(body)) == sum.hex,
-        "SHA-512" => to_hex(&Sha512::digest(body)) == sum.hex,
+        "SHA-256" => Sha256::digest(body).to_hex() == sum.hex,
+        "SHA-512" => Sha512::digest(body).to_hex() == sum.hex,
         _ => false,
     }
 }
@@ -791,7 +788,7 @@ fn npm_integrity(integrity: &str) -> Option<Checksum> {
         .split_whitespace()
         .find_map(|i| i.strip_prefix("sha512-"))?;
     let raw = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
-    Checksum::new("SHA-512", &to_hex(&raw))
+    Checksum::new("SHA-512", &raw.to_hex())
 }
 
 /// The newest release below `current`; pre-releases count only when `current` is one.

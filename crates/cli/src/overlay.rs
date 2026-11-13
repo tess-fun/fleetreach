@@ -13,6 +13,7 @@
 //! not valid OSV JSON stops the scan, since a correction that is silently not applied could
 //! hide a finding.
 
+use crate::hexenc::ToHex;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -157,11 +158,7 @@ fn digest(dir: &Path) -> Result<String, String> {
         hasher.update(&bytes);
         hasher.update([0]);
     }
-    Ok(hasher
-        .finalize()
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect())
+    Ok(hasher.finalize().to_hex())
 }
 
 #[cfg(test)]

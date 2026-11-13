@@ -6,6 +6,7 @@
 //! `checksum` hashes yarn's own archive. A package with no such value has no hash; nothing
 //! is computed or guessed.
 
+use crate::hexenc::ToHex;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -65,7 +66,7 @@ fn sri(value: &str) -> Option<Checksum> {
             let bytes = base64::engine::general_purpose::STANDARD
                 .decode(encoded)
                 .ok()?;
-            let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+            let hex: String = bytes.to_hex();
             Checksum::new(algorithm, &hex)
         })
         .max_by_key(|c| c.hex.len())

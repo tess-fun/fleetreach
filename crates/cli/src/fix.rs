@@ -27,6 +27,7 @@
 //! The scan runs as a subprocess of the same binary with the flags given after `--`, so a
 //! verification sees exactly what `fleetreach scan` reports.
 
+use crate::hexenc::ToHex;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -494,11 +495,7 @@ pub(crate) fn campaign_id(
         ecosystem_name(ecosystem),
         advisories.join(",")
     );
-    Sha256::digest(key.as_bytes())
-        .iter()
-        .take(4)
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    Sha256::digest(key.as_bytes())[..4].to_hex()
 }
 
 fn ecosystem_name(ecosystem: Ecosystem) -> String {

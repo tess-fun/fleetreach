@@ -9,6 +9,7 @@
 //! reviewed, a sink absent from the installed code, a file that could not be read, no entry
 //! points, an occurrence outside an analyzed image) is `Unknown` with the reason.
 
+use crate::hexenc::ToHex;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -72,12 +73,7 @@ pub(crate) fn inputs_hash(files: &[(String, PathBuf)], app: &[String]) -> Result
 }
 
 pub(crate) fn hex(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(7 + bytes.len() * 2);
-    out.push_str("sha256:");
-    for b in bytes {
-        out.push_str(&format!("{b:02x}"));
-    }
-    out
+    format!("sha256:{}", bytes.to_hex())
 }
 
 /// Annotate the engine's findings that have a sink record from the images' graphs.

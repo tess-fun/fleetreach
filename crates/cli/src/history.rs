@@ -9,6 +9,7 @@
 //! is missing, unreadable or out of step with them is rebuilt, keeping the first sightings of
 //! findings whose snapshots retention already removed.
 
+use crate::hexenc::ToHex;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -505,10 +506,7 @@ pub fn record(
     let body = serde_json::to_vec(report).map_err(|e| e.to_string())?;
     let hash: String = {
         use sha2::{Digest, Sha256};
-        Sha256::digest(&body)[..4]
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect()
+        Sha256::digest(&body)[..4].to_hex()
     };
     let stamp = format!(
         "{:04}{:02}{:02}T{:02}{:02}{:02}Z",
