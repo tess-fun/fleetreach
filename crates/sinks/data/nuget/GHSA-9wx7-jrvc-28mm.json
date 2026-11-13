@@ -5,7 +5,7 @@
   "packages": [
     "starkbank-ecdsa"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -16,7 +16,12 @@
   "evidence": {
     "commits": [
       "https://github.com/starkbank/ecdsa-python/commit/d136170666e9510eb63c2572551805807bd4c17f"
-    ]
+    ],
+    "excluded": []
   },
-  "note": "Proposed from the IL diff of starkbank-ecdsa 1.3.1 -> 1.3.2 (netstandard2.1): every changed method (the fix commits could not be read)."
+  "note": "The linked commit is the Python port's, so the 1.3.1 -> 1.3.2 IL diff kept every changed method, and only Ecdsa.verify changed. Reached wherever the app verifies signatures with this library.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

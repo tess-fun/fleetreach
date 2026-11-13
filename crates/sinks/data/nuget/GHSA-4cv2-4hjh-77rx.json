@@ -8,44 +8,12 @@
   "packages": [
     "System.Linq.Dynamic.Core"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
-      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
-      "method": ".ctor"
-    },
-    {
-      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
-      "method": "FindTypesMarkedWithDynamicLinqTypeAttribute"
-    },
-    {
-      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
-      "method": "GetAssemblyTypesWithDynamicLinqTypeAttribute"
-    },
-    {
-      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
-      "method": "ResolveType"
-    },
-    {
-      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
-      "method": "ResolveTypeBySimpleName"
-    },
-    {
-      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.DefaultDynamicLinqCustomTypeProvider",
-      "method": ".ctor"
-    },
-    {
-      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.DefaultDynamicLinqCustomTypeProvider",
-      "method": "GetCustomTypesInternal"
-    },
-    {
-      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.DefaultDynamicLinqCustomTypeProvider",
-      "method": "GetExtensionMethodsInternal"
-    },
-    {
-      "class": "System.Linq.Dynamic.Core.ParsingConfig",
-      "method": ".ctor"
+      "class": "System.Linq.Dynamic.Core.Parser.ExpressionParser",
+      "method": "ParseMemberAccess"
     }
   ],
   "evidence": {
@@ -77,8 +45,57 @@
         "class": "System.Linq.Dynamic.Core.ParsingConfig",
         "method": "set_CustomTypeProvider",
         "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
+        "method": ".ctor",
+        "reason": "type-provider changes, not the member access the attack uses"
+      },
+      {
+        "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
+        "method": "FindTypesMarkedWithDynamicLinqTypeAttribute",
+        "reason": "type-provider changes, not the member access the attack uses"
+      },
+      {
+        "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
+        "method": "GetAssemblyTypesWithDynamicLinqTypeAttribute",
+        "reason": "type-provider changes, not the member access the attack uses"
+      },
+      {
+        "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
+        "method": "ResolveType",
+        "reason": "type-provider changes, not the member access the attack uses"
+      },
+      {
+        "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
+        "method": "ResolveTypeBySimpleName",
+        "reason": "type-provider changes, not the member access the attack uses"
+      },
+      {
+        "class": "System.Linq.Dynamic.Core.CustomTypeProviders.DefaultDynamicLinqCustomTypeProvider",
+        "method": ".ctor",
+        "reason": "type-provider changes, not the member access the attack uses"
+      },
+      {
+        "class": "System.Linq.Dynamic.Core.CustomTypeProviders.DefaultDynamicLinqCustomTypeProvider",
+        "method": "GetCustomTypesInternal",
+        "reason": "type-provider changes, not the member access the attack uses"
+      },
+      {
+        "class": "System.Linq.Dynamic.Core.CustomTypeProviders.DefaultDynamicLinqCustomTypeProvider",
+        "method": "GetExtensionMethodsInternal",
+        "reason": "type-provider changes, not the member access the attack uses"
+      },
+      {
+        "class": "System.Linq.Dynamic.Core.ParsingConfig",
+        "method": ".ctor",
+        "reason": "type-provider changes, not the member access the attack uses"
       }
     ]
   },
-  "note": "Proposed from the IL diff of System.Linq.Dynamic.Core 1.5.1 -> 1.6.0 (net8.0): methods of the files the fix commits changed."
+  "note": "The fix narrows the type providers, but the attack (issue 867) is a member chain such as GetType().Assembly.DefinedTypes in a user-supplied dynamic expression. ExpressionParser.ParseMemberAccess resolves those members. Reached wherever the app parses dynamic LINQ from user input.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

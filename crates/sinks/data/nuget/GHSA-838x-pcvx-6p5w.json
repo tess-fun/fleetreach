@@ -8,7 +8,7 @@
   "packages": [
     "Snappier"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -65,5 +65,9 @@
       }
     ]
   },
-  "note": "Proposed from the IL diff of Snappier 1.1.0 -> 1.1.1 (net7.0): methods of the files the fix commits changed."
+  "note": "From the 1.1.0 -> 1.1.1 IL diff (PR 73). Only 1.1.0 is affected: its compressor and decompressor hold byte references the GC can move during compaction. Reached wherever the app compresses or decompresses Snappy data.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
