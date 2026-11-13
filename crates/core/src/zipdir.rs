@@ -27,7 +27,15 @@ struct Member {
 #[derive(Debug)]
 pub struct Archive {
     file: File,
+    /// The file's length, so a read never runs past it.
+    len_bytes: u64,
     members: Vec<Member>,
+}
+
+/// The error for a member that is not UTF-8 text.
+#[must_use]
+pub fn not_utf8() -> io::Error {
+    bad("member is not UTF-8")
 }
 
 fn bad(what: &str) -> io::Error {
@@ -79,6 +87,40 @@ fn read_vec(file: &File, offset: u64, len: u64) -> io::Result<Vec<u8>> {
     let mut buf = vec![0u8; len];
     read_at(file, &mut buf, offset)?;
     Ok(buf)
+}
+
+/// How far apart the first and last member of one [`Archive::par_read`] read may start.
+const RUN_BYTES: u64 = 1 << 20;
+/// Room past a member's data size for its local header's name and extra field.
+const RUN_SLACK: u64 = 1024;
+
+/// Where member `m`'s data starts, from its 30-byte local header.
+fn data_offset(m: &Member, local: &[u8]) -> io::Result<u64> {
+    if u32_at(local, 0)? != LOCAL {
+        return Err(bad("bad local header"));
+    }
+    Ok(m.header + 30 + u64::from(u16_at(local, 26)?) + u64::from(u16_at(local, 28)?))
+}
+
+/// Member `m`'s stored or deflated `raw` data, checked against its size and CRC-32.
+fn unpack(m: &Member, raw: &[u8]) -> io::Result<Vec<u8>> {
+    let capacity = usize::try_from(m.size).map_err(|_| bad("member too large"))?;
+    let body = if m.deflated {
+        let mut out = Vec::with_capacity(capacity);
+        flate2::read::DeflateDecoder::new(raw)
+            .take(m.size + 1)
+            .read_to_end(&mut out)?;
+        out
+    } else {
+        raw.to_vec()
+    };
+    if body.len() as u64 != m.size {
+        return Err(bad("member size does not match"));
+    }
+    if crc32fast::hash(&body) != m.crc {
+        return Err(bad("member checksum does not match"));
+    }
+    Ok(body)
 }
 
 const EOCD: u32 = 0x0605_4b50;
@@ -190,7 +232,11 @@ impl Archive {
                 deflated,
             });
         }
-        Ok(Archive { file, members })
+        Ok(Archive {
+            file,
+            len_bytes: len,
+            members,
+        })
     }
 
     /// Members kept.
@@ -212,29 +258,86 @@ impl Archive {
     pub fn read(&self, i: usize) -> io::Result<Vec<u8>> {
         let m = self.members.get(i).ok_or_else(|| bad("no such member"))?;
         let local = read_vec(&self.file, m.header, 30)?;
-        if u32_at(&local, 0)? != LOCAL {
-            return Err(bad("bad local header"));
-        }
-        let data_at =
-            m.header + 30 + u64::from(u16_at(&local, 26)?) + u64::from(u16_at(&local, 28)?);
+        let data_at = data_offset(m, &local)?;
         let raw = read_vec(&self.file, data_at, m.compressed)?;
-        let capacity = usize::try_from(m.size).map_err(|_| bad("member too large"))?;
-        let body = if m.deflated {
-            let mut out = Vec::with_capacity(capacity);
-            flate2::read::DeflateDecoder::new(&raw[..])
-                .take(m.size + 1)
-                .read_to_end(&mut out)?;
-            out
-        } else {
-            raw
+        unpack(m, &raw)
+    }
+
+    /// Every member's contents, as [`Archive::read`] gives them, handed to `f` in parallel;
+    /// the results come back in member order. Members are read a run of neighbours at a time,
+    /// about a megabyte per read, instead of two reads each: npm's export is some 230,000
+    /// members, and the reads were most of a scan's time.
+    pub fn par_read<R: Send>(&self, f: impl Fn(io::Result<Vec<u8>>) -> R + Sync) -> Vec<R> {
+        use rayon::prelude::*;
+        let mut order: Vec<usize> = (0..self.members.len()).collect();
+        order.sort_by_key(|&i| self.members.get(i).map_or(0, |m| m.header));
+        let mut runs: Vec<&[usize]> = Vec::new();
+        let mut rest = order.as_slice();
+        while !rest.is_empty() {
+            let first = rest.first().and_then(|&i| self.members.get(i));
+            let start = first.map_or(0, |m| m.header);
+            let take = rest
+                .iter()
+                .position(|&i| {
+                    self.members
+                        .get(i)
+                        .is_some_and(|m| m.header.saturating_sub(start) >= RUN_BYTES)
+                })
+                .unwrap_or(rest.len())
+                .max(1);
+            let (run, tail) = rest.split_at(take);
+            runs.push(run);
+            rest = tail;
+        }
+        let mut out: Vec<(usize, R)> = runs
+            .par_iter()
+            .flat_map_iter(|run| self.read_run(run, &f))
+            .collect();
+        out.sort_by_key(|(i, _)| *i);
+        out.into_iter().map(|(_, r)| r).collect()
+    }
+
+    /// `f` of each member of `run` (sorted by offset), from one read of the bytes they span. A member
+    /// whose data the read does not cover (a local header longer than its central entry
+    /// suggests) is read on its own.
+    fn read_run<R>(&self, run: &[usize], f: impl Fn(io::Result<Vec<u8>>) -> R) -> Vec<(usize, R)> {
+        let members: Vec<&Member> = run.iter().filter_map(|&i| self.members.get(i)).collect();
+        let start = members.first().map_or(0, |m| m.header);
+        let end = members
+            .iter()
+            .map(|m| {
+                m.header
+                    .saturating_add(30 + RUN_SLACK)
+                    .saturating_add(m.compressed)
+            })
+            .max()
+            .unwrap_or(start)
+            .min(self.len_bytes);
+        let buf = read_vec(&self.file, start, end.saturating_sub(start));
+        let body = |i: usize, m: &Member| {
+            let Ok(buf) = &buf else {
+                return self.read(i);
+            };
+            let from = |at: u64| usize::try_from(at.checked_sub(start)?).ok();
+            let local = from(m.header).and_then(|at| buf.get(at..at.checked_add(30)?));
+            let Some(local) = local else {
+                return self.read(i);
+            };
+            let data_at = data_offset(m, local)?;
+            let raw = from(data_at).and_then(|at| {
+                let len = usize::try_from(m.compressed).ok()?;
+                buf.get(at..at.checked_add(len)?)
+            });
+            match raw {
+                Some(raw) => unpack(m, raw),
+                None => self.read(i),
+            }
         };
-        if body.len() as u64 != m.size {
-            return Err(bad("member size does not match"));
-        }
-        if crc32fast::hash(&body) != m.crc {
-            return Err(bad("member checksum does not match"));
-        }
-        Ok(body)
+        // Each body goes to `f` as soon as it is unpacked, so only one is held at a time.
+        run.iter()
+            .zip(members)
+            .map(|(&i, m)| (i, f(body(i, m))))
+            .collect()
     }
 
     /// Member `i` as UTF-8 text.
@@ -243,7 +346,7 @@ impl Archive {
     ///
     /// As [`Archive::read`], or the member is not UTF-8.
     pub fn read_string(&self, i: usize) -> io::Result<String> {
-        String::from_utf8(self.read(i)?).map_err(|_| bad("member is not UTF-8"))
+        String::from_utf8(self.read(i)?).map_err(|_| not_utf8())
     }
 }
 
@@ -288,6 +391,52 @@ mod tests {
         let json = Archive::open(&path, |n| n.ends_with(".json")).unwrap();
         assert_eq!(json.len(), 3);
         assert_eq!(json.read_string(2).unwrap(), "é".repeat(5000));
+        assert_eq!(same_as_read(&all), members.len());
+        assert_eq!(same_as_read(&json), 3);
+    }
+
+    /// `par_read` gives what `read` gives for every member, in order; the member count.
+    fn same_as_read(a: &Archive) -> usize {
+        let together = a.par_read(|body| body.map_err(|e| e.to_string()));
+        assert_eq!(together.len(), a.len());
+        for (i, body) in together.iter().enumerate() {
+            assert_eq!(body, &a.read(i).map_err(|e| e.to_string()), "member {i}");
+        }
+        together.len()
+    }
+
+    #[test]
+    fn reads_in_runs_across_members_larger_than_a_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("runs.zip");
+        // Incompressible bodies, so stored and deflated members alike span the file.
+        let mut state = 0x2545_f491_u32;
+        let mut noise = |n: usize| -> Vec<u8> {
+            (0..n)
+                .map(|_| {
+                    state ^= state << 13;
+                    state ^= state >> 17;
+                    state ^= state << 5;
+                    state.to_le_bytes()[0]
+                })
+                .collect()
+        };
+        let mut members = Vec::new();
+        for i in 0..400 {
+            let len = match i % 50 {
+                0 => 3 << 20,
+                1 => 0,
+                _ => 9_000,
+            };
+            members.push((format!("{i}.json"), noise(len), i % 3 == 0));
+        }
+        write_zip(&path, &members);
+        let a = Archive::open(&path, |_| true).unwrap();
+        assert_eq!(same_as_read(&a), 400);
+        let bodies = a.par_read(|body| body.unwrap());
+        for (got, (_, want, _)) in bodies.iter().zip(&members) {
+            assert_eq!(got, want);
+        }
     }
 
     #[test]
@@ -302,6 +451,8 @@ mod tests {
         assert_eq!(a.len(), 70_000);
         assert_eq!(a.read_string(69_999).unwrap(), "69999");
         assert_eq!(a.read_string(12_344).unwrap(), "12344");
+        let all = a.par_read(|body| String::from_utf8(body.unwrap()).unwrap());
+        assert!(all.iter().enumerate().all(|(i, s)| *s == i.to_string()));
     }
 
     #[test]
@@ -323,6 +474,7 @@ mod tests {
             b[at] ^= 0x55;
             std::fs::write(&damaged, &b).unwrap();
             if let Ok(a) = Archive::open(&damaged, |_| true) {
+                same_as_read(&a);
                 for i in 0..a.len() {
                     match a.read(i) {
                         Ok(body) => assert!(
@@ -340,9 +492,7 @@ mod tests {
         for cut in 0..good.len() {
             std::fs::write(&damaged, &good[..cut]).unwrap();
             if let Ok(a) = Archive::open(&damaged, |_| true) {
-                for i in 0..a.len() {
-                    let _ = a.read(i);
-                }
+                same_as_read(&a);
             }
         }
     }

@@ -647,14 +647,12 @@ fn load_zip(path: &Path, wanted: &Wanted) -> Result<PerRecord, OsError> {
     use fleetreach_core::osv::zip_error;
     let archive = fleetreach_core::zipdir::Archive::open(path, |name| name.ends_with(".json"))
         .map_err(|e| OsError::db(path, zip_error(e)))?;
-    (0..archive.len())
-        .into_par_iter()
-        .map(|i| {
-            let body = archive
-                .read(i)
-                .map_err(|e| OsError::db(path, zip_error(e)))?;
+    archive
+        .par_read(|body| {
+            let body = body.map_err(|e| OsError::db(path, zip_error(e)))?;
             parse_record(&body, wanted, path)
         })
+        .into_iter()
         .collect()
 }
 

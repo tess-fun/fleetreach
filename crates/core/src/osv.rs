@@ -718,14 +718,14 @@ where
     let archive = crate::zipdir::Archive::open(path, |name| name.ends_with(".json"))
         .map_err(|e| LoadError::new(path, zip_error(e)))?;
 
-    let per_entry: Vec<Vec<(String, Advisory<V>)>> = (0..archive.len())
-        .into_par_iter()
-        .map(|i| {
-            let body = archive
-                .read_string(i)
+    let per_entry: Vec<Vec<(String, Advisory<V>)>> = archive
+        .par_read(|body| {
+            let body = body
+                .and_then(|b| String::from_utf8(b).map_err(|_| crate::zipdir::not_utf8()))
                 .map_err(|e| LoadError::new(path, zip_error(e)))?;
             record_advisories(&body, spec, skip, keep).map_err(|e| LoadError::new(path, e))
         })
+        .into_iter()
         .collect::<Result<_, LoadError>>()?;
 
     Ok(OsvDb {
