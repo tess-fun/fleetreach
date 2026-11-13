@@ -8,6 +8,7 @@
 
 pub mod assemble;
 pub mod attribute;
+pub mod capabilities;
 pub mod cli;
 pub mod config;
 pub mod crosscheck;

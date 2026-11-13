@@ -82,6 +82,55 @@ PyPI's project status (PEP 792) is not read yet.
 With `--history-dir`, `--signals` also flags packages whose name no earlier recorded run has
 read. The first recorded run is the baseline and flags nothing.
 
+## What package code can do
+
+`--capabilities` reads the code of each npm and PyPI package the lockfiles pin by hash. It
+warns above all on what a version **adds** over the release before it:
+
+```text
+fleetreach:adds-install-network:npm/pad@1.0.1  npm package pad 1.0.1 adds network access to install-time code (1.0.0 had none): i.js
+```
+
+| Capability | Read as |
+|------------|---------|
+| `network` | `http`, `https`, `net`, `dns`, `fetch(`, `WebSocket`; Python `socket`, `urllib.request`, `requests`, `httpx`; `curl` or `wget` in an install script or through `child_process` |
+| `shell` | `child_process`; Python `subprocess`, `os.system`, `os.popen` |
+| `filesystem` | `fs`; Python `open(`, `shutil` |
+| `env` | `process.env`; Python `os.environ`, `os.getenv` |
+| `eval` | `eval(`, `new Function(`, `vm`; Python `eval(`, `exec(`, `marshal.loads` |
+| `obfuscated` | `_0x` names or dense `\x` escapes; Python `exec` of decoded data, PyArmor |
+| `high-entropy` | a long base64 or hex string that looks random, not a `data:` URI |
+| `native-code` | an ELF, Mach-O or PE file, or a `.node` addon |
+| `install-script` | npm `preinstall`, `install`, `postinstall`; a `.pth` file that imports |
+
+Code is placed by when it runs:
+- **Install-time:** npm install scripts, the files they start with `node` and what those
+  require, and a wheel's `.pth` files.
+- **Build-time:** a source distribution's `setup.py`.
+- **Runtime:** everything else.
+
+The id says which: `adds-install-network`, `adds-build-shell`, `adds-env`. A few warnings
+stand without a previous release:
+- network, shell, eval, obfuscation and high-entropy strings in install-time code;
+- network, obfuscation and high-entropy strings in `setup.py`;
+- obfuscated code anywhere.
+
+A compiler call or an `exec` of a version file in `setup.py` is normal, so it shows only when
+a version adds it. Tests, docs and examples are not read.
+
+Each archive and its previous release come from the public registry. Each must match its hash:
+the lockfile's for the version in use, the registry's for the one before. Archives are read in
+memory as bytes, never unpacked and never run. Profiles are cached by hash, so a version is
+read once, and `--offline` reads only the cache. A package with no SHA-512 (npm) or SHA-256
+(PyPI) hash in its lockfile is not read, and a note says how many.
+
+None of this is a verdict: a capability is what code can reach. On the latest releases of the
+top 1,000 npm and top 1,000 PyPI packages (2026-11-12), 6 and 13 in 1,000 had any warning,
+and 2 and 3 in 1,000 had one that stands on its own. On 13 open-source monorepos (11,038
+package versions), 11.5 in 1,000 had a warning and 3 in 1,000 one that stands on its own,
+all of them packages that fetch or build a binary when installed (esbuild, swc, sentry-cli).
+A first run downloads each archive once; the same fleet then took 23 seconds from the cache.
+
 ## Malware
 
 Known malware (OSV `MAL-` records) needs no flag: it is always critical, never hidden by

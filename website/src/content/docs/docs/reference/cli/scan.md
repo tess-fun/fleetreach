@@ -89,6 +89,9 @@ Options:
       --health
           warn on what registries say of packages: deprecated, yanked, abandoned, retracted, retired, relocated. Sends each public package's name and version to its registry; with `[settings.health] min_scorecard` or a GitHub token also to deps.dev, to find its repo; with GITHUB_TOKEN or GH_TOKEN repo names to GitHub, to find archived ones. Cached for a week. With --offline only the cache is read, and a package with no answer is a coverage gap
 
+      --capabilities
+          warn on what npm and PyPI package code can do (network, shell, filesystem, env, eval, obfuscation, high-entropy strings, native binaries, install scripts) and above all on what a version adds over the previous release. Downloads each pinned archive and the previous release's from the public registry, checks both against their hashes and reads them in memory without unpacking or running anything; profiles are cached by hash. With --offline only the cache is read
+
       --require-full-coverage
           exit 2 if any source was read with less than full coverage (a pom.xml without a resolved graph, a lockfile format fleetreach cannot read), as for an errored repo
 

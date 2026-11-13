@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`scan --capabilities` reads what npm and PyPI package code can do.** It looks for network,
+  shell, filesystem, env, eval, obfuscation, high-entropy strings, native binaries and install
+  scripts. It warns on what a version adds over the previous release, such as `adds network
+  access to install-time code (1.0.0 had none): install.js`. Install-time code, `setup.py`
+  and obfuscation also warn on their own. Archives are checked against their hashes and read
+  in memory: never unpacked, never run. Profiles are cached by hash. On the top 1,000 npm and
+  PyPI packages, 6 and 13 in 1,000 warn.
 - **`fix apply` updates Swift, Hex and Julia lockfiles** without running package code. It
   moves the `Package.resolved` pin to the tag's commit (`git ls-remote`). It rewrites the
   `mix.lock` entry with checksums and requirements from `repo.hex.pm`. It sets the

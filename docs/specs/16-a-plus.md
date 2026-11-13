@@ -1395,6 +1395,21 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: alerts per 1,000 benign packages per alert type, measured on the top 5,000 npm
   and PyPI packages and `~/fa-testbed` (as the typosquat signal's 1.6 per 1,000). Recall
   from synthetic fixtures modelled on public reports, not live samples.
+- **Status: implemented 2026-11-12, for 1.7.0** (`crates/cli/src/capabilities.rs`,
+  `scan --capabilities`, its own flag since it downloads; `--signals` stays offline). User
+  chose the top 1,000 of each instead of 5,000 (download size). Benign rates, latest
+  releases: npm top 1,000 (npm-high-impact) 6 per 1,000 warn, 2 standalone (esbuild, pnpm
+  installers); PyPI top 1,000 (top-pypi-packages, 26 over 50 MB skipped) 13 per 1,000,
+  3 standalone (coverage and coloredlogs `.pth`, ddtrace `setup.py` download). `~/fa-testbed/oss`
+  (13 monorepos, 11,038 pinned versions, 2,455 without a usable hash): 11.5 per 1,000 warn,
+  3.0 standalone (binary installers: esbuild, swc, @parcel/watcher, sentry-cli), no type
+  above 3.8 per 1,000 (`adds-env`); cold run 8.5 min, cached 23 s. The first PyPI pass gave
+  54 per 1,000, nearly all `setup.py` compiler calls and `exec(open(version))`, so `setup.py`
+  became its own build-time context where only network, obfuscation and entropy stand alone,
+  and tests, docs and examples are not read. Recall: six fixtures modelled on
+  flatmap-stream, ua-parser-js 0.7.29, node-ipc 10.1.1, ctx 0.2.2, a `.pth` startup hook and
+  a `setup.py` dropper, each caught with the expected signals. Found on the real run: a
+  char-boundary panic on non-ASCII text, and `.egg` files picked as a previous release.
 - **If the user later wants A+ here**, the researched paths are: a registry proxy that blocks
   at install time (Socket Firewall's model), a scheduled job that scans new versions of the
   fleet's dependencies, and an optional LLM review of pre-screened files (SocketAI's model).

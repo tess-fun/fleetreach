@@ -106,6 +106,11 @@ pub(crate) struct ScanArgs {
     health: bool,
     #[arg(
         long,
+        help = "warn on what npm and PyPI package code can do (network, shell, filesystem, env, eval, obfuscation, high-entropy strings, native binaries, install scripts) and above all on what a version adds over the previous release. Downloads each pinned archive and the previous release's from the public registry, checks both against their hashes and reads them in memory without unpacking or running anything; profiles are cached by hash. With --offline only the cache is read"
+    )]
+    capabilities: bool,
+    #[arg(
+        long,
         help = "exit 2 if any source was read with less than full coverage (a pom.xml without a resolved graph, a lockfile format fleetreach cannot read), as for an errored repo"
     )]
     require_full_coverage: bool,
@@ -1196,6 +1201,17 @@ fn add_fleet_signals(
         }
         scan.warnings.extend(outcome.findings);
         scan.coverage.extend(outcome.gaps);
+    }
+    if args.capabilities {
+        let outcome = crate::capabilities::scan(&config.repos, args.offline)
+            .map_err(|e| fail(&format!("--capabilities: {e}")))?;
+        for note in &outcome.notes {
+            eprintln!(
+                "note: --capabilities: {}",
+                fleetreach_report::sanitize_cell(note)
+            );
+        }
+        scan.warnings.extend(outcome.findings);
     }
     scan.outcomes.extend(
         materialized
