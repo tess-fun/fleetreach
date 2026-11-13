@@ -639,7 +639,13 @@ fn load_lookups(
     let overlay = osv.and_then(|o| o.advisories.as_deref());
     let mut lookups = BTreeMap::new();
     for (eco, source) in sources {
-        match fix_targets::lookup(eco, &source.path, overlay) {
+        let wanted = fix_targets::Wanted::of(
+            bumps
+                .iter()
+                .filter(|b| b.ecosystem == eco)
+                .map(|b| b.package.as_str()),
+        );
+        match fix_targets::lookup(eco, &source.path, overlay, &wanted) {
             Ok(Some(found)) => {
                 lookups.insert(eco, found);
             }

@@ -79,6 +79,21 @@ impl NuGetDb {
             .map_err(|e| NuGetError::db(e.path, e.source))
     }
 
+    /// [`NuGetDb::load_with_overlay`], keeping only the packages `keep` accepts (by index key).
+    ///
+    /// # Errors
+    ///
+    /// As [`NuGetDb::load_with_overlay`].
+    pub fn load_only(
+        root: &Path,
+        overlay: Option<&Path>,
+        keep: osv::Keep<'_>,
+    ) -> Result<NuGetDb, NuGetError> {
+        osv::load_only(root, overlay, &spec(), keep)
+            .map(NuGetDb)
+            .map_err(|e| NuGetError::db(e.path, e.source))
+    }
+
     /// Every `(package key, advisory)` pair, in key order (for `db quality`).
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Advisory)> {
         self.0.iter()

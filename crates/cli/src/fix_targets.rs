@@ -205,6 +205,27 @@ fn check_all<V: Ord + Clone + Display>(
     checked.filter(|moved| *moved).count()
 }
 
+/// The index keys of the packages a caller will ask about: each name as given, lower-cased and
+/// PEP 503-normalized, which covers every feeder's key. Loading only these keeps a whole
+/// export (npm's is 220 MB) out of memory.
+pub(crate) struct Wanted(BTreeSet<String>);
+
+impl Wanted {
+    pub(crate) fn of<'a>(names: impl Iterator<Item = &'a str>) -> Self {
+        let mut keys = BTreeSet::new();
+        for name in names {
+            keys.insert(name.to_string());
+            keys.insert(name.to_ascii_lowercase());
+            keys.insert(fleetreach_pypi::normalize_name(name));
+        }
+        Wanted(keys)
+    }
+
+    pub(crate) fn has(&self, key: &str) -> bool {
+        self.0.contains(key)
+    }
+}
+
 /// Reads one ecosystem's export and checks its edits; the count of edits it changed.
 fn check_ecosystem(
     ecosystem: Ecosystem,
@@ -213,10 +234,12 @@ fn check_ecosystem(
     edits: &mut [&mut Edit],
     allow_breaking: bool,
 ) -> Result<usize, String> {
+    let wanted = Wanted::of(edits.iter().map(|e| e.package.as_str()));
+    let only = &|key: &str| wanted.has(key);
     let keep = allow_breaking;
     Ok(match ecosystem {
         Ecosystem::Npm => {
-            let db = NpmDb::load_with_overlay(path, overlay).map_err(|e| e.to_string())?;
+            let db = NpmDb::load_only(path, overlay, only).map_err(|e| e.to_string())?;
             let reader = Reader {
                 advisories: &|name| db.advisories_for(name),
                 parse: fleetreach_npm::parse_npm_version,
@@ -225,7 +248,7 @@ fn check_ecosystem(
             check_all(&reader, edits, keep)
         }
         Ecosystem::Cargo => {
-            let db = CratesDb::load_with_overlay(path, overlay).map_err(|e| e.to_string())?;
+            let db = CratesDb::load_only(path, overlay, only).map_err(|e| e.to_string())?;
             let reader = Reader {
                 advisories: &|name| db.advisories_for(name),
                 parse: |text| Version::parse(text).ok(),
@@ -234,7 +257,7 @@ fn check_ecosystem(
             check_all(&reader, edits, keep)
         }
         Ecosystem::Pypi => {
-            let db = PyPiDb::load_with_overlay(path, overlay).map_err(|e| e.to_string())?;
+            let db = PyPiDb::load_only(path, overlay, only).map_err(|e| e.to_string())?;
             let key = |name: &str| fleetreach_pypi::normalize_name(name);
             let reader = Reader {
                 advisories: &|name| db.advisories_for(&key(name)),
@@ -244,7 +267,7 @@ fn check_ecosystem(
             check_all(&reader, edits, keep)
         }
         Ecosystem::RubyGems => {
-            let db = RubyGemsDb::load_with_overlay(path, overlay).map_err(|e| e.to_string())?;
+            let db = RubyGemsDb::load_only(path, overlay, only).map_err(|e| e.to_string())?;
             let reader = Reader {
                 advisories: &|name| db.advisories_for(name),
                 parse: fleetreach_rubygems::parse_rubygems_version,
@@ -253,7 +276,7 @@ fn check_ecosystem(
             check_all(&reader, edits, keep)
         }
         Ecosystem::Packagist => {
-            let db = PackagistDb::load_with_overlay(path, overlay).map_err(|e| e.to_string())?;
+            let db = PackagistDb::load_only(path, overlay, only).map_err(|e| e.to_string())?;
             let reader = Reader {
                 advisories: &|name| db.advisories_for(&name.to_ascii_lowercase()),
                 parse: fleetreach_packagist::parse_composer_version,
@@ -262,7 +285,7 @@ fn check_ecosystem(
             check_all(&reader, edits, keep)
         }
         Ecosystem::NuGet => {
-            let db = NuGetDb::load_with_overlay(path, overlay).map_err(|e| e.to_string())?;
+            let db = NuGetDb::load_only(path, overlay, only).map_err(|e| e.to_string())?;
             let reader = Reader {
                 advisories: &|name| db.advisories_for(&name.to_ascii_lowercase()),
                 parse: fleetreach_nuget::parse_nuget_version,
@@ -271,7 +294,7 @@ fn check_ecosystem(
             check_all(&reader, edits, keep)
         }
         Ecosystem::Maven => {
-            let db = MavenDb::load_with_overlay(path, overlay).map_err(|e| e.to_string())?;
+            let db = MavenDb::load_only(path, overlay, only).map_err(|e| e.to_string())?;
             let reader = Reader {
                 advisories: &|name| db.advisories_for(name),
                 parse: fleetreach_maven::parse_maven_version,
@@ -361,11 +384,13 @@ pub(crate) fn lookup(
     ecosystem: Ecosystem,
     path: &Path,
     overlay: Option<&Path>,
+    wanted: &Wanted,
 ) -> Result<Option<Lookup>, String> {
+    let only = &|key: &str| wanted.has(key);
     let err = |e: &dyn Display| e.to_string();
     let found: Lookup = match ecosystem {
         Ecosystem::Npm => {
-            let db = NpmDb::load_with_overlay(path, overlay).map_err(|e| err(&e))?;
+            let db = NpmDb::load_only(path, overlay, only).map_err(|e| err(&e))?;
             Box::new(move |name, v| {
                 hits_at(
                     db.advisories_for(name),
@@ -374,11 +399,11 @@ pub(crate) fn lookup(
             })
         }
         Ecosystem::Cargo => {
-            let db = CratesDb::load_with_overlay(path, overlay).map_err(|e| err(&e))?;
+            let db = CratesDb::load_only(path, overlay, only).map_err(|e| err(&e))?;
             Box::new(move |name, v| hits_at(db.advisories_for(name), Version::parse(v).ok()))
         }
         Ecosystem::Pypi => {
-            let db = PyPiDb::load_with_overlay(path, overlay).map_err(|e| err(&e))?;
+            let db = PyPiDb::load_only(path, overlay, only).map_err(|e| err(&e))?;
             Box::new(move |name, v| {
                 let key = fleetreach_pypi::normalize_name(name);
                 hits_at(
@@ -388,28 +413,28 @@ pub(crate) fn lookup(
             })
         }
         Ecosystem::RubyGems => {
-            let db = RubyGemsDb::load_with_overlay(path, overlay).map_err(|e| err(&e))?;
+            let db = RubyGemsDb::load_only(path, overlay, only).map_err(|e| err(&e))?;
             Box::new(move |name, v| {
                 let version = fleetreach_rubygems::parse_rubygems_version(v);
                 hits_at(db.advisories_for(name), version)
             })
         }
         Ecosystem::Packagist => {
-            let db = PackagistDb::load_with_overlay(path, overlay).map_err(|e| err(&e))?;
+            let db = PackagistDb::load_only(path, overlay, only).map_err(|e| err(&e))?;
             Box::new(move |name, v| {
                 let version = fleetreach_packagist::parse_composer_version(v);
                 hits_at(db.advisories_for(&name.to_ascii_lowercase()), version)
             })
         }
         Ecosystem::NuGet => {
-            let db = NuGetDb::load_with_overlay(path, overlay).map_err(|e| err(&e))?;
+            let db = NuGetDb::load_only(path, overlay, only).map_err(|e| err(&e))?;
             Box::new(move |name, v| {
                 let version = fleetreach_nuget::parse_nuget_version(v);
                 hits_at(db.advisories_for(&name.to_ascii_lowercase()), version)
             })
         }
         Ecosystem::Maven => {
-            let db = MavenDb::load_with_overlay(path, overlay).map_err(|e| err(&e))?;
+            let db = MavenDb::load_only(path, overlay, only).map_err(|e| err(&e))?;
             Box::new(move |name, v| {
                 hits_at(
                     db.advisories_for(name),

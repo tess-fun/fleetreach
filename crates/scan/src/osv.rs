@@ -70,6 +70,24 @@ impl CratesDb {
         })
     }
 
+    /// [`CratesDb::load_with_overlay`], keeping only the crates `keep` accepts.
+    ///
+    /// # Errors
+    ///
+    /// As [`CratesDb::load_with_overlay`].
+    pub fn load_only(
+        root: &Path,
+        overlay: Option<&Path>,
+        keep: osv::Keep<'_>,
+    ) -> Result<CratesDb, ScanError> {
+        let db = osv::load_only(root, overlay, &spec(), keep)
+            .map_err(|e| ScanError::DatabaseLoad(format!("{}: {}", e.path.display(), e.source)))?;
+        Ok(CratesDb {
+            db,
+            withdrawn: BTreeSet::new(),
+        })
+    }
+
     /// Honor what `rustsec` withdrew.
     #[must_use]
     pub fn beside(mut self, rustsec: &AdvisoryDb) -> CratesDb {

@@ -207,6 +207,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `not_affected` statements by building the repos. A JVM statement comes from scanning images,
   so `scan --reachability=jvm` derives it again; counted as re-derived, it would pass without
   being checked.
+- **`whatif` and `fix plan` read only the advisories of the packages they ask about.** Each
+  OSV record is first read just far enough to see its package names, and only records naming a
+  bumped package are parsed in full. Peak memory on a 30-repo fleet went from about 1 GB to
+  about 600 MB for `whatif` and from 836 MB to 607 MB for `fix plan`, with byte-identical output.
 
 ### Fixed
 

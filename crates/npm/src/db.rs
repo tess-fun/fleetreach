@@ -83,6 +83,21 @@ impl NpmDb {
             .map_err(|e| NpmError::db(e.path, e.source))
     }
 
+    /// [`NpmDb::load_with_overlay`], keeping only the packages `keep` accepts (by index key).
+    ///
+    /// # Errors
+    ///
+    /// As [`NpmDb::load_with_overlay`].
+    pub fn load_only(
+        root: &Path,
+        overlay: Option<&Path>,
+        keep: osv::Keep<'_>,
+    ) -> Result<NpmDb, NpmError> {
+        osv::load_only(root, overlay, &spec(), keep)
+            .map(NpmDb)
+            .map_err(|e| NpmError::db(e.path, e.source))
+    }
+
     /// Every `(package key, advisory)` pair, in key order (for `db quality`).
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Advisory)> {
         self.0.iter()
@@ -319,5 +334,52 @@ mod tests {
         );
         assert_eq!(npm_db_path("https://osv.dev"), None);
         assert_eq!(npm_db_path("/bare/path"), None);
+    }
+
+    #[test]
+    fn load_only_is_a_full_load_restricted_to_the_kept_names() {
+        let dir = std::env::temp_dir().join(format!("npm-load-only-{}", std::process::id()));
+        let (export, overlay) = (dir.join("export"), dir.join("overlay"));
+        std::fs::create_dir_all(&export).unwrap();
+        std::fs::create_dir_all(&overlay).unwrap();
+        let record = |id: &str, names: &[&str]| {
+            let affected: Vec<_> = names
+                .iter()
+                .map(|n| {
+                    serde_json::json!({
+                        "package": {"ecosystem": "npm", "name": n},
+                        "ranges": [{"type": "SEMVER", "events": [
+                            {"introduced": "0"}, {"fixed": format!("1.{}.0", id.len())}
+                        ]}]
+                    })
+                })
+                .collect();
+            serde_json::json!({"id": id, "modified": "2026-01-01T00:00:00Z", "affected": affected})
+                .to_string()
+        };
+        let write = |at: &Path, id: &str, names: &[&str]| {
+            std::fs::write(at.join(format!("{id}.json")), record(id, names)).unwrap();
+        };
+        write(&export, "GHSA-a", &["lodash", "left-pad"]);
+        write(&export, "GHSA-bb", &["left-pad"]);
+        write(&export, "GHSA-ccc", &["lodash"]);
+        // The overlay replaces one kept record and adds one for a package left out.
+        write(&overlay, "GHSA-ccc", &["lodash", "express"]);
+        write(&overlay, "ORG-1", &["express"]);
+
+        let full = NpmDb::load_with_overlay(&export, Some(&overlay)).unwrap();
+        let only = NpmDb::load_only(&export, Some(&overlay), &|n| n == "lodash").unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let kept: Vec<String> = full
+            .iter()
+            .filter(|(name, _)| *name == "lodash")
+            .map(|e| format!("{e:?}"))
+            .collect();
+        let got: Vec<String> = only.iter().map(|e| format!("{e:?}")).collect();
+        assert_eq!(kept.len(), 2);
+        assert_eq!(got, kept);
+        assert!(full.advisories_for("express").len() == 2);
+        assert!(only.advisories_for("left-pad").is_empty());
     }
 }

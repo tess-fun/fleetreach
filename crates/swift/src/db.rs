@@ -79,6 +79,21 @@ impl SwiftDb {
             .map_err(|e| SwiftError::db(e.path, e.source))
     }
 
+    /// [`SwiftDb::load_with_overlay`], keeping only the packages `keep` accepts (by index key).
+    ///
+    /// # Errors
+    ///
+    /// As [`SwiftDb::load_with_overlay`].
+    pub fn load_only(
+        root: &Path,
+        overlay: Option<&Path>,
+        keep: osv::Keep<'_>,
+    ) -> Result<SwiftDb, SwiftError> {
+        osv::load_only(root, overlay, &spec(), keep)
+            .map(SwiftDb)
+            .map_err(|e| SwiftError::db(e.path, e.source))
+    }
+
     /// Every `(package key, advisory)` pair, in key order (for `db quality`).
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Advisory)> {
         self.0.iter()

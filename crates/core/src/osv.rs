@@ -470,6 +470,41 @@ where
     Ok(db)
 }
 
+/// Which packages to keep, by their index key (the name after [`Spec::normalize_name`]).
+pub type Keep<'a> = &'a (dyn Fn(&str) -> bool + Sync);
+
+/// [`load_with_overlay`], keeping only the advisories of packages `keep` accepts. A record
+/// none of whose packages is kept is read only as far as its package names, so a caller
+/// asking about a few packages (`whatif`, `fix plan`) does not hold a whole export.
+///
+/// # Errors
+///
+/// As [`load_with_overlay`].
+pub fn load_only<V>(
+    root: &Path,
+    overlay: Option<&Path>,
+    spec: &Spec<V>,
+    keep: Keep<'_>,
+) -> Result<OsvDb<V>, LoadError>
+where
+    V: Ord + Clone + Send,
+{
+    let records = match overlay {
+        Some(dir) => read_overlay(dir)?,
+        None => Vec::new(),
+    };
+    let replaced: BTreeSet<String> = records.iter().map(|r| r.id.clone()).collect();
+    let mut db = load_filtered(root, spec, &replaced, Some(keep))?;
+    for record in records {
+        for (name, advisory) in advisories_from(record, spec) {
+            if keep(&name) {
+                db.by_package.entry(name).or_default().push(advisory);
+            }
+        }
+    }
+    Ok(db)
+}
+
 /// Every `*.json` OSV record under `dir` (recursively, in path order, hidden entries
 /// skipped), as layered by [`load_with_overlay`].
 ///
@@ -514,26 +549,84 @@ fn load_skipping<V>(
 where
     V: Ord + Clone + Send,
 {
-    if root.is_dir() {
-        load_dir(root, spec, skip)
-    } else {
-        load_zip(root, spec, skip)
-    }
+    load_filtered(root, spec, skip, None)
 }
 
-/// The record's advisories, or none when an overlay replaces its id.
-fn unless_skipped<V: Ord + Clone>(
-    osv: OsvRecord,
+fn load_filtered<V>(
+    root: &Path,
     spec: &Spec<V>,
     skip: &BTreeSet<String>,
-) -> Vec<(String, Advisory<V>)> {
-    if skip.contains(&osv.id) {
-        return Vec::new();
+    keep: Option<Keep<'_>>,
+) -> Result<OsvDb<V>, LoadError>
+where
+    V: Ord + Clone + Send,
+{
+    if root.is_dir() {
+        load_dir(root, spec, skip, keep)
+    } else {
+        load_zip(root, spec, skip, keep)
     }
-    advisories_from(osv, spec)
 }
 
-fn load_dir<V>(root: &Path, spec: &Spec<V>, skip: &BTreeSet<String>) -> Result<OsvDb<V>, LoadError>
+/// Just enough of a record to know its packages.
+#[derive(Deserialize)]
+struct Names<'a> {
+    #[serde(default, borrow)]
+    affected: Vec<NameEntry<'a>>,
+}
+
+#[derive(Deserialize)]
+struct NameEntry<'a> {
+    #[serde(default, borrow)]
+    package: NamePackage<'a>,
+}
+
+#[derive(Deserialize, Default)]
+struct NamePackage<'a> {
+    #[serde(default, borrow)]
+    ecosystem: Option<std::borrow::Cow<'a, str>>,
+    #[serde(default, borrow)]
+    name: Option<std::borrow::Cow<'a, str>>,
+}
+
+/// One record's text to its advisories: none when an overlay replaces its id, and only kept
+/// packages' when there is a filter. A record no kept package is in is not parsed in full.
+fn record_advisories<V: Ord + Clone>(
+    body: &str,
+    spec: &Spec<V>,
+    skip: &BTreeSet<String>,
+    keep: Option<Keep<'_>>,
+) -> Result<Vec<(String, Advisory<V>)>, serde_json::Error> {
+    if let Some(keep) = keep {
+        let names: Names<'_> = serde_json::from_str(body)?;
+        let wanted = names.affected.iter().any(|a| {
+            a.package.ecosystem.as_deref() == Some(spec.ecosystem)
+                && a.package
+                    .name
+                    .as_deref()
+                    .is_some_and(|n| keep(&(spec.normalize_name)(n)))
+        });
+        if !wanted {
+            return Ok(Vec::new());
+        }
+    }
+    let osv: OsvRecord = serde_json::from_str(body)?;
+    if skip.contains(&osv.id) {
+        return Ok(Vec::new());
+    }
+    let mut out = advisories_from(osv, spec);
+    if let Some(keep) = keep {
+        out.retain(|(name, _)| keep(name));
+    }
+    Ok(out)
+}
+
+fn load_dir<V>(
+    root: &Path,
+    spec: &Spec<V>,
+    skip: &BTreeSet<String>,
+    keep: Option<Keep<'_>>,
+) -> Result<OsvDb<V>, LoadError>
 where
     V: Ord + Clone + Send,
 {
@@ -548,9 +641,7 @@ where
         .par_iter()
         .map(|path| {
             let body = std::fs::read_to_string(path).map_err(|e| LoadError::new(path, e))?;
-            let osv: OsvRecord =
-                serde_json::from_str(&body).map_err(|e| LoadError::new(path, e))?;
-            Ok(unless_skipped(osv, spec, skip))
+            record_advisories(&body, spec, skip, keep).map_err(|e| LoadError::new(path, e))
         })
         .collect::<Result<_, LoadError>>()?;
 
@@ -559,7 +650,12 @@ where
     })
 }
 
-fn load_zip<V>(path: &Path, spec: &Spec<V>, skip: &BTreeSet<String>) -> Result<OsvDb<V>, LoadError>
+fn load_zip<V>(
+    path: &Path,
+    spec: &Spec<V>,
+    skip: &BTreeSet<String>,
+    keep: Option<Keep<'_>>,
+) -> Result<OsvDb<V>, LoadError>
 where
     V: Ord + Clone + Send,
 {
@@ -582,9 +678,7 @@ where
                 entry
                     .read_to_string(&mut body)
                     .map_err(|e| LoadError::new(path, e))?;
-                let osv: OsvRecord =
-                    serde_json::from_str(&body).map_err(|e| LoadError::new(path, e))?;
-                Ok(unless_skipped(osv, spec, skip))
+                record_advisories(&body, spec, skip, keep).map_err(|e| LoadError::new(path, e))
             },
         )
         .collect::<Result<_, LoadError>>()?;
