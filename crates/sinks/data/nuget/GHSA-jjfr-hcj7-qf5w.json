@@ -8,488 +8,16 @@
   "packages": [
     "SixLabors.ImageSharp"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
-      "class": "SixLabors.ImageSharp.ColorProfiles.Icc.Calculators.ClutCalculator",
-      "method": ".ctor"
-    },
-    {
-      "class": "SixLabors.ImageSharp.ColorProfiles.Icc.Calculators.LutEntryCalculator",
-      "method": "Init"
-    },
-    {
-      "class": "SixLabors.ImageSharp.ColorProfiles.Icc.Calculators.TrcCalculator",
-      "method": ".ctor"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
-      "method": "ReadFileHeader"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
-      "method": "ReadIccProfile"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
-      "method": "ReadImageHeaders"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
-      "method": "ReadInfoHeader"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
-      "method": "ReadRgbPaletteWithAlphaMask"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
-      "method": "UncompressRle24"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
-      "method": "UncompressRle4"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
-      "method": "UncompressRle8"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.Compression.Decompressors.B44ExrCompression",
-      "method": "Decompress"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.Compression.Decompressors.NoneExrCompression",
-      "method": "Decompress"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.Compression.Decompressors.Pxr24Compression",
-      "method": "Decompress"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.Compression.Decompressors.RunLengthExrCompression",
-      "method": "Decompress"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.Compression.Decompressors.ZipExrCompression",
-      "method": "Decompress"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.Compression.ExrBaseDecompressor",
-      "method": "Decompress"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.Compression.ExrBaseDecompressor",
-      "method": "UndoZipCompression"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
-      "method": "DecodeFloatingPointPixelData"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
-      "method": "DecodeUnsignedIntPixelData"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
-      "method": "ParseHeaderAttributes"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
-      "method": "ReadChannelInfo"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
-      "method": "ReadExrHeader"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
-      "method": "ReadSignedInteger"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
-      "method": "ReadSingle"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
-      "method": "ReadUnsignedInteger"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
-      "method": "ReadUnsignedLong"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
-      "method": "Identify"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
-      "method": "ReadApplicationExtension"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
-      "method": "ReadGraphicalControlExtension"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
-      "method": "ReadImageDescriptor"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
-      "method": "ReadLogicalScreenDescriptor"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
-      "method": "ReadLogicalScreenDescriptorAndGlobalColorTable"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
-      "method": "ReadNetscapeApplicationExtensionData"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
-      "method": "SkipBlock"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Gif.GifXmpApplicationExtension",
-      "method": "Read"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Gif.GifXmpApplicationExtension",
-      "method": "ReadXmpData"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
-      "method": "LoadTables"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
-      "method": "ParseStream"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
-      "method": "ProcessApp13Marker"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
-      "method": "ProcessApp14Marker"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
-      "method": "ProcessApp1Marker"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
-      "method": "ProcessApp2Marker"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
-      "method": "ProcessApplicationHeaderMarker"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
-      "method": "ProcessDefineHuffmanTablesMarker"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
-      "method": "ProcessDefineQuantizationTablesMarker"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
-      "method": "ProcessStartOfFrameMarker"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
-      "method": "ProcessStartOfScanMarker"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
-      "method": "ReadUint16"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "CalculateScanlineLength"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "Decode"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "DecodeInterlacedPixelDataCore"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "DecodePixelDataCore"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "Identify"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "InitializeImage"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "ReadChunkCrc"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "ReadChunkData"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "ReadChunkType"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "ReadHeaderChunk"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "ReadNextDataChunk"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "ReadNextFrameDataChunk"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "SkipChunkDataAndCrc"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "TryDecompressZlibData"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
-      "method": "TryReadChunkLength"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Tga.TgaDecoderCore",
-      "method": "Decode"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Tga.TgaDecoderCore",
-      "method": "ReadBgr24Pixel"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Tga.TgaDecoderCore",
-      "method": "ReadBgra32Pixel"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Tga.TgaDecoderCore",
-      "method": "ReadFileHeader"
+      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Compressors.T6BitCompressor",
+      "method": "CompressStrip"
     },
     {
       "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Compressors.TiffCcittCompressor",
-      "method": "Initialize"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Compressors.TiffCcittCompressor",
-      "method": "WriteCode"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.DeflateTiffCompression",
-      "method": "Decompress"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.BitReader.BitReaderBase",
-      "method": "ReadImageDataFromStream"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.Chunks.WebpFrameData",
-      "method": "Parse"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpAnimationDecoder",
-      "method": "ReadAlphaData"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpAnimationDecoder",
-      "method": "ReadFrameInfo"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpAnimationDecoder",
-      "method": "ReadOptionalChunk"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpChunkParsingUtils",
-      "method": "ReadChunkSize"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpChunkParsingUtils",
-      "method": "ReadExifProfile"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpChunkParsingUtils",
-      "method": "ReadIccProfile"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpChunkParsingUtils",
-      "method": "ReadUInt24LittleEndian"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpChunkParsingUtils",
-      "method": "ReadVp8Header"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpChunkParsingUtils",
-      "method": "ReadVp8XHeader"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpChunkParsingUtils",
-      "method": "ReadXmpProfile"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpDecoderCore",
-      "method": "Decode"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpDecoderCore",
-      "method": "ParseOptionalChunks"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpDecoderCore",
-      "method": "ParseOptionalExtendedChunks"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpDecoderCore",
-      "method": "ReadAlphaData"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpDecoderCore",
-      "method": "ReadAnimationParameters"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpDecoderCore",
-      "method": "ReadImageHeader"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Webp.WebpDecoderCore",
-      "method": "ReadVp8Info"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Metadata.Profiles.Exif.ExifProfile",
-      "method": "ToByteArray"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Metadata.Profiles.Icc.IccDataReader",
-      "method": "ReadClut16"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Metadata.Profiles.Icc.IccDataReader",
-      "method": "ReadClut8"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Metadata.Profiles.Icc.IccDataReader",
-      "method": "ReadClutF32"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Metadata.Profiles.Icc.IccDataReader",
-      "method": "ReadMultiLocalizedUnicodeTagDataEntry"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Metadata.Profiles.Icc.IccDataReader",
-      "method": "ReadProfileDescription"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Metadata.Profiles.Icc.IccReader",
-      "method": "ReadTagTable"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Numerics",
-      "method": "Clamp"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Numerics",
-      "method": "ClampRgbToAlpha"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfTypeHelper",
-      "method": "FromScaled"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfTypeHelper",
-      "method": "ToScaled"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4+PixelOperations",
-      "method": "FromAssociatedScaledVector4Destructive"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4+PixelOperations",
-      "method": "FromAssociatedVector4Destructive"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4+PixelOperations",
-      "method": "FromUnassociatedScaledVector4Destructive"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4+PixelOperations",
-      "method": "ToAssociatedVector4"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4+PixelOperations",
-      "method": "ToUnassociatedScaledVector4"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P",
-      "method": "QuantizeScaledAlpha"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
-      "method": "ClampUnit"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
-      "method": "FromAssociatedVector4Destructive"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
-      "method": "FromUnassociatedVector4Destructive"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
-      "method": "PackAssociatedScaled"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
-      "method": "QuantizeScaledAlpha"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
-      "method": "Reassociate"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
-      "method": "ToAssociatedScaledVector4"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
-      "method": "ToUnassociatedVector4"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.RgbaHalfP+PixelOperations",
-      "method": "AssociateForStorage"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.RgbaHalfP+PixelOperations",
-      "method": "Pack"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.RgbaHalfP+PixelOperations",
-      "method": "PackFromAssociated"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.RgbaHalfP+PixelOperations",
-      "method": "ReassociateForStorage"
-    },
-    {
-      "class": "SixLabors.ImageSharp.PixelFormats.Utils.Vector4Converters+MultiplyThenAddOperator",
-      "method": "Invoke"
+      "method": "CompressStrip"
     }
   ],
   "evidence": {
@@ -559,8 +87,612 @@
         "class": "SixLabors.ImageSharp.Metadata.Profiles.Icc.IccDataReader",
         "method": "GetClutLength",
         "reason": "added by the fix"
+      },
+      {
+        "class": "SixLabors.ImageSharp.ColorProfiles.Icc.Calculators.ClutCalculator",
+        "method": ".ctor",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.ColorProfiles.Icc.Calculators.LutEntryCalculator",
+        "method": "Init",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.ColorProfiles.Icc.Calculators.TrcCalculator",
+        "method": ".ctor",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
+        "method": "ReadFileHeader",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
+        "method": "ReadIccProfile",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
+        "method": "ReadImageHeaders",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
+        "method": "ReadInfoHeader",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
+        "method": "ReadRgbPaletteWithAlphaMask",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
+        "method": "UncompressRle24",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
+        "method": "UncompressRle4",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Bmp.BmpDecoderCore",
+        "method": "UncompressRle8",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.Compression.Decompressors.B44ExrCompression",
+        "method": "Decompress",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.Compression.Decompressors.NoneExrCompression",
+        "method": "Decompress",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.Compression.Decompressors.Pxr24Compression",
+        "method": "Decompress",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.Compression.Decompressors.RunLengthExrCompression",
+        "method": "Decompress",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.Compression.Decompressors.ZipExrCompression",
+        "method": "Decompress",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.Compression.ExrBaseDecompressor",
+        "method": "Decompress",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.Compression.ExrBaseDecompressor",
+        "method": "UndoZipCompression",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
+        "method": "DecodeFloatingPointPixelData",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
+        "method": "DecodeUnsignedIntPixelData",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
+        "method": "ParseHeaderAttributes",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
+        "method": "ReadChannelInfo",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
+        "method": "ReadExrHeader",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
+        "method": "ReadSignedInteger",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
+        "method": "ReadSingle",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
+        "method": "ReadUnsignedInteger",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Exr.ExrDecoderCore",
+        "method": "ReadUnsignedLong",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
+        "method": "Identify",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
+        "method": "ReadApplicationExtension",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
+        "method": "ReadGraphicalControlExtension",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
+        "method": "ReadImageDescriptor",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
+        "method": "ReadLogicalScreenDescriptor",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
+        "method": "ReadLogicalScreenDescriptorAndGlobalColorTable",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
+        "method": "ReadNetscapeApplicationExtensionData",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Gif.GifDecoderCore",
+        "method": "SkipBlock",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Gif.GifXmpApplicationExtension",
+        "method": "Read",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Gif.GifXmpApplicationExtension",
+        "method": "ReadXmpData",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
+        "method": "LoadTables",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
+        "method": "ParseStream",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
+        "method": "ProcessApp13Marker",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
+        "method": "ProcessApp14Marker",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
+        "method": "ProcessApp1Marker",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
+        "method": "ProcessApp2Marker",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
+        "method": "ProcessApplicationHeaderMarker",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
+        "method": "ProcessDefineHuffmanTablesMarker",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
+        "method": "ProcessDefineQuantizationTablesMarker",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
+        "method": "ProcessStartOfFrameMarker",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
+        "method": "ProcessStartOfScanMarker",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Jpeg.JpegDecoderCore",
+        "method": "ReadUint16",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "CalculateScanlineLength",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "Decode",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "DecodeInterlacedPixelDataCore",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "DecodePixelDataCore",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "Identify",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "InitializeImage",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "ReadChunkCrc",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "ReadChunkData",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "ReadChunkType",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "ReadHeaderChunk",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "ReadNextDataChunk",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "ReadNextFrameDataChunk",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "SkipChunkDataAndCrc",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "TryDecompressZlibData",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Png.PngDecoderCore",
+        "method": "TryReadChunkLength",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Tga.TgaDecoderCore",
+        "method": "Decode",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Tga.TgaDecoderCore",
+        "method": "ReadBgr24Pixel",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Tga.TgaDecoderCore",
+        "method": "ReadBgra32Pixel",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Tga.TgaDecoderCore",
+        "method": "ReadFileHeader",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Compressors.TiffCcittCompressor",
+        "method": "Initialize",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Compressors.TiffCcittCompressor",
+        "method": "WriteCode",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.DeflateTiffCompression",
+        "method": "Decompress",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.BitReader.BitReaderBase",
+        "method": "ReadImageDataFromStream",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.Chunks.WebpFrameData",
+        "method": "Parse",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpAnimationDecoder",
+        "method": "ReadAlphaData",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpAnimationDecoder",
+        "method": "ReadFrameInfo",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpAnimationDecoder",
+        "method": "ReadOptionalChunk",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpChunkParsingUtils",
+        "method": "ReadChunkSize",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpChunkParsingUtils",
+        "method": "ReadExifProfile",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpChunkParsingUtils",
+        "method": "ReadIccProfile",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpChunkParsingUtils",
+        "method": "ReadUInt24LittleEndian",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpChunkParsingUtils",
+        "method": "ReadVp8Header",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpChunkParsingUtils",
+        "method": "ReadVp8XHeader",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpChunkParsingUtils",
+        "method": "ReadXmpProfile",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpDecoderCore",
+        "method": "Decode",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpDecoderCore",
+        "method": "ParseOptionalChunks",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpDecoderCore",
+        "method": "ParseOptionalExtendedChunks",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpDecoderCore",
+        "method": "ReadAlphaData",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpDecoderCore",
+        "method": "ReadAnimationParameters",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpDecoderCore",
+        "method": "ReadImageHeader",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Webp.WebpDecoderCore",
+        "method": "ReadVp8Info",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Metadata.Profiles.Exif.ExifProfile",
+        "method": "ToByteArray",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Metadata.Profiles.Icc.IccDataReader",
+        "method": "ReadClut16",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Metadata.Profiles.Icc.IccDataReader",
+        "method": "ReadClut8",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Metadata.Profiles.Icc.IccDataReader",
+        "method": "ReadClutF32",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Metadata.Profiles.Icc.IccDataReader",
+        "method": "ReadMultiLocalizedUnicodeTagDataEntry",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Metadata.Profiles.Icc.IccDataReader",
+        "method": "ReadProfileDescription",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Metadata.Profiles.Icc.IccReader",
+        "method": "ReadTagTable",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Numerics",
+        "method": "Clamp",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Numerics",
+        "method": "ClampRgbToAlpha",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfTypeHelper",
+        "method": "FromScaled",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfTypeHelper",
+        "method": "ToScaled",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4+PixelOperations",
+        "method": "FromAssociatedScaledVector4Destructive",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4+PixelOperations",
+        "method": "FromAssociatedVector4Destructive",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4+PixelOperations",
+        "method": "FromUnassociatedScaledVector4Destructive",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4+PixelOperations",
+        "method": "ToAssociatedVector4",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4+PixelOperations",
+        "method": "ToUnassociatedScaledVector4",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P",
+        "method": "QuantizeScaledAlpha",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
+        "method": "ClampUnit",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
+        "method": "FromAssociatedVector4Destructive",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
+        "method": "FromUnassociatedVector4Destructive",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
+        "method": "PackAssociatedScaled",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
+        "method": "QuantizeScaledAlpha",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
+        "method": "Reassociate",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
+        "method": "ToAssociatedScaledVector4",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.HalfVector4P+PixelOperations",
+        "method": "ToUnassociatedVector4",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.RgbaHalfP+PixelOperations",
+        "method": "AssociateForStorage",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.RgbaHalfP+PixelOperations",
+        "method": "Pack",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.RgbaHalfP+PixelOperations",
+        "method": "PackFromAssociated",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.RgbaHalfP+PixelOperations",
+        "method": "ReassociateForStorage",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.PixelFormats.Utils.Vector4Converters+MultiplyThenAddOperator",
+        "method": "Invoke",
+        "reason": "changed for another advisory or reason in the same release"
       }
     ]
   },
-  "note": "Proposed from the IL diff of SixLabors.ImageSharp 4.1.1 -> 4.1.2 (net8.0): methods of the files the fix commits changed."
+  "note": "Commit a9498c6 sizes the CCITT encoders' output buffers; T6BitCompressor.CompressStrip is the T6 entry and TiffCcittCompressor.CompressStrip the shared one. Reached wherever the app writes TIFF with CCITT T6 compression.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

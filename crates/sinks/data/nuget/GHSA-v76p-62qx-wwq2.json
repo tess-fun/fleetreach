@@ -8,7 +8,7 @@
   "packages": [
     "SixLabors.ImageSharp"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -16,28 +16,16 @@
       "method": "Decompress"
     },
     {
-      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.T4BitReader",
-      "method": "ReadEolBeforeFirstData"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.T4BitReader",
-      "method": "ReadNextRun"
-    },
-    {
       "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.T4TiffCompression",
       "method": "Decompress"
     },
     {
-      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.T4TiffCompression",
-      "method": "WritePixelRun"
+      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.T6TiffCompression",
+      "method": "Decompress"
     },
     {
       "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.T6TiffCompression",
       "method": "Decode2DScanline"
-    },
-    {
-      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.TiffDecompressorsFactory",
-      "method": "Create"
     }
   ],
   "evidence": {
@@ -46,7 +34,33 @@
       "https://github.com/SixLabors/ImageSharp/pull/3208",
       "https://github.com/SixLabors/ImageSharp/commit/9ee7d1dd5b62d8c9f16cc755e76828386bc2191f",
       "https://github.com/SixLabors/ImageSharp/commit/baa37cd19077b2a2a0c5667535111cf31d48c019"
+    ],
+    "excluded": [
+      {
+        "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.T4BitReader",
+        "method": "ReadEolBeforeFirstData",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.T4BitReader",
+        "method": "ReadNextRun",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.T4TiffCompression",
+        "method": "WritePixelRun",
+        "reason": "changed for another advisory or reason in the same release"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.TiffDecompressorsFactory",
+        "method": "Create",
+        "reason": "changed for another advisory or reason in the same release"
+      }
     ]
   },
-  "note": "Proposed from the IL diff of SixLabors.ImageSharp 4.1.0 -> 4.1.1 (net8.0): methods of the files the fix commits changed."
+  "note": "Commit 9ee7d1d (PR 3176) sizes fax scanlines by the tile, not the image: the Modified Huffman, T4 and T6 decompressors wrote image-width rows into tile buffers. Present from 3.0. Reached wherever the app decodes tiled fax TIFF input.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
