@@ -240,6 +240,15 @@ pub const RUST_UNREAD: &str = "Rust binaries with no cargo-auditable crate list"
 
 pub const JAVA_UNREAD: &str = "Java archives (*.jar, *.war, *.ear) with no coordinates";
 
+/// The coverage-gap kind for gem specifications that name no gem.
+pub const GEM_UNREAD: &str = "gem specifications that name no gem";
+
+/// The coverage-gap kind for `.deps.json` files that do not parse.
+pub const DOTNET_UNREAD: &str = ".NET deps.json files that could not be read";
+
+/// The coverage-gap kind for Composer `installed.json` files that do not parse.
+pub const COMPOSER_UNREAD: &str = "Composer installed.json files that could not be read";
+
 /// An installed language package read from its metadata.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Installed {
@@ -340,9 +349,7 @@ pub fn collect(fs: &ImageFs, owned: &BTreeSet<String>) -> LangFiles {
                 }
                 None if is_owned => {}
                 None => {
-                    *out.unread
-                        .entry("gem specifications that name no gem")
-                        .or_default() += 1;
+                    *out.unread.entry(GEM_UNREAD).or_default() += 1;
                 }
             }
             continue;
@@ -381,9 +388,7 @@ pub fn collect(fs: &ImageFs, owned: &BTreeSet<String>) -> LangFiles {
                 }
                 None if is_owned => {}
                 None => {
-                    *out.unread
-                        .entry(".NET deps.json files that could not be read")
-                        .or_default() += 1;
+                    *out.unread.entry(DOTNET_UNREAD).or_default() += 1;
                 }
             }
             continue;
@@ -404,9 +409,7 @@ pub fn collect(fs: &ImageFs, owned: &BTreeSet<String>) -> LangFiles {
                 }
                 None if is_owned => {}
                 None => {
-                    *out.unread
-                        .entry("Composer installed.json files that could not be read")
-                        .or_default() += 1;
+                    *out.unread.entry(COMPOSER_UNREAD).or_default() += 1;
                 }
             }
             continue;

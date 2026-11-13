@@ -195,6 +195,8 @@ jobs:
         run: cargo +nightly fuzz run jar -- -max_total_time=30
       - name: fuzz OS package databases
         run: cargo +nightly fuzz run os_packages -- -max_total_time=30
+      - name: fuzz .NET assemblies
+        run: cargo +nightly fuzz run clr_assembly -- -max_total_time=30
 
   reach-driver:
     name: reach-driver (static reachability + soundness corpus)

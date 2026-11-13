@@ -14,6 +14,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 fleetreach-cli = { path = "../crates/cli" }
+fleetreach-clr = { path = "../crates/clr" }
 fleetreach-go = { path = "../crates/go" }
 fleetreach-os = { path = "../crates/os" }
 rustsec = "=0.33.0"
@@ -80,3 +81,10 @@ name = "go_binary"
 path = "fuzz_targets/go_binary.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "clr_assembly"
+path = "fuzz_targets/clr_assembly.rs"
+test = false
+doc = false
+bench = false

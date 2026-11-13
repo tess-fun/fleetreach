@@ -243,6 +243,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Unread .NET and Composer files in images were filed under RubyGems.** A `.deps.json` or
+  Composer `installed.json` an image holds but that does not parse is a coverage gap; it now
+  names NuGet or Packagist instead of RubyGems.
 - **NuGet packages that put no code into an image were reported.** A `.deps.json` lists every
   package the build resolved, also those whose assemblies it dropped because the runtime pack
   ships a newer copy (`System.Private.Uri/4.3.0` beside .NET 6, `System.Text.Encodings.Web`

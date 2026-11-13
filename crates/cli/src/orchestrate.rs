@@ -1636,6 +1636,22 @@ fn scan_image_java(
     result
 }
 
+/// The ecosystem of language artifacts in an image the reader could not identify, by gap kind.
+/// A kind not named here is still a gap, under the image's own ecosystem.
+fn unread_ecosystem(kind: &str, image: Ecosystem) -> Ecosystem {
+    use fleetreach_os::lang::{
+        COMPOSER_UNREAD, DOTNET_UNREAD, GEM_UNREAD, JAVA_UNREAD, RUST_UNREAD,
+    };
+    match kind {
+        JAVA_UNREAD => Ecosystem::Maven,
+        RUST_UNREAD => Ecosystem::Cargo,
+        GEM_UNREAD => Ecosystem::RubyGems,
+        DOTNET_UNREAD => Ecosystem::NuGet,
+        COMPOSER_UNREAD => Ecosystem::Packagist,
+        _ => image,
+    }
+}
+
 /// Match an image's OS packages. Returns the ecosystem the result is filed under (dpkg, apk
 /// or rpm) and the result: errored when the distro's export is missing, and with coverage gaps
 /// for an unknown distro or release, an incomplete package database, image files that could
@@ -1686,13 +1702,7 @@ fn scan_os(
         ));
     }
     for (kind, n) in opened.iter().flat_map(|o| &o.unread) {
-        let eco = if kind.contains("jar") {
-            Ecosystem::Maven
-        } else if *kind == fleetreach_os::lang::RUST_UNREAD {
-            Ecosystem::Cargo
-        } else {
-            Ecosystem::RubyGems
-        };
+        let eco = unread_ecosystem(kind, ecosystem);
         gaps.push(gap(
             kind,
             eco,
@@ -2640,6 +2650,23 @@ pub fn discover_lockfiles(repo: &Repo) -> (Vec<PathBuf>, Vec<String>) {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unread_image_artifacts_are_gaps_of_their_own_ecosystem() {
+        use fleetreach_os::lang::{
+            COMPOSER_UNREAD, DOTNET_UNREAD, GEM_UNREAD, JAVA_UNREAD, RUST_UNREAD,
+        };
+        let image = Ecosystem::Deb;
+        assert_eq!(unread_ecosystem(DOTNET_UNREAD, image), Ecosystem::NuGet);
+        assert_eq!(
+            unread_ecosystem(COMPOSER_UNREAD, image),
+            Ecosystem::Packagist
+        );
+        assert_eq!(unread_ecosystem(GEM_UNREAD, image), Ecosystem::RubyGems);
+        assert_eq!(unread_ecosystem(JAVA_UNREAD, image), Ecosystem::Maven);
+        assert_eq!(unread_ecosystem(RUST_UNREAD, image), Ecosystem::Cargo);
+        assert_eq!(unread_ecosystem("something new", image), image);
+    }
 
     #[test]
     fn a_toolchain_free_repo_without_a_usable_mirror_says_how_to_get_one() {
