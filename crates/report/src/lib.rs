@@ -1464,21 +1464,10 @@ pub fn to_fix_first(report: &FleetReport, color: bool) -> String {
     table.to_string()
 }
 
-/// Remediation view: the actionable fix queue. Where [`to_fix_first`] ranks *which
-/// advisory* to patch, this ranks *what to do* — the concrete dependency bump,
-/// batched so one row clears every advisory a single version bump resolves, with a
-/// reachability gate. The active queue is fix-first-ordered (KEV, severity, blast,
-/// EPSS, CVSS); advisories that are soundly `NotReachable` drop to an
-/// informational tail (shown, never numbered) so dead-code findings never crowd
-/// out real work. The `#` column is the fix order.
-pub fn to_remediation(report: &FleetReport, color: bool) -> String {
-    let items = remediations(report);
-    if items.is_empty() {
-        return "No remediations: nothing to fix.".to_string();
-    }
-    let (mut active, mut informational): (Vec<&RemediationItem>, Vec<&RemediationItem>) =
-        items.iter().partition(|i| i.reach.is_actionable());
-
+/// Sorts actionable remediation items into the fix-first order the remediation table numbers
+/// (`#`): SSVC outcome when decided, KEV, severity, confirmed reachability, blast radius, EPSS,
+/// CVSS, then package. `fleetreach whatif --top` takes the same order.
+pub fn fix_first(report: &FleetReport, items: &mut [&RemediationItem]) {
     // Active queue: the proven fix-first order, applied to batched actions. Within
     // a severity band, a *confirmed-reachable* batch leads an unconfirmed one
     // before blast radius breaks the tie — a govulncheck-confirmed call site is a
@@ -1486,17 +1475,13 @@ pub fn to_remediation(report: &FleetReport, color: bool) -> String {
     // whose advisories carry no CVSS, so most sit in the same `unknown` band.)
     // The SSVC outcome leads when decided (spec 08): it already folds in exploitation and
     // the exposure of the repos involved.
-    let decided = report
-        .ssvc
-        .as_ref()
-        .is_some_and(|s| !s.decisions.is_empty());
     let outcome = |it: &RemediationItem| {
         it.advisories
             .iter()
             .filter_map(|id| ssvc::max_outcome(report, id, Some(&it.package)))
             .max()
     };
-    active.sort_by(|a, b| {
+    items.sort_by(|a, b| {
         outcome(b)
             .cmp(&outcome(a))
             .then(b.kev.cmp(&a.kev))
@@ -1517,6 +1502,34 @@ pub fn to_remediation(report: &FleetReport, color: bool) -> String {
             )
             .then(a.package.cmp(&b.package))
     });
+}
+
+/// Remediation view: the actionable fix queue. Where [`to_fix_first`] ranks *which
+/// advisory* to patch, this ranks *what to do* — the concrete dependency bump,
+/// batched so one row clears every advisory a single version bump resolves, with a
+/// reachability gate. The active queue is fix-first-ordered (KEV, severity, blast,
+/// EPSS, CVSS); advisories that are soundly `NotReachable` drop to an
+/// informational tail (shown, never numbered) so dead-code findings never crowd
+/// out real work. The `#` column is the fix order.
+pub fn to_remediation(report: &FleetReport, color: bool) -> String {
+    let items = remediations(report);
+    if items.is_empty() {
+        return "No remediations: nothing to fix.".to_string();
+    }
+    let (mut active, mut informational): (Vec<&RemediationItem>, Vec<&RemediationItem>) =
+        items.iter().partition(|i| i.reach.is_actionable());
+
+    let decided = report
+        .ssvc
+        .as_ref()
+        .is_some_and(|s| !s.decisions.is_empty());
+    let outcome = |it: &RemediationItem| {
+        it.advisories
+            .iter()
+            .filter_map(|id| ssvc::max_outcome(report, id, Some(&it.package)))
+            .max()
+    };
+    fix_first(report, &mut active);
     // Informational tail: blast radius desc, then package — these aren't work.
     informational.sort_by(|a, b| b.repos.cmp(&a.repos).then(a.package.cmp(&b.package)));
 

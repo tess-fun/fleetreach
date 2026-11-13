@@ -22,6 +22,7 @@ Generated from `fleetreach --help`; each command's page has its full help.
 | [`report`](/fleetreach/docs/reference/cli/report/) | Publishable reports from the scan history |
 | [`triage`](/fleetreach/docs/reference/cli/triage/) | Decisions on findings, kept as files in git: set, list and export them |
 | [`serve`](/fleetreach/docs/reference/cli/serve/) | Browse the history report and record triage decisions in a browser (plain HTTP) |
+| [`whatif`](/fleetreach/docs/reference/cli/whatif/) | What a set of bumps would clear, leave and add, from a saved report, before any edit |
 
 ```text
 Fleet-native dependency security audit across 12 ecosystems
@@ -42,6 +43,7 @@ Commands:
   report    Publishable reports from the scan history
   triage    Decisions on findings, kept as files in git: set, list and export them
   serve     Browse the history report and record triage decisions in a browser (plain HTTP)
+  whatif    What a set of bumps would clear, leave and add, from a saved report, before any edit
   help      Print this message or the help of the given subcommand(s)
 
 Options:

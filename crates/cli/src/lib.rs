@@ -82,6 +82,7 @@ pub mod typosquat;
 pub mod vex;
 pub(crate) mod vex_input;
 pub mod vulnrichment;
+pub mod whatif;
 pub(crate) mod why;
 
 pub use assemble::{

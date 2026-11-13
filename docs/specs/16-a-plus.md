@@ -680,6 +680,20 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Work**: `fleetreach whatif --bump pkg@ver ...` re-matching an in-memory graph.
 - **Effort**: S. **Release**: 1.8.0 (uses the incremental cache). **Proof**: what-if equals a
   real `fix apply` plus re-scan on the demo fleet.
+- **Status: implemented 2026-11-13, for 1.8.0** (`crates/cli/src/whatif.rs`, `fleetreach
+  whatif`). It works from a saved report, not the incremental cache: the report already holds
+  every occurrence, and the targets are matched against the OSV exports `fix plan` reads
+  (`fix_targets::lookup`), so it runs in under a second. `--top` takes the remediation table's
+  fix-first order (`fleetreach_report::fix_first`). Proof on copies of the demo fleet plus 12
+  npm/PyPI repos (22 repos): `fix plan --allow-breaking`, `fix apply` (104 verified edits),
+  re-scan of the branches, then `whatif --plan` with the verified edits. Of 360 findings on
+  bumped packages, 357 predicted exactly, 1 left open correctly (an unbumped `vega` copy),
+  and 2 predicted open that cleared because `mermaid`'s new version pulled `lodash-es` up
+  (the stated limit: what a target pulls in needs the registry). None predicted cleared
+  stayed open. 25 findings on packages not in the plan also cleared, for the same reason.
+  The new findings on queue targets equal the 11 advisories `fix plan` moved targets for.
+  Gap: the OSV exports load whole (about 1 GB resident with npm, PyPI and crates.io), as in
+  `fix plan`.
 
 #### 3. Batched cross-repo fix queue (A+, keep)
 

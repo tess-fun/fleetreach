@@ -8,6 +8,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`fleetreach whatif` shows what bumps would do before any lockfile moves.** From a saved
+  report, it takes bumps from `--bump [ECOSYSTEM:]PACKAGE@VERSION`, the first N items of the
+  fix-first queue (`--top N`) or a `fix plan` file (`--plan`). It raises each copy below the
+  target and matches the target again against the same OSV exports `fix plan` reads, in each
+  ecosystem's own version order. Output: findings cleared, findings left open (and whether
+  only some copies moved), advisories new on the target, and open findings by severity before
+  and after, per bump and per repo (table or `-f json`). Records that alias each other count
+  once. Go and GitHub Actions bumps use the report's fixed ranges, with no search for new
+  advisories. Checked against a real `fix apply` and re-scan of 22 repos (cargo, npm, yarn,
+  pnpm, uv, Pipfile, Actions): 104 verified edits, 360 findings on the bumped packages, 357
+  predicted exactly, and none predicted cleared that stayed open. The two misses were
+  copies moved by another bump's dependencies, which needs the registry. Its new findings on
+  the queue targets match the 11 advisories `fix plan` steps around.
 - **Function-level witnesses for npm and PyPI findings.** `scan --reachability` now follows
   calls, not only imports, from your JavaScript/TypeScript or Python source into installed
   dependency source, and a finding whose sink is reached shows the chain of calls with file

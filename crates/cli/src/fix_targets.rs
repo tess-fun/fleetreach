@@ -329,6 +329,121 @@ pub(crate) fn check(
     (changed, warnings)
 }
 
+/// An advisory that covers a version, as `fleetreach whatif` reports it.
+#[derive(Debug, Clone)]
+pub(crate) struct Hit {
+    pub id: String,
+    pub aliases: Vec<String>,
+    pub severity: fleetreach_core::Severity,
+}
+
+/// Every advisory on `package` that covers `version`, in the ecosystem's own order; `None`
+/// when the version does not parse.
+pub(crate) type Lookup = Box<dyn Fn(&str, &str) -> Option<Vec<Hit>>>;
+
+fn hits_at<V: Ord + Clone>(
+    advisories: &[osv::Advisory<V>],
+    version: Option<V>,
+) -> Option<Vec<Hit>> {
+    let version = version?;
+    let covered = advisories.iter().filter(|a| hits(a, &version));
+    let found = covered.map(|a| Hit {
+        id: a.id.clone(),
+        aliases: a.aliases.clone(),
+        severity: a.severity,
+    });
+    Some(found.collect())
+}
+
+/// Reads one ecosystem's export into a [`Lookup`]; `Ok(None)` for an ecosystem this module
+/// does not read (Go, GitHub Actions and the rest keep the report's own ranges).
+pub(crate) fn lookup(
+    ecosystem: Ecosystem,
+    path: &Path,
+    overlay: Option<&Path>,
+) -> Result<Option<Lookup>, String> {
+    let err = |e: &dyn Display| e.to_string();
+    let found: Lookup = match ecosystem {
+        Ecosystem::Npm => {
+            let db = NpmDb::load_with_overlay(path, overlay).map_err(|e| err(&e))?;
+            Box::new(move |name, v| {
+                hits_at(
+                    db.advisories_for(name),
+                    fleetreach_npm::parse_npm_version(v),
+                )
+            })
+        }
+        Ecosystem::Cargo => {
+            let db = CratesDb::load_with_overlay(path, overlay).map_err(|e| err(&e))?;
+            Box::new(move |name, v| hits_at(db.advisories_for(name), Version::parse(v).ok()))
+        }
+        Ecosystem::Pypi => {
+            let db = PyPiDb::load_with_overlay(path, overlay).map_err(|e| err(&e))?;
+            Box::new(move |name, v| {
+                let key = fleetreach_pypi::normalize_name(name);
+                hits_at(
+                    db.advisories_for(&key),
+                    fleetreach_pypi::parse_pypi_version(v),
+                )
+            })
+        }
+        Ecosystem::RubyGems => {
+            let db = RubyGemsDb::load_with_overlay(path, overlay).map_err(|e| err(&e))?;
+            Box::new(move |name, v| {
+                let version = fleetreach_rubygems::parse_rubygems_version(v);
+                hits_at(db.advisories_for(name), version)
+            })
+        }
+        Ecosystem::Packagist => {
+            let db = PackagistDb::load_with_overlay(path, overlay).map_err(|e| err(&e))?;
+            Box::new(move |name, v| {
+                let version = fleetreach_packagist::parse_composer_version(v);
+                hits_at(db.advisories_for(&name.to_ascii_lowercase()), version)
+            })
+        }
+        Ecosystem::NuGet => {
+            let db = NuGetDb::load_with_overlay(path, overlay).map_err(|e| err(&e))?;
+            Box::new(move |name, v| {
+                let version = fleetreach_nuget::parse_nuget_version(v);
+                hits_at(db.advisories_for(&name.to_ascii_lowercase()), version)
+            })
+        }
+        Ecosystem::Maven => {
+            let db = MavenDb::load_with_overlay(path, overlay).map_err(|e| err(&e))?;
+            Box::new(move |name, v| {
+                hits_at(
+                    db.advisories_for(name),
+                    fleetreach_maven::parse_maven_version(v),
+                )
+            })
+        }
+        _ => return Ok(None),
+    };
+    Ok(Some(found))
+}
+
+/// The ecosystems [`lookup`] reads.
+pub(crate) fn readable(ecosystem: Ecosystem) -> bool {
+    CHECKED.contains(&ecosystem)
+}
+
+/// Orders two version texts as the ecosystem does; `None` when either does not parse.
+pub(crate) fn order(ecosystem: Ecosystem, a: &str, b: &str) -> Option<std::cmp::Ordering> {
+    fn by<V: Ord>(parse: fn(&str) -> Option<V>, a: &str, b: &str) -> Option<std::cmp::Ordering> {
+        Some(parse(a)?.cmp(&parse(b)?))
+    }
+    let semver = |t: &str| Version::parse(t.strip_prefix('v').unwrap_or(t)).ok();
+    match ecosystem {
+        Ecosystem::Npm => by(fleetreach_npm::parse_npm_version, a, b),
+        Ecosystem::Pypi => by(fleetreach_pypi::parse_pypi_version, a, b),
+        Ecosystem::RubyGems => by(fleetreach_rubygems::parse_rubygems_version, a, b),
+        Ecosystem::Packagist => by(fleetreach_packagist::parse_composer_version, a, b),
+        Ecosystem::NuGet => by(fleetreach_nuget::parse_nuget_version, a, b),
+        Ecosystem::Maven => by(fleetreach_maven::parse_maven_version, a, b),
+        _ => Some(semver(a)?.cmp(&semver(b)?)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]

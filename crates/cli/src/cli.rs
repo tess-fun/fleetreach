@@ -64,6 +64,8 @@ enum Commands {
     Triage(crate::triage::TriageCommand),
     /// Browse the history report and record triage decisions in a browser (plain HTTP).
     Serve(crate::serve::ServeArgs),
+    /// What a set of bumps would clear, leave and add, from a saved report, before any edit.
+    Whatif(crate::whatif::WhatifArgs),
 }
 
 #[derive(Subcommand)]
@@ -127,6 +129,7 @@ pub fn dispatch(cli: Cli) -> u8 {
         Commands::Report(command) => crate::report_html::run_report(command),
         Commands::Triage(command) => crate::triage::run_triage(command),
         Commands::Serve(args) => crate::serve::run_serve(args),
+        Commands::Whatif(args) => crate::whatif::run_whatif(&args),
     }
 }
 

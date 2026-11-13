@@ -65,6 +65,47 @@ clears. How the target is chosen:
 - `Bump risk` is `low` within the current major. For a breaking bump it counts how many of
   your repos already run the target: three or more make it `medium`.
 
+## See what the bumps would do first
+
+`fleetreach whatif` reads a saved report and answers "if these bumps land, what clears, what
+stays open, and what is new". Nothing is edited and nothing is fetched:
+
+<!-- run: fleetreach whatif --report report.json --top 3 -->
+```console
+$ fleetreach whatif --report report.json --top 3
+what-if: 3 bump(s)
+  maven org.apache.logging.log4j:log4j-core -> 2.25.4 (1 repo): clears 8, leaves 0, new 0
+  github-actions tj-actions/changed-files -> 46.0.1 (1 repo): clears 1, leaves 0, new not checked
+  cargo smallvec -> 1.6.1 (1 repo): clears 1, leaves 0, new not checked
+
+open findings  critical  high medium  low unknown  total
+  before         15    86    102   21      33    257
+  after          12    84     97   21      33    247
+
+per repo
+  checkout-web: 36 -> 35 (cleared 1, new 0)
+  partner-api: 25 -> 17 (cleared 8, new 0)
+  payments-api: 10 -> 9 (cleared 1, new 0)
+```
+<!-- /run -->
+
+Each bump raises every copy of the package below the target, in every repo with a finding on
+it, and matches the target again against the same advisory data the scan read, in the
+ecosystem's own version order:
+
+- **clears** counts findings (one advisory in one repo) left with no affected copy;
+- **leaves** counts findings the target does not fix, and says when only some copies moved;
+- **new** counts advisories that affect the target but none of the versions it replaces.
+
+Name bumps yourself with `--bump`, as `PACKAGE@VERSION` or `ECOSYSTEM:PACKAGE@VERSION` when
+the name is in two ecosystems (`--bump npm:lodash@4.17.21 --bump regex@1.5.5`), add `--repo`
+to try them in one repo, or pass a whole plan with `--plan plan.json`. `-f json` gives every
+finding by name.
+
+Two limits. Packages the new version pulls in need the registry, so they are left to the
+re-scan `fix apply` runs. And Go and GitHub Actions bumps are judged by the fixed ranges in
+the report, with no search for new advisories; a warning says so.
+
 ## Direct or transitive?
 
 `-f blast` keeps the per-advisory ranking and splits each advisory's repos into direct and
