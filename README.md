@@ -44,7 +44,7 @@ $ fleetreach scan -f remediation --enrich | head -n 9
 ```sh
 curl -fsSL https://raw.githubusercontent.com/tess-fun/fleetreach/main/scripts/install.sh | sh
 brew install tess-fun/tap/fleetreach
-cargo install fleetreach-cli --features network
+cargo install fleetreach-cli --features network,serve
 ```
 
 Prebuilt binaries for Linux, macOS and Windows with checksums and attestations, and a

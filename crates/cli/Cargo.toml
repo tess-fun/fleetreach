@@ -19,6 +19,9 @@ workspace = true
 # (via ureq). Off by default so the build is pure-Rust (no rustls/aws-lc/ring);
 # without it, use --db for the advisory DB and --kev-file/--epss-file to enrich. M-5.
 network = ["dep:ureq", "fleetreach-scan/network"]
+# `fleetreach serve`: views over the history directory and triage edits, over plain HTTP
+# (axum on hyper and tokio, pure Rust). Off by default.
+serve = ["dep:axum", "dep:tokio", "dep:getrandom", "dep:form_urlencoded"]
 
 [lib]
 name = "fleetreach_cli"
@@ -69,6 +72,11 @@ serde_json = { workspace = true }
 # blocking HTTP for the KEV/EPSS feeds + advisory-DB fetch (the `network` feature);
 # pulls rustls (vendored-C crypto), so it is optional and off by default. M-5.
 ureq = { version = "3", optional = true }
+axum = { version = "0.8", default-features = false, features = ["tokio", "http1", "form", "query"], optional = true }
+tokio = { version = "1", default-features = false, features = ["rt", "net"], optional = true }
+# The per-process token that stops cross-site form posts to `serve`.
+getrandom = { version = "0.4", optional = true }
+form_urlencoded = { version = "1", optional = true }
 rayon = "1"
 tempfile = "3"
 # Validate a freshly downloaded osv.dev export before installing it (spec 01). Same pure-Rust

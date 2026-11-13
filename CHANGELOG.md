@@ -8,6 +8,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`fleetreach serve` shows the history report and records triage decisions in a browser.**
+  It reads the `scan --history-dir` directory and the triage files on every request, lists the
+  newest run's findings with their decisions, and writes a decision from a form as the same file
+  and log entry `triage set` writes; it never runs git. By default it listens on loopback only and
+  records decisions as `--by`, git's `user.name` or `$USER`. Behind a reverse proxy that signs
+  people in (`--trust-proxy`), it serves only that proxy and takes the reviewer from its identity
+  header. Forms carry a per-process token and cross-site posts are refused; the one script
+  allowed to run is the report's own, by hash. Release binaries include it; with cargo, build
+  with `--features serve` (pure Rust).
 - **`sbom -f spdx3` writes SPDX 3.0.1 JSON-LD.** The same packages, hashes, licenses and graph
   as the other formats, and two things SPDX 2.3 cannot say: each dependency relationship carries
   its `completeness`, and a development-only dependency has the `development` scope. With

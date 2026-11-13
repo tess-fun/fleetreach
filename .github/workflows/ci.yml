@@ -37,10 +37,10 @@ jobs:
             exit 1
           fi
       # Lint + test the opt-in network feature so the gated code stays healthy.
-      - name: clippy + test (network feature)
+      - name: clippy + test (network and serve features)
         run: |
-          cargo clippy --workspace --all-targets --features fleetreach-cli/network -- -D warnings
-          cargo test --workspace --features fleetreach-cli/network
+          cargo clippy --workspace --all-targets --features fleetreach-cli/network,fleetreach-cli/serve -- -D warnings
+          cargo test --workspace --features fleetreach-cli/network,fleetreach-cli/serve
 
   readme:
     name: README in sync (cargo-rdme)

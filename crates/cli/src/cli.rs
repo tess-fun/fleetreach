@@ -44,7 +44,7 @@ enum Commands {
     /// Discover and check out the repos named by `[[source]]` entries.
     #[command(subcommand)]
     Fleet(FleetCommand),
-    /// Write a CycloneDX 1.7 or SPDX 2.3 SBOM per repo from the same sources `scan` reads.
+    /// Write a CycloneDX 1.7, SPDX 2.3 or SPDX 3 SBOM per repo from the same sources `scan` reads.
     Sbom(crate::sbom::SbomArgs),
     /// License inventory and policy violations across the fleet.
     Licenses(crate::licenses_cmd::LicensesArgs),
@@ -62,6 +62,8 @@ enum Commands {
     /// Decisions on findings, kept as files in git: set, list and export them.
     #[command(subcommand)]
     Triage(crate::triage::TriageCommand),
+    /// Browse the history report and record triage decisions in a browser (plain HTTP).
+    Serve(crate::serve::ServeArgs),
 }
 
 #[derive(Subcommand)]
@@ -121,6 +123,7 @@ pub fn dispatch(cli: Cli) -> u8 {
         Commands::Notify(args) => crate::notify::run_notify(&args),
         Commands::Report(command) => crate::report_html::run_report(command),
         Commands::Triage(command) => crate::triage::run_triage(command),
+        Commands::Serve(args) => crate::serve::run_serve(args),
     }
 }
 

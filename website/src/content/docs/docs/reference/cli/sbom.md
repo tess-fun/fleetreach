@@ -1,14 +1,14 @@
 ---
 title: fleetreach sbom
-description: "fleetreach sbom: Write a CycloneDX 1.7 or SPDX 2.3 SBOM per repo from the same sources `scan` reads. Every flag, from the binary's help."
+description: "fleetreach sbom: Write a CycloneDX 1.7, SPDX 2.3 or SPDX 3 SBOM per repo from the same sources `scan` reads. Every flag, from the binary's help."
 sidebar:
   order: 6
 ---
 
-Write a CycloneDX 1.7 or SPDX 2.3 SBOM per repo from the same sources `scan` reads
+Write a CycloneDX 1.7, SPDX 2.3 or SPDX 3 SBOM per repo from the same sources `scan` reads
 
 ```text
-Write a CycloneDX 1.7 or SPDX 2.3 SBOM per repo from the same sources `scan` reads
+Write a CycloneDX 1.7, SPDX 2.3 or SPDX 3 SBOM per repo from the same sources `scan` reads
 
 Usage: fleetreach sbom [OPTIONS] --out-dir <OUT_DIR>
 

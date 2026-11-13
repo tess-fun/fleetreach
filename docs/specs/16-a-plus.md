@@ -771,6 +771,14 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     (trends, SLA, owner queues, campaigns) and actions that edit triage files. Auth: none on
     localhost; behind a reverse proxy it trusts a configured identity header only from
     configured proxy addresses and records that identity in the log. No database.
+    **Status: implemented 2026-11-12, for 1.7.0** (`crates/cli/src/serve.rs`, `server.rs`,
+    feature `serve`). The overview is the history report; `/triage` lists the newest run's
+    findings with filters, and a form records a decision through the same writer as
+    `triage set` (Open question 2: files only, no git). Loopback-only by default, with the
+    reviewer from `--by`, git or `$USER`; `--trust-proxy` serves only those peers and reads
+    `--identity-header`. Posts need a per-process token, `Sec-Fetch-Site` same-origin and a
+    matching `Origin`; the CSP allows only the report's script by hash. HTTP-level tests cover
+    every action and refusal; checked in a real browser (filter, form, refusal, phone width).
   - 1.8.0: Jira tickets (create, update, close with the finding) next to the existing
     GitHub/GitLab issues; signed webhooks.
 - **Effort**: L. **Release**: 1.6.0, 1.7.0, 1.8.0. **Depends on**: incremental cache.
@@ -1573,7 +1581,6 @@ feeds (advisories, corrections, sinks) are open data.
 1. If a research gate misses its bar (sink precision, lead time against Snyk, Trivy diff), is
    publishing the measured grade with the reason acceptable for that release, while the work
    continues?
-2. Should `serve` commit triage edits to git itself, or only write files and leave commits to
-   the user?
+2. Answered 2026-11-12: `serve` only writes triage files and leaves commits to the user.
 3. Answered 2026-11-02: no malware is ever executed and no known samples are collected;
    benign packages and synthetic fixtures only, plus open data such as OSV `MAL-` records.

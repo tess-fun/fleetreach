@@ -61,6 +61,9 @@ pub mod sbom_input;
 pub mod scan;
 pub mod scancache;
 pub mod scope;
+pub(crate) mod serve;
+#[cfg(feature = "serve")]
+pub(crate) mod server;
 pub mod signals;
 pub mod snapshot;
 pub mod sources;

@@ -71,7 +71,7 @@ jobs:
       - name: build
         shell: bash
         run: >-
-          cargo build --locked --profile dist -p fleetreach-cli --features network
+          cargo build --locked --profile dist -p fleetreach-cli --features network,serve
           --target "${{ matrix.target }}"
       - name: smoke test
         if: matrix.target != 'x86_64-apple-darwin'

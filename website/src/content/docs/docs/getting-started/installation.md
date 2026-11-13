@@ -29,7 +29,7 @@ brew install tess-fun/tap/fleetreach
 ## cargo
 
 ```sh
-cargo install fleetreach-cli --features network
+cargo install fleetreach-cli --features network,serve
 ```
 
 The minimum supported Rust version is 1.89.

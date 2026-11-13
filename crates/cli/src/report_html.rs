@@ -103,6 +103,7 @@ fn run_html(args: &HtmlArgs) -> u8 {
         campaigns: campaigns.as_deref(),
         at,
         since,
+        nav: None,
     });
     if args.output.as_os_str() == "-" {
         print!("{page}");
@@ -124,9 +125,11 @@ pub struct Input<'a> {
     pub campaigns: Option<&'a [serde_json::Value]>,
     pub at: time::OffsetDateTime,
     pub since: Option<time::OffsetDateTime>,
+    /// Markup put above the header (`serve` links its pages there); trusted, not escaped.
+    pub nav: Option<&'a str>,
 }
 
-fn esc(s: &str) -> String {
+pub(crate) fn esc(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {
@@ -162,7 +165,7 @@ const SEVERITIES: [Severity; 5] = [
     Severity::Unknown,
 ];
 
-fn sev_class(s: Severity) -> &'static str {
+pub(crate) fn sev_class(s: Severity) -> &'static str {
     match s {
         Severity::Critical => "s-critical",
         Severity::High => "s-high",
@@ -261,6 +264,10 @@ pub fn render(input: &Input<'_>) -> String {
         esc(input.title),
         CSS
     );
+    if let Some(nav) = input.nav {
+        b.push_str(nav);
+        b.push('\n');
+    }
     let _ = writeln!(
         b,
         "<header><h1>{}</h1><p class=\"meta\">Generated {} from {} run(s){}.</p></header>",
@@ -763,7 +770,7 @@ fn mttr_section(b: &mut String, rows: &[history::Mttr]) {
 
 /// Severity is ordinal, so one blue ramp (validated light and dark as an ordinal ramp);
 /// red is kept for the past-SLA status, always with its `!` icon and a label.
-const CSS: &str = r#"
+pub(crate) const CSS: &str = r#"
 :root{color-scheme:light;--page:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink-2:#52514e;--muted:#898781;
 --grid:#e1e0d9;--axis:#c3c2b7;--border:rgba(11,11,11,.10);
 --s-low:#86b6ef;--s-medium:#5598e7;--s-high:#256abf;--s-critical:#104281;--s-unknown:#c3c2b7;
@@ -815,7 +822,7 @@ a{color:inherit;text-decoration-color:var(--muted)}
 "#;
 
 /// The hover and focus layer for the trend chart.
-const SCRIPT: &str = r#"
+pub(crate) const SCRIPT: &str = r#"
 (function(){var tip=document.getElementById('tip');
 function show(e){var t=e.target.getAttribute('data-tip');if(!t)return;tip.textContent=t;tip.hidden=false;
 var r=e.clientX!==undefined&&e.type!=='focus'?{x:e.clientX,y:e.clientY}:(function(){var b=e.target.getBoundingClientRect();return{x:b.left+b.width/2,y:b.top}})();

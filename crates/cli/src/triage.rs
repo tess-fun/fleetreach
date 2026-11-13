@@ -37,14 +37,14 @@ pub enum State {
 
 impl State {
     /// Whether a decision in this state sets its finding aside.
-    fn sets_aside(self) -> bool {
+    pub(crate) fn sets_aside(self) -> bool {
         matches!(
             self,
             State::AcceptedRisk | State::FalsePositive | State::NotAffected
         )
     }
 
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             State::Affected => "affected",
             State::InTriage => "in_triage",
@@ -130,7 +130,7 @@ impl Decision {
         Ok(())
     }
 
-    fn expired(&self, today: Date) -> bool {
+    pub(crate) fn expired(&self, today: Date) -> bool {
         let last = self.expires.as_deref().and_then(parse_day);
         self.state.sets_aside() && last.is_some_and(|day| today > day)
     }
@@ -402,7 +402,7 @@ pub struct SetArgs {
     place: Place,
 }
 
-fn parse_ecosystem(s: &str) -> Result<Ecosystem, String> {
+pub(crate) fn parse_ecosystem(s: &str) -> Result<Ecosystem, String> {
     serde_json::from_value(json!(s)).map_err(|_| format!("unknown ecosystem `{s}`"))
 }
 
@@ -453,7 +453,7 @@ pub(crate) fn run_triage(command: TriageCommand) -> u8 {
     }
 }
 
-fn who(explicit: Option<String>) -> Result<String, String> {
+pub(crate) fn who(explicit: Option<String>) -> Result<String, String> {
     let git = || {
         let out = std::process::Command::new("git")
             .args(["config", "user.name"])
@@ -468,18 +468,39 @@ fn who(explicit: Option<String>) -> Result<String, String> {
         .ok_or_else(|| "cannot tell who is deciding: pass --by".to_string())
 }
 
-fn set(args: SetArgs) -> Result<(), String> {
-    let dir = args.place.resolve()?;
-    let path = dir.join(relative_path(&args.advisory, args.ecosystem, &args.package));
+/// One decision to record: what `triage set` and `serve` both take.
+#[derive(Debug, Clone)]
+pub(crate) struct Change {
+    pub advisory: String,
+    pub ecosystem: Ecosystem,
+    pub package: String,
+    pub state: State,
+    pub reason: Option<String>,
+    pub assignee: Option<String>,
+    pub expires: Option<String>,
+    pub justification: Option<String>,
+    pub aliases: Vec<String>,
+    /// Empty keeps the repos the decision already had (or the whole fleet, for a new one).
+    pub repos: Vec<String>,
+}
+
+/// Record `change` by `by` in `dir`, appending to the decision's log, and return the file.
+/// Nothing is written unless the decision is valid; the file is replaced atomically.
+pub(crate) fn record(dir: &Path, change: Change, by: String) -> Result<PathBuf, String> {
+    let path = dir.join(relative_path(
+        &change.advisory,
+        change.ecosystem,
+        &change.package,
+    ));
     let mut decision = if path.exists() {
-        read_decision(&dir, &path)?
+        read_decision(dir, &path)?
     } else {
         Decision {
-            advisory: args.advisory,
+            advisory: change.advisory,
             aliases: Vec::new(),
-            ecosystem: args.ecosystem,
-            package: args.package,
-            state: args.state,
+            ecosystem: change.ecosystem,
+            package: change.package,
+            state: change.state,
             assignee: None,
             expires: None,
             justification: None,
@@ -488,33 +509,58 @@ fn set(args: SetArgs) -> Result<(), String> {
             log: Vec::new(),
         }
     };
-    decision.state = args.state;
+    decision.state = change.state;
     // A new state starts from what was said, so an old expiry or reason cannot outlive the
     // decision it was given for; the log keeps them.
-    decision.expires = args.expires;
-    decision.justification = args.justification;
-    decision.reason.clone_from(&args.reason);
-    decision.assignee = args.assignee.or(decision.assignee);
-    if !args.repo.is_empty() {
-        decision.repos = args.repo;
+    decision.expires = change.expires;
+    decision.justification = change.justification;
+    decision.reason.clone_from(&change.reason);
+    decision.assignee = change.assignee.or(decision.assignee);
+    if !change.repos.is_empty() {
+        decision.repos = change.repos;
     }
-    for alias in args.alias {
+    for alias in change.aliases {
         if !decision.aliases.contains(&alias) {
             decision.aliases.push(alias);
         }
     }
     decision.log.push(LogEntry {
         at: format_time(now()),
-        by: who(args.by)?,
-        state: args.state,
-        note: args.reason,
+        by,
+        state: change.state,
+        note: change.reason,
     });
     decision.check()?;
     let text = toml::to_string_pretty(&decision).map_err(|e| e.to_string())?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
-    }
-    std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("{}: no parent directory", path.display()))?;
+    std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    let mut tmp = tempfile::NamedTempFile::new_in(parent)
+        .map_err(|e| format!("{}: {e}", parent.display()))?;
+    std::io::Write::write_all(&mut tmp, text.as_bytes())
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    tmp.persist(&path)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(path)
+}
+
+fn set(args: SetArgs) -> Result<(), String> {
+    let dir = args.place.resolve()?;
+    let by = who(args.by)?;
+    let change = Change {
+        advisory: args.advisory,
+        ecosystem: args.ecosystem,
+        package: args.package,
+        state: args.state,
+        reason: args.reason,
+        assignee: args.assignee,
+        expires: args.expires,
+        justification: args.justification,
+        aliases: args.alias,
+        repos: args.repo,
+    };
+    let path = record(&dir, change, by)?;
     println!("{}", path.display());
     Ok(())
 }
