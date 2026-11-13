@@ -29,7 +29,7 @@ use oxc_parser::Parser;
 use oxc_span::{GetSpan, SourceType, Span};
 use oxc_syntax::scope::ScopeFlags;
 
-use crate::calls::{Expr, ModuleFacts, Spec};
+use crate::calls::{Expr, ModuleFacts, Spec, MAX_LINKS};
 use crate::java::Method;
 
 /// Whether `path` is JavaScript or TypeScript source this reader takes (declaration files
@@ -49,6 +49,11 @@ pub fn is_source(path: &str) -> bool {
 /// nothing (the caller sees no candidates, never a wrong one).
 #[must_use]
 pub fn functions(path: &str, src: &str) -> BTreeMap<String, Method> {
+    crate::stack::on_own_stack(src, &crate::stack::JS, || functions_here(path, src))
+        .unwrap_or_default()
+}
+
+fn functions_here(path: &str, src: &str) -> BTreeMap<String, Method> {
     let source_type = SourceType::from_path(path)
         .unwrap_or_default()
         .with_module(true);
@@ -79,6 +84,10 @@ pub fn functions(path: &str, src: &str) -> BTreeMap<String, Method> {
 /// gives nothing.
 #[must_use]
 pub fn facts(path: &str, src: &str) -> ModuleFacts {
+    crate::stack::on_own_stack(src, &crate::stack::JS, || facts_here(path, src)).unwrap_or_default()
+}
+
+fn facts_here(path: &str, src: &str) -> ModuleFacts {
     let source_type = SourceType::from_path(path)
         .unwrap_or_default()
         .with_module(true);
@@ -213,6 +222,9 @@ fn member_name(e: &Expression<'_>) -> Option<String> {
     let mut parts = Vec::new();
     let mut cur = e;
     loop {
+        if parts.len() >= MAX_LINKS {
+            return None;
+        }
         match cur {
             Expression::StaticMemberExpression(m) => {
                 parts.push(m.property.name.to_string());
@@ -240,29 +252,38 @@ fn member_name(e: &Expression<'_>) -> Option<String> {
 
 /// A value expression as the call graph sees it.
 fn expr_of(e: &Expression<'_>) -> Expr {
+    expr_at(e, 0)
+}
+
+/// [`expr_of`] `links` deep into a chain: past [`MAX_LINKS`] the rest is unknown.
+fn expr_at(e: &Expression<'_>, links: usize) -> Expr {
+    if links >= MAX_LINKS {
+        return Expr::Unknown;
+    }
+    let inner = |e: &Expression<'_>| Box::new(expr_at(e, links + 1));
     match e.get_inner_expression() {
         Expression::Identifier(id) => Expr::Name(id.name.to_string()),
         Expression::ThisExpression(_) => Expr::This,
         Expression::StaticMemberExpression(m) => {
-            Expr::Member(Box::new(expr_of(&m.object)), m.property.name.to_string())
+            Expr::Member(inner(&m.object), m.property.name.to_string())
         }
         Expression::ComputedMemberExpression(m) => match &m.expression {
             Expression::StringLiteral(s) => {
-                Expr::Member(Box::new(expr_of(&m.object)), s.value.display().to_string())
+                Expr::Member(inner(&m.object), s.value.display().to_string())
             }
             _ => Expr::Unknown,
         },
-        Expression::CallExpression(c) => call_value(c),
-        Expression::NewExpression(n) => Expr::Call(Box::new(expr_of(&n.callee))),
+        Expression::CallExpression(c) => call_value(c, links),
+        Expression::NewExpression(n) => Expr::Call(inner(&n.callee)),
         Expression::ImportExpression(i) => match &i.source {
             Expression::StringLiteral(s) => Expr::Import(Spec::Js(s.value.display().to_string())),
             _ => Expr::Unknown,
         },
-        Expression::AwaitExpression(a) => expr_of(&a.argument),
+        Expression::AwaitExpression(a) => expr_at(&a.argument, links + 1),
         Expression::ChainExpression(c) => match &c.expression {
-            ChainElement::CallExpression(call) => call_value(call),
+            ChainElement::CallExpression(call) => call_value(call, links),
             ChainElement::StaticMemberExpression(m) => {
-                Expr::Member(Box::new(expr_of(&m.object)), m.property.name.to_string())
+                Expr::Member(inner(&m.object), m.property.name.to_string())
             }
             _ => Expr::Unknown,
         },
@@ -271,10 +292,10 @@ fn expr_of(e: &Expression<'_>) -> Expr {
 }
 
 /// `require("x")` is an import; any other call is the value it returns.
-fn call_value(c: &CallExpression<'_>) -> Expr {
+fn call_value(c: &CallExpression<'_>, links: usize) -> Expr {
     match require_spec(c) {
         Some(spec) => Expr::Import(Spec::Js(spec)),
-        None => Expr::Call(Box::new(expr_of(&c.callee))),
+        None => Expr::Call(Box::new(expr_at(&c.callee, links + 1))),
     }
 }
 
@@ -296,6 +317,9 @@ fn member_parts(e: &Expression<'_>) -> Option<Vec<String>> {
     let mut parts = Vec::new();
     let mut cur = e;
     loop {
+        if parts.len() >= MAX_LINKS {
+            return None;
+        }
         match cur.get_inner_expression() {
             Expression::StaticMemberExpression(m) => {
                 parts.push(m.property.name.to_string());

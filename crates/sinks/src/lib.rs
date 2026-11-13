@@ -30,6 +30,7 @@ pub mod js;
 pub mod propose;
 pub mod python;
 pub mod record;
+mod stack;
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};

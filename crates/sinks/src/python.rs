@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::calls::{Expr, ModuleFacts, Spec, MAIN};
+use crate::calls::{Expr, ModuleFacts, Spec, MAIN, MAX_LINKS};
 use crate::java::Method;
 
 /// Whether `path` is Python source this reader takes.
@@ -46,6 +46,11 @@ pub fn module_name(path: &str) -> String {
 /// Every function of one module, keyed `module.Class.name` (see [`module_name`]).
 #[must_use]
 pub fn functions(path: &str, src: &str) -> BTreeMap<String, Method> {
+    crate::stack::on_own_stack(src, &crate::stack::PYTHON, || functions_here(path, src))
+        .unwrap_or_default()
+}
+
+fn functions_here(path: &str, src: &str) -> BTreeMap<String, Method> {
     let module = module_name(path);
     let (code, blank) = strip(src);
     let lines = logical_lines(&blank);
@@ -133,6 +138,10 @@ pub fn functions(path: &str, src: &str) -> BTreeMap<String, Method> {
 /// names are those of [`functions`] without the module.
 #[must_use]
 pub fn facts(src: &str) -> ModuleFacts {
+    crate::stack::on_own_stack(src, &crate::stack::PYTHON, || facts_here(src)).unwrap_or_default()
+}
+
+fn facts_here(src: &str) -> ModuleFacts {
     let (_, blank) = strip(src);
     let lines = logical_lines(&blank);
     // From the source: the blanked text turns newlines inside strings into spaces.
@@ -384,13 +393,14 @@ fn chain_value(text: &str) -> Option<Expr> {
     {
         return None;
     }
-    let (expr, _, _) = parse_chain(b, 0);
+    let (expr, _, _) = parse_chain(b, 0, &after_closers(b));
     (expr != Expr::Unknown).then_some(expr)
 }
 
 /// Every call in a logical line: the offset of its `(` and the callee.
 fn chains(text: &str) -> Vec<(usize, Expr)> {
     let b = text.as_bytes();
+    let after = after_closers(b);
     let mut out = Vec::new();
     let mut i = 0;
     while i < b.len() {
@@ -407,7 +417,7 @@ fn chains(text: &str) -> Vec<(usize, Expr)> {
             i = end;
             continue;
         }
-        let (_, sites, _) = parse_chain(b, i);
+        let (_, sites, _) = parse_chain(b, i, &after);
         out.extend(sites);
         i = end;
     }
@@ -424,7 +434,7 @@ fn ident_end(b: &[u8], from: usize) -> usize {
 
 /// Parse `name(.name | (...) | [...])*` from `start`: the value, the calls on the way, and the
 /// end offset.
-fn parse_chain(b: &[u8], start: usize) -> (Expr, Vec<(usize, Expr)>, usize) {
+fn parse_chain(b: &[u8], start: usize, after: &[usize]) -> (Expr, Vec<(usize, Expr)>, usize) {
     let end = ident_end(b, start);
     let word = String::from_utf8_lossy(&b[start..end]).into_owned();
     let mut expr = if word == "self" || word == "cls" {
@@ -434,7 +444,15 @@ fn parse_chain(b: &[u8], start: usize) -> (Expr, Vec<(usize, Expr)>, usize) {
     };
     let mut sites = Vec::new();
     let mut j = end;
+    let mut links = 0;
+    let mut capped = false;
     loop {
+        // Past the cap the chain is unknown and stays so: no prefix of it is kept.
+        links += 1;
+        if links > MAX_LINKS {
+            capped = true;
+            expr = Expr::Unknown;
+        }
         let mut k = j;
         while k < b.len() && b[k] == b' ' {
             k += 1;
@@ -449,20 +467,24 @@ fn parse_chain(b: &[u8], start: usize) -> (Expr, Vec<(usize, Expr)>, usize) {
                 if e == n {
                     break;
                 }
-                let member = String::from_utf8_lossy(&b[n..e]).into_owned();
-                expr = Expr::Member(Box::new(expr), member);
+                if !capped {
+                    let member = String::from_utf8_lossy(&b[n..e]).into_owned();
+                    expr = Expr::Member(Box::new(expr), member);
+                }
                 j = e;
             }
             Some(b'(') => {
                 if expr != Expr::Unknown {
                     sites.push((k, expr.clone()));
                 }
-                expr = Expr::Call(Box::new(expr));
-                j = matching(b, k);
+                if !capped {
+                    expr = Expr::Call(Box::new(expr));
+                }
+                j = after[k];
             }
             Some(b'[') => {
                 expr = Expr::Unknown;
-                j = matching(b, k);
+                j = after[k];
             }
             _ => break,
         }
@@ -470,24 +492,24 @@ fn parse_chain(b: &[u8], start: usize) -> (Expr, Vec<(usize, Expr)>, usize) {
     (expr, sites, j)
 }
 
-/// The offset after the bracket closing the one at `open` (strings are already blank).
-fn matching(b: &[u8], open: usize) -> usize {
-    let mut depth = 0i32;
-    let mut j = open;
-    while j < b.len() {
-        match b[j] {
-            b'(' | b'[' | b'{' => depth += 1,
+/// For each opening bracket, the offset after the bracket closing it (the end when none
+/// does); strings are already blank. One pass for the whole line: matching each bracket
+/// on its own rescans the rest of the line from every level of `a(a(a(...)))`.
+fn after_closers(b: &[u8]) -> Vec<usize> {
+    let mut after = vec![b.len(); b.len()];
+    let mut open = Vec::new();
+    for (j, c) in b.iter().enumerate() {
+        match c {
+            b'(' | b'[' | b'{' => open.push(j),
             b')' | b']' | b'}' => {
-                depth -= 1;
-                if depth == 0 {
-                    return j + 1;
+                if let Some(o) = open.pop() {
+                    after[o] = j + 1;
                 }
             }
             _ => {}
         }
-        j += 1;
     }
-    b.len()
+    after
 }
 
 fn is_ident(s: &str) -> bool {

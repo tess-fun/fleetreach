@@ -243,6 +243,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A crafted JavaScript or Python file could abort or stall a `--reachability` scan.** The
+  call graphs read every installed package's source. Deep nesting inside the 2 MiB file cap
+  (`((((...`, `a=a=a=...`, nested arrow functions) overflowed the parser's stack, which ends
+  the process where no error handling can catch it, and long call or attribute chains, or
+  nested calls in Python, took quadratic time and memory (53 GB on one file). Each file is
+  now parsed on its own thread with a stack sized from a bound on what the file can need,
+  chains keep at most 64 links, and Python matches brackets once per line. 43 crafted shapes
+  read in 200 ms at most, 48,000 mutated real files in 2.5 ms at most, and the call graphs on
+  40 real repos are unchanged.
 - **A crafted Java class could crash a JVM scan.** `cafebabe` 0.9 panics on a name entry that
   is not valid modified UTF-8; such a class is now unread, a gap in the read like any other
   class it rejects. 1.1 million mutated real class files read with no panic, the slowest in

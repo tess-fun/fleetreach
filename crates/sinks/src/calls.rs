@@ -182,6 +182,10 @@ const MAX_MODULES: usize = 40_000;
 const MAX_NODES: usize = 1_000_000;
 const MAX_FILE_BYTES: usize = 2 << 20;
 const MAX_DEPTH: usize = 24;
+/// Links one expression keeps (`a.b.c(...)` has four); a longer chain is `Expr::Unknown`.
+/// Resolution stops at [`MAX_DEPTH`] anyway, and a crafted `f()()()...` would otherwise store
+/// every prefix of itself: quadratic in the length of the line.
+pub(crate) const MAX_LINKS: usize = 64;
 
 /// A proposed record with more sinks than this names a broad fix (a refactor in the same
 /// commit), too broad for a witness until a person narrows it.
