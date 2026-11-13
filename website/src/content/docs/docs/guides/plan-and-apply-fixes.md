@@ -69,12 +69,12 @@ $ fleetreach fix plan --report report.json | head -n 52
       "risk_reasons": [
         "breaking (new major)",
         "no repo in the fleet runs it yet"
-      ]
+      ],
+      "ssvc": "scheduled"
     },
     {
       "campaign": "1f397432",
       "repo": "admin-dashboard",
-      "ecosystem": "npm",
 ```
 <!-- /run -->
 
@@ -178,7 +178,8 @@ merge request with `glab` on GitLab), or updates the open one so re-running neve
 duplicates it. Unverified branches are never pushed, and only `fleetreach/*` branches are
 ever pushed. A push leases on the commit fleetreach last saw, so it does not overwrite work
 someone else pushed. The description lists the advisories, flags a breaking jump, states the
-verification and names the other repos in the campaign. Nothing is merged for you.
+verification and names the other repos in the campaign. Nothing is merged for you unless
+`[settings.fix] automerge` says so.
 
 `fix status` lists every repo's `fleetreach/*` requests with their state.
 
@@ -202,6 +203,45 @@ flags keep a large rollout small:
 | `--max-prs <n>` | Opens at most `n` new requests; open ones are still updated. |
 | `--canary a,b` | Runs these repos first; the rest wait on every edit in them being verified. |
 | `--stop-after-failures <n>` | Stops the run after `n` edits that did not verify. |
+
+## Schedules, grouping, automerge and rollout
+
+`[settings.fix]` in fleet.toml sets how a fleet takes its fixes:
+
+```toml
+[settings.fix]
+schedule = ["mon-thu 09:00-16:00"]   # when --push and --open-pr may publish
+timezone = "Europe/Paris"            # IANA name; UTC by default
+group = "repo"                       # "package" (default), "repo" or "ssvc"
+automerge = "verified"               # "off" (default) or "verified"
+merge_method = "squash"              # "squash" (default), "merge" or "rebase"
+```
+
+**Schedule.** Outside every window, a run with `--push`, `--open-pr` or `--close-obsolete`
+publishes nothing, says when the next window opens, and exits 0. A window is
+`[days] HH:MM-HH:MM`, where days are `mon` to `sun`, ranges (`mon-fri`) or lists
+(`sat,sun`), and no days means every day. One that ends before it starts runs past midnight
+(`fri 22:00-06:00`). Applying without publishing ignores the schedule, and so does
+`--ignore-schedule`.
+
+**Grouping.** `package` opens one request per bump. `repo` puts every bump of a repo on
+`fleetreach/all`, and `ssvc` puts them on `fleetreach/ssvc-<outcome>`, so an `immediate` fix
+never waits on a `defer` one (the plan takes each edit's most urgent SSVC outcome from a
+scan run with SSVC decisions). In a group, each bump is applied and re-scanned on top of the
+ones before it. One that fails or does not verify is undone and left out, and the request
+lists it, so the branch only ever holds verified bumps, squashed into one commit.
+
+**Automerge.** With `automerge = "verified"`, each request fleetreach opens or updates turns on
+the forge's own auto-merge (`gh pr merge --auto`, `glab mr merge --auto-merge`), pinned to the
+commit fleetreach verified: a later push to the branch cancels it, and the forge's required
+checks and reviews still apply. A draft, or a request with a breaking bump, is left for a
+person.
+
+**Rollout.** `rollout = [1, 5]` spreads each campaign in waves: one repo first, five more once
+that request has merged, then the rest once those five have. While a wave's requests are open,
+the campaign opens nothing new; one closed without merging stops the campaign. Rollout needs
+`group = "package"`, since a grouped request mixes campaigns. It works with `--open-pr`, which
+reads every repo's request states.
 
 See
 [Renovate and Dependabot](/fleetreach/docs/integrations/renovate-and-dependabot/) for how

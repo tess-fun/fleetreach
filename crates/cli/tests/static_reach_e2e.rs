@@ -120,6 +120,7 @@ fn static_engine_annotates_a_dependency_finding_reachable() {
         history_keep: None,
         gate_dev: Default::default(),
         health_min_scorecard: None,
+        fix: Default::default(),
         sbom_discover: false,
         sbom_discover_repos: Default::default(),
     };
@@ -236,6 +237,7 @@ fn uninstantiated_generic_dependency_fn_is_not_reachable() {
         history_keep: None,
         gate_dev: Default::default(),
         health_min_scorecard: None,
+        fix: Default::default(),
         sbom_discover: false,
         sbom_discover_repos: Default::default(),
     };

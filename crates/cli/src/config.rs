@@ -64,6 +64,8 @@ pub enum ConfigError {
     BadGateScope(String),
     #[error("settings.health.min_scorecard `{0}` is not between 0 and 10")]
     BadMinScorecard(f64),
+    #[error("settings.fix: {0}")]
+    InvalidFix(String),
     #[error("settings.history: {0}")]
     InvalidHistory(String),
 }
@@ -350,6 +352,8 @@ struct SettingsTable {
     health: RawHealth,
     #[serde(default)]
     sbom: RawSbom,
+    #[serde(default)]
+    fix: crate::fix_policy::RawFix,
 }
 
 /// The `[settings.sbom]` block (spec 16, row 26).
@@ -559,6 +563,8 @@ pub struct Config {
     pub gate_dev: crate::assemble::DevGate,
     /// `[settings.health] min_scorecard`.
     pub health_min_scorecard: Option<f64>,
+    /// `[settings.fix]`: schedule, grouping, automerge and rollout for `fix apply`.
+    pub fix: crate::fix_policy::FixSettings,
 }
 
 /// A rule that turns a repo's tags or forge topics into decision points. For each decision
@@ -1297,6 +1303,7 @@ impl Config {
             Some("never") => DevGate::Never,
             Some(other) => return Err(ConfigError::BadGateScope(other.to_string())),
         };
+        let fix = raw.settings.fix.parse().map_err(ConfigError::InvalidFix)?;
         let health_min_scorecard = raw.settings.health.min_scorecard;
         if let Some(score) = health_min_scorecard.filter(|s| !(0.0..=10.0).contains(s)) {
             return Err(ConfigError::BadMinScorecard(score));
@@ -1345,6 +1352,7 @@ impl Config {
             history_keep,
             gate_dev,
             health_min_scorecard,
+            fix,
         })
     }
 }

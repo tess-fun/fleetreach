@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`[settings.fix]` sets when and how `fix apply` publishes.** `schedule` windows (with an
+  IANA `timezone`) keep `--push` and `--open-pr` to working hours; outside them a run publishes
+  nothing and says when the next window opens. `group = "repo"` or `"ssvc"` puts a repo's bumps
+  on one branch and request, each applied and re-scanned on top of the last, with any that do
+  not verify undone and left out. `automerge = "verified"` turns on the forge's own auto-merge,
+  pinned to the verified commit, except for drafts and breaking bumps. `rollout = [1, 5]`
+  spreads a campaign in waves: the next wave opens once the last one merged, and a request
+  closed unmerged stops it.
 - **`fleetreach serve` shows the history report and records triage decisions in a browser.**
   It reads the `scan --history-dir` directory and the triage files on every request, lists the
   newest run's findings with their decisions, and writes a decision from a form as the same file

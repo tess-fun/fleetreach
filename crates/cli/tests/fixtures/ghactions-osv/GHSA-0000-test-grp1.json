@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.6.0",
+  "id": "GHSA-0000-test-grp1",
+  "modified": "2026-11-12T00:00:00Z",
+  "published": "2026-11-12T00:00:00Z",
+  "summary": "Synthetic advisory for the fix grouping tests (not a real advisory)",
+  "database_specific": {"severity": "HIGH"},
+  "affected": [
+    {
+      "package": {"ecosystem": "GitHub Actions", "name": "fleetreach-test/setup-tool"},
+      "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "1.0.1"}]}]
+    }
+  ]
+}

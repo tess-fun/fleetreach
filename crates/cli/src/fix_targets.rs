@@ -448,6 +448,7 @@ mod tests {
             reason: None,
             risk: Some(Risk::Low),
             risk_reasons: vec![],
+            ssvc: None,
         }
     }
 

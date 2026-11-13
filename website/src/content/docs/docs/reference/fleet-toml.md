@@ -220,6 +220,22 @@ high           = "30d"
 `never`. `--fail-on-dev` wins over it, and without either they gate like any other package.
 See [Gate on what ships](/fleetreach/docs/guides/gate-on-what-ships/).
 
+## `[settings.fix]`
+
+```toml
+[settings.fix]
+schedule = ["mon-fri 09:00-17:00"]   # windows when fix apply may publish
+timezone = "UTC"                     # IANA time zone of the windows
+group = "package"                    # or "repo", "ssvc"
+automerge = "off"                    # or "verified"
+merge_method = "squash"              # or "merge", "rebase"
+rollout = [1, 5]                     # repos per wave, per campaign
+```
+
+How `fix apply` publishes: when, on which branches, whether verified requests merge
+themselves, and how fast a campaign spreads. An unknown key or value is a config error. See
+[Schedules, grouping, automerge and rollout](/fleetreach/docs/guides/plan-and-apply-fixes/#schedules-grouping-automerge-and-rollout).
+
 ## `[settings.health]`
 
 `min_scorecard` makes `scan --health` warn on source repos with an OpenSSF Scorecard under this

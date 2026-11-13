@@ -749,6 +749,15 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     PRs on Bitbucket, Azure DevOps and Gitea/Forgejo, Swift/Hex/Julia manifest edits.
     Poetry and Pipenv stay excluded unless their lock commands can be proven not to build
     sdists.
+    **Status: schedules, grouping, automerge and rollout implemented 2026-11-12, for 1.7.0**
+    (`crates/cli/src/fix_policy.rs`, `[settings.fix]`). Grouping presets are `package`,
+    `repo` and `ssvc`; `owner` is not one, since a request lives in one repo and a repo has
+    one owner, so it would equal `repo`. A grouped branch applies and re-scans each bump on
+    top of the last and leaves out any that do not verify. Automerge is the forge's native
+    one pinned to the verified head, never for drafts or breaking bumps. Rollout waves gate
+    on the campaign's merged, open and closed requests. Proven end to end with a fake `gh`
+    over real git remotes; not yet against github.com or GitLab. Still open: PRs on
+    Bitbucket, Azure DevOps and Gitea/Forgejo, and Swift/Hex/Julia lock edits.
 - **Effort**: L. **Release**: 1.6.0 + 1.7.0. **Depends on**: forges (row 4) for phase B.
 - **Proof**: a 30-repo PR corpus across all managers on throwaway repos: every PR re-scanned
   clean, nothing new introduced, lockfile accepted by the package manager's frozen install.

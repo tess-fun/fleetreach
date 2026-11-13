@@ -81,6 +81,9 @@ Options:
       --close-obsolete
           Close the open fleetreach requests this plan no longer wants, in repos it scanned
 
+      --ignore-schedule
+          Publish even outside the `[settings.fix] schedule` windows
+
   -q, --quiet
           no progress output
 

@@ -40,6 +40,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cli::fail;
 use crate::config::{Config, Repo};
+use crate::fix_policy::{FixSettings, Group, RolloutGate};
 use crate::{fix_constraints, fix_managers, fix_targets, osvdb, sources};
 
 /// The plan file format.
@@ -160,6 +161,9 @@ pub struct FixApplyArgs {
     /// Close the open fleetreach requests this plan no longer wants, in repos it scanned
     #[arg(long)]
     close_obsolete: bool,
+    /// Publish even outside the `[settings.fix] schedule` windows
+    #[arg(long)]
+    ignore_schedule: bool,
     #[arg(short, long, help = "no progress output")]
     quiet: bool,
     /// Push each verified branch to the repo's `origin` (only `fleetreach/*` branches;
@@ -222,6 +226,10 @@ pub struct Edit {
     pub risk: Option<fleetreach_core::Risk>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub risk_reasons: Vec<String>,
+    /// The most urgent SSVC outcome among the advisories in this repo, when the scan decided
+    /// one; `[settings.fix] group = "ssvc"` splits requests by it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssvc: Option<fleetreach_core::ssvc::Outcome>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -351,6 +359,7 @@ pub fn build_plan(report: &FleetReport, allow_breaking: bool) -> Plan {
                         reason,
                         risk: Some(risk),
                         risk_reasons,
+                        ssvc: None,
                     }
                 }
                 (_, action) => {
@@ -385,10 +394,25 @@ pub fn build_plan(report: &FleetReport, allow_breaking: bool) -> Plan {
                         reason,
                         risk,
                         risk_reasons,
+                        ssvc: None,
                     }
                 }
             };
             edits.push(edit);
+        }
+    }
+    if let Some(ssvc) = &report.ssvc {
+        for edit in &mut edits {
+            edit.ssvc = ssvc
+                .decisions
+                .iter()
+                .filter(|d| {
+                    d.repo.0 == edit.repo
+                        && d.package == edit.package
+                        && edit.advisories.contains(&d.advisory_id)
+                })
+                .map(|d| d.outcome)
+                .max();
         }
     }
     edits.sort_by(|a, b| (&a.repo, &a.campaign).cmp(&(&b.repo, &b.campaign)));
@@ -520,7 +544,7 @@ fn run_plan(args: &FixPlanArgs) -> u8 {
 
 // ---- apply ----
 
-#[derive(Debug, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 enum Outcome {
     /// Applied and verified: the targeted advisories are gone and nothing new appeared.
@@ -615,6 +639,76 @@ fn settled(state: &str) -> Option<&'static str> {
     }
 }
 
+/// Edits that share one branch and one request (spec 16, row 5): a single bump with
+/// `group = "package"`, or every bump of a repo (or of a repo and SSVC outcome) otherwise.
+struct Unit<'a> {
+    repo: String,
+    branch: String,
+    edits: Vec<&'a Edit>,
+}
+
+/// Split the edits into units, keeping the order they come in.
+fn units<'a>(edits: &[&'a Edit], group: Group) -> Vec<Unit<'a>> {
+    let mut out: Vec<Unit<'a>> = Vec::new();
+    for edit in edits {
+        let branch = unit_branch(edit, group);
+        match out
+            .iter_mut()
+            .find(|u| u.repo == edit.repo && u.branch == branch)
+        {
+            Some(unit) => unit.edits.push(edit),
+            None => out.push(Unit {
+                repo: edit.repo.clone(),
+                branch,
+                edits: vec![edit],
+            }),
+        }
+    }
+    out
+}
+
+/// The branch an edit lands on under a grouping preset.
+fn unit_branch(edit: &Edit, group: Group) -> String {
+    match group {
+        Group::Package => branch_name(edit),
+        Group::Repo => "fleetreach/all".to_string(),
+        Group::Ssvc => format!(
+            "fleetreach/ssvc-{}",
+            edit.ssvc.map_or("undecided", |o| o.label())
+        ),
+    }
+}
+
+/// How many of a campaign's requests, across the fleet, are merged, open and closed unmerged.
+fn campaign_requests(
+    campaign: &str,
+    plan: &Plan,
+    config: &Config,
+    forge: ForgeArg,
+    requests: &mut Requests,
+) -> Result<(usize, usize, usize), String> {
+    let (mut merged, mut open, mut closed) = (0, 0, 0);
+    for edit in plan.edits.iter().filter(|e| e.campaign == campaign) {
+        let Some(repo) = config.repos.iter().find(|r| r.id.0 == edit.repo) else {
+            continue;
+        };
+        let known = requests
+            .of(repo, forge)
+            .as_ref()
+            .map_err(|e| format!("{}: {e}", edit.repo))?;
+        match known
+            .get(&branch_name(edit))
+            .map(|(state, _)| state.as_str())
+        {
+            Some("MERGED") => merged += 1,
+            Some("OPEN") => open += 1,
+            Some("CLOSED") => closed += 1,
+            _ => {}
+        }
+    }
+    Ok((merged, open, closed))
+}
+
 fn run_apply(args: &FixApplyArgs) -> u8 {
     let mut config = match Config::load(&args.config) {
         Ok(c) => c,
@@ -638,6 +732,24 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
             plan.schema
         ));
     }
+    let policy = config.fix.clone();
+    let publishing = args.push || args.open_pr;
+    if (publishing || args.close_obsolete) && !args.ignore_schedule {
+        let now = jiff::Zoned::now();
+        if !policy.open_at(&now) {
+            let next = policy.next_open(&now).map_or_else(
+                || "no window ahead".to_string(),
+                |at| format!("it next opens {}", at.strftime("%a %Y-%m-%d %H:%M %Z")),
+            );
+            eprintln!(
+                "outside [settings.fix] schedule ({}): nothing published; {next}, or pass \
+                 --ignore-schedule",
+                policy.timezone_name
+            );
+            println!("[]");
+            return 0;
+        }
+    }
     let Some(work_root) = crate::osvdb::private_subdir("fix") else {
         return fail("no usable cache directory for fix work trees");
     };
@@ -647,56 +759,64 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
             return fail(&format!("--canary repo `{canary}` is not in fleet.toml"));
         }
     }
-    // Canaries go first; sorting is stable, so the plan's order holds within each group.
-    let is_canary = |edit: &Edit| args.canary.contains(&edit.repo);
-    let mut edits: Vec<&Edit> = plan.edits.iter().collect();
-    edits.sort_by_key(|e| !is_canary(e));
-
     let mut results: Vec<Applied> = Vec::new();
-    let mut requests = Requests::default();
-    let mut repos_touched: BTreeSet<String> = BTreeSet::new();
-    let mut stopped: Option<String> = None;
-    for edit in edits {
-        let skip = |why: &str| Applied::new(edit, Outcome::Skipped, why);
+    // Canaries go first; sorting is stable, so the plan's order holds within each group.
+    let is_canary = |repo: &str| args.canary.iter().any(|c| c == repo);
+    let mut edits: Vec<&Edit> = Vec::new();
+    for edit in &plan.edits {
         if edit.strategy == Strategy::Blocked {
-            results.push(skip(
+            results.push(Applied::new(
+                edit,
+                Outcome::Skipped,
                 edit.reason.as_deref().unwrap_or("blocked in the plan"),
             ));
-            continue;
+        } else if args.repos.is_empty() || args.repos.contains(&edit.repo) {
+            edits.push(edit);
         }
-        if !args.repos.is_empty() && !args.repos.contains(&edit.repo) {
-            continue;
-        }
+    }
+    edits.sort_by_key(|e| !is_canary(&e.repo));
+
+    let mut requests = Requests::default();
+    let mut repos_touched: BTreeSet<String> = BTreeSet::new();
+    let mut opened_by_campaign: BTreeMap<String, usize> = BTreeMap::new();
+    let mut stopped: Option<String> = None;
+    for unit in units(&edits, policy.group) {
+        let skip_all = |results: &mut Vec<Applied>, outcome: Outcome, why: &str| {
+            for edit in &unit.edits {
+                results.push(Applied::new(edit, outcome.clone(), why));
+            }
+        };
         let failures = results.iter().filter(|r| r.failed()).count();
         if stopped.is_none() && args.stop_after_failures.is_some_and(|n| failures >= n) {
             stopped = Some(format!("stopped after {failures} failed edit(s)"));
         }
-        let canary_failed = results
-            .iter()
-            .any(|r| r.failed() && args.canary.contains(&r.repo));
-        if stopped.is_none() && canary_failed && !is_canary(edit) {
+        let canary_failed = results.iter().any(|r| r.failed() && is_canary(&r.repo));
+        if stopped.is_none() && canary_failed && !is_canary(&unit.repo) {
             stopped = Some("stopped: a canary repo did not verify".to_string());
         }
         if let Some(why) = &stopped {
-            results.push(skip(why));
+            skip_all(&mut results, Outcome::Skipped, why);
             continue;
         }
-        if !repos_touched.contains(&edit.repo) && repos_touched.len() >= args.max_repos {
-            results.push(skip("over --max-repos for this run"));
+        if !repos_touched.contains(&unit.repo) && repos_touched.len() >= args.max_repos {
+            skip_all(
+                &mut results,
+                Outcome::Skipped,
+                "over --max-repos for this run",
+            );
             continue;
         }
-        let Some(repo) = config.repos.iter().find(|r| r.id.0 == edit.repo) else {
-            results.push(skip("repo not in fleet.toml"));
+        let Some(repo) = config.repos.iter().find(|r| r.id.0 == unit.repo) else {
+            skip_all(&mut results, Outcome::Skipped, "repo not in fleet.toml");
             continue;
         };
-        let branch = branch_name(edit);
         let mut has_open = false;
         if args.open_pr {
             match requests.of(repo, args.forge) {
                 Ok(known) => {
-                    let state = known.get(&branch).map(|(state, _)| state.as_str());
+                    let state = known.get(&unit.branch).map(|(state, _)| state.as_str());
                     if let Some(why) = state.and_then(settled) {
-                        results.push(skip(why));
+                        skip_all(&mut results, Outcome::Skipped, why);
                         continue;
                     }
                     has_open = state == Some("OPEN");
@@ -704,32 +824,114 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
                 // Unknown requests cannot be counted or respected.
                 Err(e) => {
                     let detail = format!("could not list requests: {e}");
-                    results.push(Applied::new(edit, Outcome::Blocked, &detail));
+                    skip_all(&mut results, Outcome::Blocked, &detail);
                     continue;
                 }
             }
         }
+        // Gradual rollout: a campaign opens its next wave only once the last one merged.
+        if args.open_pr && !has_open && !policy.rollout.is_empty() {
+            let campaign = &unit.edits[0].campaign;
+            let held = match campaign_requests(campaign, &plan, &config, args.forge, &mut requests)
+            {
+                Err(e) => Some(format!("rollout: could not list requests: {e}")),
+                Ok((merged, open, closed)) => {
+                    let opened = opened_by_campaign.get(campaign).copied().unwrap_or(0);
+                    match policy.rollout_allowance(merged, open, closed) {
+                        RolloutGate::Stopped => Some(
+                            "rollout stopped: a request of this campaign was closed without \
+                             merging"
+                                .to_string(),
+                        ),
+                        RolloutGate::Waiting if opened == 0 => Some(format!(
+                            "rollout: waiting for this campaign's {open} open request(s) to merge"
+                        )),
+                        RolloutGate::Waiting => {
+                            Some("rollout: this run already opened the current wave".to_string())
+                        }
+                        RolloutGate::Open(Some(n)) if opened >= n => Some(format!(
+                            "rollout: this wave is {n} repo(s), already opened this run"
+                        )),
+                        RolloutGate::Open(_) => None,
+                    }
+                }
+            };
+            if let Some(why) = held {
+                skip_all(&mut results, Outcome::Skipped, &why);
+                continue;
+            }
+        }
         let opened = results.iter().filter(|r| r.opened).count();
         if !has_open && args.open_pr && args.max_prs.is_some_and(|n| opened >= n) {
-            results.push(skip("over --max-prs for this run"));
+            skip_all(
+                &mut results,
+                Outcome::Skipped,
+                "over --max-prs for this run",
+            );
             continue;
         }
-        repos_touched.insert(edit.repo.clone());
+        repos_touched.insert(unit.repo.clone());
         if !args.quiet {
-            eprintln!("{}: {} -> {} ...", edit.repo, edit.package, edit.to);
+            let what: Vec<String> = unit
+                .edits
+                .iter()
+                .map(|e| format!("{} -> {}", e.package, e.to))
+                .collect();
+            eprintln!("{}: {} ...", unit.repo, what.join(", "));
         }
-        let publishing = args.push || args.open_pr;
-        let mut result = apply_one(edit, repo, &work_root, &args.scan_args, publishing);
-        if result.outcome == Outcome::Verified && publishing {
-            publish(&mut result, edit, repo, &plan, args);
+        let mut applied = if policy.group == Group::Package {
+            vec![apply_one(
+                unit.edits[0],
+                repo,
+                &work_root,
+                &args.scan_args,
+                publishing,
+            )]
+        } else {
+            apply_group(
+                &unit,
+                policy.group,
+                repo,
+                &work_root,
+                &args.scan_args,
+                publishing,
+            )
+        };
+        if publishing && applied.iter().any(|a| a.outcome == Outcome::Verified) {
+            publish(
+                &mut applied,
+                &unit,
+                policy.group,
+                repo,
+                &plan,
+                args,
+                &policy,
+            );
         }
-        if !args.quiet {
-            eprintln!("  {:?}: {}", result.outcome, result.detail);
+        for result in &applied {
+            if result.opened {
+                *opened_by_campaign
+                    .entry(result.campaign.clone())
+                    .or_default() += 1;
+            }
+            if !args.quiet {
+                eprintln!(
+                    "  {}: {:?}: {}",
+                    result.package, result.outcome, result.detail
+                );
+            }
         }
-        results.push(result);
+        results.extend(applied);
     }
     if args.close_obsolete {
-        close_obsolete(&plan, &config, args, &mut requests, &mut results);
+        close_obsolete(
+            &plan,
+            &config,
+            args,
+            policy.group,
+            &mut requests,
+            &mut results,
+        );
     }
 
     match serde_json::to_string_pretty(&results) {
@@ -744,11 +946,7 @@ fn run_apply(args: &FixApplyArgs) -> u8 {
         count(Outcome::Blocked),
         count(Outcome::Skipped),
         count(Outcome::Closed),
-        if args.push || args.open_pr {
-            ""
-        } else {
-            " (nothing pushed)"
-        }
+        if publishing { "" } else { " (nothing pushed)" }
     );
     // Like scan: 0 when everything planned was verified, 1 when some edit did not land.
     u8::from(count(Outcome::Unverified) + count(Outcome::Blocked) > 0)
@@ -968,11 +1166,245 @@ fn apply_one(
     out
 }
 
+/// The marker a grouped commit carries, so a rerun can tell it is fleetreach's and which
+/// campaigns it holds.
+fn group_marker(campaigns: &[&str]) -> String {
+    format!("Campaigns: {}", campaigns.join(", "))
+}
+
+/// Apply a unit of several bumps on one branch. Each bump is applied and re-scanned on top of
+/// the ones before it; one that fails or does not verify is undone and left out, so the branch
+/// only ever holds verified bumps, squashed into one commit.
+fn apply_group(
+    unit: &Unit,
+    group: Group,
+    repo: &Repo,
+    work_root: &Path,
+    scan_args: &[String],
+    publishing: bool,
+) -> Vec<Applied> {
+    let all = |outcome: Outcome, detail: &str| -> Vec<Applied> {
+        unit.edits
+            .iter()
+            .map(|e| Applied::new(e, outcome.clone(), detail))
+            .collect()
+    };
+    let top = match git(&repo.path, &["rev-parse", "--show-toplevel"]) {
+        Ok(t) => PathBuf::from(t),
+        Err(e) => return all(Outcome::Blocked, &format!("not a git work tree: {e}")),
+    };
+    let rel = repo
+        .path
+        .canonicalize()
+        .ok()
+        .and_then(|p| {
+            top.canonicalize()
+                .ok()
+                .and_then(|t| p.strip_prefix(t).ok().map(Path::to_path_buf))
+        })
+        .unwrap_or_default();
+    let branch = unit.branch.clone();
+    let tree = work_root.join(format!("{}-{}", safe(&unit.repo), safe(&branch)));
+    let (base, remote) = match base_and_remote(&top, &branch, publishing) {
+        Ok(found) => found,
+        Err(e) => return all(Outcome::Blocked, &format!("could not read the remote: {e}")),
+    };
+    let grouped_ours = |sha: &str| {
+        git(&top, &["log", "-1", "--format=%B", sha])
+            .is_ok_and(|m| m.contains(VERIFIED) && m.contains("Campaigns: "))
+    };
+    if let Some(sha) = &remote {
+        if !grouped_ours(sha) {
+            return all(
+                Outcome::Skipped,
+                "someone else has pushed to this branch; left alone",
+            );
+        }
+    }
+    let mut wanted: Vec<&str> = unit.edits.iter().map(|e| e.campaign.as_str()).collect();
+    wanted.sort_unstable();
+    let current = remote
+        .clone()
+        .or_else(|| git(&top, &["rev-parse", "--verify", "--quiet", &branch]).ok());
+    if let Some(sha) = current {
+        let parent = git(&top, &["rev-parse", &format!("{sha}^")]);
+        let same = git(&top, &["log", "-1", "--format=%B", &sha])
+            .is_ok_and(|m| m.contains(VERIFIED) && m.contains(&group_marker(&wanted)));
+        if parent.as_deref() == Ok(base.as_str()) && same {
+            // Nothing moved under it: a rewrite would only reset its CI and reviews.
+            if let Err(e) = git(&top, &["branch", "--force", &branch, &sha]) {
+                return all(Outcome::Blocked, &format!("could not update {branch}: {e}"));
+            }
+            let mut out = all(Outcome::Verified, "already verified on the current base");
+            for a in &mut out {
+                a.branch = Some(branch.clone());
+            }
+            return out;
+        }
+    }
+    let _ = git(&top, &["worktree", "remove", "--force", path_str(&tree)]);
+    let _ = std::fs::remove_dir_all(&tree);
+    let _ = git(&top, &["worktree", "prune"]);
+    if let Err(e) = git(
+        &top,
+        &[
+            "worktree",
+            "add",
+            "--quiet",
+            "--force",
+            "--detach",
+            path_str(&tree),
+            &base,
+        ],
+    ) {
+        return all(
+            Outcome::Blocked,
+            &format!("could not create a work tree: {e}"),
+        );
+    }
+    let cleanup = || {
+        let _ = git(&top, &["worktree", "remove", "--force", path_str(&tree)]);
+    };
+    let work = tree.join(&rel);
+    let mut before = match scan(&work, repo, scan_args) {
+        Ok(s) => s,
+        Err(e) => {
+            cleanup();
+            return all(Outcome::Blocked, &format!("baseline scan failed: {e}"));
+        }
+    };
+    // Back to the last verified state after a bump that did not make it.
+    let undo = || {
+        git(&tree, &["reset", "--quiet", "--hard"])
+            .and_then(|_| git(&tree, &["clean", "--quiet", "-fd"]))
+    };
+    let mut out: Vec<Applied> = Vec::new();
+    let mut lines: Vec<String> = Vec::new();
+    let mut kept: Vec<&Edit> = Vec::new();
+    for edit in &unit.edits {
+        let mut result = Applied::new(edit, Outcome::Blocked, "");
+        match apply_edit(&work, edit) {
+            Err(e) => result.detail = e,
+            Ok(_) if git(&tree, &["status", "--porcelain"]).is_ok_and(|s| s.is_empty()) => {
+                result.detail = "the update changed nothing".to_string();
+            }
+            Ok(changed) => match scan(&work, repo, scan_args) {
+                Err(e) => result.detail = format!("{changed}; re-scan failed: {e}"),
+                Ok(after) => match verify(edit, &before, &after) {
+                    Err(why) => {
+                        result.outcome = Outcome::Unverified;
+                        result.detail = format!(
+                            "{changed}; re-scan did not verify: {why}; left out of {branch}"
+                        );
+                    }
+                    Ok(()) => {
+                        let step = git(&tree, &["add", "-A"])
+                            .and_then(|_| git(&tree, &["commit", "--quiet", "-m", &edit.campaign]));
+                        match step {
+                            Err(e) => result.detail = format!("could not commit: {e}"),
+                            Ok(_) => {
+                                result.outcome = Outcome::Verified;
+                                result.detail = format!(
+                                    "{changed}; re-scan: {} cleared, nothing new",
+                                    edit.advisories.join(", ")
+                                );
+                                result.ran = changed.clone();
+                                lines.push(format!(
+                                    "- {} {} -> {}: {} ({} campaign {}). Update: {changed}.",
+                                    edit.package,
+                                    edit.from.join(", "),
+                                    edit.to,
+                                    edit.advisories.join(", "),
+                                    ecosystem_name(edit.ecosystem),
+                                    edit.campaign
+                                ));
+                                kept.push(edit);
+                                before = after;
+                            }
+                        }
+                    }
+                },
+            },
+        }
+        if result.outcome != Outcome::Verified {
+            if let Err(e) = undo() {
+                cleanup();
+                out.push(result);
+                for rest in unit.edits.iter().skip(out.len()) {
+                    out.push(Applied::new(
+                        rest,
+                        Outcome::Blocked,
+                        &format!("could not undo a failed bump: {e}"),
+                    ));
+                }
+                return out;
+            }
+        }
+        out.push(result);
+    }
+    if kept.is_empty() {
+        cleanup();
+        return out;
+    }
+    let mut campaigns: Vec<&str> = kept.iter().map(|e| e.campaign.as_str()).collect();
+    campaigns.sort_unstable();
+    let advisories: BTreeSet<&str> = kept
+        .iter()
+        .flat_map(|e| e.advisories.iter().map(String::as_str))
+        .collect();
+    let message = format!(
+        "{}\n\nClears {}.\n{}\n\nGroup: {}\n{}\n{VERIFIED}: after each bump its advisories \
+         are gone and nothing new appeared.\n",
+        group_title(&kept, group),
+        advisories.into_iter().collect::<Vec<_>>().join(", "),
+        lines.join("\n"),
+        unit.branch.trim_start_matches("fleetreach/"),
+        group_marker(&campaigns),
+    );
+    let squashed = git(&tree, &["reset", "--quiet", "--soft", &base])
+        .and_then(|_| git(&tree, &["commit", "--quiet", "-m", &message]))
+        .and_then(|_| git(&tree, &["rev-parse", "HEAD"]));
+    cleanup();
+    let moved = squashed.and_then(|sha| git(&top, &["branch", "--force", &branch, &sha]));
+    if let Err(e) = moved {
+        for a in out.iter_mut().filter(|a| a.outcome == Outcome::Verified) {
+            a.outcome = Outcome::Blocked;
+            a.detail = format!("could not update {branch}: {e}");
+        }
+        return out;
+    }
+    for a in out.iter_mut().filter(|a| a.outcome == Outcome::Verified) {
+        a.branch = Some(branch.clone());
+    }
+    out
+}
+
 // ---- publish ----
 
-/// Push a verified branch and, with `--open-pr`, open or update its pull request.
-fn publish(result: &mut Applied, edit: &Edit, repo: &Repo, plan: &Plan, args: &FixApplyArgs) {
-    let Some(branch) = result.branch.clone() else {
+/// Push a unit's verified branch and, with `--open-pr`, open or update its request, then turn
+/// on the forge's own auto-merge when `[settings.fix] automerge = "verified"` allows it.
+fn publish(
+    applied: &mut [Applied],
+    unit: &Unit,
+    group: Group,
+    repo: &Repo,
+    plan: &Plan,
+    args: &FixApplyArgs,
+    policy: &FixSettings,
+) {
+    let note = |applied: &mut [Applied], text: &str| {
+        for a in applied
+            .iter_mut()
+            .filter(|a| a.outcome == Outcome::Verified)
+        {
+            a.detail.push_str(text);
+        }
+    };
+    let Some(branch) = applied
+        .iter()
+        .find(|a| a.outcome == Outcome::Verified)
+        .and_then(|a| a.branch.clone())
+    else {
         return;
     };
     if !branch.starts_with("fleetreach/") {
@@ -981,7 +1413,7 @@ fn publish(result: &mut Applied, edit: &Edit, repo: &Repo, plan: &Plan, args: &F
     let top = match git(&repo.path, &["rev-parse", "--show-toplevel"]) {
         Ok(t) => PathBuf::from(t),
         Err(e) => {
-            result.detail.push_str(&format!("; push skipped: {e}"));
+            note(applied, &format!("; push skipped: {e}"));
             return;
         }
     };
@@ -1009,16 +1441,38 @@ fn publish(result: &mut Applied, edit: &Edit, repo: &Repo, plan: &Plan, args: &F
             &format!("{branch}:{branch}"),
         ],
     ) {
-        result.detail.push_str(&format!("; push failed: {e}"));
+        note(applied, &format!("; push failed: {e}"));
         return;
     }
-    result.detail.push_str("; pushed");
+    note(applied, "; pushed");
     if !args.open_pr {
         return;
     }
-    let title = format!("fix(deps): bump {} to {}", edit.package, edit.to);
-    let body = pr_body(edit, plan, &result.ran);
-    let (noun, opened) = match args.forge.resolve(&top) {
+    let verified: Vec<&Edit> = unit
+        .edits
+        .iter()
+        .copied()
+        .filter(|e| {
+            applied
+                .iter()
+                .any(|a| a.outcome == Outcome::Verified && a.campaign == e.campaign)
+        })
+        .collect();
+    let (title, body) = if group == Group::Package {
+        let edit = unit.edits[0];
+        let ran = applied.first().map(|a| a.ran.clone()).unwrap_or_default();
+        (
+            format!("fix(deps): bump {} to {}", edit.package, edit.to),
+            pr_body(edit, plan, &ran),
+        )
+    } else {
+        (
+            group_title(&verified, group),
+            group_body(&verified, applied, group),
+        )
+    };
+    let forge = args.forge.resolve(&top);
+    let (noun, opened) = match forge {
         Forge::GitHub => (
             "pull request",
             github_request(&top, &branch, &title, &body, args.draft),
@@ -1028,15 +1482,152 @@ fn publish(result: &mut Applied, edit: &Edit, repo: &Repo, plan: &Plan, args: &F
             gitlab_request(&top, &branch, &title, &body, args.draft),
         ),
     };
-    match opened {
+    let url = match opened {
         Ok((url, updated)) => {
             let verb = if updated { "updated" } else { "opened" };
-            result.detail.push_str(&format!("; {noun} {verb}"));
-            result.pull_request = Some(url);
-            result.opened = !updated;
+            note(applied, &format!("; {noun} {verb}"));
+            for a in applied
+                .iter_mut()
+                .filter(|a| a.outcome == Outcome::Verified)
+            {
+                a.pull_request = Some(url.clone());
+            }
+            // One new request, counted once for --max-prs and the rollout.
+            if let Some(first) = applied.iter_mut().find(|a| a.outcome == Outcome::Verified) {
+                first.opened = !updated;
+            }
+            url
         }
-        Err(e) => result.detail.push_str(&format!("; {noun} failed: {e}")),
+        Err(e) => {
+            note(applied, &format!("; {noun} failed: {e}"));
+            return;
+        }
+    };
+    if !policy.automerge {
+        return;
     }
+    let why_not = if args.draft {
+        Some("a draft")
+    } else if verified.iter().any(|e| e.breaking) {
+        Some("a breaking bump needs a review")
+    } else {
+        None
+    };
+    if let Some(why) = why_not {
+        note(applied, &format!("; auto-merge left off: {why}"));
+        return;
+    }
+    let head = match git(&top, &["rev-parse", &branch]) {
+        Ok(sha) => sha,
+        Err(e) => {
+            note(applied, &format!("; auto-merge not enabled: {e}"));
+            return;
+        }
+    };
+    match enable_automerge(forge, &top, &url, &head, policy.merge_method) {
+        Ok(()) => note(applied, "; auto-merge on"),
+        Err(e) => note(applied, &format!("; auto-merge not enabled: {e}")),
+    }
+}
+
+/// Ask the forge to merge the request once its own checks pass, and only at `head`, the commit
+/// fleetreach verified: a later push to the branch cancels it.
+fn enable_automerge(
+    forge: Forge,
+    top: &Path,
+    url: &str,
+    head: &str,
+    method: crate::fix_policy::MergeMethod,
+) -> Result<(), String> {
+    match forge {
+        Forge::GitHub => run(Command::new("gh").current_dir(top).args([
+            "pr",
+            "merge",
+            url,
+            "--auto",
+            method.flag(),
+            "--match-head-commit",
+            head,
+        ]))
+        .map(|_| ()),
+        Forge::GitLab => {
+            let iid = url.rsplit('/').next().unwrap_or_default();
+            let mut cmd = Command::new("glab");
+            cmd.current_dir(top)
+                .args(["mr", "merge", iid, "--auto-merge", "--yes", "--sha", head]);
+            match method {
+                crate::fix_policy::MergeMethod::Squash => {
+                    cmd.arg("--squash");
+                }
+                crate::fix_policy::MergeMethod::Rebase => {
+                    cmd.arg("--rebase");
+                }
+                crate::fix_policy::MergeMethod::Merge => {}
+            }
+            run(&mut cmd).map(|_| ())
+        }
+    }
+}
+
+/// A grouped request's title.
+fn group_title(edits: &[&Edit], group: Group) -> String {
+    let what = match edits {
+        [one] => format!("bump {} to {}", one.package, one.to),
+        many => format!("bump {} packages", many.len()),
+    };
+    match (group, edits.first().and_then(|e| e.ssvc)) {
+        (Group::Ssvc, Some(outcome)) => format!("fix(deps): {what} ({})", outcome.label()),
+        _ => format!("fix(deps): {what}"),
+    }
+}
+
+/// A grouped request's description: one line per bump, how it was checked, the campaigns.
+fn group_body(edits: &[&Edit], applied: &[Applied], group: Group) -> String {
+    let mut body = String::from("| Package | From | To | Fixes |\n|---|---|---|---|\n");
+    for edit in edits {
+        body.push_str(&format!(
+            "| `{}` ({}) | {} | {} | {} |\n",
+            edit.package,
+            ecosystem_name(edit.ecosystem),
+            edit.from.join(", "),
+            edit.to,
+            edit.advisories.join(", ")
+        ));
+    }
+    body.push('\n');
+    if let (Group::Ssvc, Some(outcome)) = (group, edits.first().and_then(|e| e.ssvc)) {
+        body.push_str(&format!(
+            "**SSVC:** every fix here is `{}` for this repo.\n\n",
+            outcome.label()
+        ));
+    }
+    let breaking: Vec<&str> = edits
+        .iter()
+        .filter(|e| e.breaking)
+        .map(|e| e.package.as_str())
+        .collect();
+    if !breaking.is_empty() {
+        body.push_str(&format!(
+            "**Breaking:** {} cross a major version; review the changelogs.\n\n",
+            breaking.join(", ")
+        ));
+    }
+    let left_out: Vec<String> = applied
+        .iter()
+        .filter(|a| a.outcome != Outcome::Verified)
+        .map(|a| format!("`{}` ({})", a.package, a.detail))
+        .collect();
+    if !left_out.is_empty() {
+        body.push_str(&format!("**Left out:** {}.\n\n", left_out.join("; ")));
+    }
+    body.push_str(
+        "**Verified:** a fleetreach re-scan after each bump finds its advisories gone and \
+         nothing new. The updates ran no package code.\n\n",
+    );
+    let campaigns: Vec<&str> = edits.iter().map(|e| e.campaign.as_str()).collect();
+    body.push_str(&format!("Campaigns: `{}`.", campaigns.join("`, `")));
+    body.push_str("\n\n_Opened by `fleetreach fix apply --open-pr`._\n");
+    body
 }
 
 /// Close each open fleetreach request the plan does not want, in repos the report read in
@@ -1046,13 +1637,14 @@ fn close_obsolete(
     plan: &Plan,
     config: &Config,
     args: &FixApplyArgs,
+    group: Group,
     requests: &mut Requests,
     results: &mut Vec<Applied>,
 ) {
     let wanted: BTreeSet<(&str, String)> = plan
         .edits
         .iter()
-        .map(|e| (e.repo.as_str(), branch_name(e)))
+        .map(|e| (e.repo.as_str(), unit_branch(e, group)))
         .collect();
     let in_scope = |id: &String| args.repos.is_empty() || args.repos.contains(id);
     for id in plan.scanned.iter().filter(|id| in_scope(id)) {
@@ -1971,6 +2563,7 @@ mod tests {
             reason: reason.map(String::from),
             risk: None,
             risk_reasons: Vec::new(),
+            ssvc: None,
         };
         let mut edits = [
             edit("nginx", Strategy::LockBump, None),
@@ -2073,7 +2666,73 @@ mod tests {
             reason: None,
             risk: None,
             risk_reasons: Vec::new(),
+            ssvc: None,
         }
+    }
+
+    #[test]
+    fn units_follow_the_grouping_preset() {
+        use fleetreach_core::ssvc::Outcome as Ssvc;
+        let at = |repo: &str, campaign: &str, ssvc: Option<Ssvc>| Edit {
+            repo: repo.into(),
+            campaign: campaign.into(),
+            package: campaign.into(),
+            ssvc,
+            ..edit()
+        };
+        let edits = [
+            at("a", "c1", Some(Ssvc::Immediate)),
+            at("b", "c1", Some(Ssvc::Immediate)),
+            at("a", "c2", Some(Ssvc::Defer)),
+            at("a", "c3", Some(Ssvc::Immediate)),
+            at("a", "c4", None),
+        ];
+        let refs: Vec<&Edit> = edits.iter().collect();
+        let shape = |group| -> Vec<(String, String, Vec<String>)> {
+            units(&refs, group)
+                .into_iter()
+                .map(|u| {
+                    let c = u.edits.iter().map(|e| e.campaign.clone()).collect();
+                    (u.repo, u.branch, c)
+                })
+                .collect()
+        };
+        assert_eq!(shape(Group::Package).len(), 5);
+        assert_eq!(
+            shape(Group::Repo),
+            [
+                (
+                    "a".into(),
+                    "fleetreach/all".into(),
+                    vec!["c1".into(), "c2".into(), "c3".into(), "c4".into()]
+                ),
+                ("b".into(), "fleetreach/all".into(), vec!["c1".into()]),
+            ]
+        );
+        let ssvc = shape(Group::Ssvc);
+        let branches: Vec<(&str, &str)> = ssvc
+            .iter()
+            .map(|(r, b, _)| (r.as_str(), b.as_str()))
+            .collect();
+        assert_eq!(
+            branches,
+            [
+                ("a", "fleetreach/ssvc-immediate"),
+                ("b", "fleetreach/ssvc-immediate"),
+                ("a", "fleetreach/ssvc-defer"),
+                ("a", "fleetreach/ssvc-undecided"),
+            ]
+        );
+        assert_eq!(ssvc[0].2, ["c1", "c3"]);
+        let both = [&edits[0], &edits[3]];
+        assert_eq!(
+            group_title(&both, Group::Ssvc),
+            "fix(deps): bump 2 packages (immediate)"
+        );
+        assert_eq!(
+            group_title(&both[..1], Group::Repo),
+            "fix(deps): bump c1 to 1.2.0"
+        );
     }
 
     #[test]

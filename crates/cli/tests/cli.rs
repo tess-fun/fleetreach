@@ -1109,6 +1109,7 @@ case "$1 $2" in
     printf '[{"headRefName":"%s","state":"OPEN","url":"https://forge.test/pr/1","title":"t"}]' "$b" > "$state"
     echo "https://forge.test/pr/1" ;;
   "pr close") sed 's/"OPEN"/"CLOSED"/' "$state" > "$state.new" && mv "$state.new" "$state" ;;
+  "pr merge") echo "$*" >> "$PWD.merge" ;;
 esac
 "#,
         )
@@ -1212,6 +1213,23 @@ esac
 
     fn repo(&self, id: &str) -> PathBuf {
         self.root.join(id)
+    }
+
+    /// Append `[settings.fix]` (or anything else) to fleet.toml.
+    fn settings(&self, text: &str) {
+        let mut body = std::fs::read_to_string(&self.fleet).unwrap();
+        body.push_str(text);
+        std::fs::write(&self.fleet, body).unwrap();
+    }
+
+    /// Mark the repo's one fake request with `state`.
+    fn set_request_state(&self, id: &str, state: &str) {
+        let file = format!("{}.pr", self.repo(id).display());
+        let text = std::fs::read_to_string(&file).unwrap();
+        let text = text
+            .replace("\"OPEN\"", &format!("\"{state}\""))
+            .replace("\"MERGED\"", &format!("\"{state}\""));
+        std::fs::write(&file, text).unwrap();
     }
 
     /// A commit on the remote's default branch that this checkout has not seen.
@@ -4552,4 +4570,210 @@ fn an_incremental_scan_reuses_a_repo_until_its_lockfile_changes() {
     assert_eq!(changed.stdout, scan(&[]).stdout);
     let _ = std::fs::remove_dir_all(&work);
     let _ = std::fs::remove_dir_all(&osv);
+}
+
+/// Today's weekday in UTC as `mon`..`sun`, and a day that is not today.
+fn not_today() -> &'static str {
+    const DAYS: [&str; 7] = ["thu", "fri", "sat", "sun", "mon", "tue", "wed"];
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    DAYS[usize::try_from((secs / 86_400 + 3) % 7).unwrap()]
+}
+
+#[test]
+fn fix_apply_publishes_only_inside_the_schedule() {
+    let fleet = FixFleet::new("schedule", &["a"]);
+    let database = db();
+    let origin = fleet.root.join("a.git");
+    fleet.settings(&format!(
+        "\n[settings]\n[settings.fix]\nschedule = [\"{} 00:00-24:00\"]\n",
+        not_today()
+    ));
+    let (status, results) = fleet.apply(&["--open-pr"], &database);
+    assert_eq!(status, 0);
+    assert_eq!(results, serde_json::json!([]));
+    let branches = git_in(&origin, &["branch", "--list", "fleetreach/*"]);
+    assert!(branches.is_empty(), "{branches}");
+    // Applying locally is not publishing: the schedule does not hold it back.
+    let (status, results) = fleet.apply(&[], &database);
+    assert_eq!(status, 0, "{results}");
+    assert_eq!(results[0]["outcome"], "verified", "{results}");
+    // --ignore-schedule publishes anyway.
+    let (status, results) = fleet.apply(&["--open-pr", "--ignore-schedule"], &database);
+    assert_eq!(status, 0, "{results}");
+    assert!(results[0]["pull_request"].is_string(), "{results}");
+    let _ = std::fs::remove_dir_all(&fleet.root);
+}
+
+#[test]
+fn fix_apply_turns_on_automerge_pinned_to_the_verified_commit() {
+    let fleet = FixFleet::new("automerge", &["a"]);
+    let database = db();
+    fleet.settings("\n[settings]\n[settings.fix]\nautomerge = \"verified\"\n");
+    // The fixture's bump crosses a major: a person reviews it.
+    let (_, results) = fleet.apply(&["--open-pr"], &database);
+    let detail = results[0]["detail"].as_str().unwrap();
+    assert!(
+        detail.contains("auto-merge left off: a breaking bump"),
+        "{detail}"
+    );
+    let _ = std::fs::remove_dir_all(&fleet.root);
+
+    // A patch bump merges itself once the forge's checks pass.
+    let mut fleet = FixFleet::new("automerge", &["a"]);
+    let repo = fleet.repo("a");
+    let workflow = "on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: \
+                    fleetreach-test/setup-tool@v1.0.0\n";
+    std::fs::write(repo.join(".github/workflows/ci.yml"), workflow).unwrap();
+    git_in(&repo, &["commit", "-q", "-am", "patch-level action"]);
+    git_in(&repo, &["push", "-q", "origin", "main"]);
+    fleet.write_plan();
+    fleet.settings("\n[settings]\n[settings.fix]\nautomerge = \"verified\"\n");
+    let (status, results) = fleet.apply(&["--open-pr"], &database);
+    assert_eq!(status, 0, "{results}");
+    let detail = results[0]["detail"].as_str().unwrap();
+    assert!(detail.contains("auto-merge on"), "{detail}");
+    let branch = results[0]["branch"].as_str().unwrap();
+    let head = git_in(&fleet.root.join("a.git"), &["rev-parse", branch]);
+    let merged = std::fs::read_to_string(format!("{}.merge", fleet.repo("a").display())).unwrap();
+    assert!(
+        merged.contains("--auto") && merged.contains("--squash"),
+        "{merged}"
+    );
+    assert!(
+        merged.contains(&format!("--match-head-commit {head}")),
+        "{merged}"
+    );
+    // A draft is never merged by itself.
+    let _ = std::fs::remove_file(format!("{}.merge", fleet.repo("a").display()));
+    let (_, results) = fleet.apply(&["--open-pr", "--draft"], &database);
+    let detail = results[0]["detail"].as_str().unwrap();
+    assert!(detail.contains("auto-merge left off: a draft"), "{detail}");
+    assert!(!std::path::Path::new(&format!("{}.merge", fleet.repo("a").display())).exists());
+    let _ = std::fs::remove_dir_all(&fleet.root);
+}
+
+#[test]
+fn fix_rollout_opens_the_next_wave_after_the_last_one_merged() {
+    let fleet = FixFleet::new("rollout", &["a", "b", "c", "d"]);
+    let database = db();
+    fleet.settings("\n[settings]\n[settings.fix]\nrollout = [1, 2]\n");
+    let opened = |results: &serde_json::Value| -> Vec<String> {
+        results
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["detail"].as_str().unwrap().contains("request opened"))
+            .map(|r| r["repo"].as_str().unwrap().to_string())
+            .collect()
+    };
+    // Wave 1: one repo.
+    let (_, results) = fleet.apply(&["--open-pr"], &database);
+    assert_eq!(opened(&results), ["a"], "{results}");
+    let held = results
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["outcome"] == "skipped")
+        .count();
+    assert_eq!(held, 3, "{results}");
+    // Its request is still open: nothing new.
+    let (_, results) = fleet.apply(&["--open-pr"], &database);
+    assert!(opened(&results).is_empty(), "{results}");
+    assert!(results.to_string().contains("waiting for"), "{results}");
+    // Merged: wave 2 is two repos.
+    fleet.set_request_state("a", "MERGED");
+    let (_, results) = fleet.apply(&["--open-pr"], &database);
+    assert_eq!(opened(&results), ["b", "c"], "{results}");
+    // Both merged: past the last wave, the rest go.
+    fleet.set_request_state("b", "MERGED");
+    fleet.set_request_state("c", "MERGED");
+    let (_, results) = fleet.apply(&["--open-pr"], &database);
+    assert_eq!(opened(&results), ["d"], "{results}");
+    let _ = std::fs::remove_dir_all(&fleet.root);
+}
+
+#[test]
+fn fix_rollout_stops_when_a_request_is_closed_unmerged() {
+    let fleet = FixFleet::new("rollout-stop", &["a", "b"]);
+    let database = db();
+    fleet.settings("\n[settings]\n[settings.fix]\nrollout = [1]\n");
+    let (_, results) = fleet.apply(&["--open-pr"], &database);
+    assert!(results.to_string().contains("request opened"), "{results}");
+    fleet.set_request_state("a", "CLOSED");
+    let (_, results) = fleet.apply(&["--open-pr"], &database);
+    let b = results
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["repo"] == "b")
+        .unwrap();
+    assert_eq!(b["outcome"], "skipped", "{results}");
+    assert!(
+        b["detail"].as_str().unwrap().contains("rollout stopped"),
+        "{results}"
+    );
+    let _ = std::fs::remove_dir_all(&fleet.root);
+}
+
+#[test]
+fn fix_group_repo_puts_every_verified_bump_on_one_branch() {
+    let fleet = FixFleet::new("group", &["a"]);
+    let database = db();
+    let repo = fleet.repo("a");
+    let origin = fleet.root.join("a.git");
+    let workflow = "on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: \
+                    tj-actions/changed-files@v44\n      - uses: fleetreach-test/setup-tool@v1.0.0\n";
+    std::fs::write(repo.join(".github/workflows/ci.yml"), workflow).unwrap();
+    git_in(&repo, &["commit", "-q", "-am", "a second action"]);
+    git_in(&repo, &["push", "-q", "origin", "main"]);
+    let mut fleet = fleet;
+    fleet.write_plan();
+    fleet.settings("\n[settings]\n[settings.fix]\ngroup = \"repo\"\n");
+
+    let (status, results) = fleet.apply(&["--open-pr"], &database);
+    assert_eq!(status, 0, "{results}");
+    let rows = results.as_array().unwrap();
+    assert_eq!(rows.len(), 2, "{results}");
+    for row in rows {
+        assert_eq!(row["outcome"], "verified", "{results}");
+        assert_eq!(row["branch"], "fleetreach/all", "{results}");
+        assert_eq!(row["pull_request"], "https://forge.test/pr/1", "{results}");
+    }
+    // One commit on top of main, naming both campaigns, and one request.
+    let log = git_in(&origin, &["log", "--format=%B", "-1", "fleetreach/all"]);
+    assert!(log.starts_with("fix(deps): bump 2 packages"), "{log}");
+    assert!(log.contains("Campaigns: ") && log.contains("Verified by a fleetreach re-scan"));
+    let main = git_in(&origin, &["rev-parse", "main"]);
+    assert_eq!(git_in(&origin, &["rev-parse", "fleetreach/all^"]), main);
+    let opened = rows
+        .iter()
+        .filter(|r| r["detail"].as_str().unwrap().contains("request opened"))
+        .count();
+    assert_eq!(opened, 2, "both bumps report the one request: {results}");
+    let new_requests = std::fs::read_to_string(format!("{}.pr", repo.display())).unwrap();
+    assert_eq!(new_requests.matches("OPEN").count(), 1, "{new_requests}");
+    let workflow = git_in(
+        &origin,
+        &["show", "fleetreach/all:.github/workflows/ci.yml"],
+    );
+    assert!(
+        workflow.contains("changed-files@v46.0.1") && workflow.contains("setup-tool@v1.0.1"),
+        "{workflow}"
+    );
+
+    // Nothing moved: the same commit, so its CI and reviews survive.
+    let head = git_in(&origin, &["rev-parse", "fleetreach/all"]);
+    let (_, results) = fleet.apply(&["--open-pr"], &database);
+    assert!(
+        results[0]["detail"]
+            .as_str()
+            .unwrap()
+            .contains("already verified"),
+        "{results}"
+    );
+    assert_eq!(git_in(&origin, &["rev-parse", "fleetreach/all"]), head);
+    let _ = std::fs::remove_dir_all(&fleet.root);
 }

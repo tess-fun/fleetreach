@@ -716,6 +716,7 @@ mod tests {
             reason: None,
             risk: None,
             risk_reasons: vec![],
+            ssvc: None,
         }
     }
 
