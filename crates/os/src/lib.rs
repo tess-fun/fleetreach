@@ -6,32 +6,32 @@
 //!
 //! Like the language feeders it is **toolchain-free and safe by construction**: nothing in
 //! the image is run, nothing is written to disk (except the Java archives
-//! [`open_image_spilling`] writes to a directory the caller gives, for a JVM call graph), and
+//! `open_image_spilling` writes to a directory the caller gives, for a JVM call graph), and
 //! every layer named by digest is checked against it. The pieces:
 //!
-//! - [`image`]: layer merge with OCI whiteouts (`.wh.<name>`, `.wh..wh..opq`), symlinks
+//! - `image`: layer merge with OCI whiteouts (`.wh.<name>`, `.wh..wh..opq`), symlinks
 //!   followed inside the image, only wanted files kept in memory;
-//! - [`distro`]: `/etc/os-release` to the osv.dev ecosystem (`Debian:12`, `Ubuntu:24.04:LTS`,
+//! - `distro`: `/etc/os-release` to the osv.dev ecosystem (`Debian:12`, `Ubuntu:24.04:LTS`,
 //!   `Alpine:v3.20`, `Wolfi`, `Chainguard`, `MinimOS`, `Alpaquita:stream`, `Echo`,
 //!   `CleanStart`, `Red Hat:enterprise_linux:9::baseos`, `AlmaLinux:9`, `Rocky Linux:9`,
 //!   `openSUSE:Leap 15.6`, `SUSE:...`, `Azure Linux:3`, `Mageia:9`, `openEuler:...`, and the
 //!   vendor-feed ecosystems `Amazon Linux:2023`, `Oracle Linux:9`, `Photon OS:5.0`), plus the
 //!   Ubuntu Pro and Root overlays; an unknown distribution or release, or one with no
 //!   advisories to match (CentOS, Fedora), is a coverage gap, never clean;
-//! - [`feeds`]: Amazon Linux `updateinfo.xml`, Oracle OVAL and Photon CVE metadata converted
+//! - `feeds`: Amazon Linux `updateinfo.xml`, Oracle OVAL and Photon CVE metadata converted
 //!   into OSV records, for the distributions osv.dev does not carry;
-//! - [`packages`]: dpkg `status` and distroless `status.d`, apk `installed`, and the rpm
-//!   database ([`rpmdb`]: SQLite, Berkeley DB and NDB, read in pure Rust), each binary package
+//! - `packages`: dpkg `status` and distroless `status.d`, apk `installed`, and the rpm
+//!   database (`rpmdb`: SQLite, Berkeley DB and NDB, read in pure Rust), each binary package
 //!   mapped to the source package advisories name, and the files each package owns;
-//! - [`DebVersion`], [`ApkVersion`] and [`RpmVersion`]: dpkg's, apk-tools' and rpm's
+//! - `DebVersion`, `ApkVersion` and `RpmVersion`: dpkg's, apk-tools' and rpm's
 //!   orderings, validated against `dpkg --compare-versions`, `apk version -t` and
 //!   `rpm.vercmp` (see `tests/comparator_golden.rs`);
-//! - [`db`] and [`scan`]: the per-distro advisory index and the matcher. Unfixed Debian and
+//! - `db` and `scan`: the per-distro advisory index and the matcher. Unfixed Debian and
 //!   Ubuntu records are findings with no patched version and their urgency. Red Hat and
 //!   AlmaLinux advisories name binary packages, so there each binary is matched on its own;
-//! - [`eol`]: the release's end of life, from a bundled endoflife.date snapshot, reported as
+//! - `eol`: the release's end of life, from a bundled endoflife.date snapshot, reported as
 //!   a warning once standard support has ended;
-//! - [`lang`]: the language lockfiles and installed package metadata in the image, for the
+//! - `lang`: the language lockfiles and installed package metadata in the image, for the
 //!   existing language feeders, skipping files an OS package owns.
 //!
 //! Every finding is package-level `Unknown` reachability (engine `fleetreach-tier-c`), never

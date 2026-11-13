@@ -816,7 +816,7 @@ fn vex_osv(
 }
 
 /// The OSV records of one Red Hat record's RHEL rpm entries, by ecosystem
-/// ([`fleetreach_os::distro::red_hat_vex`]), as [`vex_osv`] writes them. A package fixed on
+/// ([`fleetreach_os::distro::red_hat_vex`]), as `vex_osv` writes them. A package fixed on
 /// a main-stream platform (`cpe:/o:redhat:enterprise_linux:8::baseos`) gets its fix
 /// version; one Red Hat lists against the release (`red_hat_enterprise_linux_8`) as not
 /// fixed gets its status; one not affected on either gets an empty range.
@@ -873,7 +873,7 @@ pub fn red_hat_vex(record: &VexRecord) -> Vec<(String, Value)> {
 }
 
 /// The OSV records of one SUSE record's rpm entries, by ecosystem
-/// ([`fleetreach_os::distro::suse_vex`] of the product's osv.dev ecosystem), as [`vex_osv`]
+/// ([`fleetreach_os::distro::suse_vex`] of the product's osv.dev ecosystem), as `vex_osv`
 /// writes them. SUSE names binary packages and its fixes `recommended` (read as fixed);
 /// products images are not matched against (SUSE Manager, cloud images) are left out.
 #[must_use]

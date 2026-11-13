@@ -1,7 +1,7 @@
 //! The `vex` subcommands: product/assertion resolution shared by `-f vex` and
 //! SARIF, the pure cores of `vex check` (drift) and `vex verify` (witnesses), and
 //! the `Check`/`Verify` argument structs + runners. The binary only parses and
-//! dispatches into [`run_vex_check`]/[`run_vex_verify`].
+//! dispatches into `run_vex_check`/`run_vex_verify`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

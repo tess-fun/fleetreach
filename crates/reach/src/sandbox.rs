@@ -126,7 +126,7 @@ impl Sandbox {
 /// A resolved build confinement other feeders can reuse to wrap their own
 /// untrusted subprocess with the *same* mechanism the reach build uses.
 ///
-/// This is the public face of [`Sandbox`]: the Go feeder runs `govulncheck`,
+/// This is the public face of `Sandbox`: the Go feeder runs `govulncheck`,
 /// which compiles the scanned module exactly as our cargo build does, so it
 /// confines that subprocess through this handle rather than re-deriving a
 /// platform profile. `resolve` denies the network and confines writes to

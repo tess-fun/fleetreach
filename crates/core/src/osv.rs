@@ -976,7 +976,7 @@ pub fn sort_dedup_findings(out: &mut Vec<VulnFinding>) {
 /// several ids. osv.dev carries, e.g., both a `PYSEC-` and a `GHSA-` record for most PyPI
 /// vulnerabilities, each listing the other (or a shared CVE) in `aliases`; reporting both
 /// double-counts. Findings whose `{id} + aliases` sets overlap (transitively) are one cluster.
-/// The kept id is chosen from the records alone ([`representative_rank`]) so every repo picks
+/// The kept id is chosen from the records alone (`representative_rank`) so every repo picks
 /// the same one; the others' ids move into its `aliases` (so ignores and VEX naming any of them
 /// still apply) and it takes the cluster's worst severity and highest CVSS score.
 pub fn collapse_alias_duplicates(out: &mut Vec<VulnFinding>) {

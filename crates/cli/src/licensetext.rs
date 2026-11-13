@@ -4,7 +4,7 @@
 //! the license files in a package's own directory and matches them against the SPDX list, with
 //! the matcher and the texts of the `spdx` crate, so the answer is what the package ships.
 //!
-//! A text the matcher does not place at [`CONFIDENCE`] is named as unrecognized, never guessed
+//! A text the matcher does not place at `CONFIDENCE` is named as unrecognized, never guessed
 //! at. SPDX ids that share a text (`GPL-3.0-only`, `GPL-3.0-or-later`) cannot be told apart from
 //! it, so they compare as one license.
 

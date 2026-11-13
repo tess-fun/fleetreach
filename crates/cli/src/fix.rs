@@ -11,7 +11,7 @@
 //!   branch, never in the user's own work tree, with a lock-only command that runs no package
 //!   code (`cargo update --precise`, `npm update --package-lock-only --ignore-scripts`, a
 //!   text edit of a workflow `uses:` tag, `go get`, `uv lock --no-build`, and the updates in
-//!   [`crate::fix_managers`]). It then **verifies** the change by running
+//!   `crate::fix_managers`). It then **verifies** the change by running
 //!   fleetreach's own scan on the work tree before and after: every targeted advisory must be
 //!   gone, nothing new may appear, and the repo must still scan without errors or new
 //!   coverage gaps. The commit stays on its branch either way, marked verified or not;

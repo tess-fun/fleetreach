@@ -8,7 +8,7 @@
 //! - **Berkeley DB** (`Packages`, hash format): RHEL 7 and 8, CentOS 7, Amazon Linux 2.
 //! - **NDB** (`Packages.db`): SUSE and openSUSE.
 //!
-//! Each package is its stored RPM header ([`header`]), reduced to the fields that identify it
+//! Each package is its stored RPM header (`header`), reduced to the fields that identify it
 //! and the files it owns. Images are read through [`read`], on the bytes the image reader
 //! kept; [`read_dir`] reads a database directory on disk.
 //!

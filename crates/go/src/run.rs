@@ -37,7 +37,7 @@ pub struct GoScanOptions<'a> {
 /// through the *same* mechanism as `--reachability=static` (see [`Confinement`]).
 /// Confinement denies the network, but govulncheck needs its vuln DB, so a confined
 /// scan must read a local `file://` mirror via [`opts.vuln_db`](GoScanOptions); the
-/// policy and the mirror together decide the mode (see [`effective_policy`]):
+/// policy and the mirror together decide the mode (see `effective_policy`):
 ///
 /// - **`Off`** runs govulncheck unconfined — the only mode that reaches `vuln.go.dev`
 ///   online.

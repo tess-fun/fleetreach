@@ -12,7 +12,7 @@
 //! version logic, like npm). The Swift-specific part is **package identity**: a Swift package
 //! is named by its **source URL**, and the OSV `SwiftURL` ecosystem keys advisories on a
 //! normalized form (`github.com/apple/swift-nio`). `Package.resolved` records the full clone
-//! URL, so both sides are run through [`normalize_package_url`] (strip scheme/`git@`/`.git`/
+//! URL, so both sides are run through `normalize_package_url` (strip scheme/`git@`/`.git`/
 //! trailing slash, lowercase) before matching.
 //!
 //! `Package.resolved` does not record which dependencies are direct, so the sibling

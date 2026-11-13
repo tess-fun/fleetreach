@@ -16,7 +16,7 @@
 //! [`attachments`] lists what is attached to a pulled image, as OCI 1.1 referrers (or the
 //! referrers tag of a registry without that API) and cosign's `.att` tag. Attachments are not
 //! part of the image's digest, so anyone who can push to the repository can add one: they are
-//! only fetched here, and [`crate::oci_vex`] decides what they may do.
+//! only fetched here, and `crate::oci_vex` decides what they may do.
 
 // Without `network` only the cache is read, and the login and challenge code goes unused.
 #![cfg_attr(not(feature = "network"), allow(dead_code))]

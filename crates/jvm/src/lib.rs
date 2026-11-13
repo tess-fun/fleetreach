@@ -2,9 +2,9 @@
 //!
 //! Jars and class files are data: they are unzipped and parsed, never loaded or run.
 //!
-//! [`classpath::load`] reads a service's classes, from plain jars or from the nested layout of
-//! Spring Boot fat jars and wars. [`graph::analyze`] then walks a rapid type analysis call
-//! graph from the service's entry points, and [`verdict::judge`] turns that into an answer
+//! `classpath::load` reads a service's classes, from plain jars or from the nested layout of
+//! Spring Boot fat jars and wars. `graph::analyze` then walks a rapid type analysis call
+//! graph from the service's entry points, and `verdict::judge` turns that into an answer
 //! for one curated sink record. `fleetreach scan --reachability=jvm` runs this over each
 //! container image's Java archives.
 //!
@@ -25,9 +25,9 @@
 //! the JDK and proxies call what its outside types declare, and frameworks call its property
 //! accessors, `hashCode`, `equals` and `toString`.
 //!
-//! What still escapes is counted where it can be: [`graph::Analysis::open_reflection`] lists
+//! What still escapes is counted where it can be: `graph::Analysis::open_reflection` lists
 //! reached call sites that take a class or method name no constant gives. So "not reached"
-//! always means "not reached in this graph", and [`verdict::judge`] says so with those limits.
+//! always means "not reached in this graph", and `verdict::judge` says so with those limits.
 //! Run on five real Spring services, at most 0.05% of the methods the JVM ran were outside the
 //! graph, in three kinds this crate does not model: template expressions (`#numbers` in
 //! Thymeleaf), class names built at run time, and a few reflective calls by method name. The

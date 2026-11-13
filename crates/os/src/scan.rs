@@ -601,7 +601,7 @@ fn rebranded(distro: &Distro, db: &DistroDb, src: &Source) -> Option<ByName> {
     Some(out)
 }
 
-/// Match an image's installed packages. `packages` are from [`crate::inventory`].
+/// Match an image's installed packages. `packages` are from `crate::inventory`.
 pub fn scan(
     distro: &Distro,
     packages: &[OsPackage],

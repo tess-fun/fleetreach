@@ -16,7 +16,7 @@
 //! for what is said of one version, so `[[settings.ignore]]` can take one package out.
 //!
 //! Only packages from the public registry are sent: git, path and other-registry sources are
-//! not, nor a Go module under `GOPRIVATE` or `GONOPROXY`. Answers are cached per package under the user cache for [`FRESH_SECS`]. A package with
+//! not, nor a Go module under `GOPRIVATE` or `GONOPROXY`. Answers are cached per package under the user cache for `FRESH_SECS`. A package with
 //! no answer, offline or after a failure, is a coverage gap and never clean, and `--offline`
 //! reads the cache however old it is. Julia's registry records none of this.
 

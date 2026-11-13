@@ -6,11 +6,11 @@
 //! as usual on the reused findings. With every repo of an ecosystem reused, its advisory
 //! database is not even loaded.
 //!
-//! A repo's files count by their bytes, and only those a feeder can read ([`is_input`]): a
+//! A repo's files count by their bytes, and only those a feeder can read (`is_input`): a
 //! source edit or a fresh clone keeps the entry, and stating every file would cost what the
 //! scan saves. Repos whose findings depend on more than that are never reused: Maven (POMs in
 //! `~/.m2` or the network), SBOM inputs, govulncheck, the host's build resolution, a link loop,
-//! and a pip file including something [`is_input`] does not cover. An errored repo is not
+//! and a pip file including something `is_input` does not cover. An errored repo is not
 //! stored either, so it is tried again.
 
 use std::collections::{BTreeMap, BTreeSet};

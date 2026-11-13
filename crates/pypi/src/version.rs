@@ -61,7 +61,7 @@ pub fn normalize_name(name: &str) -> String {
 
 /// Coerce a PEP 440 [`Version`] into the `semver::Version` the shared finding model
 /// stores (`Occurrence::installed` / `patched`). **Detection never uses this** — the
-/// matcher in [`crate::db`] compares true PEP 440 versions — so this is only the
+/// matcher in `crate::db` compares true PEP 440 versions — so this is only the
 /// displayed/remediation form.
 ///
 /// It is faithful for the dominant `X.Y.Z` and calendar (`2023.7.22`) shapes (a direct

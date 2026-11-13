@@ -11,15 +11,15 @@
 Vulnerable-function (sink) data from artifact diffs (spec 16, row 13).
 
 The first source is the JVM: the difference between the last affected and the first fixed
-jar of an advisory is a superset of its fix. [`diff_jars`](https://docs.rs/fleetreach-sinks/latest/fleetreach_sinks/fn.diff_jars.html) compares the two at the method
+jar of an advisory is a superset of its fix. `diff_jars` compares the two at the method
 level after normalization, so rebuild noise (line tables, local variable tables,
 constant-pool order, compiler-numbered lambdas) is not reported as a change.
 
 Jars are data: they are unzipped and parsed, never loaded or run.
 
 Neither jar diffs nor fix-commit diffs give sinks precise enough to act on unreviewed (the
-E2 and E2b experiments in spec 16), so sinks are curated data: [`propose`](https://docs.rs/fleetreach-sinks/latest/fleetreach_sinks/propose/) turns a fix
-into a `proposed` [`record`](https://docs.rs/fleetreach-sinks/latest/fleetreach_sinks/record/), a person reviews it, and only reviewed records may ever
+E2 and E2b experiments in spec 16), so sinks are curated data: `propose` turns a fix
+into a `proposed` `record`, a person reviews it, and only reviewed records may ever
 support "not reached".
 
 The proposer reads Java, Python and JavaScript/TypeScript fixes: the `java` and `python`
@@ -31,8 +31,8 @@ produce witnesses, since name-based call graphs in those languages are positive-
 installed dependency source) and looks for a chain from the project's own code to a
 record's sinks. It is positive-only: a chain is a witness, and no chain proves nothing.
 
-The curated records under `data/` are built into the crate: [`record::bundled`](https://docs.rs/fleetreach-sinks/latest/fleetreach_sinks/record/fn.bundled.html) returns
-them, checked as [`record::load_dir`](https://docs.rs/fleetreach-sinks/latest/fleetreach_sinks/record/fn.load_dir.html) checks a directory.
+The curated records under `data/` are built into the crate: `record::bundled` returns
+them, checked as `record::load_dir` checks a directory.
 
 <!-- cargo-rdme end -->
 
