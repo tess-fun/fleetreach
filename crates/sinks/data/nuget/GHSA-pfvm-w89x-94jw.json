@@ -1,0 +1,30 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-pfvm-w89x-94jw",
+  "ecosystem": "NuGet",
+  "packages": [
+    "SIPSorcery"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "SIPSorcery.Net.TurnServer",
+      "method": "HandleTcpClientAsync"
+    },
+    {
+      "class": "SIPSorcery.Net.TurnServer",
+      "method": "ReceiveUdpAsync"
+    },
+    {
+      "class": "SIPSorcery.Net.TurnServer",
+      "method": "Start"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/sipsorcery-org/sipsorcery/commit/ccb0b5a845efa2fb131fd00de4f5321bae627f29"
+    ]
+  },
+  "note": "Proposed from the IL diff of SIPSorcery 10.0.13 -> 10.0.14 (net8.0): methods of the files the fix commits changed."
+}

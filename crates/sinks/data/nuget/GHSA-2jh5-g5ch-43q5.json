@@ -1,0 +1,38 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2jh5-g5ch-43q5",
+  "aliases": [
+    "CVE-2025-43858"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "YoutubeDLSharp"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "YoutubeDLSharp.YoutubeDL",
+      "method": "GetDownloadOptions"
+    },
+    {
+      "class": "YoutubeDLSharp.YoutubeDLProcess",
+      "method": ".ctor"
+    },
+    {
+      "class": "YoutubeDLSharp.YoutubeDLProcess",
+      "method": "ConvertToArgs"
+    },
+    {
+      "class": "YoutubeDLSharp.YoutubeDLProcess",
+      "method": "RunAsync"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/Bluegrams/YoutubeDLSharp/commit/b6051372bd5af30f95f73de47d9bc71c3a07de0f",
+      "https://github.com/Bluegrams/YoutubeDLSharp/commit/fdf3256da18d0e2da4a2f33ad4a1b72ff8273a50"
+    ]
+  },
+  "note": "Proposed from the IL diff of YoutubeDLSharp 1.1.1 -> 1.1.2 (net8.0): methods of the files the fix commits changed."
+}

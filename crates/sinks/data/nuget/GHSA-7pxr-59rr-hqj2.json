@@ -1,0 +1,131 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-7pxr-59rr-hqj2",
+  "aliases": [
+    "CVE-2026-72923"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Microsoft.OpenApi.Readers",
+    "Microsoft.OpenApi.YamlReader"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Microsoft.OpenApi.Readers.OpenApiReaderSettings",
+      "method": ".ctor"
+    },
+    {
+      "class": "Microsoft.OpenApi.Readers.OpenApiReaderSettings",
+      "method": "AddMicrosoftExtensionParsers"
+    },
+    {
+      "class": "Microsoft.OpenApi.Readers.OpenApiYamlDocumentReader",
+      "method": "Read"
+    },
+    {
+      "class": "Microsoft.OpenApi.Readers.OpenApiYamlDocumentReader",
+      "method": "ReadAsync"
+    },
+    {
+      "class": "Microsoft.OpenApi.Readers.OpenApiYamlDocumentReader",
+      "method": "ReadFragment"
+    },
+    {
+      "class": "Microsoft.OpenApi.Readers.ParseNodes.ListNode",
+      "method": "CreateAny"
+    },
+    {
+      "class": "Microsoft.OpenApi.Readers.ParseNodes.MapNode",
+      "method": "CreateAny"
+    },
+    {
+      "class": "Microsoft.OpenApi.Readers.ParseNodes.ParseNode",
+      "method": ".ctor"
+    },
+    {
+      "class": "Microsoft.OpenApi.Readers.ParseNodes.ParseNode",
+      "method": "CreateAny"
+    },
+    {
+      "class": "Microsoft.OpenApi.Readers.ParseNodes.PropertyNode",
+      "method": "CreateAny"
+    },
+    {
+      "class": "Microsoft.OpenApi.Readers.ParseNodes.ValueNode",
+      "method": "CreateAny"
+    },
+    {
+      "class": "Microsoft.OpenApi.Readers.ParsingContext",
+      "method": ".ctor"
+    },
+    {
+      "class": "Microsoft.OpenApi.Readers.ParsingContext",
+      "method": "GetLocation"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/microsoft/OpenAPI.NET/pull/3000",
+      "https://github.com/microsoft/OpenAPI.NET/pull/3005",
+      "https://github.com/microsoft/OpenAPI.NET/pull/3020",
+      "https://github.com/microsoft/OpenAPI.NET/commit/1f9aea9bdcbf4066b59ce33b3bd8f97ed9cb4766",
+      "https://github.com/microsoft/OpenAPI.NET/commit/21793261d6860fb6e607b71fd95c0bd320724764",
+      "https://github.com/microsoft/OpenAPI.NET/commit/4db9af07d112cdf45170b7a946f956ffe74fa14e"
+    ],
+    "excluded": [
+      {
+        "class": "Microsoft.OpenApi.Readers.OpenApiReaderSettings",
+        "method": "get_MaxDepth",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.OpenApiReaderSettings",
+        "method": "get_MaxNodeCount",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.OpenApiReaderSettings",
+        "method": "set_MaxDepth",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.OpenApiReaderSettings",
+        "method": "set_MaxNodeCount",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.ParseNodes.ParseNode",
+        "method": "EnsureDepthWithinLimit",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.ParsingContext",
+        "method": "CountNode",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.ParsingContext",
+        "method": "get_MaxDepth",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.ParsingContext",
+        "method": "get_MaxNodeCount",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.ParsingContext",
+        "method": "set_MaxDepth",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Microsoft.OpenApi.Readers.ParsingContext",
+        "method": "set_MaxNodeCount",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of Microsoft.OpenApi.Readers 1.6.29 -> 1.6.30 (netstandard2.0): methods of the files the fix commits changed."
+}

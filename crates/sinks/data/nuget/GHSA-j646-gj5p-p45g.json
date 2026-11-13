@@ -1,0 +1,17 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-j646-gj5p-p45g",
+  "ecosystem": "NuGet",
+  "packages": [
+    "CefSharp.Common",
+    "CefSharp.Common.NETCore"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/cefsharp/CefSharp/commit/f2890ba66170afb0bf742839febe4d20449f758c"
+    ]
+  },
+  "note": "Proposed: no managed method of a source file the fix changed differs between CefSharp.Common 116.0.190 -> 116.0.230 (net462); the flaw may be in native code, configuration or another package."
+}

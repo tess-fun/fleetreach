@@ -1,0 +1,71 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-w9pf-h6m6-v89h",
+  "aliases": [
+    "CVE-2026-24838"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "DotNetNuke.Core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "DotNetNuke.Entities.Portals.PortalSettingsController",
+      "method": "LoadPortalSettings"
+    },
+    {
+      "class": "DotNetNuke.Entities.Tabs.TabModulesController",
+      "method": "GetTabModules"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/dnnsoftware/Dnn.Platform/commit/4a4bcbcdf3cedbf702816f8168c4d51bf688f7f6"
+    ],
+    "excluded": [
+      {
+        "class": "DotNetNuke.Common.Utilities.HtmlUtils",
+        "method": "CleanOutOfJavascript",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "DotNetNuke.Common.Utilities.HtmlUtils",
+        "method": "ContainsJavaScript",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "DotNetNuke.Common.Utilities.HtmlUtils",
+        "method": "SanitizeHtmlIfNeeded",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "DotNetNuke.Common.Utilities.HtmlUtils",
+        "method": "StripHtmlSyntax",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "DotNetNuke.Entities.Portals.PortalSettings",
+        "method": "get_AllowJsInModuleFooters",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "DotNetNuke.Entities.Portals.PortalSettings",
+        "method": "get_AllowJsInModuleHeaders",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "DotNetNuke.Entities.Portals.PortalSettings",
+        "method": "set_AllowJsInModuleFooters",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "DotNetNuke.Entities.Portals.PortalSettings",
+        "method": "set_AllowJsInModuleHeaders",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of DotNetNuke.Core 10.1.2 -> 10.2.0 (net48): methods of the files the fix commits changed."
+}

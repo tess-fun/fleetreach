@@ -1,0 +1,74 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-28gm-jrmw-xx93",
+  "aliases": [
+    "CVE-2026-54632"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "SIPSorcery"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "SIPSorcery.Net.RTPChannel",
+      "method": "OnRTPPacketReceived"
+    },
+    {
+      "class": "SIPSorcery.Net.STUNAddressAttribute",
+      "method": ".ctor"
+    },
+    {
+      "class": "SIPSorcery.Net.STUNAddressAttribute",
+      "method": "ToString"
+    },
+    {
+      "class": "SIPSorcery.Net.STUNAttribute",
+      "method": "ParseMessageAttributes"
+    },
+    {
+      "class": "SIPSorcery.Net.STUNAttribute",
+      "method": "ToString"
+    },
+    {
+      "class": "SIPSorcery.Net.STUNMessage",
+      "method": "ParseSTUNMessage"
+    },
+    {
+      "class": "SIPSorcery.Net.STUNMessage",
+      "method": "ToString"
+    },
+    {
+      "class": "SIPSorcery.Net.STUNXORAddressAttribute",
+      "method": ".ctor"
+    },
+    {
+      "class": "SIPSorcery.Net.STUNXORAddressAttribute",
+      "method": "ToString"
+    },
+    {
+      "class": "SIPSorcery.Net.UdpReceiver",
+      "method": "EndReceiveFrom"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/sipsorcery-org/sipsorcery/pull/1677",
+      "https://github.com/sipsorcery-org/sipsorcery/commit/bdb76cbc0c7216e3126f743fb78e8525af56cea2"
+    ],
+    "excluded": [
+      {
+        "class": "SIPSorcery.Net.STUNAttribute",
+        "method": "GetMinimumValueLength",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "SIPSorcery.Net.STUNMessage",
+        "method": "GetFirstAttribute",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of SIPSorcery 10.0.8 -> 10.0.9 (net8.0): methods of the files the fix commits changed."
+}

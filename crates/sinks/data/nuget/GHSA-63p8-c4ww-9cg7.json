@@ -1,0 +1,48 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-63p8-c4ww-9cg7",
+  "aliases": [
+    "CVE-2024-41131"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "SixLabors.ImageSharp"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "SixLabors.ImageSharp.Formats.Gif.LzwDecoder",
+      "method": ".ctor"
+    },
+    {
+      "class": "SixLabors.ImageSharp.Formats.Gif.LzwDecoder",
+      "method": "Dispose"
+    },
+    {
+      "class": "SixLabors.ImageSharp.Formats.Gif.LzwDecoder",
+      "method": "SkipIndices"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/SixLabors/ImageSharp/pull/2754",
+      "https://github.com/SixLabors/ImageSharp/pull/2756",
+      "https://github.com/SixLabors/ImageSharp/commit/9dda64a8186af67baf06b6d9c1ab599c3608b693",
+      "https://github.com/SixLabors/ImageSharp/commit/a1f287977139109a987065643b8172c748abdadb"
+    ],
+    "excluded": [
+      {
+        "class": "SixLabors.ImageSharp.Formats.Gif.LzwDecoder",
+        "method": "DecodePixelRow",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "SixLabors.ImageSharp.Formats.Gif.LzwDecoder",
+        "method": "IsValidMinCodeSize",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of SixLabors.ImageSharp 3.1.4 -> 3.1.5 (net6.0): methods of the files the fix commits changed."
+}

@@ -1,0 +1,180 @@
+"""Propose NuGet sink records (spec 16, row 13) for the NuGet advisories in an OSV export.
+
+For each advisory: the fixed release of its latest line and the release before it are
+fetched from nuget.org, the .dll files of one target framework both share are extracted (by
+file name only, nothing else from the package), the fix commits' changed paths are read with
+`gh api`, and the `nugetpropose` example writes a `proposed` record. Nothing fetched is run.
+
+usage: python3 -I propose.py OSV_ALL_ZIP WORK_DIR OUT_DIR NUGETPROPOSE [ID ...]
+Without ids: every HIGH or CRITICAL advisory with a GitHub fix commit, ChakraCore's native
+engine left out.
+"""
+import json, os, re, subprocess, sys, urllib.request, zipfile
+
+FLAT = "https://api.nuget.org/v3-flatcontainer"
+TFM_ORDER = ["net8.0", "net9.0", "net10.0", "net7.0", "net6.0", "net5.0", "netcoreapp3.1",
+             "netstandard2.1", "netstandard2.0", "netcoreapp2.1", "netstandard1.3", "net472",
+             "net462", "net461", "net45", "net40"]
+SKIP_PACKAGES = {"Microsoft.ChakraCore"}
+
+
+def get(url, dest=None):
+    req = urllib.request.Request(url, headers={"User-Agent": "fleetreach-sinks-research"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        body = r.read()
+    if dest:
+        with open(dest, "wb") as f:
+            f.write(body)
+    return body
+
+
+def vkey(v):
+    core, _, pre = v.partition("+")[0].partition("-")
+    nums = [int(x) if x.isdigit() else 0 for x in core.split(".")]
+    nums += [0] * (4 - len(nums))
+    return (nums, 0 if pre else 1, pre)
+
+
+def pick_releases(record, package, versions):
+    """(last vulnerable, first fixed) of the advisory's latest fixed line, or None."""
+    fixes = []
+    for a in record.get("affected", []):
+        if a["package"]["name"] != package:
+            continue
+        for r in a.get("ranges", []):
+            for e in r.get("events", []):
+                if "fixed" in e:
+                    fixes.append(e["fixed"])
+    published = {v.lower(): v for v in versions}
+    fixes = [f for f in fixes if f.lower() in published]
+    if not fixes:
+        return None
+    fixed = max(fixes, key=vkey)
+    before = [v for v in versions if vkey(v) < vkey(fixed)]
+    stable = [v for v in before if "-" not in v]
+    pool = stable or before
+    if not pool:
+        return None
+    return max(pool, key=vkey), published[fixed.lower()]
+
+
+def extract(nupkg, dest):
+    """The lib/<tfm>/*.dll members, as {tfm: dir}, written by bare file name."""
+    out = {}
+    with zipfile.ZipFile(nupkg) as z:
+        for name in z.namelist():
+            parts = name.split("/")
+            if len(parts) != 3 or parts[0].lower() != "lib" or not parts[2].lower().endswith(".dll"):
+                continue
+            tfm, file = parts[1].lower(), os.path.basename(parts[2])
+            if not re.fullmatch(r"[A-Za-z0-9._-]+", tfm) or not re.fullmatch(r"[A-Za-z0-9._-]+", file):
+                continue
+            d = os.path.join(dest, tfm)
+            os.makedirs(d, exist_ok=True)
+            with open(os.path.join(d, file), "wb") as f:
+                f.write(z.read(name))
+            out[tfm] = d
+    return out
+
+
+def best_tfm(old, new):
+    common = [t for t in old if t in new]
+    if not common:
+        return None
+    for t in TFM_ORDER:
+        if t in common:
+            return t
+    return sorted(common)[-1]
+
+
+def changed_files(url):
+    m = re.match(r"https://github\.com/([^/]+)/([^/]+)/(commit|pull)/([0-9a-fA-F]+|\d+)", url)
+    if not m:
+        return None
+    owner, repo, kind, ref = m.groups()
+    if kind == "commit":
+        args = ["gh", "api", f"repos/{owner}/{repo}/commits/{ref}", "--jq", ".files[].filename"]
+    else:
+        args = ["gh", "api", "--paginate", f"repos/{owner}/{repo}/pulls/{ref}/files", "--jq", ".[].filename"]
+    r = subprocess.run(args, capture_output=True, text=True, timeout=120)
+    if r.returncode != 0:
+        return None
+    return [l for l in r.stdout.splitlines() if l.strip()]
+
+
+def main():
+    osv_zip, work, out_dir, tool = sys.argv[1:5]
+    only = set(sys.argv[5:])
+    os.makedirs(work, exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)
+    z = zipfile.ZipFile(osv_zip)
+    log = open(os.path.join(work, "log.tsv"), "a")
+    for name in sorted(z.namelist()):
+        rec = json.loads(z.read(name))
+        rid = rec["id"]
+        if rec.get("withdrawn") or (only and rid not in only):
+            continue
+        packages = sorted({a["package"]["name"] for a in rec.get("affected", [])
+                           if a["package"].get("ecosystem") == "NuGet"})
+        commits = [r["url"] for r in rec.get("references", [])
+                   if re.search(r"github\.com/[^/]+/[^/]+/(commit|pull)/", r["url"])]
+        sev = (rec.get("database_specific") or {}).get("severity")
+        if not only and (sev not in ("HIGH", "CRITICAL") or not any("/commit/" in c for c in commits)
+                         or not packages or set(packages) & SKIP_PACKAGES):
+            continue
+        if os.path.exists(os.path.join(out_dir, rid + ".json")):
+            continue
+        package = packages[0]
+        try:
+            lower = package.lower()
+            versions = json.loads(get(f"{FLAT}/{lower}/index.json"))["versions"]
+            pair = pick_releases(rec, package, versions)
+            if not pair:
+                print(f"{rid}\tskip\tno published fixed release", file=log, flush=True)
+                continue
+            dirs = []
+            for v in pair:
+                d = os.path.join(work, "pkgs", f"{lower}.{v.lower()}")
+                nupkg = d + ".nupkg"
+                if not os.path.exists(nupkg):
+                    os.makedirs(os.path.dirname(nupkg), exist_ok=True)
+                    get(f"{FLAT}/{lower}/{v.lower()}/{lower}.{v.lower()}.nupkg", nupkg)
+                dirs.append(extract(nupkg, d))
+            tfm = best_tfm(*dirs)
+            if not tfm:
+                print(f"{rid}\tskip\tno shared lib target framework ({pair[0]} -> {pair[1]})", file=log, flush=True)
+                continue
+            files, read_all = [], True
+            for c in commits:
+                f = changed_files(c)
+                if f is None:
+                    read_all = False
+                else:
+                    files += f
+            list_path = os.path.join(work, "files", rid + ".txt")
+            os.makedirs(os.path.dirname(list_path), exist_ok=True)
+            with open(list_path, "w") as f:
+                f.write("\n".join(files if read_all or files else []))
+            args = [tool, "--id", rid, "--old", dirs[0][tfm], "--new", dirs[1][tfm],
+                    "--releases", f"{package} {pair[0]} -> {pair[1]} ({tfm})", "--files", list_path]
+            for a in rec.get("aliases", []):
+                if re.fullmatch(r"(CVE-\d{4}-\d+|GHSA(-[23456789cfghjmpqrvwx]{4}){3})", a):
+                    args += ["--alias", a]
+            for p in packages:
+                args += ["--package", p]
+            for c in commits:
+                args += ["--commit", c]
+            r = subprocess.run(args, capture_output=True, text=True, timeout=600)
+            if r.returncode != 0:
+                print(f"{rid}\terror\t{r.stderr.strip()[:300]}", file=log, flush=True)
+                continue
+            with open(os.path.join(out_dir, rid + ".json"), "w") as f:
+                f.write(r.stdout)
+            doc = json.loads(r.stdout)
+            print(f"{rid}\t{doc['verdict']}\t{len(doc.get('sinks', []))} sinks\t{pair[0]} -> {pair[1]} {tfm}", file=log, flush=True)
+        except Exception as e:  # one advisory's failure never stops the run
+            print(f"{rid}\terror\t{type(e).__name__}: {e}"[:400], file=log, flush=True)
+
+
+if __name__ == "__main__":
+    main()

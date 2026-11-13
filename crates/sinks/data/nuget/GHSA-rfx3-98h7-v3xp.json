@@ -1,0 +1,149 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-rfx3-98h7-v3xp",
+  "aliases": [
+    "CVE-2026-75513"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Marten"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Marten.Events.Daemon.Internals.EventLoader",
+      "method": ".ctor"
+    },
+    {
+      "class": "Marten.Events.Daemon.Internals.EventLoader",
+      "method": "LoadAsync"
+    },
+    {
+      "class": "Marten.Events.Daemon.Internals.EventLoader",
+      "method": "loadNormalAsync"
+    },
+    {
+      "class": "Marten.Events.Daemon.Internals.EventLoader",
+      "method": "loadWithSkipAheadAsync"
+    },
+    {
+      "class": "Marten.Events.Daemon.Internals.EventLoader",
+      "method": "loadWithWindowStepAsync"
+    },
+    {
+      "class": "Marten.Internal.Operations.DeleteAllForTenant",
+      "method": "ConfigureCommand"
+    },
+    {
+      "class": "Marten.Linq.Members.Dictionaries.DictionaryContainsKeyFilter",
+      "method": ".ctor"
+    },
+    {
+      "class": "Marten.Linq.Members.Dictionaries.DictionaryContainsKeyFilter",
+      "method": "Apply"
+    },
+    {
+      "class": "Marten.Linq.Members.Dictionaries.DictionaryItemMember`2",
+      "method": ".ctor"
+    },
+    {
+      "class": "Marten.Linq.Parsing.SelectParser",
+      "method": "VisitConstant"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/JasperFx/marten/pull/4911",
+      "https://github.com/JasperFx/marten/commit/61882d0424854cb48703f08bdb246894ac576bed"
+    ],
+    "excluded": [
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": ".cctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": ".ctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": "AddPartitionToAllTables",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": "DropPartitionFromAllTables",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": "DropPartitionFromAllTablesForValue",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": "ForceReload",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": "HydrateAsync",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": "PartitionsFor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": "Weasel-Postgresql-Tables-Partitioning-IListPartitionManager-Partitions",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": "Weasel.Postgresql.Tables.Partitioning.IListPartitionManager.Partitions",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": "get_Partitions",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": "hydrateWithFreshConnectionAsync",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": "mergeInto",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": "removeSuffixes",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": "setFor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions",
+        "method": "tryScopedView",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Marten.Schema.DatabaseScopedTenantPartitions+DatabaseSet",
+        "method": ".ctor",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of Marten 9.12.0 -> 9.13.0 (net9.0): methods of the files the fix commits changed."
+}

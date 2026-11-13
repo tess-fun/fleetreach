@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2hp9-3xfr-r9w2",
+  "aliases": [
+    "CVE-2023-31287"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Serenity.Net.Core",
+    "Serenity.Net.Web"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Serenity.ComponentModel.BaseUploadEditorAttribute",
+      "method": ".ctor"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/serenity-is/Serenity/commit/11b9d267f840513d04b4f4d4876de7823a6e48d2"
+    ]
+  },
+  "note": "Proposed from the IL diff of Serenity.Net.Core 6.6.6 -> 6.7.0 (netstandard2.1): every changed method (the fix commits could not be read)."
+}

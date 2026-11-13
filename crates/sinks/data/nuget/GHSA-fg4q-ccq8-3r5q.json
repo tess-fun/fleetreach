@@ -1,0 +1,218 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-fg4q-ccq8-3r5q",
+  "aliases": [
+    "CVE-2024-39677"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "NHibernate"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "NHibernate.Dialect.Dialect",
+      "method": "Configure"
+    },
+    {
+      "class": "NHibernate.Dialect.MySQLDialect",
+      "method": ".ctor"
+    },
+    {
+      "class": "NHibernate.Dialect.SybaseASA9Dialect",
+      "method": ".ctor"
+    },
+    {
+      "class": "NHibernate.Dialect.SybaseSQLAnywhere10Dialect",
+      "method": ".ctor"
+    },
+    {
+      "class": "NHibernate.Type.AbstractCharType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.AbstractDateTimeType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.AbstractStringType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.ByteType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.CharBooleanType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.DateType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.DecimalType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.DoubleType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.EnumCharType`1",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.GuidType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.Int16Type",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.Int32Type",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.Int64Type",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.SByteType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.SingleType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.TicksType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.TimeAsTimeSpanType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.TimeSpanType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.TimeType",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.UInt16Type",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.UInt32Type",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.UInt64Type",
+      "method": "ObjectToSQLString"
+    },
+    {
+      "class": "NHibernate.Type.UriType",
+      "method": "ObjectToSQLString"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/nhibernate/nhibernate-core/pull/3517",
+      "https://github.com/nhibernate/nhibernate-core/pull/3547",
+      "https://github.com/nhibernate/nhibernate-core/commit/b4a69d1a5ff5744312478d70308329af496e4ba9"
+    ],
+    "excluded": [
+      {
+        "class": "NHibernate.Dialect.DB2Dialect",
+        "method": "ToStringLiteral",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.Dialect",
+        "method": "ToStringLiteral",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.Dialect",
+        "method": "get_EscapeBackslashInStrings",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.Dialect",
+        "method": "get_UseNPrefixForUnicodeStrings",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.Dialect",
+        "method": "set_EscapeBackslashInStrings",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.IngresDialect",
+        "method": "get_UseNPrefixForUnicodeStrings",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.MsSql2000Dialect",
+        "method": "get_UseNPrefixForUnicodeStrings",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.MySQLDialect",
+        "method": "get_EscapeBackslashInStrings",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.MySQLDialect",
+        "method": "get_UseNPrefixForUnicodeStrings",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.MySQLDialect",
+        "method": "set_EscapeBackslashInStrings",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.Oracle8iDialect",
+        "method": "get_UseNPrefixForUnicodeStrings",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.SybaseASA9Dialect",
+        "method": "get_EscapeBackslashInStrings",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.SybaseASA9Dialect",
+        "method": "get_UseNPrefixForUnicodeStrings",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.SybaseASA9Dialect",
+        "method": "set_EscapeBackslashInStrings",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.SybaseSQLAnywhere10Dialect",
+        "method": "get_EscapeBackslashInStrings",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.SybaseSQLAnywhere10Dialect",
+        "method": "get_UseNPrefixForUnicodeStrings",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "NHibernate.Dialect.SybaseSQLAnywhere10Dialect",
+        "method": "set_EscapeBackslashInStrings",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of NHibernate 5.5.1 -> 5.5.2 (net6.0): methods of the files the fix commits changed."
+}

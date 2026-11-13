@@ -1,0 +1,69 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-838x-pcvx-6p5w",
+  "aliases": [
+    "CVE-2023-28638"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Snappier"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Snappier.Internal.SnappyCompressor",
+      "method": "CompressFragment"
+    },
+    {
+      "class": "Snappier.Internal.SnappyCompressor",
+      "method": "FindMatchLength"
+    },
+    {
+      "class": "Snappier.Internal.SnappyCompressor",
+      "method": "FindMatchLengthX64"
+    },
+    {
+      "class": "Snappier.Internal.SnappyDecompressor",
+      "method": "Append"
+    },
+    {
+      "class": "Snappier.Internal.SnappyDecompressor",
+      "method": "AppendFromSelf"
+    },
+    {
+      "class": "Snappier.Internal.SnappyDecompressor",
+      "method": "DecompressAllTags"
+    },
+    {
+      "class": "Snappier.Internal.SnappyDecompressor",
+      "method": "DecompressTagFromScratch"
+    },
+    {
+      "class": "Snappier.Internal.SnappyDecompressor",
+      "method": "RefillTag"
+    },
+    {
+      "class": "Snappier.Internal.SnappyDecompressor",
+      "method": "RefillTagFromScratch"
+    },
+    {
+      "class": "Snappier.Internal.SnappyDecompressor",
+      "method": "TryFastAppend"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/brantburnett/Snappier/pull/73",
+      "https://github.com/brantburnett/Snappier/commit/d7ac5267b5b18439e6d108f8138edf48c436b32f"
+    ],
+    "excluded": [
+      {
+        "class": "Snappier.Internal.SnappyDecompressor",
+        "method": "set_ExpectedLength",
+        "reason": "property accessor or static initializer"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of Snappier 1.1.0 -> 1.1.1 (net7.0): methods of the files the fix commits changed."
+}

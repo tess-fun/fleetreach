@@ -1,0 +1,19 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-5q7q-qqw2-hjq7",
+  "aliases": [
+    "CVE-2021-43853"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "AjaxNetProfessional"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/michaelschwarz/Ajax.NET-Professional/commit/c89e39b9679fcb8ab6644fe21cc7e652cb615e2b"
+    ]
+  },
+  "note": "Proposed: no managed method of a source file the fix changed differs between AjaxNetProfessional 21.12.21.1 -> 21.12.22.1 (net20); the flaw may be in native code, configuration or another package."
+}

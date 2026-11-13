@@ -1,0 +1,35 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-wgh7-7m3c-fx25",
+  "aliases": [
+    "CVE-2026-74795"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Scriban.Signed",
+    "scriban"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Scriban.Parsing.Parser",
+      "method": "EnterExpression"
+    },
+    {
+      "class": "Scriban.TemplateContext",
+      "method": ".ctor"
+    },
+    {
+      "class": "Scriban.TemplateContext",
+      "method": "FetchNamedArgumentsAsync"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/scriban/scriban/commit/a6fe6074199e5c04f4d29dc8d8e652b24d33e3e4",
+      "https://github.com/scriban/scriban/commit/b5ac4bf30459fdc76964e3f751e16f7e96079ea7"
+    ]
+  },
+  "note": "Proposed from the IL diff of Scriban.Signed 6.5.8 -> 6.6.0 (net8.0): methods of the files the fix commits changed."
+}

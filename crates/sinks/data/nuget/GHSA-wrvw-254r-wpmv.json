@@ -1,0 +1,35 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-wrvw-254r-wpmv",
+  "aliases": [
+    "CVE-2026-100368"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "AlastairLundy.CliInvoke.Specializations",
+    "CliInvoke.Specializations"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "AlastairLundy.CliInvoke.Specializations.Configurations.CmdProcessConfiguration",
+      "method": ".ctor"
+    },
+    {
+      "class": "AlastairLundy.CliInvoke.Specializations.Configurations.PowershellProcessConfiguration",
+      "method": ".ctor"
+    },
+    {
+      "class": "AlastairLundy.CliInvoke.Specializations.Configurations.PowershellProcessConfiguration",
+      "method": "GetUnixInstallLocation"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/alastairlundy/CliInvoke/commit/1e98582f02eb43e345e5b97b8dd6ff9443806685",
+      "https://github.com/alastairlundy/CliInvoke/commit/2077e5239850e83dc9cc67ae6036dcd4e68a1876"
+    ]
+  },
+  "note": "Proposed from the IL diff of AlastairLundy.CliInvoke.Specializations 2.0.0 -> 2.0.2 (net8.0): methods of the files the fix commits changed."
+}

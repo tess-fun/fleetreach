@@ -1,0 +1,76 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-4q2p-hwmr-qcxc",
+  "aliases": [
+    "CVE-2024-33862"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "OPCFoundation.NetStandard.Opc.Ua.Core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Opc.Ua.Bindings.TcpTransportListener",
+      "method": "ChannelClosed"
+    },
+    {
+      "class": "Opc.Ua.Bindings.TcpTransportListener",
+      "method": "Dispose"
+    },
+    {
+      "class": "Opc.Ua.Bindings.TcpTransportListener",
+      "method": "GetNextChannelId"
+    },
+    {
+      "class": "Opc.Ua.Bindings.TcpTransportListener",
+      "method": "OnAccept"
+    },
+    {
+      "class": "Opc.Ua.Bindings.TcpTransportListener",
+      "method": "Open"
+    },
+    {
+      "class": "Opc.Ua.Bindings.TcpTransportListener",
+      "method": "Start"
+    },
+    {
+      "class": "Opc.Ua.Bindings.TcpTransportListener",
+      "method": "TransferListenerChannel"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/OPCFoundation/UA-.NETStandard/commit/52d4492ccc928f128e7a38857fdf58d94e1e652b"
+    ],
+    "excluded": [
+      {
+        "class": "Opc.Ua.Bindings.TcpTransportListener",
+        "method": "DetectInactiveChannels",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Opc.Ua.Bindings.TcpTransportListener",
+        "method": "UpdateChannelLastActiveTime",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Opc.Ua.Bindings.TcpTransportListener",
+        "method": "get_ListenerId",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Opc.Ua.Bindings.TcpTransportListener",
+        "method": "get_MaxChannelCount",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Opc.Ua.DefaultEncodingLimits",
+        "method": ".cctor",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of OPCFoundation.NetStandard.Opc.Ua.Core 1.5.374.36 -> 1.5.374.54 (net8.0): methods of the files the fix commits changed."
+}

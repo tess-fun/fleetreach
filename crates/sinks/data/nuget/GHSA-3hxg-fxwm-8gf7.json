@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3hxg-fxwm-8gf7",
+  "aliases": [
+    "CVE-2024-51501"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Refit"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Refit.RequestBuilderImplementation",
+      "method": "SetHeader"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/reactiveui/refit/commit/483b1d8df18098f137ca0eca056b7e9ec19f70dd"
+    ],
+    "excluded": [
+      {
+        "class": "Refit.RequestBuilderImplementation",
+        "method": "EnsureSafe",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of Refit 7.2.1 -> 7.2.22 (net8.0): methods of the files the fix commits changed."
+}

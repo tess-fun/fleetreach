@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-qr3m-xw4c-jqw3",
+  "aliases": [
+    "CVE-2026-40324"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "HotChocolate.Language"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/ChilliCream/graphql-platform/pull/9528",
+      "https://github.com/ChilliCream/graphql-platform/pull/9530",
+      "https://github.com/ChilliCream/graphql-platform/pull/9531",
+      "https://github.com/ChilliCream/graphql-platform/commit/08c0caa42ca33c121bbed49d2db892e5bf6fb541",
+      "https://github.com/ChilliCream/graphql-platform/commit/4cbaf67d366f800fc1e484bc5c06dfcf27b45023",
+      "https://github.com/ChilliCream/graphql-platform/commit/b185eb276c9ee227bd44616ff113be7f01a66c69",
+      "https://github.com/ChilliCream/graphql-platform/commit/b9271e6a500484c002fd528dcd34d1a9b445480f"
+    ]
+  },
+  "note": "Proposed: no managed method of a source file the fix changed differs between HotChocolate.Language 15.1.13 -> 15.1.14 (net8.0); the flaw may be in native code, configuration or another package."
+}

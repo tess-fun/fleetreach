@@ -1,0 +1,32 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-xhw7-j96h-c3g5",
+  "aliases": [
+    "CVE-2026-43937"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "YAFNET.Core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "YAF.Core.Services.BoardInfo",
+      "method": ".ctor"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/YAFNET/YAFNET/commit/27f7e671f93698f7e014d5d0fb88320248b8aa20"
+    ],
+    "excluded": [
+      {
+        "class": "YAF.Core.BasePages.ForumPage",
+        "method": "OnPageHandlerExecutionAsync",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of YAFNET.Core 4.0.4 -> 4.0.5 (net10.0): methods of the files the fix commits changed."
+}

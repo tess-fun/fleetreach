@@ -1,0 +1,133 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2cwq-pwfr-wcw3",
+  "aliases": [
+    "CVE-2026-44375"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Nerdbank.MessagePack"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Nerdbank.MessagePack.Converters.ArrayConverter`1",
+      "method": "ReadAsync"
+    },
+    {
+      "class": "Nerdbank.MessagePack.Converters.ArrayWithFlattenedDimensionsConverter`2",
+      "method": "Read"
+    },
+    {
+      "class": "Nerdbank.MessagePack.Converters.ArrayWithNestedDimensionsConverter`2",
+      "method": "Read"
+    },
+    {
+      "class": "Nerdbank.MessagePack.Converters.ObjectArrayConverter`1",
+      "method": "Read"
+    },
+    {
+      "class": "Nerdbank.MessagePack.Converters.ObjectArrayConverter`1",
+      "method": "ReadAsync"
+    },
+    {
+      "class": "Nerdbank.MessagePack.Converters.ObjectArrayWithNonDefaultCtorConverter`2",
+      "method": "Read"
+    },
+    {
+      "class": "Nerdbank.MessagePack.Converters.ObjectArrayWithNonDefaultCtorConverter`2",
+      "method": "ReadAsync"
+    },
+    {
+      "class": "Nerdbank.MessagePack.MessagePackPrimitives",
+      "method": "TryRead"
+    },
+    {
+      "class": "Nerdbank.MessagePack.MessagePackReader",
+      "method": "ReadMapHeader"
+    },
+    {
+      "class": "Nerdbank.MessagePack.MessagePackSerializer",
+      "method": "ConvertToJson"
+    },
+    {
+      "class": "Nerdbank.MessagePack.MessagePackStreamingReader",
+      "method": "ReadStringSlow"
+    },
+    {
+      "class": "Nerdbank.MessagePack.SecureHash.CollisionResistantHasherLookup",
+      "method": "TryGetPrimitiveHasher"
+    },
+    {
+      "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+BigIntegerEqualityComparer",
+      "method": "GetSecureHashCode"
+    },
+    {
+      "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+ByteArrayEqualityComparer",
+      "method": "Equals"
+    },
+    {
+      "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+DecimalEqualityComparer",
+      "method": "GetSecureHashCode"
+    },
+    {
+      "class": "Nerdbank.MessagePack.SecureHash.SecureDictionaryEqualityComparer`3",
+      "method": "GetSecureHashCode"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/AArnott/Nerdbank.MessagePack/pull/941",
+      "https://github.com/AArnott/Nerdbank.MessagePack/commit/7d1eb319cfabe7280e70699946c9a48579fa2f30"
+    ],
+    "excluded": [
+      {
+        "class": "Nerdbank.MessagePack.Converters.ArrayConverterUtilities",
+        "method": "ReadFlattenedElementCount",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Nerdbank.MessagePack.Converters.ArrayConverterUtilities",
+        "method": "VerifyNestedDimensionsFitInBuffer",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Nerdbank.MessagePack.Converters.PolyTypeExtensions",
+        "method": "EnsurePooledBufferSize",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Nerdbank.MessagePack.Converters.PolyTypeExtensions",
+        "method": "GetStreamingCollectionInitialCapacity",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+DecimalEqualityComparer",
+        "method": "NormalizeBits",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+DecimalEqualityComparer",
+        "method": "TryDivideBitsBy10",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+UriEqualityComparer",
+        "method": ".ctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+UriEqualityComparer",
+        "method": "Equals",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Nerdbank.MessagePack.SecureHash.HashCollisionResistantPrimitives+UriEqualityComparer",
+        "method": "GetSecureHashCode",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of Nerdbank.MessagePack 1.1.25 -> 1.1.62 (net8.0): methods of the files the fix commits changed."
+}

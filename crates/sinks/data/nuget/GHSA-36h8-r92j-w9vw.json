@@ -1,0 +1,40 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-36h8-r92j-w9vw",
+  "aliases": [
+    "CVE-2025-24894"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "SPID.AspNetCore.Authentication"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "SPID.AspNetCore.Authentication.Helpers.XmlHelpers",
+      "method": ".ctor"
+    },
+    {
+      "class": "SPID.AspNetCore.Authentication.Helpers.XmlHelpers",
+      "method": "SignXMLDoc"
+    },
+    {
+      "class": "SPID.AspNetCore.Authentication.Helpers.XmlHelpers",
+      "method": "VerifySignature"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/italia/spid-aspnetcore/commit/093efa2273f8a1e0481f678a0bfcd57fbdc7b029"
+    ],
+    "excluded": [
+      {
+        "class": "SPID.AspNetCore.Authentication.Helpers.XmlHelpers",
+        "method": "VerifyAllSignatures",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of SPID.AspNetCore.Authentication 3.3.0 -> 3.4.0 (net8.0): methods of the files the fix commits changed."
+}

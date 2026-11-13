@@ -1,0 +1,180 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-xpwp-rq3x-x6v7",
+  "aliases": [
+    "CVE-2017-0907"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "recurly-api-client"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Recurly.Account",
+      "method": "DeleteBillingInfo"
+    },
+    {
+      "class": "Recurly.Account",
+      "method": "GetActiveRedemptions"
+    },
+    {
+      "class": "Recurly.Account",
+      "method": "GetAdjustments"
+    },
+    {
+      "class": "Recurly.Account",
+      "method": "GetNotes"
+    },
+    {
+      "class": "Recurly.Account",
+      "method": "GetShippingAddresses"
+    },
+    {
+      "class": "Recurly.Account",
+      "method": "GetSubscriptions"
+    },
+    {
+      "class": "Recurly.Account",
+      "method": "GetTransactions"
+    },
+    {
+      "class": "Recurly.Account",
+      "method": "InvoicePendingCharges"
+    },
+    {
+      "class": "Recurly.Account",
+      "method": "PreviewInvoicePendingCharges"
+    },
+    {
+      "class": "Recurly.Account",
+      "method": "Update"
+    },
+    {
+      "class": "Recurly.AccountBalance",
+      "method": "Get"
+    },
+    {
+      "class": "Recurly.AddOn",
+      "method": "Create"
+    },
+    {
+      "class": "Recurly.AddOn",
+      "method": "Delete"
+    },
+    {
+      "class": "Recurly.AddOn",
+      "method": "Update"
+    },
+    {
+      "class": "Recurly.Adjustment",
+      "method": "Create"
+    },
+    {
+      "class": "Recurly.Adjustment",
+      "method": "Delete"
+    },
+    {
+      "class": "Recurly.BillingInfo",
+      "method": "BillingInfoUrl"
+    },
+    {
+      "class": "Recurly.Coupon",
+      "method": "Deactivate"
+    },
+    {
+      "class": "Recurly.Coupon",
+      "method": "Restore"
+    },
+    {
+      "class": "Recurly.Coupon",
+      "method": "Update"
+    },
+    {
+      "class": "Recurly.CouponRedemption",
+      "method": "Delete"
+    },
+    {
+      "class": "Recurly.CouponRedemption",
+      "method": "Redeem"
+    },
+    {
+      "class": "Recurly.Invoice",
+      "method": "Create"
+    },
+    {
+      "class": "Recurly.Invoice",
+      "method": "Preview"
+    },
+    {
+      "class": "Recurly.MeasuredUnit",
+      "method": "Delete"
+    },
+    {
+      "class": "Recurly.MeasuredUnit",
+      "method": "Update"
+    },
+    {
+      "class": "Recurly.Plan",
+      "method": "Deactivate"
+    },
+    {
+      "class": "Recurly.Plan",
+      "method": "GetAddOn"
+    },
+    {
+      "class": "Recurly.Plan",
+      "method": "Update"
+    },
+    {
+      "class": "Recurly.Subscription",
+      "method": "Cancel"
+    },
+    {
+      "class": "Recurly.Subscription",
+      "method": "ChangeSubscription"
+    },
+    {
+      "class": "Recurly.Subscription",
+      "method": "GetRedemptions"
+    },
+    {
+      "class": "Recurly.Subscription",
+      "method": "Postpone"
+    },
+    {
+      "class": "Recurly.Subscription",
+      "method": "PreviewChange"
+    },
+    {
+      "class": "Recurly.Subscription",
+      "method": "Reactivate"
+    },
+    {
+      "class": "Recurly.Subscription",
+      "method": "Terminate"
+    },
+    {
+      "class": "Recurly.Subscription",
+      "method": "UpdateNotes"
+    },
+    {
+      "class": "Recurly.Transaction",
+      "method": "Refund"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/recurly/recurly-client-net/commit/9eef460c0084afd5c24d66220c8b7a381cf9a1f1"
+    ],
+    "excluded": [
+      {
+        "class": "Recurly.Plan",
+        "method": "get_AddOns",
+        "reason": "property accessor or static initializer"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of recurly-api-client 1.8.0 -> 1.8.1 (net35): methods of the files the fix commits changed."
+}

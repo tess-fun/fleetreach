@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-6r92-cgxc-r5fg",
+  "aliases": [
+    "CVE-2024-21909"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "PeterO.Cbor"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "PeterO.Cbor.CBORObject",
+      "method": "MapCompare"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/peteroupc/CBOR/commit/b4117dbbb4cd5a4a963f9d0c9aa132f033e15b95"
+    ]
+  },
+  "note": "Proposed from the IL diff of PeterO.Cbor 4.5.0 -> 4.5.1 (net40): methods of the files the fix commits changed."
+}

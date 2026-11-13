@@ -1,0 +1,38 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-3x49-g6rc-c284",
+  "aliases": [
+    "CVE-2022-23535"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "LiteDB"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "LiteDB.BsonMapper",
+      "method": "Deserialize"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/mbdavid/LiteDB/commit/4382ff4dd0dd8b8b16a4e37dfd29727c5f70f93f",
+      "https://github.com/mbdavid/LiteDB/commit/d72c6774e6a13de2cfcd7d477d3575efeb75c8f2"
+    ],
+    "excluded": [
+      {
+        "class": "LiteDB.LiteException",
+        "method": "AvoidUseOfProcess",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "LiteDB.LiteException",
+        "method": "DataTypeNotAssignable",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of LiteDB 5.0.12 -> 5.0.13 (netstandard2.0): methods of the files the fix commits changed."
+}

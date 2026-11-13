@@ -1,0 +1,42 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-vmw2-qwm8-x84c",
+  "aliases": [
+    "CVE-2026-45288"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Marten"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Marten.Linq.SqlGeneration.Filters.FullTextWhereFragment",
+      "method": ".ctor"
+    },
+    {
+      "class": "Marten.Linq.SqlGeneration.Filters.FullTextWhereFragment",
+      "method": "GetDataConfig"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/JasperFx/marten/pull/4343",
+      "https://github.com/JasperFx/marten/commit/626249656829860b9c55895b5b6046b61a2a695f"
+    ],
+    "excluded": [
+      {
+        "class": "Marten.Linq.SqlGeneration.Filters.FullTextWhereFragment",
+        "method": ".cctor",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "Marten.Linq.SqlGeneration.Filters.FullTextWhereFragment",
+        "method": "ValidateRegConfig",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of Marten 8.36.0 -> 8.37.0 (net8.0): methods of the files the fix commits changed."
+}

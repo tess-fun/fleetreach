@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2qw8-ppr5-m96c",
+  "aliases": [
+    "CVE-2024-43383"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Lucene.Net.Replicator"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Lucene.Net.Replicator.Http.HttpClientBase",
+      "method": "ExecutePost"
+    },
+    {
+      "class": "Lucene.Net.Replicator.Http.HttpClientBase",
+      "method": "ThrowKnownError"
+    },
+    {
+      "class": "Lucene.Net.Replicator.Http.HttpClientBase+ConsumingStream",
+      "method": "Write"
+    },
+    {
+      "class": "Lucene.Net.Replicator.Http.ReplicationService",
+      "method": "Perform"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/lucenenet/commit/1f61dd0fdb465e17141a79d22eb2f2bc02059acc"
+    ]
+  },
+  "note": "Proposed from the IL diff of Lucene.Net.Replicator 4.8.0-beta00016 -> 4.8.0-beta00017 (net6.0): methods of the files the fix commits changed."
+}

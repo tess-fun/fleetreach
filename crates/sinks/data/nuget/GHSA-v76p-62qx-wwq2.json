@@ -1,0 +1,52 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-v76p-62qx-wwq2",
+  "aliases": [
+    "CVE-2026-106118"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "SixLabors.ImageSharp"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.ModifiedHuffmanTiffCompression",
+      "method": "Decompress"
+    },
+    {
+      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.T4BitReader",
+      "method": "ReadEolBeforeFirstData"
+    },
+    {
+      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.T4BitReader",
+      "method": "ReadNextRun"
+    },
+    {
+      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.T4TiffCompression",
+      "method": "Decompress"
+    },
+    {
+      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.T4TiffCompression",
+      "method": "WritePixelRun"
+    },
+    {
+      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.Decompressors.T6TiffCompression",
+      "method": "Decode2DScanline"
+    },
+    {
+      "class": "SixLabors.ImageSharp.Formats.Tiff.Compression.TiffDecompressorsFactory",
+      "method": "Create"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/SixLabors/ImageSharp/pull/3176",
+      "https://github.com/SixLabors/ImageSharp/pull/3208",
+      "https://github.com/SixLabors/ImageSharp/commit/9ee7d1dd5b62d8c9f16cc755e76828386bc2191f",
+      "https://github.com/SixLabors/ImageSharp/commit/baa37cd19077b2a2a0c5667535111cf31d48c019"
+    ]
+  },
+  "note": "Proposed from the IL diff of SixLabors.ImageSharp 4.1.0 -> 4.1.1 (net8.0): methods of the files the fix commits changed."
+}

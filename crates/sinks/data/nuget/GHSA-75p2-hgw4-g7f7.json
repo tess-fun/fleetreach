@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-75p2-hgw4-g7f7",
+  "aliases": [
+    "CVE-2019-20627"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Autoupdater.NET.Official"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "AutoUpdaterDotNET.AutoUpdater",
+      "method": "BackgroundWorkerDoWork"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/ravibpatel/AutoUpdater.NET/commit/1dc25f2bea6ea522dbac1512b5563c4746d539c3"
+    ]
+  },
+  "note": "Proposed from the IL diff of Autoupdater.NET.Official 1.5.7 -> 1.5.8 (net40): methods of the files the fix commits changed."
+}

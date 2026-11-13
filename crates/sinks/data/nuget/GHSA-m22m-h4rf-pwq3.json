@@ -1,0 +1,101 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-m22m-h4rf-pwq3",
+  "aliases": [
+    "CVE-2021-32840"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "SharpZipLib"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ICSharpCode.SharpZipLib.GZip.GZipOutputStream",
+      "method": "CleanFilename"
+    },
+    {
+      "class": "ICSharpCode.SharpZipLib.Tar.TarArchive",
+      "method": "ExtractEntry"
+    },
+    {
+      "class": "ICSharpCode.SharpZipLib.Tar.TarArchive",
+      "method": "WriteEntryCore"
+    },
+    {
+      "class": "ICSharpCode.SharpZipLib.Zip.FastZip",
+      "method": "CreateZip"
+    },
+    {
+      "class": "ICSharpCode.SharpZipLib.Zip.ZipFile",
+      "method": "CopyDescriptorBytes"
+    },
+    {
+      "class": "ICSharpCode.SharpZipLib.Zip.ZipFile",
+      "method": "CopyDescriptorBytesDirect"
+    },
+    {
+      "class": "ICSharpCode.SharpZipLib.Zip.ZipFile",
+      "method": "CopyEntryDirect"
+    },
+    {
+      "class": "ICSharpCode.SharpZipLib.Zip.ZipFile",
+      "method": "GetDescriptorSize"
+    },
+    {
+      "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
+      "method": "PutNextEntry"
+    },
+    {
+      "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
+      "method": "Write"
+    },
+    {
+      "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
+      "method": "WriteAESHeader"
+    },
+    {
+      "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
+      "method": "WriteEncryptionHeader"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/icsharpcode/SharpZipLib/commit/a0e96de70b5264f4c919b09253b1522bc7a221cc"
+    ],
+    "excluded": [
+      {
+        "class": "ICSharpCode.SharpZipLib.GZip.GZipOutputStream",
+        "method": "set_FileName",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
+        "method": ".cctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
+        "method": "InitializeAESPassword",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
+        "method": "InitializePassword",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
+        "method": "get_Password",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ICSharpCode.SharpZipLib.Zip.ZipOutputStream",
+        "method": "set_Password",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of SharpZipLib 1.3.2 -> 1.3.3 (netstandard2.1): every changed method (the fix commits could not be read)."
+}

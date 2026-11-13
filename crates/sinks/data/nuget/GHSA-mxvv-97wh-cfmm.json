@@ -1,0 +1,53 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-mxvv-97wh-cfmm",
+  "aliases": [
+    "CVE-2025-57803"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Magick.NET-Q16-AnyCPU",
+    "Magick.NET-Q16-HDRI-AnyCPU",
+    "Magick.NET-Q16-HDRI-x86",
+    "Magick.NET-Q16-x86",
+    "Magick.NET-Q8-AnyCPU",
+    "Magick.NET-Q8-x86"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ImageMagick.Drawing.DrawableAffine",
+      "method": "TransformRotation"
+    },
+    {
+      "class": "ImageMagick.Drawing.DrawableAffine",
+      "method": "TransformSkewX"
+    },
+    {
+      "class": "ImageMagick.Drawing.DrawableAffine",
+      "method": "TransformSkewY"
+    },
+    {
+      "class": "ImageMagick.MagickImage+CloneMutator",
+      "method": "Splice"
+    },
+    {
+      "class": "ImageMagick.MagickImage+NativeMagickImage",
+      "method": "Splice"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/ImageMagick/ImageMagick/commit/2c55221f4d38193adcb51056c14cf238fbcc35d7"
+    ],
+    "excluded": [
+      {
+        "class": "ImageMagick.Drawing.DrawableAffine",
+        "method": "NormalizeAngleToRadians",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of Magick.NET-Q16-AnyCPU 14.8.0 -> 14.8.1 (net8.0): every changed method (the fix commits could not be read)."
+}

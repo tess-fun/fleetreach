@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-j8ph-6fxj-g533",
+  "aliases": [
+    "CVE-2026-50196"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Steeltoe.Discovery.Eureka"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Steeltoe.Discovery.Eureka.Configuration.DataCenterInfo",
+      "method": "FromJson"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/SteeltoeOSS/Steeltoe/commit/b8ed8557bb595863e4f340051d16b26ba40a75f4",
+      "https://github.com/SteeltoeOSS/Steeltoe/commit/c34a7399e808d0d11dd977460e81df1f2722df28"
+    ]
+  },
+  "note": "Proposed from the IL diff of Steeltoe.Discovery.Eureka 4.1.0 -> 4.2.0 (net8.0): methods of the files the fix commits changed."
+}

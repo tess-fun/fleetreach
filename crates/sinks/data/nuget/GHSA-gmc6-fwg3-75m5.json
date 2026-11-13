@@ -1,0 +1,16 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-gmc6-fwg3-75m5",
+  "ecosystem": "NuGet",
+  "packages": [
+    "MimeKit"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/jstedfast/MimeKit/commit/aef4eda75525848b992ce5e1f9b87399000fffb6"
+    ]
+  },
+  "note": "Proposed: no managed method of a source file the fix changed differs between MimeKit 4.7.0 -> 4.7.1 (net8.0); the flaw may be in native code, configuration or another package."
+}

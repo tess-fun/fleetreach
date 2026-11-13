@@ -1,0 +1,155 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-67m4-qxp3-j6hh",
+  "aliases": [
+    "CVE-2024-23838"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "TrueLayer.Client"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "TrueLayer.ApiClient",
+      "method": ".ctor"
+    },
+    {
+      "class": "TrueLayer.ApiClient",
+      "method": "CreateResponseAsync"
+    },
+    {
+      "class": "TrueLayer.ApiClient",
+      "method": "DeserializeJsonAsync"
+    },
+    {
+      "class": "TrueLayer.ApiClient",
+      "method": "GetAsync"
+    },
+    {
+      "class": "TrueLayer.ApiClient",
+      "method": "PostAsync"
+    },
+    {
+      "class": "TrueLayer.Auth.AuthApi",
+      "method": ".ctor"
+    },
+    {
+      "class": "TrueLayer.Auth.AuthApi",
+      "method": "GetAuthToken"
+    },
+    {
+      "class": "TrueLayer.Extensions.UriExtensions",
+      "method": "Append"
+    },
+    {
+      "class": "TrueLayer.Mandates.MandatesApi",
+      "method": ".ctor"
+    },
+    {
+      "class": "TrueLayer.Mandates.MandatesApi",
+      "method": "CreateMandate"
+    },
+    {
+      "class": "TrueLayer.Mandates.MandatesApi",
+      "method": "GetConfirmationOfFunds"
+    },
+    {
+      "class": "TrueLayer.Mandates.MandatesApi",
+      "method": "GetMandate"
+    },
+    {
+      "class": "TrueLayer.Mandates.MandatesApi",
+      "method": "GetMandateConstraints"
+    },
+    {
+      "class": "TrueLayer.Mandates.MandatesApi",
+      "method": "ListMandates"
+    },
+    {
+      "class": "TrueLayer.Mandates.MandatesApi",
+      "method": "RevokeMandate"
+    },
+    {
+      "class": "TrueLayer.Mandates.MandatesApi",
+      "method": "StartAuthorizationFlow"
+    },
+    {
+      "class": "TrueLayer.Mandates.MandatesApi",
+      "method": "SubmitConsent"
+    },
+    {
+      "class": "TrueLayer.Mandates.MandatesApi",
+      "method": "SubmitProviderSelection"
+    },
+    {
+      "class": "TrueLayer.MerchantAccounts.MerchantAccountsApi",
+      "method": ".ctor"
+    },
+    {
+      "class": "TrueLayer.MerchantAccounts.MerchantAccountsApi",
+      "method": "GetMerchantAccount"
+    },
+    {
+      "class": "TrueLayer.MerchantAccounts.MerchantAccountsApi",
+      "method": "GetPaymentSources"
+    },
+    {
+      "class": "TrueLayer.MerchantAccounts.MerchantAccountsApi",
+      "method": "ListMerchantAccounts"
+    },
+    {
+      "class": "TrueLayer.Payments.PaymentsApi",
+      "method": ".ctor"
+    },
+    {
+      "class": "TrueLayer.Payments.PaymentsApi",
+      "method": "CreatePayment"
+    },
+    {
+      "class": "TrueLayer.Payments.PaymentsApi",
+      "method": "GetPayment"
+    },
+    {
+      "class": "TrueLayer.Payouts.PayoutsApi",
+      "method": ".ctor"
+    },
+    {
+      "class": "TrueLayer.Payouts.PayoutsApi",
+      "method": "CreatePayout"
+    },
+    {
+      "class": "TrueLayer.Payouts.PayoutsApi",
+      "method": "GetPayout"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/TrueLayer/truelayer-dotnet/commit/75e436ed5360faa73d6e7ce3a9903a3c49505e3e"
+    ],
+    "excluded": [
+      {
+        "class": "TrueLayer.Common.TrueLayerBaseUris",
+        "method": ".cctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "TrueLayer.Guard",
+        "method": "HasValidBaseUri",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "TrueLayer.Guard",
+        "method": "NotAUrl",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "TrueLayer.Guard",
+        "method": "ThrowIfFalse",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of TrueLayer.Client 1.5.0 -> 1.6.0 (net6.0): methods of the files the fix commits changed."
+}

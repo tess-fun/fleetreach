@@ -1,0 +1,79 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-j7hp-h8jx-5ppr",
+  "aliases": [
+    "CVE-2023-4863",
+    "CVE-2023-5129"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "SkiaSharp",
+    "magick.net-q16-anycpu",
+    "magick.net-q16-hdri-anycpu",
+    "magick.net-q16-x64",
+    "magick.net-q8-anycpu",
+    "magick.net-q8-openmp-x64",
+    "magick.net-q8-x64"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "SkiaSharp.GRContextOptions",
+      "method": "ToNative"
+    },
+    {
+      "class": "SkiaSharp.GRVkBackendContext",
+      "method": "ToNative"
+    },
+    {
+      "class": "SkiaSharp.SKDocument",
+      "method": "CreatePdf"
+    },
+    {
+      "class": "SkiaSharp.SKHighContrastConfig",
+      "method": ".ctor"
+    },
+    {
+      "class": "SkiaSharp.SKPath+Iterator",
+      "method": ".ctor"
+    },
+    {
+      "class": "SkiaSharp.SkiaSharpVersion",
+      "method": "CheckNativeLibraryCompatible"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/qnighy/libwebp-sys2-rs/pull/21",
+      "https://github.com/python-pillow/Pillow/pull/7395",
+      "https://github.com/jaredforth/webp/pull/30",
+      "https://github.com/electron/electron/pull/39823",
+      "https://github.com/electron/electron/pull/39825",
+      "https://github.com/electron/electron/pull/39826",
+      "https://github.com/electron/electron/pull/39827",
+      "https://github.com/electron/electron/pull/39828",
+      "https://github.com/webmproject/libwebp/commit/902bc9190331343b2017211debcec8d2ab87e17a",
+      "https://github.com/qnighy/libwebp-sys2-rs/commit/4560c473a76ec8bd8c650f19ddf9d7a44f719f8b",
+      "https://github.com/jaredforth/webp/commit/9d4c56e63abecc777df71c702503c3eaabd7dcbc"
+    ],
+    "excluded": [
+      {
+        "class": "SkiaSharp.GRVkImageInfo",
+        "method": "set_Protected",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "SkiaSharp.SKCodecFrameInfo",
+        "method": "set_FullyRecieved",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "SkiaSharp.SKHighContrastConfig",
+        "method": "set_Grayscale",
+        "reason": "property accessor or static initializer"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of SkiaSharp 2.88.5 -> 2.88.6 (net6.0): every changed method (the fix commits could not be read)."
+}

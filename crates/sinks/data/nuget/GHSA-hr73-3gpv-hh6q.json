@@ -1,0 +1,44 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-hr73-3gpv-hh6q",
+  "aliases": [
+    "CVE-2026-81515"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Steeltoe.Discovery.Eureka"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Steeltoe.Discovery.Eureka.Transport.BoolStringJsonConverter",
+      "method": "Read"
+    },
+    {
+      "class": "Steeltoe.Discovery.Eureka.Transport.EurekaJsonSerializerContext",
+      "method": "global::System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver.GetTypeInfo"
+    },
+    {
+      "class": "Steeltoe.Discovery.Eureka.Transport.JsonInstanceInfoConverter",
+      "method": "Read"
+    },
+    {
+      "class": "Steeltoe.Discovery.Eureka.Transport.LongStringJsonConverter",
+      "method": "Read"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/SteeltoeOSS/Steeltoe/commit/bc1c3763aacc1fee82ef9932f338ec08dcb00432"
+    ],
+    "excluded": [
+      {
+        "class": "Steeltoe.Discovery.Eureka.Transport.JsonInstanceInfoConverter",
+        "method": "TryDeserializeInstance",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of Steeltoe.Discovery.Eureka 4.2.0 -> 4.3.0 (net8.0): methods of the files the fix commits changed."
+}

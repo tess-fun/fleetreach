@@ -1,0 +1,44 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-v7g2-m8c5-mf84",
+  "aliases": [
+    "CVE-2026-25985"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Magick.NET-Q16-AnyCPU",
+    "Magick.NET-Q16-HDRI-AnyCPU",
+    "Magick.NET-Q16-HDRI-OpenMP-arm64",
+    "Magick.NET-Q16-HDRI-OpenMP-x64",
+    "Magick.NET-Q16-HDRI-arm64",
+    "Magick.NET-Q16-HDRI-x64",
+    "Magick.NET-Q16-HDRI-x86",
+    "Magick.NET-Q16-OpenMP-arm64",
+    "Magick.NET-Q16-OpenMP-x64",
+    "Magick.NET-Q16-OpenMP-x86",
+    "Magick.NET-Q16-arm64",
+    "Magick.NET-Q16-x64",
+    "Magick.NET-Q16-x86",
+    "Magick.NET-Q8-AnyCPU",
+    "Magick.NET-Q8-OpenMP-arm64",
+    "Magick.NET-Q8-OpenMP-x64",
+    "Magick.NET-Q8-arm64",
+    "Magick.NET-Q8-x64",
+    "Magick.NET-Q8-x86"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/ImageMagick/ImageMagick/commit/1a51eb9af00c36724660e294520878fd1f13e312"
+    ],
+    "excluded": [
+      {
+        "class": "ImageMagick.MagickNET",
+        "method": "get_Version",
+        "reason": "property accessor or static initializer"
+      }
+    ]
+  },
+  "note": "Proposed: no managed method of a source file the fix changed differs between Magick.NET-Q16-AnyCPU 14.10.2 -> 14.10.3 (net8.0); the flaw may be in native code, configuration or another package."
+}

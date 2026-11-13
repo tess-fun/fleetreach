@@ -1,0 +1,30 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-rqrc-8q8f-cp9c",
+  "aliases": [
+    "CVE-2020-1469"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Bond.Core.CSharp"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Bond.Protocols.CompactBinaryCounter",
+      "method": "AddBytes"
+    },
+    {
+      "class": "Bond.Protocols.CompactBinaryCounter",
+      "method": "WriteStructEnd"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/microsoft/bond/commit/3afea822c42dd0095fedb9e7db9ebb99165e7343",
+      "https://github.com/microsoft/bond/commit/b0fd4a15a7cae946dd2855122559ca59cc34dbea"
+    ]
+  },
+  "note": "Proposed from the IL diff of Bond.Core.CSharp 9.0.0 -> 9.0.1 (netstandard1.3): methods of the files the fix commits changed."
+}

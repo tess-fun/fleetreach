@@ -1,0 +1,84 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-4cv2-4hjh-77rx",
+  "aliases": [
+    "CVE-2024-51417"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "System.Linq.Dynamic.Core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
+      "method": ".ctor"
+    },
+    {
+      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
+      "method": "FindTypesMarkedWithDynamicLinqTypeAttribute"
+    },
+    {
+      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
+      "method": "GetAssemblyTypesWithDynamicLinqTypeAttribute"
+    },
+    {
+      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
+      "method": "ResolveType"
+    },
+    {
+      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.AbstractDynamicLinqCustomTypeProvider",
+      "method": "ResolveTypeBySimpleName"
+    },
+    {
+      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.DefaultDynamicLinqCustomTypeProvider",
+      "method": ".ctor"
+    },
+    {
+      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.DefaultDynamicLinqCustomTypeProvider",
+      "method": "GetCustomTypesInternal"
+    },
+    {
+      "class": "System.Linq.Dynamic.Core.CustomTypeProviders.DefaultDynamicLinqCustomTypeProvider",
+      "method": "GetExtensionMethodsInternal"
+    },
+    {
+      "class": "System.Linq.Dynamic.Core.ParsingConfig",
+      "method": ".ctor"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/zzzprojects/System.Linq.Dynamic.Core/commit/49b6cf0909cf3571e0d3580317675408300dbdac"
+    ],
+    "excluded": [
+      {
+        "class": "System.Linq.Dynamic.Core.Parser.PredefinedTypesHelper",
+        "method": ".cctor",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "System.Linq.Dynamic.Core.ParsingConfig",
+        "method": "UseDefaultDynamicLinqCustomTypeProvider",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "System.Linq.Dynamic.Core.ParsingConfig",
+        "method": "get_AllowEqualsAndToStringMethodsOnObject",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "System.Linq.Dynamic.Core.ParsingConfig",
+        "method": "set_AllowEqualsAndToStringMethodsOnObject",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "System.Linq.Dynamic.Core.ParsingConfig",
+        "method": "set_CustomTypeProvider",
+        "reason": "property accessor or static initializer"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of System.Linq.Dynamic.Core 1.5.1 -> 1.6.0 (net8.0): methods of the files the fix commits changed."
+}

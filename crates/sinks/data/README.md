@@ -15,6 +15,15 @@ have no descriptors or deny lists. The 284 PyPI and 289 npm records are `sinkpro
 all `proposed`: `scan --reachability` uses them only for call-chain witnesses, and skips a
 proposed record with more than 10 sinks as too broad.
 
+Records for NuGet (`nuget/`) name types as .NET reflection does (`Namespace.Outer+Inner`) and
+methods by their metadata name (`.ctor`, `ReadFrame`). The 83 records are `nugetpropose`
+output (`crates/clr/examples`), all `proposed`: for each high or critical NuGet advisory with a
+GitHub fix commit, the IL of the last vulnerable and the first fixed release, narrowed to the
+types of the source files the fix changed, with generated code charged to the method that
+owns it. `docs/differential/nuget-sinks/propose.py` fetches the packages and commit file lists
+and runs it. Packages with no library assemblies (native code, tools, runtime packs) have no
+record.
+
 ## Status of the seed data
 
 The 100 records cover a seeded sample of high and critical Maven advisories that have SAP

@@ -1,0 +1,92 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-x9h5-r9v2-vcww",
+  "aliases": [
+    "CVE-2026-33901"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Magick.NET-Q16-AnyCPU",
+    "Magick.NET-Q16-HDRI-AnyCPU",
+    "Magick.NET-Q16-HDRI-OpenMP-arm64",
+    "Magick.NET-Q16-HDRI-arm64",
+    "Magick.NET-Q16-HDRI-x64",
+    "Magick.NET-Q16-HDRI-x86",
+    "Magick.NET-Q16-OpenMP-arm64",
+    "Magick.NET-Q16-OpenMP-x64",
+    "Magick.NET-Q16-arm64",
+    "Magick.NET-Q16-x64",
+    "Magick.NET-Q16-x86",
+    "Magick.NET-Q8-AnyCPU",
+    "Magick.NET-Q8-OpenMP-arm64",
+    "Magick.NET-Q8-OpenMP-x64",
+    "Magick.NET-Q8-arm64",
+    "Magick.NET-Q8-x64",
+    "Magick.NET-Q8-x86"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/ImageMagick/ImageMagick/commit/4c72003e9e54a4ebaa938d239e75f5d285527ebe"
+    ],
+    "excluded": [
+      {
+        "class": "ImageMagick.Formats.DcmReadDefines",
+        "method": "get_Defines",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.Formats.DcmReadDefines",
+        "method": "get_FixByteOrder",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.Formats.DcmReadDefines",
+        "method": "set_FixByteOrder",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.Formats.IconWriteDefines",
+        "method": ".ctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.Formats.IconWriteDefines",
+        "method": "get_AutoResize",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.Formats.IconWriteDefines",
+        "method": "get_Defines",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.Formats.IconWriteDefines",
+        "method": "get_Format",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.Formats.IconWriteDefines",
+        "method": "get_PngCompressionSize",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.Formats.IconWriteDefines",
+        "method": "set_AutoResize",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.Formats.IconWriteDefines",
+        "method": "set_PngCompressionSize",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.MagickNET",
+        "method": "get_Version",
+        "reason": "property accessor or static initializer"
+      }
+    ]
+  },
+  "note": "Proposed: no managed method of a source file the fix changed differs between Magick.NET-Q16-AnyCPU 14.11.1 -> 14.12.0 (net8.0); the flaw may be in native code, configuration or another package."
+}

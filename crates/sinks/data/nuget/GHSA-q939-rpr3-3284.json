@@ -1,0 +1,74 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-q939-rpr3-3284",
+  "aliases": [
+    "CVE-2026-48798"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "SSH.NET"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Renci.SshNet.ScpClient",
+      "method": ".ctor"
+    },
+    {
+      "class": "Renci.SshNet.ScpClient",
+      "method": "Download"
+    },
+    {
+      "class": "Renci.SshNet.ScpClient",
+      "method": "InternalDownload"
+    },
+    {
+      "class": "Renci.SshNet.ScpClient",
+      "method": "Upload"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/sshnet/SSH.NET/commit/600be0de543765995a189b5d7cd4efac5007f3ce"
+    ],
+    "excluded": [
+      {
+        "class": "Renci.SshNet.ScpClient",
+        "method": ".cctor",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "Renci.SshNet.ScpClient",
+        "method": "EnsureValidLocalName",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Renci.SshNet.ScpClient",
+        "method": "get_DefaultTransform",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Renci.SshNet.ScpClient",
+        "method": "get_EnsureIsDirectoryArg",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Renci.SshNet.ScpClient",
+        "method": "get_UseDirectoryFlag",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Renci.SshNet.ScpClient",
+        "method": "set_RemotePathTransformation",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "Renci.SshNet.ScpClient",
+        "method": "set_UseDirectoryFlag",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of SSH.NET 2025.1.0 -> 2026.0.0 (net8.0): methods of the files the fix commits changed."
+}

@@ -17,3 +17,6 @@ workspace = true
 [dependencies]
 thiserror = { workspace = true }
 fleetreach-sinks = { path = "../sinks", version = "1.6.0" }
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-hfvc-g252-rp4g",
+  "aliases": [
+    "CVE-2020-7791"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "i18n"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "i18n.TextLocalizer",
+      "method": "IsLanguageValid"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/turquoiseowl/i18n/commit/c418e3345313dc896c1951d8c46ab0b9b12fcbd3"
+    ],
+    "excluded": [
+      {
+        "class": "i18n.LocalizedApplication",
+        "method": "set_DefaultLanguage",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "i18n.LocalizedApplication",
+        "method": "set_DefaultLanguageTag",
+        "reason": "property accessor or static initializer"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of i18n 2.1.14 -> 2.1.15 (net40): methods of the files the fix commits changed."
+}

@@ -1,0 +1,80 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-wxhm-2mq7-7697",
+  "aliases": [
+    "CVE-2026-53598"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Prompty.Core"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Prompty.Core.PromptyLoader",
+      "method": "Build"
+    },
+    {
+      "class": "Prompty.Core.PromptyLoader",
+      "method": "Load"
+    },
+    {
+      "class": "Prompty.Core.PromptyLoader",
+      "method": "LoadAsync"
+    },
+    {
+      "class": "Prompty.Core.ReferenceResolver",
+      "method": ".ctor"
+    },
+    {
+      "class": "Prompty.Core.ReferenceResolver",
+      "method": "CreatePreProcess"
+    },
+    {
+      "class": "Prompty.Core.ReferenceResolver",
+      "method": "ResolveEnvVar"
+    },
+    {
+      "class": "Prompty.Core.ReferenceResolver",
+      "method": "ResolveFileRef"
+    },
+    {
+      "class": "Prompty.Core.ReferenceResolver",
+      "method": "ResolveReferences"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/microsoft/prompty/commit/88ac9948d7d37995edbb2f6d36913436626c39e1"
+    ],
+    "excluded": [
+      {
+        "class": "Prompty.Core.PromptyLoadOptions",
+        "method": ".ctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Prompty.Core.PromptyLoadOptions",
+        "method": "get_AllowedFileRoots",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Prompty.Core.PromptyLoadOptions",
+        "method": "set_AllowedFileRoots",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Prompty.Core.ReferenceResolver",
+        "method": "GetCanonicalPath",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Prompty.Core.ReferenceResolver",
+        "method": "IsWithinRoot",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of Prompty.Core 2.0.0-beta.1 -> 2.0.0-beta.2 (net9.0): methods of the files the fix commits changed."
+}

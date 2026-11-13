@@ -1,0 +1,145 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-x9vc-6hfv-hg8c",
+  "aliases": [
+    "CVE-2024-32655"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Npgsql"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WriteBind"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WriteCancelRequest"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WriteClose"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WriteCopyDone"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WriteCopyFail"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WriteDescribe"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WriteExecute"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WriteParse"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WritePassword"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WritePregenerated"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WriteQuery"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WriteSASLInitialResponse"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WriteSslRequest"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WriteStartup"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WriteSync"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlConnector",
+      "method": "WriteTerminate"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+      "method": ".ctor"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+      "method": "Clear"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+      "method": "DirectWrite"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+      "method": "Flush"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+      "method": "WriteBytesRaw"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+      "method": "WriteStreamRaw"
+    },
+    {
+      "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+      "method": "WriteString"
+    },
+    {
+      "class": "Npgsql.NpgsqlTransaction",
+      "method": "Save"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/npgsql/npgsql/commit/091655eed0c84e502ab424950c930339d17c1928",
+      "https://github.com/npgsql/npgsql/commit/3183efb2bdcca159c8c2e22af57e18ea8f853cf0",
+      "https://github.com/npgsql/npgsql/commit/67acbe027e28477ac2199e15cfb554bb2ffaf169",
+      "https://github.com/npgsql/npgsql/commit/703d9af8fa48dfe8c0180e36edb8278f34342d7b",
+      "https://github.com/npgsql/npgsql/commit/a22a42d8141d7a3528f43c02c095a409507cf1af",
+      "https://github.com/npgsql/npgsql/commit/e34e2ba8042e666d9af54a1b255fba4d5b11df56",
+      "https://github.com/npgsql/npgsql/commit/f7e7ead0702d776a8f551f5786c4cac2d65c4bc6"
+    ],
+    "excluded": [
+      {
+        "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+        "method": "AdvanceMessageBytesFlushed",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+        "method": "StartMessage",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+        "method": "get_MessageLengthValidation",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+        "method": "set_MessageLengthValidation",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of Npgsql 8.0.2 -> 8.0.3 (net8.0): methods of the files the fix commits changed."
+}

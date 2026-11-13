@@ -16,10 +16,15 @@
 //! does for class files. The graph is checked against what the runtime itself ran: on 11
 //! apps built from real NuGet packages, every method the JIT compiled in their assemblies is
 //! in the graph (`docs/differential/clr/jit`).
+//!
+//! `propose` drafts sink records for NuGet advisories from the IL diff of a package's last
+//! vulnerable and first fixed release, narrowed to the types whose source files the fix
+//! commits changed. A draft is `proposed` until a person reviews it.
 
 pub mod graph;
 mod il;
 mod metadata;
+pub mod propose;
 mod sig;
 pub mod verdict;
 

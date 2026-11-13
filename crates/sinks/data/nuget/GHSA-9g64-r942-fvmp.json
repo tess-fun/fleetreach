@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-9g64-r942-fvmp",
+  "aliases": [
+    "CVE-2025-29953"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Apache.NMS.ActiveMQ"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Apache.NMS.ActiveMQ.Commands.TrustedClassFilter",
+      "method": "BindToType"
+    },
+    {
+      "class": "Apache.NMS.ActiveMQ.NmsDefaultDeserializationPolicy",
+      "method": "IsTrustedType"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/apache/activemq-nms-openwire/commit/8944c41"
+    ]
+  },
+  "note": "Proposed from the IL diff of Apache.NMS.ActiveMQ 2.1.0 -> 2.1.1 (netstandard2.0): methods of the files the fix commits changed."
+}

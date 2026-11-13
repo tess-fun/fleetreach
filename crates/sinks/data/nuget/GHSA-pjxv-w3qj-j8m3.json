@@ -1,0 +1,29 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-pjxv-w3qj-j8m3",
+  "aliases": [
+    "CVE-2021-23415"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "elFinder.AspNet"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "elFinder.AspNet.Drivers.FileSystem.FileSystemDriver",
+      "method": "ExtractAsync"
+    },
+    {
+      "class": "elFinder.AspNet.Drivers.FileSystem.FileSystemDriver",
+      "method": "RenameAsync"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/mguinness/elFinder.AspNet/commit/675049b39284a9e84f0915c71d688da8ebc7d720"
+    ]
+  },
+  "note": "Proposed from the IL diff of elFinder.AspNet 1.1.0 -> 1.1.1 (netstandard2.0): methods of the files the fix commits changed."
+}

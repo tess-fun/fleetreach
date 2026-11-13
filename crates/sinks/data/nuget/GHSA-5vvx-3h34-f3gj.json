@@ -1,0 +1,22 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-5vvx-3h34-f3gj",
+  "aliases": [
+    "CVE-2026-61570"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "MPXJ.Net",
+    "net.sf.mpxj",
+    "net.sf.mpxj-for-csharp",
+    "net.sf.mpxj-for-vb"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/joniles/mpxj/commit/6e8288bc4d1cd62842af298004dc74fe66fb0805"
+    ]
+  },
+  "note": "Proposed: no managed method of a source file the fix changed differs between MPXJ.Net 16.4.0 -> 16.4.1 (net6.0); the flaw may be in native code, configuration or another package."
+}

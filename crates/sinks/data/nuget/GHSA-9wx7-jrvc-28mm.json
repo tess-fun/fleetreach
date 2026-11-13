@@ -1,0 +1,22 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-9wx7-jrvc-28mm",
+  "ecosystem": "NuGet",
+  "packages": [
+    "starkbank-ecdsa"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "EllipticCurve.Ecdsa",
+      "method": "verify"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/starkbank/ecdsa-python/commit/d136170666e9510eb63c2572551805807bd4c17f"
+    ]
+  },
+  "note": "Proposed from the IL diff of starkbank-ecdsa 1.3.1 -> 1.3.2 (netstandard2.1): every changed method (the fix commits could not be read)."
+}

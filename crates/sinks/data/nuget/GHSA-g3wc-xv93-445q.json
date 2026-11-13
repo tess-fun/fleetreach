@@ -1,0 +1,38 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-g3wc-xv93-445q",
+  "aliases": [
+    "CVE-2021-4248"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "DNS"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "DNS.Protocol.Request",
+      "method": ".ctor"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/kapetan/dns/pull/88",
+      "https://github.com/kapetan/dns/commit/cf7105aa2aae90d6656088fe5a8ee1d5730773b6"
+    ],
+    "excluded": [
+      {
+        "class": "DNS.Protocol.Request",
+        "method": ".cctor",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "DNS.Protocol.Request",
+        "method": "NextRandomId",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of DNS 6.1.0 -> 7.0.0 (netstandard2.0): methods of the files the fix commits changed."
+}

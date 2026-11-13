@@ -1,0 +1,65 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-58f6-6rj2-3v8r",
+  "aliases": [
+    "CVE-2026-50194"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Steeltoe.Management.Endpoint",
+    "Steeltoe.Management.EndpointCore"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
+      "method": "HasMappedInstancePort"
+    },
+    {
+      "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
+      "method": "InvokeAsync"
+    },
+    {
+      "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
+      "method": "IsRequestAllowed"
+    },
+    {
+      "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
+      "method": "SetResponseError"
+    },
+    {
+      "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortStartupFilter",
+      "method": "Configure"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/SteeltoeOSS/Steeltoe/commit/4cbc352fe89ac2e6c609554e435ab28996fec5e9",
+      "https://github.com/SteeltoeOSS/Steeltoe/commit/b7ca93c510aaa08d7e4ebec40ce20c5811c2c4b6"
+    ],
+    "excluded": [
+      {
+        "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
+        "method": ".cctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
+        "method": "LogAccessDenied",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
+        "method": "LogEntering",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Steeltoe.Management.Endpoint.ManagementPort.ManagementPortMiddleware",
+        "method": "LogPortMappingAllowed",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of Steeltoe.Management.Endpoint 4.1.0 -> 4.2.0 (net8.0): methods of the files the fix commits changed."
+}

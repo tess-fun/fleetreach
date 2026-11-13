@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-qj93-37f5-mr29",
+  "aliases": [
+    "CVE-2021-33318"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "IpMatcher"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "IpMatcher.Matcher",
+      "method": "Add"
+    },
+    {
+      "class": "IpMatcher.Matcher",
+      "method": "Exists"
+    },
+    {
+      "class": "IpMatcher.Matcher",
+      "method": "MatchExists"
+    },
+    {
+      "class": "IpMatcher.Matcher",
+      "method": "Remove"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/jchristn/IpMatcher/commit/81d77c2f33aa912dbd032b34b9e184fc6e041d89"
+    ]
+  },
+  "note": "Proposed from the IL diff of IpMatcher 1.0.4.1 -> 1.0.4.2 (net5.0): methods of the files the fix commits changed."
+}

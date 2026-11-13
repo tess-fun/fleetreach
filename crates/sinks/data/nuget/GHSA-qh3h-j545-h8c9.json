@@ -1,0 +1,329 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-qh3h-j545-h8c9",
+  "aliases": [
+    "CVE-2025-53101"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Magick.NET-Q16-AnyCPU",
+    "Magick.NET-Q16-HDRI-AnyCPU",
+    "Magick.NET-Q16-HDRI-OpenMP-arm64",
+    "Magick.NET-Q16-HDRI-OpenMP-x64",
+    "Magick.NET-Q16-HDRI-arm64",
+    "Magick.NET-Q16-HDRI-x64",
+    "Magick.NET-Q16-HDRI-x86",
+    "Magick.NET-Q16-OpenMP-arm64",
+    "Magick.NET-Q16-OpenMP-x64",
+    "Magick.NET-Q16-arm64",
+    "Magick.NET-Q16-x64",
+    "Magick.NET-Q16-x86",
+    "Magick.NET-Q8-AnyCPU",
+    "Magick.NET-Q8-OpenMP-arm64",
+    "Magick.NET-Q8-OpenMP-x64",
+    "Magick.NET-Q8-arm64",
+    "Magick.NET-Q8-x64",
+    "Magick.NET-Q8-x86"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "ImageMagick.ByteArrayWrapper",
+      "method": ".ctor"
+    },
+    {
+      "class": "ImageMagick.ByteArrayWrapper",
+      "method": "EnsureLength"
+    },
+    {
+      "class": "ImageMagick.ByteArrayWrapper",
+      "method": "GetBytes"
+    },
+    {
+      "class": "ImageMagick.ByteArrayWrapper",
+      "method": "Read"
+    },
+    {
+      "class": "ImageMagick.ByteArrayWrapper",
+      "method": "ResizeBytes"
+    },
+    {
+      "class": "ImageMagick.ByteArrayWrapper",
+      "method": "Write"
+    },
+    {
+      "class": "ImageMagick.Bytes",
+      "method": "GetData"
+    },
+    {
+      "class": "ImageMagick.Bytes",
+      "method": "GetDataAsync"
+    },
+    {
+      "class": "ImageMagick.Configuration.ConfigurationFiles",
+      "method": ".ctor"
+    },
+    {
+      "class": "ImageMagick.Configuration.ConfigurationFiles",
+      "method": "ImageMagick-Configuration-IConfigurationFiles-get_All"
+    },
+    {
+      "class": "ImageMagick.ImageOptimizerHelper",
+      "method": "GetFormatInformationFromHeader"
+    },
+    {
+      "class": "ImageMagick.MagickGeometry",
+      "method": ".ctor"
+    },
+    {
+      "class": "ImageMagick.MagickGeometry",
+      "method": "Initialize"
+    },
+    {
+      "class": "ImageMagick.MagickGeometry",
+      "method": "InitializeFromPercentage"
+    },
+    {
+      "class": "ImageMagick.MagickGeometry",
+      "method": "ToString"
+    },
+    {
+      "class": "ImageMagick.MagickImage",
+      "method": "Resample"
+    },
+    {
+      "class": "ImageMagick.MagickImage",
+      "method": "Resize"
+    },
+    {
+      "class": "ImageMagick.MagickImage",
+      "method": "ToByteArray"
+    },
+    {
+      "class": "ImageMagick.MagickImage",
+      "method": "Trim"
+    },
+    {
+      "class": "ImageMagick.MagickImage",
+      "method": "WriteAsync"
+    },
+    {
+      "class": "ImageMagick.MagickImage+CloneMutator",
+      "method": "Resample"
+    },
+    {
+      "class": "ImageMagick.MagickImage+CloneMutator",
+      "method": "Resize"
+    },
+    {
+      "class": "ImageMagick.MagickImage+NativeMagickImage",
+      "method": "Resample"
+    },
+    {
+      "class": "ImageMagick.MagickImage+NativeMagickImage",
+      "method": "Resize"
+    },
+    {
+      "class": "ImageMagick.MagickImage+NativeMethods",
+      "method": "MagickImage_Resample"
+    },
+    {
+      "class": "ImageMagick.MagickImage+NativeMethods",
+      "method": "MagickImage_Resize"
+    },
+    {
+      "class": "ImageMagick.MagickImage+NativeMethods+Arm64",
+      "method": "MagickImage_Resample"
+    },
+    {
+      "class": "ImageMagick.MagickImage+NativeMethods+Arm64",
+      "method": "MagickImage_Resize"
+    },
+    {
+      "class": "ImageMagick.MagickImage+NativeMethods+X64",
+      "method": "MagickImage_Resample"
+    },
+    {
+      "class": "ImageMagick.MagickImage+NativeMethods+X64",
+      "method": "MagickImage_Resize"
+    },
+    {
+      "class": "ImageMagick.MagickImage+NativeMethods+X86",
+      "method": "MagickImage_Resample"
+    },
+    {
+      "class": "ImageMagick.MagickImage+NativeMethods+X86",
+      "method": "MagickImage_Resize"
+    },
+    {
+      "class": "ImageMagick.MagickImageCollection",
+      "method": "ToByteArray"
+    },
+    {
+      "class": "ImageMagick.StreamWrapper",
+      "method": ".ctor"
+    },
+    {
+      "class": "ImageMagick.StreamWrapper",
+      "method": "Dispose"
+    },
+    {
+      "class": "ImageMagick.StreamWrapper",
+      "method": "Read"
+    },
+    {
+      "class": "ImageMagick.StreamWrapper",
+      "method": "Write"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/ImageMagick/ImageMagick/commit/66dc8f51c11b0ae1f1cdeacd381c3e9a4de69774",
+      "https://github.com/ImageMagick/ImageMagick6/commit/643deeb60803488373cd4799b24d5786af90972e"
+    ],
+    "excluded": [
+      {
+        "class": "ImageMagick.ByteArrayWrapper",
+        "method": "Dispose",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.Configuration.ConfigurationFiles",
+        "method": "get_Mime",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "get_AspectRatio",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "get_FillArea",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "get_Greater",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "get_IgnoreAspectRatio",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "get_IsPercentage",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "get_Less",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "get_LimitPixels",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "set_AspectRatio",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "set_FillArea",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "set_Greater",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "set_Height",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "set_IgnoreAspectRatio",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "set_IsPercentage",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "set_Less",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "set_LimitPixels",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "set_Width",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "set_X",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickGeometry",
+        "method": "set_Y",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.MagickNET",
+        "method": "get_Version",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "ImageMagick.PooledByteArray",
+        "method": ".cctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.PooledByteArray",
+        "method": ".ctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.PooledByteArray",
+        "method": "Dispose",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.PooledByteArray",
+        "method": "Resize",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.PooledByteArray",
+        "method": "ToUnpooledArray",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.PooledByteArray",
+        "method": "get_Data",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "ImageMagick.PooledByteArray",
+        "method": "get_Length",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of Magick.NET-Q16-AnyCPU 14.6.0 -> 14.7.0 (net8.0): every changed method (the fix commits could not be read)."
+}

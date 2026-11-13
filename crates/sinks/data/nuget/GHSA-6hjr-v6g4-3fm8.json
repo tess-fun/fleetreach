@@ -1,0 +1,24 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-6hjr-v6g4-3fm8",
+  "aliases": [
+    "CVE-2025-66628"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Magick.NET-Q16-AnyCPU",
+    "Magick.NET-Q16-HDRI-AnyCPU",
+    "Magick.NET-Q16-HDRI-x86",
+    "Magick.NET-Q16-x86",
+    "Magick.NET-Q8-AnyCPU",
+    "Magick.NET-Q8-x86"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/dlemstra/Magick.NET/commit/2dfa08e15cfd11016a79615994787b14f9048b1c"
+    ]
+  },
+  "note": "Proposed: no managed method of a source file the fix changed differs between Magick.NET-Q16-AnyCPU 14.9.1 -> 14.10.0 (net8.0); the flaw may be in native code, configuration or another package."
+}

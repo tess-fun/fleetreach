@@ -1,0 +1,62 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-q62h-354g-5r85",
+  "aliases": [
+    "CVE-2026-50200"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Steeltoe.Management.Endpoint",
+    "Steeltoe.Management.EndpointCore"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Steeltoe.Management.Endpoint.Actuators.Environment.EnvironmentEndpointOptions",
+      "method": ".ctor"
+    },
+    {
+      "class": "Steeltoe.Management.Endpoint.Actuators.Environment.Sanitizer",
+      "method": ".ctor"
+    },
+    {
+      "class": "Steeltoe.Management.Endpoint.Actuators.Environment.Sanitizer",
+      "method": "Sanitize"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/SteeltoeOSS/Steeltoe/commit/bef9f14b710232fca3fbe87e48fdd1b9e6b60d43",
+      "https://github.com/SteeltoeOSS/Steeltoe/commit/e50cd31a429b191841120f0d38fa9dda8f751b0a"
+    ],
+    "excluded": [
+      {
+        "class": "Steeltoe.Management.Endpoint.Actuators.Environment.ConfigureEnvironmentEndpointOptions",
+        "method": ".cctor",
+        "reason": "property accessor or static initializer"
+      },
+      {
+        "class": "Steeltoe.Management.Endpoint.Actuators.Environment.EnvironmentEndpointOptions",
+        "method": "get_RequiredPermissions",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Steeltoe.Management.Endpoint.Actuators.Environment.EnvironmentEndpointOptions",
+        "method": "set_RequiredPermissions",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Steeltoe.Management.Endpoint.Actuators.Environment.Sanitizer",
+        "method": "PasswordPairRegex",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Steeltoe.Management.Endpoint.Actuators.Environment.Sanitizer",
+        "method": "UriUserInfoRegex",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of Steeltoe.Management.Endpoint 4.1.0 -> 4.2.0 (net8.0): methods of the files the fix commits changed."
+}

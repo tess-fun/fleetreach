@@ -1,0 +1,26 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-jwjp-4649-v8jp",
+  "ecosystem": "NuGet",
+  "packages": [
+    "SIPSorcery"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "SIPSorcery.Net.RTCSctpTransport",
+      "method": "DoReceive"
+    },
+    {
+      "class": "SIPSorcery.Net.SctpSackChunk",
+      "method": "ParseChunk"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/sipsorcery-org/sipsorcery/commit/a2466550bb2a28821c73fb1961bc33dcc467f8cf"
+    ]
+  },
+  "note": "Proposed from the IL diff of SIPSorcery 10.0.13 -> 10.0.14 (net8.0): methods of the files the fix commits changed."
+}

@@ -17,6 +17,7 @@ fn shipped_records_are_valid() {
             "Maven" => "maven",
             "PyPI" => "pypi",
             "npm" => "npm",
+            "NuGet" => "nuget",
             other => panic!("unexpected ecosystem {other}"),
         };
         let file = dir.join(sub).join(format!("{}.json", r.id));

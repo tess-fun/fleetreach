@@ -480,13 +480,19 @@ fn valid_dotnet_type(s: &str) -> bool {
 }
 
 /// A .NET method name: an identifier, `.ctor`, `.cctor`, or an explicit interface
-/// implementation (`System.IDisposable.Dispose`, `IEnumerable<T>.GetEnumerator`).
+/// implementation (`System.IDisposable.Dispose`, `IEnumerable<T>.GetEnumerator`, and as
+/// source generators write it, `global::System.IDisposable.Dispose`; some compilers join the
+/// parts with `-`, as in `Csla-Server-IDataPortalTarget-CheckRulesAsync`).
 fn valid_dotnet_method(s: &str) -> bool {
     matches!(s, ".ctor" | ".cctor")
         || (!s.is_empty()
             && !s.starts_with('.')
             && s.chars().all(|c| {
-                c.is_alphanumeric() || matches!(c, '_' | '.' | '<' | '>' | ',' | '`' | '+' | '$')
+                c.is_alphanumeric()
+                    || matches!(
+                        c,
+                        '_' | '.' | '<' | '>' | ',' | '`' | '+' | '$' | ':' | '-' | '?'
+                    )
             }))
 }
 
@@ -649,13 +655,20 @@ mod tests {
         let mut net = record();
         net.ecosystem = "NuGet".into();
         net.packages = vec!["Newtonsoft.Json".into()];
-        net.sinks = vec![
+        net.sinks =
+            vec![
             sink(
                 "Newtonsoft.Json.Serialization.JsonSerializerInternalReader",
                 "CreateObject",
             ),
             sink("Acme.Outer+Inner`1", ".ctor"),
             sink("Acme.Reader", "System.IDisposable.Dispose"),
+            sink(
+                "Acme.Context",
+                "global::System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver.GetTypeInfo",
+            ),
+            sink("Acme.Portal", "Csla-Server-IDataPortalTarget-CheckRulesAsync"),
+            sink("Acme.Store", "Weasel-Storage-ISelector<T?>-ResolveAsync"),
         ];
         assert_eq!(net.validate(), Ok(()));
         net.sinks = vec![sink("Acme..Bad", "f")];

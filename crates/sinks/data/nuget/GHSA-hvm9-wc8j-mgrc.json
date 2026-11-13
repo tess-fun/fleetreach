@@ -1,0 +1,49 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-hvm9-wc8j-mgrc",
+  "ecosystem": "NuGet",
+  "packages": [
+    "TShock"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "TShockAPI.TShock",
+      "method": ".ctor"
+    },
+    {
+      "class": "TShockAPI.TShock",
+      "method": "HandleCommandLine"
+    },
+    {
+      "class": "TShockAPI.TShock",
+      "method": "HandleCommandLinePostConfigLoad"
+    },
+    {
+      "class": "TShockAPI.TShock",
+      "method": "Initialize"
+    },
+    {
+      "class": "TShockAPI.TShock",
+      "method": "NetHooks_NameCollision"
+    },
+    {
+      "class": "TShockAPI.TShock",
+      "method": "NetHooks_SendData"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/Pryaxis/TShock/commit/5075997264b48e27960e3446a948ecb0ea0f5a03"
+    ],
+    "excluded": [
+      {
+        "class": "TShockAPI.TShock",
+        "method": "RemoteClient_Reset",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Proposed from the IL diff of TShock 5.2.0 -> 5.2.1 (net6.0): methods of the files the fix commits changed."
+}

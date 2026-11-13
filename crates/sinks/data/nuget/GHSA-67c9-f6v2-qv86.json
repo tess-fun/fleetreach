@@ -1,0 +1,25 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-67c9-f6v2-qv86",
+  "aliases": [
+    "CVE-2026-81516"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Steeltoe.Discovery.Consul"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Steeltoe.Discovery.Consul.ConsulServiceInstance",
+      "method": ".ctor"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/SteeltoeOSS/Steeltoe/commit/028569c4f4f0e9e393e3c22a4fa5d07987dd8673"
+    ]
+  },
+  "note": "Proposed from the IL diff of Steeltoe.Discovery.Consul 4.2.0 -> 4.3.0 (net8.0): methods of the files the fix commits changed."
+}
