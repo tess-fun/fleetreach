@@ -35,6 +35,9 @@ pub struct Enrichment {
     /// severity *and* the numeric score of advisories that carry no CVSS of their
     /// own. Empty on the offline (`*_file`) path.
     pub cvss: BTreeMap<String, f32>,
+    /// CVE → public exploit code, from `db sync --source exploits` or `--exploits-file`.
+    /// `None` when not loaded: then no finding is called `no-known-exploit`.
+    pub exploits: Option<crate::exploits::ExploitIndex>,
 }
 
 impl Enrichment {
@@ -50,6 +53,7 @@ impl Enrichment {
             epss,
             epss_percentile,
             cvss: net::fetch_nvd_scores(backfill_cves),
+            exploits: None,
         })
     }
 
@@ -63,6 +67,34 @@ impl Enrichment {
         }
         let cvss = saved_scores(&root.join(crate::snapshot::NVD_DIR));
         Some(Self::from_files(Some(&kev), Some(&epss)).map(|loaded| Self { cvss, ..loaded }))
+    }
+
+    /// Add the exploit index: `files` when given (each an index or one collection's own
+    /// file), else what `db sync --source exploits` left under `root`.
+    ///
+    /// # Errors
+    ///
+    /// When a file is unreadable or none of the formats.
+    pub fn load_exploits(
+        &mut self,
+        files: &[std::path::PathBuf],
+        root: Option<&Path>,
+    ) -> Result<(), String> {
+        let mut index: Option<crate::exploits::ExploitIndex> = None;
+        for file in files {
+            let one = crate::exploits::from_file(file)?;
+            index = Some(match index {
+                Some(index) => index.merge(one),
+                None => one,
+            });
+        }
+        if index.is_none() {
+            if let Some(root) = root {
+                index = crate::exploits::from_data_dir(root).transpose()?;
+            }
+        }
+        self.exploits = index;
+        Ok(())
     }
 
     /// Load from local files (offline): KEV catalog JSON and/or EPSS CSV
@@ -82,6 +114,7 @@ impl Enrichment {
             epss,
             epss_percentile,
             cvss: BTreeMap::new(),
+            exploits: None,
         })
     }
 
@@ -106,6 +139,22 @@ impl Enrichment {
                 .iter()
                 .filter_map(|c| self.epss_percentile.get(*c).copied())
                 .fold(None, |acc, v| Some(acc.map_or(v, |a: f32| a.max(v))));
+            let (maturity, sources) = match &self.exploits {
+                // The collections name CVEs: a finding without one cannot be looked up.
+                Some(_) if cves.is_empty() => (None, Default::default()),
+                Some(index) => {
+                    let (m, s) = index.lookup(cves.iter().map(|c| c.as_str()));
+                    (Some(m), s)
+                }
+                None => (None, Default::default()),
+            };
+            // KEV is exploitation in the wild, further than any public code.
+            finding.exploit.exploit_maturity = if finding.exploit.kev {
+                Some(fleetreach_core::ExploitMaturity::Attacked)
+            } else {
+                maturity
+            };
+            finding.exploit.exploit_sources = sources;
 
             if finding.severity == Severity::Unknown {
                 let worst = cves

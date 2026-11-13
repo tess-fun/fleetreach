@@ -9,7 +9,7 @@ fleetreach reads advisory data from files, so it runs without a network once the
 there. On a connected machine:
 
 ```sh
-fleetreach db sync --all --osv-dir ./data --source osv,rustsec,kev,epss
+fleetreach db sync --all --osv-dir ./data --source osv,rustsec,kev,epss,exploits
 fleetreach scan --enrich --osv-dir ./data            # fills the NVD and Vulnrichment caches
 fleetreach db sync --osv-dir ./data --source nvd,vulnrichment
 fleetreach db bundle --osv-dir ./data -o data.tar    # prints the tar's sha256
@@ -25,7 +25,7 @@ fleetreach scan --offline --enrich --osv-dir ./data
 ```
 
 The import checks every file against the bundle's manifest before it replaces anything. An
-offline scan finds RustSec, KEV, EPSS and both caches in that directory, so its findings are
+offline scan finds RustSec, KEV, EPSS, the exploit index and both caches in that directory, so its findings are
 the ones the connected scan reported. The caches hold only the CVEs scans have asked about,
 so a CVE new to the offline fleet has no NVD backfill or Vulnrichment answer.
 

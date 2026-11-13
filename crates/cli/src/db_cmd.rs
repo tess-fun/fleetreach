@@ -36,8 +36,8 @@ pub struct DbSyncArgs {
     #[arg(long, value_name = "DIR")]
     osv_dir: Option<PathBuf>,
     /// what to fetch: `osv` (the exports), `cve` (cvelistV5), `csaf:<provider>` (vendor CSAF
-    /// VEX; `csaf:redhat`, `csaf:suse`), `rustsec`, `kev` and `epss`; `nvd` and `vulnrichment`
-    /// copy what scans have cached. All of them land in one directory for `db bundle`
+    /// VEX; `csaf:redhat`, `csaf:suse`), `rustsec`, `kev`, `epss` and `exploits` (Metasploit,
+    /// nuclei and Exploit-DB's CVE references); `nvd` and `vulnrichment` copy what scans have cached. All of them land in one directory for `db bundle`
     #[arg(
         long,
         value_delimiter = ',',
@@ -64,7 +64,7 @@ pub struct DbImportArgs {
     #[arg(
         long,
         value_name = "PATH",
-        required_unless_present_any = ["bundle", "csaf", "rustsec", "kev", "epss"]
+        required_unless_present_any = ["bundle", "csaf", "rustsec", "kev", "epss", "exploits"]
     )]
     cve: Option<PathBuf>,
     /// a directory of CSAF documents, or a `.tar.zst` or `.tar.bz2` archive (Red Hat's
@@ -83,6 +83,10 @@ pub struct DbImportArgs {
     /// an EPSS CSV file
     #[arg(long, value_name = "PATH")]
     epss: Option<PathBuf>,
+    /// an exploit index, or Metasploit's `modules_metadata_base.json`, nuclei's `cves.json` or
+    /// Exploit-DB's `files_exploits.csv` (repeatable: they are merged into one index)
+    #[arg(long, value_name = "PATH")]
+    exploits: Vec<PathBuf>,
     /// index into this directory instead of the default cache
     #[arg(long, value_name = "DIR")]
     osv_dir: Option<PathBuf>,
@@ -134,6 +138,36 @@ pub struct DbQualityArgs {
 }
 
 #[derive(Args)]
+pub struct DbRangesArgs {
+    /// check these ecosystems' records (comma-separated: npm, pypi, maven, rubygems, packagist,
+    /// nuget, hex, swift, cargo)
+    #[arg(long, value_delimiter = ',', value_name = "ECOS", required = true)]
+    ecosystems: Vec<String>,
+    /// only these advisory ids (comma-separated)
+    #[arg(long, value_delimiter = ',', value_name = "IDS")]
+    ids: Vec<String>,
+    /// at most this many records that name a fix commit, per ecosystem, in id order
+    #[arg(long, value_name = "N")]
+    limit: Option<usize>,
+    /// use only repositories already cloned (no network)
+    #[arg(long)]
+    offline: bool,
+    /// write each corrected record here as OSV JSON (`<id>.json`), for review and then
+    /// `[settings.advisories] dir`
+    #[arg(long, value_name = "DIR")]
+    out: Option<PathBuf>,
+    /// read this directory instead of the default cache
+    #[arg(long, value_name = "DIR")]
+    osv_dir: Option<PathBuf>,
+    /// print every check as JSON instead of the summary
+    #[arg(long)]
+    json: bool,
+    /// examples to print per verdict
+    #[arg(long, default_value_t = 5)]
+    examples: usize,
+}
+
+#[derive(Args)]
 pub struct DbCrosscheckArgs {
     /// read this directory instead of the default cache
     #[arg(long, value_name = "DIR")]
@@ -181,14 +215,16 @@ pub fn run_db_sync(args: DbSyncArgs) -> u8 {
         match source.trim() {
             "osv" => osv = true,
             "cve" => cve = true,
-            other @ ("rustsec" | "kev" | "epss" | "nvd" | "vulnrichment") => others.push(other),
+            other @ ("rustsec" | "kev" | "epss" | "exploits" | "nvd" | "vulnrichment") => {
+                others.push(other)
+            }
             other => match other.strip_prefix("csaf:") {
                 Some(provider) if !providers.contains(&provider) => providers.push(provider),
                 Some(_) => {}
                 None => {
                     return fail(&format!(
                         "`{other}` is not a source (osv, cve, csaf:<provider>, rustsec, kev, \
-                         epss, nvd, vulnrichment)"
+                         epss, exploits, nvd, vulnrichment)"
                     ))
                 }
             },
@@ -264,6 +300,7 @@ fn fetch_other(source: &str, dir: &Path) -> Result<(), String> {
     match source {
         "kev" => crate::enrich::sync_kev(dir),
         "epss" => crate::enrich::sync_epss(dir),
+        "exploits" => crate::exploits::sync(dir).map(|_| ()),
         _ => {
             fleetreach_scan::AdvisoryDb::fetch().map_err(|e| e.to_string())?;
             let clone = fleetreach_scan::AdvisoryDb::default_path();
@@ -374,6 +411,31 @@ fn import_other(args: &DbImportArgs, dir: &Path) -> Vec<(String, Result<(), Stri
         let result = crate::enrich::Enrichment::from_files(None, Some(path))
             .and_then(|_| file(path, snapshot::EPSS_FILE));
         jobs.push(("epss".to_string(), result));
+    }
+    if !args.exploits.is_empty() {
+        let mut merged: Option<crate::exploits::ExploitIndex> = None;
+        let result = args
+            .exploits
+            .iter()
+            .try_for_each(|path| {
+                let one = crate::exploits::from_file(path)?;
+                merged = Some(match merged.take() {
+                    Some(index) => index.merge(one),
+                    None => one,
+                });
+                Ok::<(), String>(())
+            })
+            .and_then(|()| {
+                let index = merged.take().ok_or("no exploit file")?;
+                let body = serde_json::to_vec(&index).map_err(|e| e.to_string())?;
+                let urls: Vec<String> = args
+                    .exploits
+                    .iter()
+                    .map(|p| format!("file://{}", p.display()))
+                    .collect();
+                snapshot::install_file(dir, snapshot::EXPLOITS_FILE, &body, &urls.join(" "), None)
+            });
+        jobs.push(("exploits".to_string(), result));
     }
     jobs
 }
@@ -743,6 +805,104 @@ pub fn run_db_quality(args: DbQualityArgs) -> u8 {
         }
     }
     u8::from(errors)
+}
+
+/// `db ranges`: published `fixed` bounds checked against the tags holding the fix commits.
+pub fn run_db_ranges(args: DbRangesArgs) -> u8 {
+    use crate::fixranges::{self, Options, Verdict};
+    use fleetreach_report::sanitize_cell;
+    let dir = match target_dir(args.osv_dir.as_deref()) {
+        Ok(dir) => dir,
+        Err(e) => return fail(&e),
+    };
+    let mut ecosystems = Vec::new();
+    for name in &args.ecosystems {
+        match osvdb::parse_ecosystem(name.trim()) {
+            Some(eco) => ecosystems.push(eco),
+            None => return fail(&format!("`{name}` is not an ecosystem")),
+        }
+    }
+    let Some(cache) = osvdb::private_subdir("fix-commit-repos") else {
+        return fail("no cache directory for the repository clones");
+    };
+    let opts = Options {
+        dir: dir.clone(),
+        ecosystems,
+        ids: args.ids.iter().map(|i| i.trim().to_string()).collect(),
+        limit: args.limit,
+        offline: args.offline,
+        cache,
+    };
+    let checks = match fixranges::run(&opts) {
+        Ok(checks) => checks,
+        Err(e) => return fail(&e),
+    };
+    if let Some(out) = &args.out {
+        let records = match fixranges::corrections(&dir, &checks, &osvdb::now_rfc3339()) {
+            Ok(records) => records,
+            Err(e) => return fail(&e),
+        };
+        if let Err(e) = std::fs::create_dir_all(out) {
+            return fail(&format!("creating {}: {e}", out.display()));
+        }
+        for (id, record) in &records {
+            // Ids are OSV ids; anything that could leave the directory is refused.
+            if id.is_empty() || id.contains(['/', '\\']) || id.starts_with('.') {
+                return fail(&format!("refusing to write a record named {id:?}"));
+            }
+            let body = match serde_json::to_string_pretty(record) {
+                Ok(body) => body + "\n",
+                Err(e) => return fail(&e.to_string()),
+            };
+            if let Err(e) = std::fs::write(out.join(format!("{id}.json")), body) {
+                return fail(&format!("writing {id}: {e}"));
+            }
+        }
+        eprintln!(
+            "wrote {} corrected record(s) to {}",
+            records.len(),
+            out.display()
+        );
+    }
+    if args.json {
+        return match serde_json::to_string_pretty(&checks) {
+            Ok(body) => {
+                println!("{body}");
+                0
+            }
+            Err(e) => fail(&e.to_string()),
+        };
+    }
+    let mut counts: std::collections::BTreeMap<Verdict, usize> = Default::default();
+    for check in &checks {
+        *counts.entry(check.verdict).or_default() += 1;
+    }
+    println!("{} bound(s) checked against fix-commit tags", checks.len());
+    for (verdict, n) in &counts {
+        println!("  {:<14} {n}", verdict.as_str());
+    }
+    for (verdict, _) in counts
+        .iter()
+        .filter(|(v, _)| v.corrects() || **v == Verdict::Unverified)
+    {
+        println!("\n{}:", verdict.as_str());
+        for c in checks
+            .iter()
+            .filter(|c| c.verdict == *verdict)
+            .take(args.examples)
+        {
+            println!(
+                "  {:<10} {:<22} {:<30} {} -> {}  {}",
+                sanitize_cell(&c.ecosystem),
+                sanitize_cell(&c.id),
+                sanitize_cell(&c.package),
+                sanitize_cell(c.published.as_deref().unwrap_or("(open)")),
+                sanitize_cell(c.derived.as_deref().unwrap_or("?")),
+                sanitize_cell(&c.detail)
+            );
+        }
+    }
+    0
 }
 
 /// `db crosscheck`: what the CVE and CSAF indexes add to or contradict in the OSV exports.

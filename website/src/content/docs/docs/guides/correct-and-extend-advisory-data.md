@@ -99,6 +99,49 @@ The checks run on the data as the matchers see it: each feeder's own version par
 type, with the overlay applied. Exit code 1 means an error-level issue, 2 that the data could
 not be read.
 
+## Check fixed versions against fix commits: `db ranges`
+
+About half of the OSV records link the commit that fixed them. `db ranges` clones each linked
+repository (commits and tags only: `git clone --bare --filter=tree:0`, never checked out) and
+asks which release tags contain the fix. Each published `fixed` bound gets a verdict:
+
+| Verdict | Meaning |
+|---------|---------|
+| `confirmed` | the bound's tag is the first on its line with the fix |
+| `fixed-earlier` | an earlier release on the same line already holds the fix: versions in between are reported vulnerable but are not |
+| `fixed-later` | the bound's tag lacks the fix and a later release on its line has it: versions in between are reported safe but are vulnerable (a false clean) |
+| `fix-missing` | the range has no fix, but a release at or after its start and every one after it holds the fix |
+| `unverified` | the fix is on another line (a backport the record does not link), or the releases in between disagree |
+| `no-tag` | no tag names the published version |
+| `no-commit` | the linked commit is not in the repository |
+| `no-repo` | the repository could not be cloned |
+
+```sh
+fleetreach db ranges --ecosystems npm,pypi --limit 300
+fleetreach db ranges --ecosystems maven --ids GHSA-xxxx-xxxx-xxxx --json
+fleetreach db ranges --ecosystems npm --out corrections/    # write the corrected records
+```
+
+A correction is proposed only when every release between the two bounds agrees with it and
+both tags are on one history (`git merge-base --is-ancestor`). The registry then has to agree
+too (npm, PyPI, crates.io, RubyGems, Hex and Maven Central publish times): the derived version
+must be published, and after the fix was committed (a tag made later proves nothing); a fix
+shipped later also needs the published version to predate the commit, since one released after
+it may carry a backport the record does not link. Offline, and for other registries, the detail
+says the times were not checked.
+
+Tags map to versions as `<name>-1.2.3` or `<name>@1.2.3` first, and as bare `1.2.3`, `v1.2.3`
+only when the repository is named for the package: a monorepo's `v1.2.3` is the product's
+release, not each package's version. A record whose range starts at a release that already
+holds the linked commit links another advisory's fix, and is `unverified`. Pre-releases never
+move a bound, and `last_affected` bounds are not checked.
+
+`--out` writes each corrected record as OSV JSON with the upstream id, so it drops into
+`[settings.advisories] dir`. The record carries its evidence (repository, commits, tags) under
+`database_specific.fleetreach_correction` with `status: unreviewed`: read it before you put it
+in the overlay, and send the ones that hold up to the upstream database. Clones are cached and
+refreshed once a day; `--offline` uses only what is cloned.
+
 ## Measure the sources: `db crosscheck`
 
 `db crosscheck` prints, as JSON, what the CVE and CSAF indexes add to or contradict in the OSV

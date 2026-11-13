@@ -59,9 +59,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, Table};
 use fleetreach_core::{
-    remediations, Action, DependencyKind, Ecosystem, Exploitability, FleetReport, Occurrence,
-    ReachTier, ReachVerdict, Reachability, RemediationItem, RepoId, Severity, VulnFinding,
-    WarnFinding,
+    remediations, Action, DependencyKind, Ecosystem, ExploitMaturity, Exploitability, FleetReport,
+    Occurrence, ReachTier, ReachVerdict, Reachability, RemediationItem, RepoId, Severity,
+    VulnFinding, WarnFinding,
 };
 use serde::Serialize;
 
@@ -990,6 +990,7 @@ struct AdvisoryRow<'a> {
     toolchain: bool,
     severity: Option<Severity>,
     kev: bool,
+    maturity: Option<ExploitMaturity>,
     /// Severity tier: vulns map `Unknown..Critical` → `1..=5`; warnings sit at `0`.
     tier: u8,
     cvss: f32,
@@ -1009,6 +1010,7 @@ fn advisory_rows(report: &FleetReport) -> Vec<AdvisoryRow<'_>> {
             toolchain: has_toolchain(&v.occurrences),
             severity: Some(v.severity),
             kev: v.exploit.kev,
+            maturity: v.exploit.exploit_maturity,
             tier: severity_tier(Some(v.severity)),
             cvss: v.cvss_score.unwrap_or(0.0),
             epss: v.exploit.epss.unwrap_or(-1.0),
@@ -1023,6 +1025,7 @@ fn advisory_rows(report: &FleetReport) -> Vec<AdvisoryRow<'_>> {
             toolchain: has_toolchain(&w.occurrences),
             severity: None,
             kev: false,
+            maturity: None,
             tier: severity_tier(None),
             cvss: 0.0,
             epss: -1.0,
@@ -1385,7 +1388,7 @@ pub fn to_packages(report: &FleetReport, color: bool) -> String {
             Cell::new(r.advisories),
             sev_cell,
             Cell::new(r.fix),
-            Cell::new(exploit_cell(r.kev, r.max_epss.unwrap_or(-1.0))),
+            Cell::new(exploit_cell(r.kev, r.max_epss.unwrap_or(-1.0), None)),
             Cell::new(pkg),
         ];
         if decided {
@@ -1420,8 +1423,8 @@ pub fn to_fix_first(report: &FleetReport, color: bool) -> String {
     }
 
     // The SSVC outcome first when decided (spec 08), then KEV, then severity tier desc,
-    // then blast radius desc (the fleet-only tie-breaker), then EPSS desc, CVSS desc, and
-    // id for a total, stable order.
+    // then blast radius desc (the fleet-only tie-breaker), then public exploit code, then
+    // EPSS desc, CVSS desc, and id for a total, stable order.
     let decided = report
         .ssvc
         .as_ref()
@@ -1433,6 +1436,7 @@ pub fn to_fix_first(report: &FleetReport, color: bool) -> String {
             .then(b.kev.cmp(&a.kev))
             .then(b.tier.cmp(&a.tier))
             .then(b.repos.len().cmp(&a.repos.len()))
+            .then(maturity_rank(b.maturity).cmp(&maturity_rank(a.maturity)))
             .then(b.epss.partial_cmp(&a.epss).unwrap_or(Ordering::Equal))
             .then(b.cvss.partial_cmp(&a.cvss).unwrap_or(Ordering::Equal))
             .then(a.id.cmp(b.id))
@@ -1448,7 +1452,7 @@ pub fn to_fix_first(report: &FleetReport, color: bool) -> String {
             Cell::new(i + 1),
             advisory_sev_cell(&r.label, r.kev, r.severity, color),
             Cell::new(impact_count(r.repos.len(), r.toolchain)),
-            Cell::new(exploit_cell(r.kev, r.epss)),
+            Cell::new(exploit_cell(r.kev, r.epss, r.maturity)),
             Cell::new(sanitize_cell(r.id)),
             Cell::new(truncate(&sanitize_cell(r.title), 40)),
         ];
@@ -1586,7 +1590,7 @@ fn remediation_table(
             Cell::new(resolves_text(it)),
             Cell::new(it.repos),
             Cell::new(reach_tier_label(it.reach)),
-            Cell::new(exploit_cell(it.kev, it.max_epss.unwrap_or(-1.0))),
+            Cell::new(exploit_cell(it.kev, it.max_epss.unwrap_or(-1.0), None)),
             Cell::new(bump_risk_cell(it)),
         ];
         if let Some(outcome) = outcome {
@@ -1697,12 +1701,16 @@ fn severity_tier(severity: Option<Severity>) -> u8 {
     }
 }
 
-/// The exploit-signal cell for the fix-first view: `KEV` and/or `EPSS NN%`, or
-/// `-` when the finding carries neither (e.g. a scan without `--enrich`).
-fn exploit_cell(kev: bool, epss: f32) -> String {
+/// The exploit-signal cell for the fix-first view: `KEV`, a public exploit
+/// (`exploit` for a weaponized one, `PoC`) and/or `EPSS NN%`, or `-` when the finding
+/// carries none (e.g. a scan without `--enrich`).
+fn exploit_cell(kev: bool, epss: f32, maturity: Option<ExploitMaturity>) -> String {
     let mut parts = Vec::new();
     if kev {
         parts.push("KEV".to_string());
+    }
+    if let Some(label) = maturity.and_then(public_exploit_label) {
+        parts.push(label.to_string());
     }
     if epss >= 0.0 {
         parts.push(format!("EPSS {:.0}%", epss * 100.0));
@@ -1825,7 +1833,7 @@ fn vuln_table(vulns: &[VulnFinding], color: bool) -> String {
     // Conditional columns: only shown when that analysis actually ran.
     let enriched = vulns
         .iter()
-        .any(|v| v.exploit.kev || v.exploit.epss.is_some());
+        .any(|v| v.exploit.kev || v.exploit.epss.is_some() || v.exploit.exploit_maturity.is_some());
     let reach_checked = vulns.iter().any(|v| v.reachable.is_some());
 
     let mut header = vec!["Severity"];
@@ -1980,10 +1988,33 @@ fn title_with_functions(v: &VulnFinding) -> String {
     out
 }
 
+/// Higher for exploitation that has got further; no data ranks with no known exploit.
+fn maturity_rank(maturity: Option<ExploitMaturity>) -> u8 {
+    match maturity {
+        Some(ExploitMaturity::Attacked) => 3,
+        Some(ExploitMaturity::Mature) => 2,
+        Some(ExploitMaturity::ProofOfConcept) => 1,
+        Some(ExploitMaturity::NoKnownExploit) | None => 0,
+    }
+}
+
+/// The short label for a public exploit short of KEV: `exploit` for a weaponized
+/// one, `PoC` for proof-of-concept code; nothing otherwise (KEV has its own label).
+fn public_exploit_label(maturity: ExploitMaturity) -> Option<&'static str> {
+    match maturity {
+        ExploitMaturity::Mature => Some("exploit"),
+        ExploitMaturity::ProofOfConcept => Some("PoC"),
+        ExploitMaturity::Attacked | ExploitMaturity::NoKnownExploit => None,
+    }
+}
+
 fn risk_cell(exploit: &Exploitability, color: bool) -> Cell {
     let mut parts = Vec::new();
     if exploit.kev {
         parts.push("KEV".to_string());
+    }
+    if let Some(label) = exploit.exploit_maturity.and_then(public_exploit_label) {
+        parts.push(label.to_string());
     }
     if let Some(epss) = exploit.epss {
         parts.push(format!("epss {:.0}%", epss * 100.0));

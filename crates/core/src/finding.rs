@@ -270,6 +270,135 @@ pub struct Exploitability {
     /// Where that score ranks among all scored CVEs (0.0–1.0).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub epss_percentile: Option<f32>,
+    /// How far exploitation has got, from KEV and the public exploit collections.
+    /// `None` when no exploit data was loaded, which is not "no known exploit".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exploit_maturity: Option<ExploitMaturity>,
+    /// The public collections that hold exploit code for one of the finding's CVEs.
+    #[serde(default, skip_serializing_if = "ExploitSources::is_empty")]
+    pub exploit_sources: ExploitSources,
+}
+
+/// How far exploitation of a vulnerability has got, worst first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExploitMaturity {
+    /// Exploited in the wild: in CISA's KEV catalog.
+    Attacked,
+    /// A weaponized exploit is public: a Metasploit exploit module.
+    Mature,
+    /// Public exploit or detection code: Exploit-DB, a nuclei template, a Metasploit
+    /// auxiliary module.
+    ProofOfConcept,
+    /// The collections were loaded and none holds code for it.
+    NoKnownExploit,
+}
+
+impl ExploitMaturity {
+    /// The kebab-case name used in JSON.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ExploitMaturity::Attacked => "attacked",
+            ExploitMaturity::Mature => "mature",
+            ExploitMaturity::ProofOfConcept => "proof-of-concept",
+            ExploitMaturity::NoKnownExploit => "no-known-exploit",
+        }
+    }
+}
+
+/// A public exploit collection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExploitSource {
+    /// Rapid7's Metasploit Framework.
+    Metasploit,
+    /// ProjectDiscovery's nuclei templates.
+    Nuclei,
+    /// OffSec's Exploit Database.
+    ExploitDb,
+}
+
+impl ExploitSource {
+    /// Every source, in the order they are listed.
+    pub const ALL: [ExploitSource; 3] = [
+        ExploitSource::Metasploit,
+        ExploitSource::Nuclei,
+        ExploitSource::ExploitDb,
+    ];
+
+    /// The kebab-case name used in JSON.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ExploitSource::Metasploit => "metasploit",
+            ExploitSource::Nuclei => "nuclei",
+            ExploitSource::ExploitDb => "exploit-db",
+        }
+    }
+
+    fn bit(self) -> u8 {
+        match self {
+            ExploitSource::Metasploit => 1,
+            ExploitSource::Nuclei => 2,
+            ExploitSource::ExploitDb => 4,
+        }
+    }
+}
+
+/// A set of [`ExploitSource`]s, serialized as a list of their names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub struct ExploitSources(u8);
+
+impl ExploitSources {
+    /// Whether no source is in the set.
+    pub fn is_empty(&self) -> bool {
+        self.0 == 0
+    }
+
+    /// Add a source.
+    pub fn insert(&mut self, source: ExploitSource) {
+        self.0 |= source.bit();
+    }
+
+    /// Whether `source` is in the set.
+    pub fn contains(&self, source: ExploitSource) -> bool {
+        self.0 & source.bit() != 0
+    }
+
+    /// Every source of `other` too.
+    pub fn union(self, other: ExploitSources) -> ExploitSources {
+        ExploitSources(self.0 | other.0)
+    }
+
+    /// The sources in the set, in [`ExploitSource::ALL`] order.
+    pub fn iter(self) -> impl Iterator<Item = ExploitSource> {
+        ExploitSource::ALL
+            .into_iter()
+            .filter(move |s| self.contains(*s))
+    }
+}
+
+impl FromIterator<ExploitSource> for ExploitSources {
+    fn from_iter<I: IntoIterator<Item = ExploitSource>>(iter: I) -> Self {
+        let mut set = ExploitSources::default();
+        for source in iter {
+            set.insert(source);
+        }
+        set
+    }
+}
+
+impl Serialize for ExploitSources {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.iter())
+    }
+}
+
+impl<'de> Deserialize<'de> for ExploitSources {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Vec::<ExploitSource>::deserialize(deserializer)?
+            .into_iter()
+            .collect())
+    }
 }
 
 fn is_false(value: &bool) -> bool {

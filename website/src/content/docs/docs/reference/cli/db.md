@@ -20,6 +20,7 @@ Commands:
   status      Show which exports are present and how old they are
   quality     Report data-quality issues in the local advisory data and overlay
   crosscheck  Measure what the CVE and CSAF indexes add to or contradict in the OSV data (JSON)
+  ranges      Check published fixed versions against the release tags that hold the fix commits
   help        Print this message or the help of the given subcommand(s)
 
 Options:
@@ -41,7 +42,7 @@ Options:
       --all                fetch every language osv.dev export fleetreach can read (distro exports are fetched only by name or for a fleet's images: some are over a gigabyte)
       --distros <DISTROS>  fetch the exports for these distro releases (comma-separated, e.g. Debian:12,Wolfi): the whole distribution's export, which is what osv.dev maintains
       --osv-dir <DIR>      sync into this directory instead of the default cache (e.g. to copy to an air-gapped host)
-      --source <SOURCES>   what to fetch: `osv` (the exports), `cve` (cvelistV5), `csaf:<provider>` (vendor CSAF VEX; `csaf:redhat`, `csaf:suse`), `rustsec`, `kev` and `epss`; `nvd` and `vulnrichment` copy what scans have cached. All of them land in one directory for `db bundle` [default: osv]
+      --source <SOURCES>   what to fetch: `osv` (the exports), `cve` (cvelistV5), `csaf:<provider>` (vendor CSAF VEX; `csaf:redhat`, `csaf:suse`), `rustsec`, `kev`, `epss` and `exploits` (Metasploit, nuclei and Exploit-DB's CVE references); `nvd` and `vulnrichment` copy what scans have cached. All of them land in one directory for `db bundle` [default: osv]
       --force              re-download even if the cached export was checked recently
   -q, --quiet              no progress output
   -h, --help               Print help
@@ -65,6 +66,7 @@ Options:
       --rustsec <DIR>        a RustSec advisory-db clone
       --kev <PATH>           a KEV catalog JSON file
       --epss <PATH>          an EPSS CSV file
+      --exploits <PATH>      an exploit index, or Metasploit's `modules_metadata_base.json`, nuclei's `cves.json` or Exploit-DB's `files_exploits.csv` (repeatable: they are merged into one index)
       --osv-dir <DIR>        index into this directory instead of the default cache
   -q, --quiet                no progress output
   -h, --help                 Print help
@@ -148,4 +150,25 @@ Options:
       --json           print the measurements as JSON
       --limit <LIMIT>  examples to keep per kind [default: 5]
   -h, --help           Print help
+```
+
+## fleetreach db ranges
+
+Check published fixed versions against the release tags that hold the fix commits
+
+```text
+Check published fixed versions against the release tags that hold the fix commits
+
+Usage: fleetreach db ranges [OPTIONS] --ecosystems <ECOS>
+
+Options:
+      --ecosystems <ECOS>    check these ecosystems' records (comma-separated: npm, pypi, maven, rubygems, packagist, nuget, hex, swift, cargo)
+      --ids <IDS>            only these advisory ids (comma-separated)
+      --limit <N>            at most this many records that name a fix commit, per ecosystem, in id order
+      --offline              use only repositories already cloned (no network)
+      --out <DIR>            write each corrected record here as OSV JSON (`<id>.json`), for review and then `[settings.advisories] dir`
+      --osv-dir <DIR>        read this directory instead of the default cache
+      --json                 print every check as JSON instead of the summary
+      --examples <EXAMPLES>  examples to print per verdict [default: 5]
+  -h, --help                 Print help
 ```

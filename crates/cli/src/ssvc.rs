@@ -210,6 +210,17 @@ fn decide(
     } else {
         Exploitation::None
     };
+    // SSVC's own definition of a public PoC names Metasploit and Exploit-DB.
+    if exploitation < Exploitation::PublicPoc && !v.exploit.exploit_sources.is_empty() {
+        let names: Vec<&str> = v
+            .exploit
+            .exploit_sources
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+        why.push(format!("public exploit code: {}", names.join(", ")));
+        exploitation = Exploitation::PublicPoc;
+    }
     // CISA's assessment can only raise Exploitation: a KEV entry stays `active`.
     if let Some(cisa_e) = cisa.and_then(|c| c.exploitation) {
         if cisa_e > exploitation {
@@ -471,6 +482,39 @@ mod tests {
         };
         assert!(bad("tags = []\nexposure = \"open\"").contains("`tags` is empty"));
         assert!(bad("name = \"x\"\ntags = [\"a\"]").contains("x: sets none"));
+    }
+
+    #[test]
+    fn public_exploit_code_is_a_public_poc() {
+        let with = |extra: serde_json::Value| report(extra, serde_json::json!({}));
+        let d = decide_one(
+            OPEN,
+            &mut with(
+                serde_json::json!({ "kev": false, "exploit_maturity": "mature",
+                "exploit_sources": ["metasploit", "exploit-db"] }),
+            ),
+            KNOWN,
+        );
+        assert_eq!(d.exploitation, Exploitation::PublicPoc);
+        assert!(
+            d.rationale
+                .contains("public exploit code: metasploit, exploit-db"),
+            "{}",
+            d.rationale
+        );
+        // KEV stays active, and an index that names nothing raises nothing.
+        let d = decide_one(
+            OPEN,
+            &mut with(serde_json::json!({ "exploit_sources": ["nuclei"] })),
+            KNOWN,
+        );
+        assert_eq!(d.exploitation, Exploitation::Active);
+        let d = decide_one(
+            OPEN,
+            &mut with(serde_json::json!({ "kev": false, "exploit_maturity": "no-known-exploit" })),
+            KNOWN,
+        );
+        assert_eq!(d.exploitation, Exploitation::None);
     }
 
     #[test]

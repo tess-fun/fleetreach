@@ -186,6 +186,12 @@ pub(crate) struct ScanArgs {
     kev_file: Option<PathBuf>,
     #[arg(long, value_name = "PATH", help = "EPSS CSV file (offline enrich)")]
     epss_file: Option<PathBuf>,
+    #[arg(
+        long,
+        value_name = "PATH",
+        help = "exploit index, or Metasploit/nuclei/Exploit-DB's own file, for exploit maturity (repeatable; default: the synced index)"
+    )]
+    exploits_file: Vec<PathBuf>,
     #[arg(long, help = "fail if any finding is in the CISA KEV catalog")]
     fail_on_kev: bool,
     #[arg(long, value_name = "P", help = "report only findings with EPSS >= P")]
@@ -1433,7 +1439,8 @@ fn enrich_report(args: &ScanArgs, config: &Config, fleet_report: &mut FleetRepor
         || args.fail_on_ssvc.is_some()
         || args.min_epss.is_some()
         || args.kev_file.is_some()
-        || args.epss_file.is_some();
+        || args.epss_file.is_some()
+        || !args.exploits_file.is_empty();
     // SSVC Exploitation is only known once the KEV catalog was loaded; an EPSS file alone
     // cannot say a finding is not actively exploited.
     let mut exploitation_known = false;
@@ -1457,8 +1464,12 @@ fn enrich_report(args: &ScanArgs, config: &Config, fleet_report: &mut FleetRepor
             fetch_enrichment(fleet_report)
         };
         match loaded {
-            Ok(enrichment) => {
+            Ok(mut enrichment) => {
                 exploitation_known = !from_files || args.kev_file.is_some();
+                let root = data_dir(args, Some(config));
+                if let Err(e) = enrichment.load_exploits(&args.exploits_file, root.as_deref()) {
+                    eprintln!("warning: exploit maturity not loaded: {e}");
+                }
                 enrichment.apply(&mut fleet_report.vulnerabilities);
                 // apply() backfills `unknown` severities from NVD CVSS, so the summary
                 // (built pre-enrichment) must be refreshed or it reports a stale

@@ -61,6 +61,7 @@ fn enrich_is_ecosystem_agnostic_keying_on_cve() {
         epss: BTreeMap::from([("CVE-2099-0001".to_string(), 0.42)]),
         epss_percentile: BTreeMap::new(),
         cvss: BTreeMap::from([("CVE-2022-0778".to_string(), 7.5)]),
+        exploits: None,
     };
     let mut findings = vec![
         vuln_eco("npm-f", "CVE-2099-0001", Severity::High, Ecosystem::Npm),
@@ -129,6 +130,7 @@ fn backfill_fills_unknown_severity_and_score_from_nvd_without_downgrading() {
             ("CVE-2022-0778".to_string(), 7.5),
             ("CVE-2099-0002".to_string(), 9.5),
         ]),
+        exploits: None,
     };
 
     let mut findings = vec![
@@ -174,6 +176,7 @@ fn backfill_takes_worst_score_across_aliases() {
             ("CVE-2099-0001".to_string(), 3.5),
             ("CVE-2099-0002".to_string(), 9.5),
         ]),
+        exploits: None,
     };
 
     let mut finding = vuln("R1", "CVE-2099-0001", Severity::Unknown);
@@ -233,6 +236,7 @@ fn summary_max_severity_is_refreshed_after_enrichment_backfill() {
         epss: BTreeMap::new(),
         epss_percentile: BTreeMap::new(),
         cvss: BTreeMap::from([("CVE-2022-0778".to_string(), 9.8)]),
+        exploits: None,
     };
     enrichment.apply(&mut report.vulnerabilities);
     assert_eq!(report.vulnerabilities[0].severity, Severity::Critical);
@@ -258,6 +262,7 @@ fn rank_puts_kev_first_then_epss_descending() {
             kev,
             epss,
             epss_percentile: None,
+            ..Default::default()
         };
         v
     };
@@ -272,4 +277,83 @@ fn rank_puts_kev_first_then_epss_descending() {
     let order: Vec<&str> = findings.iter().map(|v| v.advisory_id.as_str()).collect();
     // KEV first (even with low epss), then epss desc, unknown last.
     assert_eq!(order, vec!["kev", "high-epss", "low-epss", "none"]);
+}
+
+/// Exploit maturity: KEV is attacked, Metasploit exploit modules are mature, the rest of the
+/// collections proof of concept, and only a loaded index may say no known exploit.
+#[test]
+fn exploit_maturity_from_the_index_and_kev() {
+    use fleetreach_cli::exploits::ExploitIndex;
+    use fleetreach_core::{ExploitMaturity, ExploitSource};
+    let index = ExploitIndex::parse_any(concat!(
+        r#"{"ID":"CVE-2099-0002","file_path":"http/cves/2099/CVE-2099-0002.yaml"}"#,
+        "\n",
+        r#"{"ID":"CVE-2099-0001","file_path":"http/cves/2099/CVE-2099-0001.yaml"}"#,
+    ))
+    .unwrap()
+    .merge(
+        ExploitIndex::parse_any(
+            r#"{"exploit_x": {"fullname": "exploit/x", "type": "exploit", "references": ["CVE-2099-0003"]}}"#,
+        )
+        .unwrap(),
+    );
+    let mut enrichment = Enrichment {
+        kev: BTreeSet::from(["CVE-2099-0001".to_string()]),
+        ..Default::default()
+    };
+    let mut findings = vec![
+        vuln("kev", "CVE-2099-0001", Severity::High),
+        vuln("poc", "CVE-2099-0002", Severity::High),
+        vuln("mature", "CVE-2099-0003", Severity::High),
+        vuln("none", "CVE-2099-0004", Severity::High),
+    ];
+    enrichment.apply(&mut findings);
+    assert!(
+        findings
+            .iter()
+            .filter(|f| f.advisory_id != "kev")
+            .all(|f| f.exploit.exploit_maturity.is_none()),
+        "without the index nothing is called no-known-exploit"
+    );
+    assert_eq!(
+        findings[0].exploit.exploit_maturity,
+        Some(ExploitMaturity::Attacked)
+    );
+
+    enrichment.exploits = Some(index);
+    enrichment.apply(&mut findings);
+    let maturity: Vec<_> = findings
+        .iter()
+        .map(|f| f.exploit.exploit_maturity.unwrap())
+        .collect();
+    assert_eq!(
+        maturity,
+        [
+            ExploitMaturity::Attacked,
+            ExploitMaturity::ProofOfConcept,
+            ExploitMaturity::Mature,
+            ExploitMaturity::NoKnownExploit
+        ]
+    );
+    assert!(findings[0]
+        .exploit
+        .exploit_sources
+        .contains(ExploitSource::Nuclei));
+    assert!(findings[2]
+        .exploit
+        .exploit_sources
+        .contains(ExploitSource::Metasploit));
+
+    let mut no_cve = vec![vuln("ghsa-only", "GHSA-xxxx-xxxx-xxxx", Severity::High)];
+    enrichment.apply(&mut no_cve);
+    assert_eq!(
+        no_cve[0].exploit.exploit_maturity, None,
+        "no CVE, nothing to look up"
+    );
+
+    let json = serde_json::to_value(&findings[2]).unwrap();
+    assert_eq!(json["exploit_maturity"], "mature");
+    assert_eq!(json["exploit_sources"], serde_json::json!(["metasploit"]));
+    let back: VulnFinding = serde_json::from_value(json).unwrap();
+    assert_eq!(back.exploit, findings[2].exploit);
 }

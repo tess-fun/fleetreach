@@ -1238,6 +1238,38 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   with each release.
 - **Research gate**: if the 1.7.0 measurement misses the bar, the gap is published with the
   number, and 1.8.0 work shifts to whatever the misses have in common.
+- **Status: phase 2 exploit maturity and fix-commit ranges implemented 2026-11-13, unreleased.**
+  - *Exploit maturity* (`crates/cli/src/exploits.rs`): `db sync --source exploits` reads
+    Metasploit's `modules_metadata_base.json` (exploit module = mature, auxiliary = proof of
+    concept), nuclei's `cves.json` and Exploit-DB's `files_exploits.csv` into
+    `enrich/exploits.json`: 29,764 CVEs, 2,570 mature. It equals an independent reading of
+    the three files (Python's csv and json) on every CVE, and `db import --exploits` of the
+    raw files gives the same index byte for byte. Findings carry `exploit_maturity` (KEV
+    makes `attacked`) and `exploit_sources`; no index, or no CVE alias, means no maturity,
+    never `no-known-exploit`. SSVC counts public code as a public PoC. On `~/fa-testbed/oss`
+    (1,239 findings): 2 attacked, 1 mature (a Metasploit module for CVE-2026-75604), 9
+    proof of concept.
+  - *Fix-commit ranges* (`crates/cli/src/fixranges.rs`, `db ranges`): commit links and GIT
+    ranges, bare `--filter=tree:0` clones, `git tag --contains`, ancestry, then the
+    registry's publish times. Run on the first 300 fix-commit records each of npm, PyPI
+    and Maven (1,523 bounds, 3.2GB of clones): 816 confirmed, 14 corrections, 470
+    unverified (mostly backports under other commit ids, TensorFlow's 255 among them), 221
+    no tag. Oracle: the published archive of each version (npm tarball, PyPI sdist) holds
+    the lines the fix commit added, or not: 10 of 14 right, 0 wrong, 4 undecided (bundled
+    builds, a one-line fix). Real upstream false cleans among them: node-red-dashboard
+    2.26.2, mindsdb 23.2.1.0 and loguru 0.5.3 by the archives, docsify 4.12.0 by its release
+    predating the fix. **Found** (each a guard now):
+    a monorepo's `v1.2.3` tags are the product's releases (Backstage proposed 176 wrong
+    versions); a record links the fix of an earlier advisory (Fastify, commit already in the
+    range's start); a SemVer `-2` is a pre-release; a tag made years after the release
+    (deephas 1.0.7); tags never published (9router 0.5.6); a release after the commit may
+    carry an unlinked backport (Tauri 1.5.6). Before the guards npm had 17 proposals, at
+    least 8 wrong. Maven tags after the repository or group (`sshd-2.12.0`,
+    `rel/nifi-1.23.1`, `REL42.2.28`); reading those raised Maven's confirmed bounds from
+    218 to 308, and Maven proposed nothing.
+  - **Still open**: the public `fleetreach-advisories` repository and upstream submissions
+    (outward-facing, the user's call); range derivation from the sink pipeline; the monthly
+    coverage and lead-time measurement against Snyk; `last_affected` bounds.
 
 ### Prioritization
 

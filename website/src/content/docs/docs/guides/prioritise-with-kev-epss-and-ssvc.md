@@ -37,6 +37,35 @@ $ fleetreach scan -f fix-first --enrich | head -n 9
 
 Gate on it with `--fail-on-kev` or `--min-epss 0.5`.
 
+### Exploit maturity
+
+KEV says a flaw is exploited; EPSS says how likely that is. Public exploit code is the third
+signal. `db sync --source exploits` reads which CVEs have code in Rapid7's Metasploit
+Framework, ProjectDiscovery's nuclei templates and OffSec's Exploit Database into one index
+(about 30,000 CVEs). With it, every enriched finding gets a maturity, the same scale Snyk
+shows:
+
+| `exploit_maturity` | Means |
+|--------------------|-------|
+| `attacked` | in CISA KEV: exploited in the wild |
+| `mature` | a Metasploit exploit module: ready to run against a target |
+| `proof-of-concept` | an Exploit-DB entry, a nuclei template or a Metasploit auxiliary module |
+| `no-known-exploit` | the index was loaded and none of the three names it |
+
+```sh
+fleetreach db sync --source exploits        # once a day is plenty
+fleetreach scan --enrich                    # picks up the synced index
+fleetreach scan --enrich --exploits-file modules_metadata_base.json   # or a file you have
+```
+
+`exploit_sources` lists which collections hold code. Tables show `exploit` or `PoC` next to
+`KEV`, and `fix-first` uses public code to break ties after the blast radius. Public code also
+counts as SSVC's *public PoC* (the SSVC definition names Metasploit and Exploit-DB), so a
+finding with one is never `none` for Exploitation. Without the index, findings have no
+maturity, never `no-known-exploit`: missing data is not a clean bill. The same holds for a
+finding with no CVE alias, since the collections name CVEs. The collections are read
+as data: only their CVE references are kept.
+
 ## 2. Describe each repo
 
 ```toml title="fleet.toml"

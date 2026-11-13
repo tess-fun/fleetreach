@@ -511,6 +511,13 @@ fn vulnerability_value(v: &BomVuln<'_>, index: usize) -> Value {
     if let Some(epss) = f.exploit.epss {
         properties.push(json!({ "name": "fleetreach:epss", "value": format!("{epss}") }));
     }
+    if let Some(maturity) = f.exploit.exploit_maturity {
+        properties
+            .push(json!({ "name": "fleetreach:exploit-maturity", "value": maturity.as_str() }));
+    }
+    for source in f.exploit.exploit_sources.iter() {
+        properties.push(json!({ "name": "fleetreach:exploit-source", "value": source.as_str() }));
+    }
     if let Some(outcome) = v.ssvc {
         properties.push(json!({ "name": "fleetreach:ssvc", "value": outcome }));
     }

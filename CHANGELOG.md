@@ -8,6 +8,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Exploit maturity from Metasploit, nuclei and Exploit-DB.** `db sync --source exploits`
+  reads which CVEs have public code in the three collections into one index (29,764 CVEs,
+  2,570 with a Metasploit exploit module). Enriched findings then carry `exploit_maturity`
+  (`attacked` for KEV, `mature`, `proof-of-concept`, `no-known-exploit`) and
+  `exploit_sources`. Tables show `exploit` or `PoC` beside `KEV`, `fix-first` breaks ties on
+  it, CycloneDX VEX carries it as properties, and SSVC counts public code as a public PoC.
+  `scan --exploits-file` and `db import --exploits` take the index or the collections' own
+  files. Without the index nothing is called `no-known-exploit`. The index matched an
+  independent reading of the three files on all 29,764 CVEs.
+- **`db ranges` checks published fixed versions against the fix commits.** For records that
+  link a fix commit, it clones the repository (commits and tags only, never checked out) and
+  asks which release tags contain the fix. Each `fixed` bound is `confirmed`,
+  `fixed-earlier`, `fixed-later` (a false clean), `fix-missing` or `unverified`. `--out`
+  writes corrected records as OSV overlays, marked `unreviewed`, with the evidence. A
+  proposal must also agree with the registry's publish times. On 300 records each from npm,
+  PyPI and Maven (1,523 bounds), 816 were confirmed and 14 corrections proposed. In the
+  published archives, 10 of those were shown right and none wrong; 4 could not be decided
+  (bundled builds). Two were real false cleans upstream: node-red-dashboard 2.26.2 and
+  loguru 0.5.3 lack their fixes.
 - **`scan --capabilities` reads what npm and PyPI package code can do.** It looks for network,
   shell, filesystem, env, eval, obfuscation, high-entropy strings, native binaries and install
   scripts. It warns on what a version adds over the previous release, such as `adds network

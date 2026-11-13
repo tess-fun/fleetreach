@@ -8,8 +8,8 @@ use fleetreach_core::Severity;
 use fleetreach_report as report;
 
 use crate::db_cmd::{
-    DbBundleArgs, DbCrosscheckArgs, DbImportArgs, DbQualityArgs, DbSnapshotArgs, DbStatusArgs,
-    DbSyncArgs, FleetListArgs, FleetSyncArgs,
+    DbBundleArgs, DbCrosscheckArgs, DbImportArgs, DbQualityArgs, DbRangesArgs, DbSnapshotArgs,
+    DbStatusArgs, DbSyncArgs, FleetListArgs, FleetSyncArgs,
 };
 use crate::diff::DiffArgs;
 use crate::scan::ScanArgs;
@@ -90,6 +90,8 @@ enum DbCommand {
     Quality(DbQualityArgs),
     /// Measure what the CVE and CSAF indexes add to or contradict in the OSV data (JSON).
     Crosscheck(DbCrosscheckArgs),
+    /// Check published fixed versions against the release tags that hold the fix commits.
+    Ranges(DbRangesArgs),
 }
 
 #[derive(Subcommand)]
@@ -114,6 +116,7 @@ pub fn dispatch(cli: Cli) -> u8 {
         Commands::Db(DbCommand::Status(args)) => crate::db_cmd::run_db_status(args),
         Commands::Db(DbCommand::Quality(args)) => crate::db_cmd::run_db_quality(args),
         Commands::Db(DbCommand::Crosscheck(args)) => crate::db_cmd::run_db_crosscheck(args),
+        Commands::Db(DbCommand::Ranges(args)) => crate::db_cmd::run_db_ranges(args),
         Commands::Fleet(FleetCommand::Sync(args)) => crate::db_cmd::run_fleet_sync(args),
         Commands::Fleet(FleetCommand::List(args)) => crate::db_cmd::run_fleet_list(args),
         Commands::Sbom(args) => crate::sbom::run_sbom(args),

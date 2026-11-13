@@ -131,6 +131,9 @@ Options:
       --epss-file <PATH>
           EPSS CSV file (offline enrich)
 
+      --exploits-file <PATH>
+          exploit index, or Metasploit/nuclei/Exploit-DB's own file, for exploit maturity (repeatable; default: the synced index)
+
       --fail-on-kev
           fail if any finding is in the CISA KEV catalog
 

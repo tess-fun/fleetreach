@@ -2,7 +2,8 @@
 //!
 //! One directory holds every source a scan reads: the OSV exports and vendor feeds, the CVE
 //! and CSAF indexes, and with `db sync --source` or `db import` the RustSec clone
-//! (`advisory-db/`), the KEV catalog and EPSS scores (`enrich/kev.json`, `enrich/epss.csv`) and
+//! (`advisory-db/`), the KEV catalog, EPSS scores and exploit index (`enrich/kev.json`,
+//! `enrich/epss.csv`, `enrich/exploits.json`) and
 //! copies of the NVD and Vulnrichment caches (`enrich/nvd/`, `enrich/vulnrichment/`).
 //!
 //! `db snapshot` hashes that directory into a manifest, `scan --db-snapshot` refuses to run on
@@ -25,6 +26,8 @@ pub const RUSTSEC_DIR: &str = "advisory-db";
 pub const KEV_FILE: &str = "enrich/kev.json";
 /// The EPSS scores, the file `--epss-file` reads.
 pub const EPSS_FILE: &str = "enrich/epss.csv";
+/// The exploit index built from Metasploit, nuclei and Exploit-DB.
+pub const EXPLOITS_FILE: &str = "enrich/exploits.json";
 /// The copy of the NVD score cache.
 pub const NVD_DIR: &str = "enrich/nvd";
 /// The copy of the Vulnrichment cache.
@@ -572,7 +575,11 @@ pub fn status_rows(root: &Path) -> Vec<[String; 5]> {
         let commit = rustsec_commit(root).unwrap_or_default();
         row("RustSec", String::new(), commit.chars().take(12).collect());
     }
-    for (name, file) in [("KEV", KEV_FILE), ("EPSS", EPSS_FILE)] {
+    for (name, file) in [
+        ("KEV", KEV_FILE),
+        ("EPSS", EPSS_FILE),
+        ("Exploits", EXPLOITS_FILE),
+    ] {
         if let Some(meta) = Some(root.join(file))
             .filter(|p| p.is_file())
             .and_then(|p| osvdb::read_meta(&p))
