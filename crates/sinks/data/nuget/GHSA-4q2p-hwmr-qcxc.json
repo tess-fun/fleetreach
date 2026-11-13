@@ -8,36 +8,12 @@
   "packages": [
     "OPCFoundation.NetStandard.Opc.Ua.Core"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
       "class": "Opc.Ua.Bindings.TcpTransportListener",
-      "method": "ChannelClosed"
-    },
-    {
-      "class": "Opc.Ua.Bindings.TcpTransportListener",
-      "method": "Dispose"
-    },
-    {
-      "class": "Opc.Ua.Bindings.TcpTransportListener",
-      "method": "GetNextChannelId"
-    },
-    {
-      "class": "Opc.Ua.Bindings.TcpTransportListener",
       "method": "OnAccept"
-    },
-    {
-      "class": "Opc.Ua.Bindings.TcpTransportListener",
-      "method": "Open"
-    },
-    {
-      "class": "Opc.Ua.Bindings.TcpTransportListener",
-      "method": "Start"
-    },
-    {
-      "class": "Opc.Ua.Bindings.TcpTransportListener",
-      "method": "TransferListenerChannel"
     }
   ],
   "evidence": {
@@ -69,8 +45,43 @@
         "class": "Opc.Ua.DefaultEncodingLimits",
         "method": ".cctor",
         "reason": "added by the fix"
+      },
+      {
+        "class": "Opc.Ua.Bindings.TcpTransportListener",
+        "method": "ChannelClosed",
+        "reason": "listener lifecycle, not the accept path"
+      },
+      {
+        "class": "Opc.Ua.Bindings.TcpTransportListener",
+        "method": "Dispose",
+        "reason": "listener lifecycle, not the accept path"
+      },
+      {
+        "class": "Opc.Ua.Bindings.TcpTransportListener",
+        "method": "GetNextChannelId",
+        "reason": "listener lifecycle, not the accept path"
+      },
+      {
+        "class": "Opc.Ua.Bindings.TcpTransportListener",
+        "method": "Open",
+        "reason": "listener lifecycle, not the accept path"
+      },
+      {
+        "class": "Opc.Ua.Bindings.TcpTransportListener",
+        "method": "Start",
+        "reason": "listener lifecycle, not the accept path"
+      },
+      {
+        "class": "Opc.Ua.Bindings.TcpTransportListener",
+        "method": "TransferListenerChannel",
+        "reason": "listener lifecycle, not the accept path"
       }
     ]
   },
-  "note": "Proposed from the IL diff of OPCFoundation.NetStandard.Opc.Ua.Core 1.5.374.36 -> 1.5.374.54 (net8.0): methods of the files the fix commits changed."
+  "note": "From the 1.5.374.36 -> 1.5.374.54 IL diff. TcpTransportListener.OnAccept took new channels without bounding them, so a flood of messages exhausted memory. The server builds its listener from configuration through the bindings factory, not from the app's code: no sink reached proves nothing.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  },
+  "reached_by_name": true
 }

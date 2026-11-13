@@ -8,12 +8,12 @@
   "packages": [
     "Prompty.Core"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
-      "class": "Prompty.Core.PromptyLoader",
-      "method": "Build"
+      "class": "Prompty.Core.ReferenceResolver",
+      "method": "ResolveFileRef"
     },
     {
       "class": "Prompty.Core.PromptyLoader",
@@ -22,26 +22,6 @@
     {
       "class": "Prompty.Core.PromptyLoader",
       "method": "LoadAsync"
-    },
-    {
-      "class": "Prompty.Core.ReferenceResolver",
-      "method": ".ctor"
-    },
-    {
-      "class": "Prompty.Core.ReferenceResolver",
-      "method": "CreatePreProcess"
-    },
-    {
-      "class": "Prompty.Core.ReferenceResolver",
-      "method": "ResolveEnvVar"
-    },
-    {
-      "class": "Prompty.Core.ReferenceResolver",
-      "method": "ResolveFileRef"
-    },
-    {
-      "class": "Prompty.Core.ReferenceResolver",
-      "method": "ResolveReferences"
     }
   ],
   "evidence": {
@@ -73,8 +53,37 @@
         "class": "Prompty.Core.ReferenceResolver",
         "method": "IsWithinRoot",
         "reason": "added by the fix"
+      },
+      {
+        "class": "Prompty.Core.PromptyLoader",
+        "method": "Build",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Prompty.Core.ReferenceResolver",
+        "method": ".ctor",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Prompty.Core.ReferenceResolver",
+        "method": "CreatePreProcess",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Prompty.Core.ReferenceResolver",
+        "method": "ResolveEnvVar",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Prompty.Core.ReferenceResolver",
+        "method": "ResolveReferences",
+        "reason": "changed in the same release, not on the path the advisory describes"
       }
     ]
   },
-  "note": "Proposed from the IL diff of Prompty.Core 2.0.0-beta.1 -> 2.0.0-beta.2 (net9.0): methods of the files the fix commits changed."
+  "note": "From the 2.0.0-beta.1 -> 2.0.0-beta.2 IL diff. ReferenceResolver.ResolveFileRef expanded ${file:...} references without keeping the path inside the prompt's directory; PromptyLoader.Load and LoadAsync are the entries. The 0.x previews read as unknown. Reached wherever the app loads .prompty files it does not control.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

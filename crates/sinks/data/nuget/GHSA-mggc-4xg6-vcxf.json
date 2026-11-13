@@ -8,32 +8,16 @@
   "packages": [
     "SSH.NET"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
-    {
-      "class": "Renci.SshNet.ScpClient",
-      "method": ".ctor"
-    },
-    {
-      "class": "Renci.SshNet.ScpClient",
-      "method": "Download"
-    },
-    {
-      "class": "Renci.SshNet.ScpClient",
-      "method": "InternalDownload"
-    },
     {
       "class": "Renci.SshNet.ScpClient",
       "method": "Upload"
     },
     {
-      "class": "Renci.SshNet.ServiceFactory",
-      "method": "CreateConnector"
-    },
-    {
-      "class": "Renci.SshNet.ServiceFactory",
-      "method": "CreateKeyExchange"
+      "class": "Renci.SshNet.ScpClient",
+      "method": "Download"
     }
   ],
   "evidence": {
@@ -75,8 +59,32 @@
         "class": "Renci.SshNet.ScpClient",
         "method": "set_UseDirectoryFlag",
         "reason": "added by the fix"
+      },
+      {
+        "class": "Renci.SshNet.ScpClient",
+        "method": ".ctor",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Renci.SshNet.ScpClient",
+        "method": "InternalDownload",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Renci.SshNet.ServiceFactory",
+        "method": "CreateConnector",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Renci.SshNet.ServiceFactory",
+        "method": "CreateKeyExchange",
+        "reason": "changed in the same release, not on the path the advisory describes"
       }
     ]
   },
-  "note": "Proposed from the IL diff of SSH.NET 2025.1.0 -> 2026.0.0 (net8.0): methods of the files the fix commits changed."
+  "note": "ScpClient.Upload and Download put the remote path into the scp command the server runs; on a shell-based server a path not quoted for that shell runs as a command. Present from 2011.12. An app that sets a RemotePathTransformation suited to its server is less exposed, and a code scan cannot see that setting.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

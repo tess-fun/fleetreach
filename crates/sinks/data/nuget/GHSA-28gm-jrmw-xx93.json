@@ -8,48 +8,32 @@
   "packages": [
     "SIPSorcery"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
-      "class": "SIPSorcery.Net.RTPChannel",
-      "method": "OnRTPPacketReceived"
-    },
-    {
-      "class": "SIPSorcery.Net.STUNAddressAttribute",
-      "method": ".ctor"
-    },
-    {
-      "class": "SIPSorcery.Net.STUNAddressAttribute",
-      "method": "ToString"
+      "class": "SIPSorcery.Net.STUNMessage",
+      "method": "ParseSTUNMessage"
     },
     {
       "class": "SIPSorcery.Net.STUNAttribute",
       "method": "ParseMessageAttributes"
     },
     {
-      "class": "SIPSorcery.Net.STUNAttribute",
-      "method": "ToString"
-    },
-    {
-      "class": "SIPSorcery.Net.STUNMessage",
-      "method": "ParseSTUNMessage"
-    },
-    {
-      "class": "SIPSorcery.Net.STUNMessage",
-      "method": "ToString"
-    },
-    {
-      "class": "SIPSorcery.Net.STUNXORAddressAttribute",
-      "method": ".ctor"
-    },
-    {
-      "class": "SIPSorcery.Net.STUNXORAddressAttribute",
-      "method": "ToString"
+      "class": "SIPSorcery.Net.RTPChannel",
+      "method": "OnRTPPacketReceived"
     },
     {
       "class": "SIPSorcery.Net.UdpReceiver",
       "method": "EndReceiveFrom"
+    },
+    {
+      "class": "SIPSorcery.Net.STUNAddressAttribute",
+      "method": ".ctor"
+    },
+    {
+      "class": "SIPSorcery.Net.STUNXORAddressAttribute",
+      "method": ".ctor"
     }
   ],
   "evidence": {
@@ -67,8 +51,32 @@
         "class": "SIPSorcery.Net.STUNMessage",
         "method": "GetFirstAttribute",
         "reason": "added by the fix"
+      },
+      {
+        "class": "SIPSorcery.Net.STUNAddressAttribute",
+        "method": "ToString",
+        "reason": "display only"
+      },
+      {
+        "class": "SIPSorcery.Net.STUNAttribute",
+        "method": "ToString",
+        "reason": "display only"
+      },
+      {
+        "class": "SIPSorcery.Net.STUNMessage",
+        "method": "ToString",
+        "reason": "display only"
+      },
+      {
+        "class": "SIPSorcery.Net.STUNXORAddressAttribute",
+        "method": "ToString",
+        "reason": "display only"
       }
     ]
   },
-  "note": "Proposed from the IL diff of SIPSorcery 10.0.8 -> 10.0.9 (net8.0): methods of the files the fix commits changed."
+  "note": "From the 10.0.8 -> 10.0.9 IL diff (PR 1677). The RTP/ICE receive path indexed packet and STUN attribute bytes without length checks, and the UDP receive loop closed the channel on the exception. Releases before 5.x keep the STUN parsers. Reached wherever the app runs RTP or WebRTC sessions.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

@@ -8,7 +8,7 @@
   "packages": [
     "Npgsql"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -17,95 +17,35 @@
     },
     {
       "class": "Npgsql.Internal.NpgsqlConnector",
-      "method": "WriteCancelRequest"
-    },
-    {
-      "class": "Npgsql.Internal.NpgsqlConnector",
-      "method": "WriteClose"
-    },
-    {
-      "class": "Npgsql.Internal.NpgsqlConnector",
-      "method": "WriteCopyDone"
-    },
-    {
-      "class": "Npgsql.Internal.NpgsqlConnector",
-      "method": "WriteCopyFail"
-    },
-    {
-      "class": "Npgsql.Internal.NpgsqlConnector",
-      "method": "WriteDescribe"
-    },
-    {
-      "class": "Npgsql.Internal.NpgsqlConnector",
-      "method": "WriteExecute"
-    },
-    {
-      "class": "Npgsql.Internal.NpgsqlConnector",
       "method": "WriteParse"
-    },
-    {
-      "class": "Npgsql.Internal.NpgsqlConnector",
-      "method": "WritePassword"
-    },
-    {
-      "class": "Npgsql.Internal.NpgsqlConnector",
-      "method": "WritePregenerated"
     },
     {
       "class": "Npgsql.Internal.NpgsqlConnector",
       "method": "WriteQuery"
     },
     {
-      "class": "Npgsql.Internal.NpgsqlConnector",
-      "method": "WriteSASLInitialResponse"
+      "class": "Npgsql.NpgsqlConnector",
+      "method": "WriteBind"
     },
     {
-      "class": "Npgsql.Internal.NpgsqlConnector",
-      "method": "WriteSslRequest"
+      "class": "Npgsql.NpgsqlConnector",
+      "method": "WriteParse"
     },
     {
-      "class": "Npgsql.Internal.NpgsqlConnector",
-      "method": "WriteStartup"
+      "class": "Npgsql.NpgsqlConnector",
+      "method": "WriteQuery"
     },
     {
-      "class": "Npgsql.Internal.NpgsqlConnector",
-      "method": "WriteSync"
+      "class": "Npgsql.FrontendMessages.BindMessage",
+      "method": "Write"
     },
     {
-      "class": "Npgsql.Internal.NpgsqlConnector",
-      "method": "WriteTerminate"
+      "class": "Npgsql.FrontendMessages.ParseMessage",
+      "method": "Write"
     },
     {
-      "class": "Npgsql.Internal.NpgsqlWriteBuffer",
-      "method": ".ctor"
-    },
-    {
-      "class": "Npgsql.Internal.NpgsqlWriteBuffer",
-      "method": "Clear"
-    },
-    {
-      "class": "Npgsql.Internal.NpgsqlWriteBuffer",
-      "method": "DirectWrite"
-    },
-    {
-      "class": "Npgsql.Internal.NpgsqlWriteBuffer",
-      "method": "Flush"
-    },
-    {
-      "class": "Npgsql.Internal.NpgsqlWriteBuffer",
-      "method": "WriteBytesRaw"
-    },
-    {
-      "class": "Npgsql.Internal.NpgsqlWriteBuffer",
-      "method": "WriteStreamRaw"
-    },
-    {
-      "class": "Npgsql.Internal.NpgsqlWriteBuffer",
-      "method": "WriteString"
-    },
-    {
-      "class": "Npgsql.NpgsqlTransaction",
-      "method": "Save"
+      "class": "Npgsql.FrontendMessages.QueryMessage",
+      "method": "Write"
     }
   ],
   "evidence": {
@@ -138,8 +78,117 @@
         "class": "Npgsql.Internal.NpgsqlWriteBuffer",
         "method": "set_MessageLengthValidation",
         "reason": "added by the fix"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlConnector",
+        "method": "WriteCancelRequest",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlConnector",
+        "method": "WriteClose",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlConnector",
+        "method": "WriteCopyDone",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlConnector",
+        "method": "WriteCopyFail",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlConnector",
+        "method": "WriteDescribe",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlConnector",
+        "method": "WriteExecute",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlConnector",
+        "method": "WritePassword",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlConnector",
+        "method": "WritePregenerated",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlConnector",
+        "method": "WriteSASLInitialResponse",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlConnector",
+        "method": "WriteSslRequest",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlConnector",
+        "method": "WriteStartup",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlConnector",
+        "method": "WriteSync",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlConnector",
+        "method": "WriteTerminate",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+        "method": ".ctor",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+        "method": "Clear",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+        "method": "DirectWrite",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+        "method": "Flush",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+        "method": "WriteBytesRaw",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+        "method": "WriteStreamRaw",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.Internal.NpgsqlWriteBuffer",
+        "method": "WriteString",
+        "reason": "changed in the same release, not on the path the advisory describes"
+      },
+      {
+        "class": "Npgsql.NpgsqlTransaction",
+        "method": "Save",
+        "reason": "changed in the same release, not on the path the advisory describes"
       }
     ]
   },
-  "note": "Proposed from the IL diff of Npgsql 8.0.2 -> 8.0.3 (net8.0): methods of the files the fix commits changed."
+  "note": "The Bind, Parse and Query writers summed message lengths in an int, so a large enough parameter set wrapped the length and the server read the rest as new messages. The writers are NpgsqlConnector methods (Npgsql.Internal in 4.1, 5.x and 8.x, Npgsql in 6.x and 7.x) and FrontendMessages classes in 3.x and 4.0; 2.x reads as unknown. Reached wherever the app runs commands through Npgsql.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
