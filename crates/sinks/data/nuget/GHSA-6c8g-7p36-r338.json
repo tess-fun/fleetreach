@@ -1,0 +1,45 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-6c8g-7p36-r338",
+  "aliases": [
+    "CVE-2026-44788"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "SharpCompress"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "SharpCompress.Archives.IArchiveExtensions",
+      "method": "ExtractToDirectory"
+    },
+    {
+      "class": "SharpCompress.Archives.IArchiveExtensions",
+      "method": "WriteToDirectoryInternal"
+    },
+    {
+      "class": "SharpCompress.Archives.IAsyncArchiveExtensions",
+      "method": "WriteToDirectoryAsyncInternal"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/adamhathcock/sharpcompress/commit/2021a06626d0555a4d69471386e763ca5f5d5dfb"
+    ],
+    "excluded": [
+      {
+        "class": "SharpCompress.Archives.IArchiveExtensions",
+        "method": ".ctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "SharpCompress.Archives.IAsyncArchiveExtensions",
+        "method": ".ctor",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "Commit 2021a06 bounds the directory-entry branch of WriteToDirectoryInternal and WriteToDirectoryAsyncInternal (IArchive.WriteToDirectory, 0.43 on) to the extraction root. 0.34 to 0.42 had the same unguarded Path.Combine and CreateDirectory on archive keys in IArchiveExtensions.ExtractToDirectory; 0.33 and earlier skip directory entries and send files through the guarded ExtractionMethods path, so no sink is there. Reached wherever the app extracts a ZIP or non-solid TAR archive with those methods."
+}

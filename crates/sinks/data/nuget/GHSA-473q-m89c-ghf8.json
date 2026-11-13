@@ -1,0 +1,123 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-473q-m89c-ghf8",
+  "ecosystem": "NuGet",
+  "packages": [
+    "MySqlConnector"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "MySqlConnector.Core.ServerSession",
+      "method": "SwitchAuthenticationAsync"
+    },
+    {
+      "class": "MySqlConnector.Core.ServerSession",
+      "method": "SendClearPasswordAsync"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/mysql-net/MySqlConnector/commit/86503613fe3b72ae26c03dd1ea92f0e1e6e208f9"
+    ],
+    "excluded": [
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "get_IsServerIdentityVerifiedForPassword",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": ".ctor",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "ConnectAndRedirectAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "ConnectAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "DisposeAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "GetRealServerDetailsAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "GetRsaPublicKeyAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "InitSslAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "OpenNamedPipeAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "OpenTcpSocketAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "OpenUnixSocketAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "PrepareAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "ReceiveReplyAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "SendEncryptedPasswordAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "SendRawAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "SendReplyAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "TryPingAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "TryResetConnectionAsync",
+        "reason": "not where the clear-text password is sent"
+      },
+      {
+        "class": "MySqlConnector.Core.ServerSession",
+        "method": "ValidateFingerprint",
+        "reason": "not where the clear-text password is sent"
+      }
+    ]
+  },
+  "note": "Commit 8650361 sends a clear-text password only once the server's identity is verified: SwitchAuthenticationAsync's mysql_clear_password branch and SendClearPasswordAsync now check the TLS certificate. Exposed only with SslMode VerifyCA or VerifyFull, no SslCa and a non-empty password; a reached sink says the code runs, not that the connection string sets that mode."
+}

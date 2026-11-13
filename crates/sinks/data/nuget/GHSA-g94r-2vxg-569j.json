@@ -1,0 +1,149 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-g94r-2vxg-569j",
+  "aliases": [
+    "CVE-2026-40894"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "OpenTelemetry.Api",
+    "OpenTelemetry.Extensions.Propagators"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "OpenTelemetry.Context.Propagation.BaggagePropagator",
+      "method": "Extract"
+    },
+    {
+      "class": "OpenTelemetry.Context.Propagation.BaggagePropagator",
+      "method": "Inject"
+    },
+    {
+      "class": "OpenTelemetry.Context.Propagation.B3Propagator",
+      "method": "Extract"
+    },
+    {
+      "class": "OpenTelemetry.Extensions.Propagators.B3Propagator",
+      "method": "Extract"
+    },
+    {
+      "class": "OpenTelemetry.Extensions.Propagators.JaegerPropagator",
+      "method": "Extract"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/open-telemetry/opentelemetry-dotnet/pull/1048",
+      "https://github.com/open-telemetry/opentelemetry-dotnet/pull/3244",
+      "https://github.com/open-telemetry/opentelemetry-dotnet/pull/3309",
+      "https://github.com/open-telemetry/opentelemetry-dotnet/pull/3533",
+      "https://github.com/open-telemetry/opentelemetry-dotnet/pull/533",
+      "https://github.com/open-telemetry/opentelemetry-dotnet/pull/7061"
+    ],
+    "excluded": [
+      {
+        "class": "OpenTelemetry.Context.Propagation.B3Propagator",
+        "method": "CreateTraceId",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.B3Propagator",
+        "method": "IsSampledValue",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.B3Propagator",
+        "method": "ReadNextPart",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.B3Propagator",
+        "method": "TryExtractSingleHeaderContext",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.BaggagePropagator",
+        "method": "DecodeIfNeeded",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.BaggagePropagator",
+        "method": "ReadNextSegment",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.TraceContextPropagator",
+        "method": "EnumerateFrom",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.TraceContextPropagator",
+        "method": "GetKeyHashCode",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.TraceContextPropagator",
+        "method": "TryExtractMultipleTracestate",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.TraceContextPropagator",
+        "method": "TryExtractSingleTracestate",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.TraceContextPropagator",
+        "method": "TryGetSingleValue",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.TraceStateUtils",
+        "method": "GetCombinedLength",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.TraceStateUtils",
+        "method": "TruncateEntries",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.B3Propagator",
+        "method": "ExtractFromSingleHeader",
+        "reason": "trace-context handling, not the baggage, B3 or Jaeger parsing the advisory names"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.BaggagePropagator",
+        "method": "TryExtractBaggage",
+        "reason": "trace-context handling, not the baggage, B3 or Jaeger parsing the advisory names"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.TraceContextPropagator",
+        "method": "Extract",
+        "reason": "trace-context handling, not the baggage, B3 or Jaeger parsing the advisory names"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.TraceContextPropagator",
+        "method": "Inject",
+        "reason": "trace-context handling, not the baggage, B3 or Jaeger parsing the advisory names"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.TraceContextPropagator",
+        "method": "TryExtractTracestate",
+        "reason": "trace-context handling, not the baggage, B3 or Jaeger parsing the advisory names"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.TraceStateUtils",
+        "method": "GetString",
+        "reason": "trace-context handling, not the baggage, B3 or Jaeger parsing the advisory names"
+      },
+      {
+        "class": "OpenTelemetry.Context.Propagation.TraceStateUtils",
+        "method": "ValidateKey",
+        "reason": "trace-context handling, not the baggage, B3 or Jaeger parsing the advisory names"
+      }
+    ]
+  },
+  "note": "PR 7061 stops parsing baggage, B3 and Jaeger headers eagerly: BaggagePropagator.Extract and Inject and B3Propagator.Extract in OpenTelemetry.Api, B3Propagator.Extract and JaegerPropagator.Extract in OpenTelemetry.Extensions.Propagators. Reached wherever a service extracts or injects those propagation headers."
+}

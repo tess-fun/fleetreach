@@ -1,0 +1,22 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-2m69-gcr7-jv3q",
+  "aliases": [
+    "BIT-sqlite-2025-6965",
+    "CVE-2025-6965"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "SQLitePCLRaw.lib.e_sqlite3",
+    "SQLitePCLRaw.lib.e_sqlite3.android",
+    "SQLitePCLRaw.lib.e_sqlite3.ios"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/github/advisory-database/pull/7675"
+    ]
+  },
+  "note": "The flaw is in SQLite before 3.50.2 (aggregate terms past the column count), which SQLitePCLRaw.lib.e_sqlite3 ships as a native library; any SQL the app runs reaches it, so no method can be named."
+}
