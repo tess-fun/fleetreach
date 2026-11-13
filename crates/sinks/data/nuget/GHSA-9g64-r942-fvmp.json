@@ -8,9 +8,13 @@
   "packages": [
     "Apache.NMS.ActiveMQ"
   ],
-  "status": "reviewed",
+  "status": "proposed",
   "verdict": "sinks",
   "sinks": [
+    {
+      "class": "Apache.NMS.ActiveMQ.Commands.ActiveMQObjectMessage",
+      "method": "get_Body"
+    },
     {
       "class": "Apache.NMS.ActiveMQ.Commands.TrustedClassFilter",
       "method": "BindToType"
@@ -26,9 +30,5 @@
     ],
     "excluded": []
   },
-  "note": "From the 2.1.0 -> 2.1.1 IL diff. 2.1.0 added a trusted-type filter for deserializing broker responses; TrustedClassFilter.BindToType and NmsDefaultDeserializationPolicy.IsTrustedType still let untrusted types through. Reached wherever the client connects to a broker.",
-  "review": {
-    "by": "tess-fun",
-    "date": "2026-11-13"
-  }
+  "note": "Every release before 2.1.1 deserializes ObjectMessage bodies with BinaryFormatter in ActiveMQObjectMessage.get_Body (present in 2.0.1 and 2.1.0). 2.1.0 added an allow/deny filter, TrustedClassFilter.BindToType and NmsDefaultDeserializationPolicy.IsTrustedType, which could be bypassed; those two exist only from 2.1.0. Reached wherever the client reads an ObjectMessage from a broker."
 }
