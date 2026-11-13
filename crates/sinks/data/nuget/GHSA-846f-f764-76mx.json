@@ -8,7 +8,7 @@
   "packages": [
     "System.Security.Cryptography.Pkcs"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -78,5 +78,9 @@
       }
     ]
   },
-  "note": "CheckSignature looks up each signer's certificate in SignedCms.Certificates, which reparses every certificate in the message on each call: signers times certificates. SignerInfo.FindSignerCertificate (instance and static overloads share the name) is the lookup the fix replaced with a cached index. Reached through SignedCms.CheckSignature or SignerInfo.CheckSignature on a message from outside."
+  "note": "CheckSignature looks up each signer's certificate in SignedCms.Certificates, which reparses every certificate in the message on each call: signers times certificates. SignerInfo.FindSignerCertificate (instance and static overloads share the name) is the lookup the fix replaced with a cached index. Reached through SignedCms.CheckSignature or SignerInfo.CheckSignature on a message from outside.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

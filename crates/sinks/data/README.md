@@ -21,9 +21,8 @@ methods by their metadata name (`.ctor`, `ReadFrame`). The 97 records started as
 GitHub fix commit, the IL of the last vulnerable and the first fixed release inside the fixed
 range, narrowed to the types of the source files the fix changed, with generated code charged
 to the method that owns it. `docs/differential/nuget-sinks/propose.py` fetches the packages
-and commit file lists and runs it. 91 are `reviewed`: 67 name sinks, 24 are
-`no-method-sink` (mostly flaws in a bundled native library). 6 are `proposed`, narrowed by
-hand but not yet reviewed. `scan --reachability=dotnet` looks for a record's sinks only in the
+and commit file lists and runs it. All 97 are `reviewed`: 71 name sinks, 26 are
+`no-method-sink` (mostly flaws in a bundled native library or a single platform). `scan --reachability=dotnet` looks for a record's sinks only in the
 assemblies the image's deps files list for its packages, so name the package that ships the
 class. The .NET runtime's Brotli record
 (`GHSA-p3jp-9v83-76w9`) names sinks in the runtime itself, judged only where a service ships

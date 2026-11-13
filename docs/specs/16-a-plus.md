@@ -1472,8 +1472,8 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   API calls its propagators; ASP.NET Core uses the runtime's own), 5 unknown (no-method-sink
   records, SharpCompress 0.32.2 predating every sink, Brotli on a framework-dependent image
   whose runtime the graph does not walk).
-  Six more records followed for the library advisories still uncovered, `proposed` and
-  narrowed by hand from the fix (dotnet/runtime PRs 135741 and 135743, the System.Text.Json
+  Six more records followed for the library advisories still uncovered (reviewed by the
+  user), narrowed by hand from the fix (dotnet/runtime PRs 135741 and 135743, the System.Text.Json
   8.0 servicing merge, corefx's 2.1 MSRC port, IdentityModel's JWE decompression cap):
   Pkcs `SignerInfo.FindSignerCertificate`, System.Text.Json `JsonObjectConverter`
   extension data, `JwtTokenUtilities.DecompressToken`, WebSocketProtocol
@@ -1491,6 +1491,10 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   first-copy base lookup had been losing edges (`caching` rose 2,598 to 2,610 reached).
   Re-run on the 11 images: 20 of 34 NuGet findings with a record, 10 reached, 1 not reached,
   9 unknown; Kavita's WebSocket finding went from reached to unknown, nothing else changed.
+  The user then reviewed all six: 97 reviewed records, and 6 findings not reached (Pkcs in
+  Sonarr, Radarr, Lidarr and Prowlarr, whose only caller outside Pkcs is MimeKit's
+  `WindowsSecureMimeContext`; Kavita's WebSocketProtocol, whose `CreateFromStream` nothing
+  outside the package calls; OpenTelemetry in EventStore), 10 reached, 4 unknown.
   On the 224 cached images one Pkcs finding is reached, through PowerShell's type catalog
   (type names in strings, so reflection makes `SignerInfo`): weak, but a path the rules allow.
 

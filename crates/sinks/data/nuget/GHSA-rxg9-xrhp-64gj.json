@@ -8,7 +8,11 @@
   "packages": [
     "System.Drawing.Common"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "no-method-sink",
-  "note": "The flaw is in parsing graphics files on Linux and macOS, where System.Drawing.Common hands images to the native libgdiplus. No managed method differs between 5.0.2 and 5.0.3, so no managed method holds it."
+  "note": "The flaw is in parsing graphics files on Linux and macOS, where System.Drawing.Common hands images to the native libgdiplus. No managed method differs between 5.0.2 and 5.0.3, so no managed method holds it.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

@@ -8,7 +8,7 @@
   "packages": [
     "System.Net.WebSockets.WebSocketProtocol"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -52,5 +52,9 @@
       }
     ]
   },
-  "note": "ManagedWebSocket read and wrote the stream without the caller's cancellation token, so a peer that stops sending holds a receive (and its buffers) forever. ReceiveAsyncPrivate behind every ReceiveAsync and SendFrameFallbackAsync behind a contended send are where the token was dropped. Proposed by hand from the IL diff of System.Net.WebSockets.WebSocketProtocol 4.5.2 -> 4.5.3 and the 2.1 servicing commit; the copies inside Kestrel and the shared framework have no record here."
+  "note": "ManagedWebSocket read and wrote the stream without the caller's cancellation token, so a peer that stops sending holds a receive (and its buffers) forever. ReceiveAsyncPrivate behind every ReceiveAsync and SendFrameFallbackAsync behind a contended send are where the token was dropped. Proposed by hand from the IL diff of System.Net.WebSockets.WebSocketProtocol 4.5.2 -> 4.5.3 and the 2.1 servicing commit; the copies inside Kestrel and the shared framework have no record here.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

@@ -8,7 +8,7 @@
   "packages": [
     "System.Text.Json"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -38,5 +38,9 @@
       }
     ]
   },
-  "note": "Extension data typed as JsonObject sets each unknown property with replace semantics, a linear search, so a body with many properties costs n squared. JsonObjectConverter.ReadElementAndSetProperty is that set; it is an override the serializer calls for any [JsonExtensionData] JsonObject property. Dictionary-typed extension data is not affected, and the graph cannot tell the two apart once JsonObjectConverter is in use."
+  "note": "Extension data typed as JsonObject sets each unknown property with replace semantics, a linear search, so a body with many properties costs n squared. JsonObjectConverter.ReadElementAndSetProperty is that set; it is an override the serializer calls for any [JsonExtensionData] JsonObject property. Dictionary-typed extension data is not affected, and the graph cannot tell the two apart once JsonObjectConverter is in use.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

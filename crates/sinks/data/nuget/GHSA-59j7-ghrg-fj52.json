@@ -9,7 +9,7 @@
     "Microsoft.IdentityModel.JsonWebTokens",
     "System.IdentityModel.Tokens.Jwt"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -51,5 +51,9 @@
       }
     ]
   },
-  "note": "A compressed JWE (zip: DEF) inflates without a size limit (upstream GHSA-8g9c-28fc-mcx2); the fix caps the decompressed size in JwtTokenUtilities.DecompressToken, which both JsonWebTokenHandler and JwtSecurityTokenHandler call after decrypting. Exploiting it needs the service's public encryption key. The method lives in Microsoft.IdentityModel.JsonWebTokens, which System.IdentityModel.Tokens.Jwt depends on and hands DecompressToken to as a delegate (ldftn); releases before 5.6 have no JWE decompression and stay unknown."
+  "note": "A compressed JWE (zip: DEF) inflates without a size limit (upstream GHSA-8g9c-28fc-mcx2); the fix caps the decompressed size in JwtTokenUtilities.DecompressToken, which both JsonWebTokenHandler and JwtSecurityTokenHandler call after decrypting. Exploiting it needs the service's public encryption key. The method lives in Microsoft.IdentityModel.JsonWebTokens, which System.IdentityModel.Tokens.Jwt depends on and hands DecompressToken to as a delegate (ldftn); releases before 5.6 have no JWE decompression and stay unknown.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

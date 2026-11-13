@@ -8,12 +8,16 @@
   "packages": [
     "System.Security.Cryptography.Pkcs"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "no-method-sink",
   "evidence": {
     "commits": [
       "https://github.com/dotnet/runtime/pull/135743"
     ]
   },
-  "note": "Windows only: the fix changes HelpersWindows.AddCryptAttribute in the Windows build (runtimes/win), where EnvelopedCms.Decode merged attributes with CryptographicAttributeObjectCollection.Add. The Linux and macOS builds do not have the flaw, so no method in the assemblies a Linux image runs holds it; a code scan cannot tell the platform."
+  "note": "Windows only: the fix changes HelpersWindows.AddCryptAttribute in the Windows build (runtimes/win), where EnvelopedCms.Decode merged attributes with CryptographicAttributeObjectCollection.Add. The Linux and macOS builds do not have the flaw, so no method in the assemblies a Linux image runs holds it; a code scan cannot tell the platform.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

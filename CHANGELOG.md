@@ -18,13 +18,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and `appsettings.json`), and what the runtime calls on its own (`ToString`, `Dispose`, async
   state machines, ASP.NET Core interfaces). Checked against the runtime: on 11 apps built from
   real NuGet packages, every one of the 6,727 methods the JIT compiled in their assemblies is
-  in the graph. 97 NuGet sink records ship (91 reviewed, 6 proposed), each narrowed by hand
+  in the graph. 97 reviewed NuGet sink records ship, each narrowed by hand
   from its fix commit and the IL of the releases either side of it, with its sinks checked
   across every affected release line. A record's sinks count only in the assemblies its
   packages ship, as the image's deps files list them. On 11 public .NET app images (Jellyfin,
   Sonarr, Radarr, Lidarr, Prowlarr, Jackett, Squidex, Duplicati, Kavita, EventStore) 20 of 34
-  NuGet findings had a record: 10 reached with a chain, 1 not reached (OpenTelemetry's
-  propagators, which nothing in EventStore calls), 9 unknown with the reason.
+  NuGet findings had a record: 10 reached with a chain, 6 not reached (OpenTelemetry's
+  propagators in EventStore, Pkcs signature checks in four *arr images where only MimeKit's
+  Windows S/MIME context calls them, and Kavita's old WebSocket package that nothing calls), 4
+  unknown with the reason.
 
 - **Signed webhooks.** `fleetreach notify --webhook-secret-env VAR` signs each post as
   Standard Webhooks specifies (`webhook-id`, `webhook-timestamp`, `webhook-signature`: HMAC-SHA256
