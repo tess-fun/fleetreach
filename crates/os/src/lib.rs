@@ -122,6 +122,21 @@ pub fn open_image_spilling(
     image::open_spilling(path, &|p| packages::wanted(p) || extra(p), platform, dir)
 }
 
+/// [`open_image`], also writing the image's .NET assemblies into `dir` for a .NET call graph;
+/// [`ImageFs::dotnet_assemblies`] lists them.
+///
+/// # Errors
+///
+/// As [`open_image`].
+pub fn open_image_spilling_assemblies(
+    path: &Path,
+    extra: &dyn Fn(&str) -> bool,
+    platform: Option<&str>,
+    dir: &Path,
+) -> Result<ImageFs, OsError> {
+    image::open_spilling_assemblies(path, &|p| packages::wanted(p) || extra(p), platform, dir)
+}
+
 /// What an image is: its distribution (or why it cannot be matched) and its packages.
 #[derive(Debug, Clone)]
 pub struct Inspection {

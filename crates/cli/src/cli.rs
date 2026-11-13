@@ -158,6 +158,9 @@ pub(crate) enum ReachMode {
     /// A call graph over each image's Java archives, read as data and judged against the
     /// bundled sink records (no build).
     Jvm,
+    /// A call graph over each image's .NET assemblies, read as data and judged against the
+    /// bundled NuGet sink records (no build).
+    Dotnet,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]

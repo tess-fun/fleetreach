@@ -52,6 +52,7 @@ fleetreach-hex = { path = "../hex", version = "1.6.0" }
 fleetreach-ghactions = { path = "../ghactions", version = "1.6.0" }
 fleetreach-maven = { path = "../maven", version = "1.6.0" }
 fleetreach-os = { path = "../os", version = "1.6.0" }
+fleetreach-clr = { path = "../clr", version = "1.6.0" }
 fleetreach-jvm = { path = "../jvm", version = "1.6.0" }
 fleetreach-sinks = { path = "../sinks", version = "1.6.0" }
 serde = { workspace = true }

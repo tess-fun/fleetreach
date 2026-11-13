@@ -71,8 +71,9 @@ pub(crate) struct Opened {
     pub(crate) skipped: Vec<String>,
     /// Where each package came from.
     pub(crate) layers: Layers,
-    /// The JVM call graph over the image's Java archives, with `--reachability=jvm`.
-    pub(crate) jvm: Option<crate::jvm_reach::GraphOutcome>,
+    /// The call graph over the image's Java archives (`--reachability=jvm`) or .NET
+    /// assemblies (`--reachability=dotnet`).
+    pub(crate) graph: Option<crate::graph_reach::GraphOutcome>,
     /// The image's lockfiles, written out for the language feeders; `lang_repo` points here.
     pub(crate) _files: tempfile::TempDir,
     pub(crate) lang_repo: Repo,
@@ -220,17 +221,24 @@ impl Prepared {
 }
 
 /// Open every image, in parallel, in config order.
-/// Open every image. With `jvm`, each image's Java archives are also written out and its call
-/// graph judged against those records.
+/// Which image call graph to build, with the records to judge.
+#[derive(Clone, Copy)]
+pub(crate) enum GraphKind<'a> {
+    Jvm(&'a fleetreach_sinks::record::SinkSet),
+    Dotnet(&'a fleetreach_sinks::record::SinkSet),
+}
+
+/// Open every image. With `graph`, each image's Java archives or .NET assemblies are also
+/// written out and its call graph judged against those records.
 pub(crate) fn prepare_all(
     images: &[Image],
     offline: bool,
     vex: Option<&crate::oci_vex::Policy>,
-    jvm: Option<&fleetreach_sinks::record::SinkSet>,
+    graph: Option<GraphKind<'_>>,
 ) -> Vec<Prepared> {
     images
         .par_iter()
-        .map(|i| prepare(i, offline, vex, jvm))
+        .map(|i| prepare(i, offline, vex, graph))
         .collect()
 }
 
@@ -256,7 +264,7 @@ fn prepare(
     image: &Image,
     offline: bool,
     vex: Option<&crate::oci_vex::Policy>,
-    jvm: Option<&fleetreach_sinks::record::SinkSet>,
+    graph: Option<GraphKind<'_>>,
 ) -> Prepared {
     let (source, pulled) = match &image.reference {
         Some(reference) => (
@@ -289,14 +297,14 @@ fn prepare(
         digest,
         attested,
         vex_problem,
-        opened: pulled.and_then(|p| open(image, p.as_ref(), jvm)),
+        opened: pulled.and_then(|p| open(image, p.as_ref(), graph)),
     }
 }
 
 fn open(
     image: &Image,
     pulled: Option<&crate::registry::Pulled>,
-    jvm: Option<&fleetreach_sinks::record::SinkSet>,
+    graph: Option<GraphKind<'_>>,
 ) -> Result<Opened, String> {
     // A pull already chose the platform: its layout holds the one image.
     let (path, platform) = match pulled {
@@ -307,13 +315,29 @@ fn open(
         .prefix("fleetreach-image-")
         .tempdir()
         .map_err(|e| format!("creating a temporary directory: {e}"))?;
-    let (fs, graph) = match jvm {
+    let (fs, graph) = match graph {
         None => (
             fleetreach_os::open_image(path, &fleetreach_os::lang::wanted, platform)
                 .map_err(|e| e.to_string())?,
             None,
         ),
-        Some(set) => {
+        Some(GraphKind::Dotnet(set)) => {
+            // The assemblies go in a directory of their own, removed once the graph is built.
+            let assemblies = tempfile::Builder::new()
+                .prefix("fleetreach-dlls-")
+                .tempdir()
+                .map_err(|e| format!("creating a temporary directory: {e}"))?;
+            let fs = fleetreach_os::open_image_spilling_assemblies(
+                path,
+                &|p| fleetreach_os::lang::wanted(p) || crate::dotnet_reach::wanted(p),
+                platform,
+                assemblies.path(),
+            )
+            .map_err(|e| e.to_string())?;
+            let graph = crate::dotnet_reach::analyze_image(&fs, set);
+            (fs, Some(graph))
+        }
+        Some(GraphKind::Jvm(set)) => {
             // The archives go in a directory of their own, removed once the graph is built.
             let archives = tempfile::Builder::new()
                 .prefix("fleetreach-jars-")
@@ -427,7 +451,7 @@ fn open(
         unread: lang.unread,
         skipped: fs.skipped().to_vec(),
         layers,
-        jvm: graph,
+        graph,
         _files: files,
         lang_repo,
     })

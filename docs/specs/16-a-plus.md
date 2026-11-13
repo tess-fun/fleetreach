@@ -1418,7 +1418,24 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   top level, which has no line), every chain read by hand matches the code, 0.1 to 3 s per
   repo. Misses are mostly framework dispatch: Django's request handler and model managers,
   Pillow's plugin registry, DRF parsers from settings, requests' adapters. On the OSS fleet
-  it found posthog's pyjwt and urllib3 chains. Still open in row 13: the .NET IL reader.
+  it found posthog's pyjwt and urllib3 chains.
+- **.NET call graph (2026-11-13, row 13 for 1.8.0)**: `crates/clr` reads ECMA-335 metadata and
+  IL in pure Rust (identical to `System.Reflection.Metadata` on 4,374 SDK and package-cache
+  DLLs) and builds a rapid type analysis graph, judged by `scan --reachability=dotnet` against
+  NuGet sink records exactly as the JVM graph is (shared `graph_reach`). Services are the
+  folders of an image holding a `*.deps.json`; their own assemblies are the entry points, every
+  other `.dll` outside the runtime's shared frameworks is dependency code. Reflection routes
+  make types (`typeof`, generic arguments, strings, attributes, configuration files); slots
+  that start outside the graph, or in a `System.*`/`Microsoft.*` assembly, are reached on every
+  made type; Serilog's configuration reader roots the extension methods it calls by name.
+  **Soundness oracle**: a startup hook records every method the JIT compiles
+  (`docs/differential/clr/jit`); on 11 apps over real NuGet packages (Newtonsoft.Json, Serilog
+  and its configuration reader, DI and logging, ImageSharp, JWT, Humanizer, NuGet.Versioning,
+  MemoryCache, ASP.NET Core, Npgsql, SqlClient, Azure.Identity), 0 of 6,758 methods that ran
+  are missing from the graph. Each rule came from a miss there. A rootfs with two published
+  services (35 assemblies, 56,840 methods) scans in 1.4 s, 190 MB peak. **Still open**: NuGet
+  sink records (none ship; a proposer from fix commits or nupkg diffs needs packages fetched,
+  which needs the user's OK), and a real-image corpus measurement of yield.
 
 #### 14. Import-graph witness chains (A- to A+)
 

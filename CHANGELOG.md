@@ -8,6 +8,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`scan --reachability=dotnet` builds a call graph over each image's .NET assemblies.**
+  Every `.dll` a service ships (not the runtime's shared frameworks) is read as data by a new
+  in-house ECMA-335 reader, nothing is loaded or run, and one graph is walked from the code of
+  each folder holding a `*.deps.json`. NuGet findings with a curated sink record are judged as
+  JVM ones are: reachable with a chain, not reachable only from a reviewed record, unknown
+  with the reason otherwise. The graph follows what reflection makes (`typeof`, generic
+  arguments such as dependency injection and serializers, type names in strings, attributes
+  and `appsettings.json`), and what the runtime calls on its own (`ToString`, `Dispose`, async
+  state machines, ASP.NET Core interfaces). Checked against the runtime: on 11 apps built from
+  real NuGet packages, every one of the 6,758 methods the JIT compiled in their assemblies is
+  in the graph. No NuGet sink records ship yet, so findings get a verdict only once records are
+  added.
+
 - **Signed webhooks.** `fleetreach notify --webhook-secret-env VAR` signs each post as
   Standard Webhooks specifies (`webhook-id`, `webhook-timestamp`, `webhook-signature`: HMAC-SHA256
   of `id.timestamp.body`), with the secret read from that environment variable, so any of the
@@ -196,6 +209,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   being checked.
 
 ### Fixed
+
+- **JVM witnesses named a temporary file.** A chain that started at a resource (a
+  `META-INF/services` file, `web.xml`) named the scan's temporary copy of its archive, a path
+  that changed on every run; it now names the archive's path in the image.
 
 - **`licenses --detect` reads npm packages installed below another package.** A second version
   sits at `node_modules/a/node_modules/b`, and only the top-level copy was looked at, so the

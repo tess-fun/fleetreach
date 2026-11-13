@@ -229,7 +229,7 @@ pub(crate) struct ScanArgs {
         num_args = 0..=1,
         default_missing_value = "heuristic",
         value_name = "MODE",
-        help = "reachability: bare/`heuristic` greps your source (safe, no build); `static` is a sound call-graph analysis that COMPILES each repo — running its build scripts and proc-macros (see --allow-untrusted-builds). Needs --reach-driver. `jvm` builds a call graph over each image's Java archives, read as data and never run, and judges its Maven findings against the bundled reviewed sink records: a finding none of whose images reaches a sink is not reachable. Name the service's own packages with `jvm_app` (or --jvm-app) unless the image runs a Spring Boot fat jar or a war."
+        help = "reachability: bare/`heuristic` greps your source (safe, no build); `static` is a sound call-graph analysis that COMPILES each repo — running its build scripts and proc-macros (see --allow-untrusted-builds). Needs --reach-driver. `jvm` builds a call graph over each image's Java archives, read as data and never run, and judges its Maven findings against the bundled reviewed sink records: a finding none of whose images reaches a sink is not reachable. Name the service's own packages with `jvm_app` (or --jvm-app) unless the image runs a Spring Boot fat jar or a war. `dotnet` does the same over each image's .NET assemblies for its NuGet findings; a service is a folder holding a `*.deps.json`, as `dotnet publish` writes it."
     )]
     reachability: Option<ReachMode>,
     #[arg(
@@ -694,7 +694,13 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         &config.images,
         args.offline,
         vex_policy.as_ref(),
-        sinks.as_ref(),
+        sinks.as_ref().map(|set| {
+            if args.reachability == Some(ReachMode::Dotnet) {
+                crate::images::GraphKind::Dotnet(set)
+            } else {
+                crate::images::GraphKind::Jvm(set)
+            }
+        }),
     );
     for image in &images {
         if let Some(why) = &image.vex_problem {
@@ -1524,9 +1530,9 @@ fn enrich_report(args: &ScanArgs, config: &Config, fleet_report: &mut FleetRepor
     exploitation_known
 }
 
-/// The bundled sink records, with `--reachability=jvm`.
+/// The bundled sink records, with `--reachability=jvm` or `dotnet`.
 fn jvm_sinks(args: &ScanArgs) -> Result<Option<fleetreach_sinks::record::SinkSet>, u8> {
-    if args.reachability != Some(ReachMode::Jvm) {
+    if !matches!(args.reachability, Some(ReachMode::Jvm | ReachMode::Dotnet)) {
         return Ok(None);
     }
     fleetreach_sinks::record::bundled()
@@ -1534,28 +1540,32 @@ fn jvm_sinks(args: &ScanArgs) -> Result<Option<fleetreach_sinks::record::SinkSet
         .map_err(|e| fail(&format!("the bundled sink records: {e}")))
 }
 
-/// Each image's JVM call graph, taken before the images are dropped.
+/// Each image's call graph, taken before the images are dropped.
 fn jvm_graphs(
     args: &ScanArgs,
     images: &mut [crate::images::Prepared],
-) -> BTreeMap<fleetreach_core::RepoId, crate::jvm_reach::GraphOutcome> {
-    if args.reachability != Some(ReachMode::Jvm) {
-        return BTreeMap::new();
-    }
+) -> BTreeMap<fleetreach_core::RepoId, crate::graph_reach::GraphOutcome> {
+    let label = match args.reachability {
+        Some(ReachMode::Jvm) => "jvm",
+        Some(ReachMode::Dotnet) => "dotnet",
+        _ => return BTreeMap::new(),
+    };
     images
         .iter_mut()
         .map(|image| {
             let graph = match &mut image.opened {
                 Ok(opened) => opened
-                    .jvm
+                    .graph
                     .take()
                     .unwrap_or_else(|| Err("no call graph was built".to_string())),
                 Err(e) => Err(format!("the image could not be opened: {e}")),
             };
             if args.verbose {
                 match &graph {
-                    Ok(g) => eprintln!("reachability(jvm): {}: {}", image.source, g.summary),
-                    Err(why) => eprintln!("reachability(jvm): {}: no graph: {why}", image.source),
+                    Ok(g) => eprintln!("reachability({label}): {}: {}", image.source, g.summary),
+                    Err(why) => {
+                        eprintln!("reachability({label}): {}: no graph: {why}", image.source);
+                    }
                 }
             }
             (image.id.clone(), graph)
@@ -1566,7 +1576,7 @@ fn jvm_graphs(
 /// The records and image graphs `--reachability=jvm` judges findings with.
 type JvmInputs<'a> = (
     &'a fleetreach_sinks::record::SinkSet,
-    &'a BTreeMap<fleetreach_core::RepoId, crate::jvm_reach::GraphOutcome>,
+    &'a BTreeMap<fleetreach_core::RepoId, crate::graph_reach::GraphOutcome>,
 );
 
 /// Reachability, when asked for, and `--reachable-only`.
@@ -1587,6 +1597,11 @@ fn assess_reachability(
             ReachMode::Jvm => {
                 if let Some((set, graphs)) = jvm {
                     crate::jvm_reach::assess(fleet_report, set, graphs);
+                }
+            }
+            ReachMode::Dotnet => {
+                if let Some((set, graphs)) = jvm {
+                    crate::dotnet_reach::assess(fleet_report, set, graphs);
                 }
             }
             ReachMode::Heuristic => {
@@ -1671,6 +1686,7 @@ fn assess_reachability(
                     ReachMode::Heuristic => "not found in your source (heuristic)",
                     ReachMode::Static => "proven unreachable (static)",
                     ReachMode::Jvm => "not reached in their images' JVM call graphs",
+                    ReachMode::Dotnet => "not reached in their images' .NET call graphs",
                 };
                 eprintln!("dropped {dropped} finding(s) {how}");
             }

@@ -995,6 +995,7 @@ dependencies = [
  "clap",
  "comfy-table",
  "flate2",
+ "fleetreach-clr",
  "fleetreach-core",
  "fleetreach-correlate",
  "fleetreach-ghactions",

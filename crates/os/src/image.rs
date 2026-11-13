@@ -47,13 +47,33 @@ fn file_limit(path: &str) -> u64 {
 }
 
 /// What to keep of a wanted file: its content, or for a Java archive its digest, so a large
-/// archive is held only while it is read.
+/// archive is held only while it is read. A .NET assembly is only ever read from where it was
+/// written out, so nothing of it is kept.
 fn kept(path: &str, data: Vec<u8>) -> Vec<u8> {
     if crate::jar::is_archive(path) {
         crate::jar::digest(path, &data)
+    } else if is_assembly(path) {
+        Vec::new()
     } else {
         data
     }
+}
+
+/// A .NET assembly a service ships: a `.dll` outside the .NET runtime's own folders (the shared
+/// frameworks, SDK and packs, which a call graph treats as outside code).
+#[must_use]
+pub fn is_assembly(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".dll")
+        && ![
+            "/shared/microsoft.",
+            "dotnet/sdk/",
+            "dotnet/packs/",
+            "dotnet/host/",
+        ]
+        .iter()
+        .any(|p| lower.contains(p))
+        && !lower.starts_with("shared/microsoft.")
 }
 
 /// What is at a path in the merged image.
@@ -90,16 +110,22 @@ pub struct ImageFs {
     introduced: BTreeMap<(String, String), usize>,
     /// Whether the layer being applied changed anything a package database is made of.
     packages_changed: bool,
-    /// Where Java archives are written out, when a JVM call graph needs their classes.
+    /// Where Java archives or .NET assemblies are written out, for a call graph.
     spill: Option<Spill>,
 }
 
-/// The Java archives written out of an image, by image path, with the layer that wrote each.
+/// Which files a spill writes out, by path.
+type SpillKind = fn(&str) -> bool;
+
+/// The Java archives or .NET assemblies written out of an image, by image path, with the layer
+/// that wrote each.
 /// An entry counts only while that layer's file is still at its path: a later layer can delete
 /// or replace it.
 #[derive(Debug, Default)]
 struct Spill {
     dir: PathBuf,
+    /// Which kind of file to write out (Java archives or .NET assemblies); both when unset.
+    only: Option<SpillKind>,
     files: BTreeMap<String, (usize, PathBuf)>,
     written: u64,
     count: usize,
@@ -114,6 +140,15 @@ pub struct JavaArchives {
     pub files: Vec<(String, PathBuf)>,
     /// Archives in the image that are not among `files` (too large, unwritable), as
     /// `path: reason`. Any of these leaves a call graph partial.
+    pub missing: Vec<String>,
+}
+
+/// The .NET assemblies of an image, written out to a directory.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct DotnetAssemblies {
+    /// Each assembly still in the image, by image path, with where it was written.
+    pub files: Vec<(String, PathBuf)>,
+    /// Assemblies in the image that are not among `files`, as `path: reason`.
     pub missing: Vec<String>,
 }
 
@@ -553,9 +588,16 @@ impl ImageFs {
         let Some(spill) = self.spill.as_mut() else {
             return;
         };
-        if !crate::jar::is_archive(path) {
+        if spill.only.is_some_and(|only| !only(path)) {
             return;
         }
+        let extension = if crate::jar::is_archive(path) {
+            "jar"
+        } else if is_assembly(path) {
+            "dll"
+        } else {
+            return;
+        };
         let size = data.len() as u64;
         if spill.written + size > MAX_SPILL_BYTES {
             spill
@@ -564,7 +606,7 @@ impl ImageFs {
             spill.files.remove(path);
             return;
         }
-        let file = spill.dir.join(format!("{:06}.jar", spill.count));
+        let file = spill.dir.join(format!("{:06}.{extension}", spill.count));
         spill.count += 1;
         match std::fs::write(&file, data) {
             Ok(()) => {
@@ -605,22 +647,42 @@ impl ImageFs {
     /// large to read is missing too.
     #[must_use]
     pub fn java_archives(&self) -> JavaArchives {
+        let (files, missing) = self.spilled(crate::jar::is_archive);
+        JavaArchives { files, missing }
+    }
+
+    /// The .NET assemblies written out, as [`ImageFs::java_archives`] for Java archives.
+    #[must_use]
+    pub fn dotnet_assemblies(&self) -> DotnetAssemblies {
+        let (files, missing) = self.spilled(is_assembly);
+        DotnetAssemblies { files, missing }
+    }
+
+    /// The written-out files whose path `kind` accepts, and those of that kind missing.
+    #[allow(clippy::type_complexity)]
+    fn spilled(&self, kind: fn(&str) -> bool) -> (Vec<(String, PathBuf)>, Vec<String>) {
         let Some(spill) = self.spill.as_ref() else {
-            return JavaArchives::default();
+            return (Vec::new(), Vec::new());
         };
         let files = spill
             .files
             .keys()
+            .filter(|path| kind(path))
             .filter_map(|path| Some((path.clone(), self.live_spill(path)?)))
             .collect();
-        let mut missing = spill.refused.clone();
+        let mut missing: Vec<String> = spill
+            .refused
+            .iter()
+            .filter(|s| s.split(": ").next().is_some_and(kind))
+            .cloned()
+            .collect();
         missing.extend(
             self.skipped
                 .iter()
-                .filter(|s| s.split(": ").next().is_some_and(crate::jar::is_archive))
+                .filter(|s| s.split(": ").next().is_some_and(kind))
                 .cloned(),
         );
-        JavaArchives { files, missing }
+        (files, missing)
     }
 
     /// Remember what `data`, an executable, was built from, if it says.
@@ -1137,18 +1199,34 @@ pub fn open_spilling(
     platform: Option<&str>,
     dir: &Path,
 ) -> Result<ImageFs, OsError> {
-    open_with(path, want, platform, Some(dir))
+    open_with(path, want, platform, Some((dir, crate::jar::is_archive)))
+}
+
+/// [`open`], also writing every wanted .NET assembly (see [`is_assembly`]) into `dir`, for a
+/// call graph over the image's .NET code: [`ImageFs::dotnet_assemblies`] lists them.
+///
+/// # Errors
+///
+/// As [`open`].
+pub fn open_spilling_assemblies(
+    path: &Path,
+    want: &dyn Fn(&str) -> bool,
+    platform: Option<&str>,
+    dir: &Path,
+) -> Result<ImageFs, OsError> {
+    open_with(path, want, platform, Some((dir, is_assembly)))
 }
 
 fn open_with(
     path: &Path,
     want: &dyn Fn(&str) -> bool,
     platform: Option<&str>,
-    dir: Option<&Path>,
+    dir: Option<(&Path, SpillKind)>,
 ) -> Result<ImageFs, OsError> {
     let spill = || {
-        dir.map(|d| Spill {
+        dir.map(|(d, only)| Spill {
             dir: d.to_path_buf(),
+            only: Some(only),
             ..Spill::default()
         })
     };
@@ -1386,6 +1464,41 @@ mod tests {
                 .unwrap();
         }
         fs
+    }
+
+    #[test]
+    fn assemblies_outside_the_runtime_are_written_out_apart_from_archives() {
+        let dir = tempfile::tempdir().unwrap();
+        let fs = spilled(
+            &[tar(&[
+                E::File("app/Api.dll", b"api"),
+                E::File("app/runtimes/unix/lib/net8.0/Lib.dll", b"lib"),
+                E::File(
+                    "usr/share/dotnet/shared/Microsoft.NETCore.App/8.0.1/System.Text.Json.dll",
+                    b"fx",
+                ),
+                E::File("app/lib.jar", b"jar"),
+            ])],
+            dir.path(),
+        );
+        let dlls: Vec<String> = fs
+            .dotnet_assemblies()
+            .files
+            .into_iter()
+            .map(|(p, _)| p)
+            .collect();
+        assert_eq!(
+            dlls,
+            ["app/Api.dll", "app/runtimes/unix/lib/net8.0/Lib.dll"]
+        );
+        let jars: Vec<String> = fs
+            .java_archives()
+            .files
+            .into_iter()
+            .map(|(p, _)| p)
+            .collect();
+        assert_eq!(jars, ["app/lib.jar"]);
+        assert!(is_assembly("App/X.DLL") && !is_assembly("app/x.dll.config"));
     }
 
     fn archive_text(fs: &ImageFs) -> Vec<(String, Vec<u8>)> {

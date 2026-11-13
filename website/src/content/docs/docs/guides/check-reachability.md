@@ -145,6 +145,29 @@ CVE reproducers, 86 of the 87 vulnerable methods that ran were in the graph; the
 such a by-name case.
 :::
 
+## .NET call graphs for container images
+
+```sh
+fleetreach scan --image app.tar --reachability=dotnet
+```
+
+The same, over the image's .NET assemblies: every `.dll` outside the runtime's shared
+frameworks is read as data, and each folder holding a `*.deps.json` (what `dotnet publish`
+writes) is a service whose own assemblies are the entry points. NuGet findings with a curated
+sink record get the same three verdicts as Java ones.
+
+The graph follows what reflection makes: types named by `typeof`, by generic arguments
+(dependency injection, serializers), by strings, by attributes and by `appsettings.json` or
+`*.config`. Methods the runtime calls on its own (`ToString`, `Dispose`, async state machines,
+ASP.NET Core interfaces) are reached on every type something makes. Reflection by method name
+is counted, not followed. Checked against the runtime's own JIT events on 11 apps built from
+real NuGet packages, every method that ran in their assemblies was in the graph.
+
+:::note[No NuGet records yet]
+fleetreach ships no NuGet sink records yet, so .NET findings keep their package-level verdict
+until records are added.
+:::
+
 ## Go
 
 With `govulncheck` on `PATH` (and `--allow-untrusted-builds`, since it compiles the module),
