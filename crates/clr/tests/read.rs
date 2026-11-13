@@ -97,3 +97,48 @@ fn a_damaged_file_is_an_error_never_a_panic() {
     assert!(read(b"MZ").is_err());
     assert!(read(b"not a pe file").is_err());
 }
+
+/// The interfaces [`read`] gives, as [`read_interfaces`] names them.
+fn interfaces_of(a: &Assembly) -> Vec<fleetreach_clr::Interface> {
+    a.types
+        .iter()
+        .filter(|t| t.is_interface())
+        .map(|t| fleetreach_clr::Interface {
+            full_name: t.full_name.clone(),
+            methods: t.methods.iter().map(|m| m.name.clone()).collect(),
+            extends: t.interfaces.clone(),
+        })
+        .collect()
+}
+
+#[test]
+fn the_metadata_only_read_names_interfaces_as_the_full_read_does() {
+    for bytes in [
+        &include_bytes!("fixture.dll")[..],
+        &include_bytes!("graphapp.dll")[..],
+        &include_bytes!("graphlib.dll")[..],
+    ] {
+        let full = interfaces_of(&read(bytes).unwrap());
+        assert_eq!(fleetreach_clr::read_interfaces(bytes).unwrap(), full);
+    }
+}
+
+/// The same over every `.dll` listed, one path per line, in the file `CLR_CORPUS` names.
+#[test]
+#[ignore = "needs CLR_CORPUS, a list of local .NET assemblies"]
+fn the_metadata_only_read_agrees_over_a_corpus() {
+    let list = std::env::var("CLR_CORPUS").unwrap();
+    let (mut same, mut both_failed) = (0, 0);
+    for path in std::fs::read_to_string(list).unwrap().lines() {
+        let bytes = std::fs::read(path).unwrap();
+        match (read(&bytes), fleetreach_clr::read_interfaces(&bytes)) {
+            (Ok(a), Ok(i)) => {
+                assert_eq!(i, interfaces_of(&a), "{path}");
+                same += 1;
+            }
+            (Err(_), Err(_)) => both_failed += 1,
+            (full, only) => panic!("{path}: {:?} vs {:?}", full.err(), only.err()),
+        }
+    }
+    eprintln!("{same} agree, {both_failed} unread by both");
+}

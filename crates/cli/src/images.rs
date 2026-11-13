@@ -301,6 +301,14 @@ fn prepare(
     }
 }
 
+/// A temporary directory of its own, removed when dropped.
+fn temp_dir(prefix: &str) -> Result<tempfile::TempDir, String> {
+    tempfile::Builder::new()
+        .prefix(prefix)
+        .tempdir()
+        .map_err(|e| format!("creating a temporary directory: {e}"))
+}
+
 fn open(
     image: &Image,
     pulled: Option<&crate::registry::Pulled>,
@@ -311,10 +319,7 @@ fn open(
         Some(p) => (p.layout.as_path(), None),
         None => (image.path.as_path(), image.platform.as_deref()),
     };
-    let files = tempfile::Builder::new()
-        .prefix("fleetreach-image-")
-        .tempdir()
-        .map_err(|e| format!("creating a temporary directory: {e}"))?;
+    let files = temp_dir("fleetreach-image-")?;
     let (fs, graph) = match graph {
         None => (
             fleetreach_os::open_image(path, &fleetreach_os::lang::wanted, platform)
@@ -323,10 +328,7 @@ fn open(
         ),
         Some(GraphKind::Dotnet(set)) => {
             // The assemblies go in a directory of their own, removed once the graph is built.
-            let assemblies = tempfile::Builder::new()
-                .prefix("fleetreach-dlls-")
-                .tempdir()
-                .map_err(|e| format!("creating a temporary directory: {e}"))?;
+            let assemblies = temp_dir("fleetreach-dlls-")?;
             let fs = fleetreach_os::open_image_spilling_assemblies(
                 path,
                 &|p| fleetreach_os::lang::wanted(p) || crate::dotnet_reach::wanted(p),
@@ -339,10 +341,7 @@ fn open(
         }
         Some(GraphKind::Jvm(set)) => {
             // The archives go in a directory of their own, removed once the graph is built.
-            let archives = tempfile::Builder::new()
-                .prefix("fleetreach-jars-")
-                .tempdir()
-                .map_err(|e| format!("creating a temporary directory: {e}"))?;
+            let archives = temp_dir("fleetreach-jars-")?;
             let fs = fleetreach_os::open_image_spilling(
                 path,
                 &fleetreach_os::lang::wanted,

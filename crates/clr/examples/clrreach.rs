@@ -32,18 +32,14 @@ fn main() {
     let start = Instant::now();
     let mut outside = OutsideInterfaces::default();
     for fw in &frameworks {
-        for e in std::fs::read_dir(fw).into_iter().flatten().flatten() {
-            let p = e.path();
-            if p.extension().and_then(|e| e.to_str()) != Some("dll") {
-                continue;
-            }
-            if let Some(a) = std::fs::read(&p)
-                .ok()
-                .and_then(|b| fleetreach_clr::read(&b).ok())
-            {
-                outside.add(&a);
-            }
-        }
+        outside.add_files(
+            std::fs::read_dir(fw)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("dll")),
+        );
     }
     let mut inputs = Vec::new();
     // The whole tree: `runtimes/<rid>/lib/` holds platform builds that replace the top

@@ -139,17 +139,9 @@ pub(crate) fn analyze_image(fs: &ImageFs, set: &SinkSet) -> GraphOutcome {
             Err(e) => unread.push(format!("{path}: {e}")),
         }
     }
-    // The shared frameworks' interfaces: a framework assembly that cannot be read leaves its
-    // interfaces unknown, which only keeps more methods reached.
+    // The shared frameworks' interfaces, which say which methods the runtime may call.
     let mut outside = OutsideInterfaces::default();
-    for (_, file) in &assemblies.framework {
-        if let Some(a) = std::fs::read(file)
-            .ok()
-            .and_then(|b| fleetreach_clr::read(&b).ok())
-        {
-            outside.add(&a);
-        }
-    }
+    outside.add_files(assemblies.framework.iter().map(|(_, file)| file));
     let names = config_names(fs, &services);
     let analysis = analyze_outside(&inputs, &names, &outside);
     let partial = !unread.is_empty() || !assemblies.missing.is_empty();

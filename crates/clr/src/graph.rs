@@ -76,12 +76,42 @@ impl OutsideInterfaces {
     /// Add `assembly`'s interfaces. Several versions of one interface pool their names.
     pub fn add(&mut self, assembly: &Assembly) {
         for t in assembly.types.iter().filter(|t| t.is_interface()) {
-            let (names, bases) = self.map.entry(t.full_name.clone()).or_default();
-            names.extend(t.methods.iter().map(|m| m.name.clone()));
-            for i in &t.interfaces {
-                if !bases.contains(i) {
-                    bases.push(i.clone());
-                }
+            self.insert(
+                &t.full_name,
+                t.methods.iter().map(|m| &m.name),
+                &t.interfaces,
+            );
+        }
+    }
+
+    /// Add the interfaces of each `.dll` file in `paths`, read from metadata only
+    /// ([`crate::read_interfaces`]). A file that cannot be read adds nothing, which leaves its
+    /// interfaces unknown: that only keeps more methods reached.
+    pub fn add_files<P: AsRef<std::path::Path>>(&mut self, paths: impl IntoIterator<Item = P>) {
+        for path in paths {
+            let Some(found) = std::fs::read(path.as_ref())
+                .ok()
+                .and_then(|b| crate::read_interfaces(&b).ok())
+            else {
+                continue;
+            };
+            for i in found {
+                self.insert(&i.full_name, i.methods.iter(), &i.extends);
+            }
+        }
+    }
+
+    fn insert<'s>(
+        &mut self,
+        name: &str,
+        methods: impl Iterator<Item = &'s String>,
+        extends: &[String],
+    ) {
+        let (names, bases) = self.map.entry(name.to_string()).or_default();
+        names.extend(methods.cloned());
+        for i in extends {
+            if !bases.contains(i) {
+                bases.push(i.clone());
             }
         }
     }

@@ -2,6 +2,9 @@
 #
 # python3 -I span.py DATA_DIR OSV_NUGET_ZIP WORK CLRDUMP
 #
+# DATA_DIR is the folder of NuGet records itself (crates/sinks/data/nuget). On macOS with a
+# python.org Python, set SSL_CERT_FILE=/etc/ssl/cert.pem or every fetch fails.
+#
 # For every ECOSYSTEM range, checks the earliest stable affected release and the last
 # release of each major line in range, by method list (clrdump `M` lines). A record whose
 # sinks are all absent from a release is judged unknown there (SinkAbsent), which is safe;

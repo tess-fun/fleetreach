@@ -6,6 +6,8 @@ file name only, nothing else from the package), the fix commits' changed paths a
 `gh api`, and the `nugetpropose` example writes a `proposed` record. Nothing fetched is run.
 
 usage: python3 -I propose.py OSV_ALL_ZIP WORK_DIR OUT_DIR NUGETPROPOSE [ID ...]
+A python.org build of Python on macOS has no CA certificates: every fetch fails with
+CERTIFICATE_VERIFY_FAILED and is logged as an error. Run it with SSL_CERT_FILE=/etc/ssl/cert.pem.
 Without ids: every HIGH or CRITICAL advisory with a GitHub fix commit, ChakraCore's native
 engine left out.
 """

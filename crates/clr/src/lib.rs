@@ -186,6 +186,26 @@ pub fn read(bytes: &[u8]) -> Result<Assembly, ClrError> {
     Reader::new(&image)?.assembly()
 }
 
+/// An interface an assembly defines: its reflection name, its methods' names and the
+/// interfaces it extends.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Interface {
+    pub full_name: String,
+    pub methods: Vec<String>,
+    pub extends: Vec<String>,
+}
+
+/// Read only the interfaces of the .NET assembly in `bytes`, from its metadata: no method body
+/// is decoded. What [`read`] gives for the same types, at a fraction of the work.
+///
+/// # Errors
+///
+/// As [`read`].
+pub fn read_interfaces(bytes: &[u8]) -> Result<Vec<Interface>, ClrError> {
+    let image = Image::parse(bytes)?;
+    Reader::new(&image)?.interfaces()
+}
+
 struct Reader<'i, 'a> {
     image: &'i Image<'a>,
     /// Reflection names of TypeDef rows (index row - 1).
@@ -219,6 +239,48 @@ impl<'i, 'a> Reader<'i, 'a> {
         })
     }
 
+    /// Every InterfaceImpl row, by the TypeDef row that implements (or extends) it.
+    fn interface_impls(&self) -> Result<HashMap<u32, Vec<String>>, ClrError> {
+        let image = self.image;
+        let mut interfaces: HashMap<u32, Vec<String>> = HashMap::new();
+        for row in 1..=image.rows(table::INTERFACE_IMPL) {
+            let class = image.cell(table::INTERFACE_IMPL, row, 0)?;
+            let iface = image.cell(table::INTERFACE_IMPL, row, 1)?;
+            if let Some((t, r)) = decode(coded::TYPE_DEF_OR_REF, iface)? {
+                interfaces
+                    .entry(class)
+                    .or_default()
+                    .push(self.type_name(t, r)?);
+            }
+        }
+        Ok(interfaces)
+    }
+
+    fn interfaces(&self) -> Result<Vec<Interface>, ClrError> {
+        let image = self.image;
+        let mut impls = self.interface_impls()?;
+        let mut out = Vec::new();
+        for row in 1..=image.rows(table::TYPE_DEF) {
+            if image.cell(table::TYPE_DEF, row, 0)? & 0x20 == 0 {
+                continue;
+            }
+            let mut methods = Vec::new();
+            for method in self.range(row, 5, table::METHOD_DEF, table::METHOD_PTR)? {
+                methods.push(
+                    image
+                        .string(image.cell(table::METHOD_DEF, method, 3)?)?
+                        .to_string(),
+                );
+            }
+            out.push(Interface {
+                full_name: self.type_defs[row as usize - 1].clone(),
+                methods,
+                extends: impls.remove(&row).unwrap_or_default(),
+            });
+        }
+        Ok(out)
+    }
+
     fn assembly(&self) -> Result<Assembly, ClrError> {
         let image = self.image;
         let name = if image.rows(table::ASSEMBLY) > 0 {
@@ -236,17 +298,7 @@ impl<'i, 'a> Reader<'i, 'a> {
                     .to_string(),
             );
         }
-        let mut interfaces: HashMap<u32, Vec<String>> = HashMap::new();
-        for row in 1..=image.rows(table::INTERFACE_IMPL) {
-            let class = image.cell(table::INTERFACE_IMPL, row, 0)?;
-            let iface = image.cell(table::INTERFACE_IMPL, row, 1)?;
-            if let Some((t, r)) = decode(coded::TYPE_DEF_OR_REF, iface)? {
-                interfaces
-                    .entry(class)
-                    .or_default()
-                    .push(self.type_name(t, r)?);
-            }
-        }
+        let mut interfaces = self.interface_impls()?;
         let mut attrs = self.attributes()?;
         let mut types = Vec::new();
         for row in 1..=image.rows(table::TYPE_DEF) {
