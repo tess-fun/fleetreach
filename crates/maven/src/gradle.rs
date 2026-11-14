@@ -150,6 +150,8 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         spring_dm: scripts
             .iter()
             .any(|(_, t)| t.contains("io.spring.dependency-management")),
+
+        processor: false,
     };
     // The kordamp enforcer's `ForceDependencies` rule in the settings forces its versions on
     // every configuration of every project (jreleaser).
@@ -253,9 +255,13 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                 let m = &modules[i];
                 // What p declares in `implementation` is on this file's runtime classpath
                 // only; its `api` reaches the compile classpath too.
+                // `compileOnly(project(":p"))` compiles against p's `api` only (reposilite's
+                // plugins against the backend).
                 let through = |own: &'static str, exported: bool| match (scope, own) {
                     (_, "test" | "provided") => None,
-                    ("test" | "provided", _) => Some(scope),
+                    ("provided", "compile") if exported => Some(scope),
+                    ("provided", _) => None,
+                    ("test", _) => Some(scope),
                     ("runtime", _) | (_, "runtime") => Some("runtime"),
                     _ if !exported => Some("runtime"),
                     _ => Some("compile"),
@@ -266,8 +272,18 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                     }
                 }
                 let own = m.shared_from.unwrap_or(m.platforms.len());
-                platforms.extend(m.platforms[..own].iter().filter(|c| !c.enforced).cloned());
-                constraints.extend(m.constraints.iter().filter(|c| !c.enforced).cloned());
+                platforms.extend(
+                    m.platforms[..own]
+                        .iter()
+                        .filter(|c| !c.enforced && !c.test)
+                        .cloned(),
+                );
+                constraints.extend(
+                    m.constraints
+                        .iter()
+                        .filter(|c| !c.enforced && !c.test)
+                        .cloned(),
+                );
                 for (path, own, exported) in &m.project_deps {
                     if let (Some(&j), Some(next)) = (by_path.get(path), through(own, *exported)) {
                         queue.push_back((j, next));
@@ -790,6 +806,9 @@ struct Coordinate {
     /// From an `enforcedPlatform(...)`: its versions win over every request, a version the
     /// build declares itself included.
     strict: bool,
+    /// From a test configuration (`testImplementation(platform(...))`): it manages the test
+    /// classpaths only, and the project does not publish it.
+    test: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -923,10 +942,11 @@ impl Module {
             )
         };
         let mut managed = String::new();
-        for p in &self.platforms {
+        let applies = |c: &&Coordinate| pass == Pass::Full || !c.test;
+        for p in self.platforms.iter().filter(applies) {
             managed.push_str(&dep(p, "<type>pom</type><scope>import</scope>"));
         }
-        for c in &self.constraints {
+        for c in self.constraints.iter().filter(applies) {
             managed.push_str(&dep(c, ""));
         }
         let mut deps = String::new();
@@ -1322,6 +1342,7 @@ fn library(entry: &toml::Value, versions: Option<&toml::Value>) -> Result<Coordi
         version: version.map(|v| version_text(&v)).transpose()?,
         enforced: false,
         strict: false,
+        test: false,
     })
 }
 
@@ -1378,6 +1399,7 @@ fn coordinate(text: &str, vars: &BTreeMap<String, String>) -> Result<Coordinate,
         version: version.map(version_text).transpose()?,
         enforced: false,
         strict: false,
+        test: false,
     })
 }
 
@@ -1436,6 +1458,9 @@ struct Context {
     extended_by: BTreeMap<String, String>,
     /// Some script applies the Spring dependency-management plugin.
     spring_dm: bool,
+    /// The declaration being read is on an annotation processor's path (`kapt`, `ksp`,
+    /// `annotationProcessor`), which no classpath read here extends.
+    processor: bool,
 }
 
 impl Context {
@@ -2074,8 +2099,12 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
             version: Some(version.clone()),
             enforced: context.spring_dm,
             strict: false,
+            test: false,
         });
-    } else if id == KOTLIN_JVM {
+    } else if id == KOTLIN_JVM
+        // `kotlin.stdlib.default.dependency=false` turns the added library off (reposilite).
+        && context.vars.get("kotlin.stdlib.default.dependency").map(String::as_str) != Some("false")
+    {
         module.deps.push(Declared {
             coordinate: Coordinate {
                 group: "org.jetbrains.kotlin".to_string(),
@@ -2083,6 +2112,7 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
                 version: Some(version.clone()),
                 enforced: false,
                 strict: false,
+                test: false,
             },
             scope: "compile",
             exclusions: Vec::new(),
@@ -2165,8 +2195,21 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
         .get(&name)
         .map_or(name.as_str(), String::as_str);
     context.exported = exported_by(configuration);
+    context.processor = is_processor(configuration);
+    let before = (module.platforms.len(), module.constraints.len());
     read_values(rest, scope, block, context, module);
+    // Only a named test configuration keeps its platform to the tests: Spring Framework's
+    // custom `dependencyManagement` reads as test, yet every configuration extends it.
+    if scope == "test" && (is_configuration(&name) || context.extended_by.contains_key(&name)) {
+        for c in module.platforms[before.0..]
+            .iter_mut()
+            .chain(&mut module.constraints[before.1..])
+        {
+            c.test = true;
+        }
+    }
     context.exported = true;
+    context.processor = false;
 }
 
 /// Whether a configuration's dependencies reach the compile classpath of a project that
@@ -2177,6 +2220,13 @@ fn exported_by(configuration: &str) -> bool {
         || configuration == "compile"
         || configuration.ends_with("Api")
         || (configuration.ends_with("Compile") && !configuration.ends_with("TestCompile"))
+}
+
+/// Whether a configuration is an annotation processor's path: reposilite's
+/// `kapt(platform(jackson-bom))` manages the processors' Jackson, not the backend's.
+fn is_processor(configuration: &str) -> bool {
+    let lower = configuration.to_ascii_lowercase();
+    lower.starts_with("kapt") || lower.starts_with("ksp") || lower.contains("annotationprocessor")
 }
 
 /// `read_declaration`, with what an `enforcedPlatform(...)` adds marked strict.
@@ -2240,8 +2290,11 @@ fn read_declaration(
     let mut rest = text.trim().trim_start_matches('(').trim();
     let whole = text.trim();
     let exported = context.exported;
+    let processor = context.processor;
     let add = |module: &mut Module, c: Coordinate, platform: bool| {
-        if platform {
+        if platform && processor {
+            // A processor's platform manages that path only; it lists nothing either.
+        } else if platform {
             if c.version.is_some() && block == Block::Dependencies {
                 module.deps.push(Declared {
                     coordinate: c.clone(),
@@ -2296,6 +2349,7 @@ fn read_declaration(
                     version: Some(version.clone()),
                     enforced: false,
                     strict: false,
+                    test: false,
                 };
                 if block == Block::Dependencies {
                     module.deps.push(Declared {
@@ -2395,6 +2449,7 @@ fn read_declaration(
                     version: Some(v.to_string()),
                     enforced: false,
                     strict: false,
+                    test: false,
                 },
                 platform,
             ),
@@ -2439,6 +2494,7 @@ mod tests {
             exported: true,
             extended_by: BTreeMap::new(),
             spring_dm: false,
+            processor: false,
         }
     }
 
@@ -3428,6 +3484,106 @@ set = ["a-b", "e"]
                 .collect();
             let want: Vec<_> = expected.iter().map(|v| (*v, *v == "1")).collect();
             assert_eq!(spring, want, "{configuration}: {:?}", r.missing);
+        }
+    }
+
+    #[test]
+    fn test_and_processor_platforms_manage_their_own_paths() {
+        // reposilite: a root `testImplementation(platform(jackson-bom))` and the backend's
+        // `kapt(platform(...))` leave the main classpath's Jackson to conflict resolution.
+        let bom = (
+            "g:bom:1".to_string(),
+            "<project><groupId>g</groupId><artifactId>bom</artifactId><version>1</version>\
+             <packaging>pom</packaging><dependencyManagement><dependencies>\
+             <dependency><groupId>g</groupId><artifactId>a</artifactId><version>2</version></dependency>\
+             </dependencies></dependencyManagement></project>"
+                .to_string(),
+        );
+        let repo = Mem(BTreeMap::from([
+            bom,
+            pom("a", "1", &[]),
+            pom("a", "2", &[]),
+        ]));
+        for (configuration, expected) in [
+            ("testImplementation", vec![("1", false), ("2", true)]),
+            ("kapt", vec![("1", false)]),
+            ("implementation", vec![("2", false)]),
+        ] {
+            let dir = tree(
+                &format!("platform-{configuration}"),
+                &[(
+                    "build.gradle",
+                    &format!(
+                        "dependencies {{\n    implementation 'g:a:1'\n\
+                         \x20   {configuration} platform('g:bom:1')\n}}\n"
+                    ),
+                )],
+            );
+            let r = resolve_gradle(&dir, &repo);
+            let a: Vec<_> = r
+                .packages
+                .iter()
+                .filter(|p| p.name == "g:a")
+                .map(|p| (p.version.as_str(), p.dev))
+                .collect();
+            assert_eq!(a, expected, "{configuration}: {:?}", r.missing);
+        }
+    }
+
+    #[test]
+    fn compile_only_on_a_project_takes_its_api_only() {
+        // reposilite's plugins compile against `compileOnly(project(":reposilite-backend"))`:
+        // the backend's `implementation` dependencies are on no plugin classpath.
+        let repo = Mem(BTreeMap::from([
+            pom("a", "1", &[]),
+            pom("a", "2", &[]),
+            pom("b", "1", &[]),
+        ]));
+        let dir = tree(
+            "compile-only-project",
+            &[
+                ("settings.gradle", "include 'lib', 'app'\n"),
+                (
+                    "lib/build.gradle",
+                    "dependencies {\n    implementation 'g:a:2'\n    api 'g:b:1'\n}\n",
+                ),
+                (
+                    "app/build.gradle",
+                    "dependencies {\n    compileOnly project(':lib')\n\
+                     \x20   implementation 'g:a:1'\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:a"), ["1", "2"], "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:b"), ["1"]);
+    }
+
+    #[test]
+    fn the_stdlib_property_turns_kotlins_library_off() {
+        let repo = Mem(BTreeMap::new());
+        for (flag, listed) in [("false", false), ("true", true)] {
+            let dir = tree(
+                &format!("stdlib-{flag}"),
+                &[
+                    (
+                        "gradle.properties",
+                        &format!("kotlin.stdlib.default.dependency={flag}\n"),
+                    ),
+                    (
+                        "build.gradle.kts",
+                        "plugins {\n    kotlin(\"jvm\") version \"2.0.0\"\n}\n\
+                         dependencies {\n    implementation(\"g:a:1\")\n}\n",
+                    ),
+                ],
+            );
+            let r = resolve_gradle(&dir, &repo);
+            let stdlib = r
+                .missing
+                .iter()
+                .chain(r.packages.iter().map(|p| &p.name))
+                .any(|m| m.contains("kotlin-stdlib"));
+            assert_eq!(stdlib, listed, "{flag}: {:?}", r.missing);
         }
     }
 

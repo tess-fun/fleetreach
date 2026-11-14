@@ -46,7 +46,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 86.2% of the 9,550 modules at Gradle's version and 90.6% by name, up from 59.7% and
+  now lists 86.3% of the 9,550 modules at Gradle's version and 90.6% by name, up from 59.7% and
   70.0% on the same POMs; 95.9% and 98.5% on the 51 builds whose dependencies no build plugin
   adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
@@ -59,7 +59,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   block for tests (conductor), and the kordamp enforcer's `ForceDependencies` rule in the
   settings (jreleaser, all 17 misses and 64 extras gone). The wrapper's Gradle version
   decides `GradleVersion.current().version.startsWith(...)` branches (axion's Spock), and the
-  Kotlin DSL's positional `exclude("group", "module")` is read. Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  Kotlin DSL's positional `exclude("group", "module")` is read. A platform in a test
+  configuration (`testImplementation(platform(...))`) manages the test classpaths only, one
+  on an annotation processor's path (`kapt`, `ksp`, `annotationProcessor`) manages none of
+  the classpaths read, `compileOnly(project(':p'))` brings only p's `api` dependencies, and
+  `kotlin.stdlib.default.dependency=false` drops the standard library the Kotlin plugin adds
+  (reposilite 95.0% to 97.7%). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over
