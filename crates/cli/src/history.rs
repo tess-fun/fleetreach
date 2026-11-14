@@ -11,7 +11,7 @@
 
 use crate::hexenc::ToHex;
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use fleetreach_core::ssvc::Outcome;
@@ -151,7 +151,13 @@ impl History {
         static EMPTY: std::sync::OnceLock<Present> = std::sync::OnceLock::new();
         self.memo
             .present
-            .get_or_init(|| self.snapshots.iter().map(|s| present(&s.report)).collect())
+            .get_or_init(|| {
+                use rayon::prelude::*;
+                self.snapshots
+                    .par_iter()
+                    .map(|s| present(&s.report))
+                    .collect()
+            })
             .get(i)
             .unwrap_or_else(|| EMPTY.get_or_init(BTreeMap::new))
     }
@@ -283,8 +289,35 @@ fn trustworthy(snapshot: &Snapshot) -> BTreeSet<&str> {
         .collect()
 }
 
-/// Fold one run into the index.
-fn fold(index: &mut Index, snapshot: &Snapshot) {
+/// A run to fold, with its [`present`] findings.
+type Fold<'a> = (&'a Snapshot, std::borrow::Cow<'a, Present>);
+
+/// Each snapshot with its findings worked out here.
+fn to_fold(snapshots: &[Snapshot]) -> impl Iterator<Item = Fold<'_>> {
+    snapshots
+        .iter()
+        .map(|s| (s, std::borrow::Cow::Owned(present(&s.report))))
+}
+
+/// Fold runs into the index, oldest first.
+fn fold<'a>(index: &mut Index, runs: impl IntoIterator<Item = Fold<'a>>) {
+    let mut by_key: BTreeMap<Key, Entry> = std::mem::take(&mut index.entries)
+        .into_iter()
+        .map(|e| (e.key.clone(), e))
+        .collect();
+    for (snapshot, seen) in runs {
+        fold_one(&mut by_key, index, snapshot, &seen);
+    }
+    index.entries = by_key.into_values().collect();
+}
+
+/// Fold one run into the entries and the rest of the index.
+fn fold_one(
+    by_key: &mut BTreeMap<Key, Entry>,
+    index: &mut Index,
+    snapshot: &Snapshot,
+    seen: &Present,
+) {
     let at = &snapshot.run.at;
     let owners: BTreeMap<&str, &str> = snapshot
         .report
@@ -292,11 +325,6 @@ fn fold(index: &mut Index, snapshot: &Snapshot) {
         .iter()
         .filter_map(|c| Some((c.repo.0.as_str(), c.owner.as_deref()?)))
         .collect();
-    let mut by_key: BTreeMap<Key, Entry> = std::mem::take(&mut index.entries)
-        .into_iter()
-        .map(|e| (e.key.clone(), e))
-        .collect();
-    let seen = present(&snapshot.report);
     let ignored: BTreeSet<&Key> = snapshot.suppressed.iter().collect();
     let trusted = trustworthy(snapshot);
 
@@ -327,7 +355,7 @@ fn fold(index: &mut Index, snapshot: &Snapshot) {
             entry.owner = owner;
         }
     };
-    for (key, (severity, ssvc)) in &seen {
+    for (key, (severity, ssvc)) in seen {
         let status = if ignored.contains(key) {
             Status::Ignored
         } else {
@@ -347,7 +375,6 @@ fn fold(index: &mut Index, snapshot: &Snapshot) {
             entry.fixed_at = Some(at.clone());
         }
     }
-    index.entries = by_key.into_values().collect();
     index.runs.push(snapshot.run.id.clone());
     if let Some(packages) = &snapshot.packages {
         merge_packages(
@@ -386,14 +413,12 @@ fn merge_packages<'a>(
 
 /// Rebuild the index from `snapshots`, keeping what `old` knew about findings whose
 /// snapshots are gone (their first sighting, their fix).
-fn rebuild(snapshots: &[Snapshot], old: Option<Index>) -> Index {
+fn rebuild<'a>(runs: impl IntoIterator<Item = Fold<'a>>, old: Option<Index>) -> Index {
     let mut index = Index {
         schema: INDEX_SCHEMA.to_string(),
         ..Index::default()
     };
-    for s in snapshots {
-        fold(&mut index, s);
-    }
+    fold(&mut index, runs);
     if let Some(old) = old {
         let mut by_key: BTreeMap<Key, Entry> = index
             .entries
@@ -433,11 +458,10 @@ fn rebuild(snapshots: &[Snapshot], old: Option<Index>) -> Index {
 
 fn read_snapshot(path: &Path) -> Result<Snapshot, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-    let mut text = String::new();
-    flate2::read::GzDecoder::new(file)
-        .read_to_string(&mut text)
-        .map_err(|e| e.to_string())?;
-    let snapshot: Snapshot = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    // Parsed as it inflates: snapshots are read in parallel, and holding each one's text
+    // would add tens of megabytes per run in flight.
+    let text = std::io::BufReader::with_capacity(1 << 16, flate2::read::GzDecoder::new(file));
+    let snapshot: Snapshot = serde_json::from_reader(text).map_err(|e| e.to_string())?;
     if snapshot.schema != SNAPSHOT_SCHEMA {
         return Err(format!("unknown schema `{}`", snapshot.schema));
     }
@@ -457,10 +481,20 @@ pub fn load(dir: &Path) -> Result<History, String> {
         .filter(|p| p.to_string_lossy().ends_with(".json.gz"))
         .collect();
     paths.sort();
+    let read: Vec<(PathBuf, Result<Snapshot, String>)> = {
+        use rayon::prelude::*;
+        paths
+            .into_par_iter()
+            .map(|path| {
+                let snapshot = read_snapshot(&path);
+                (path, snapshot)
+            })
+            .collect()
+    };
     let mut snapshots = Vec::new();
     let mut unreadable = Vec::new();
-    for path in paths {
-        match read_snapshot(&path) {
+    for (path, snapshot) in read {
+        match snapshot {
             Ok(s) => snapshots.push(s),
             Err(e) => unreadable.push(format!("{}: {e}", path.display())),
         }
@@ -476,10 +510,10 @@ pub fn load(dir: &Path) -> Result<History, String> {
         .filter(|i| i.schema == INDEX_SCHEMA);
     let (index, rebuilt) = match old {
         None if index_path.exists() => (
-            rebuild(&snapshots, None),
+            rebuild(to_fold(&snapshots), None),
             Some(format!("{} was unreadable", index_path.display())),
         ),
-        None => (rebuild(&snapshots, None), None),
+        None => (rebuild(to_fold(&snapshots), None), None),
         Some(mut index) => {
             let known: BTreeSet<&str> = index.runs.iter().map(String::as_str).collect();
             // The newest run the index covers that is still on disk: anything new must come
@@ -493,13 +527,11 @@ pub fn load(dir: &Path) -> Result<History, String> {
             match (first_new, last_known) {
                 (None, _) => (index, None),
                 (Some(new), last) if last.is_none_or(|l| new > l) => {
-                    for s in &snapshots[new..] {
-                        fold(&mut index, s);
-                    }
+                    fold(&mut index, to_fold(&snapshots[new..]));
                     (index, None)
                 }
                 _ => (
-                    rebuild(&snapshots, Some(index)),
+                    rebuild(to_fold(&snapshots), Some(index)),
                     Some("a snapshot older than the index's newest run appeared".to_string()),
                 ),
             }
@@ -1001,10 +1033,13 @@ pub struct Changes<'a> {
 /// `None` without snapshots.
 pub fn changes(history: &History) -> Option<Changes<'_>> {
     let (latest, earlier) = history.snapshots.split_last()?;
-    let before = history
-        .memo
-        .before_latest
-        .get_or_init(|| rebuild(earlier, None));
+    let before = history.memo.before_latest.get_or_init(|| {
+        let runs = earlier
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s, std::borrow::Cow::Borrowed(history.present(i))));
+        rebuild(runs, None)
+    });
     let status_before: BTreeMap<&Key, Status> =
         before.entries.iter().map(|e| (&e.key, e.status)).collect();
     let mut new = Vec::new();

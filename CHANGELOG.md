@@ -224,6 +224,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   history read and reuses them. On a 12-run history
   of 10,471 repos the overview takes 45 ms instead of 0.8 to 1.3 s, the triage list 14 ms, and
   the server holds 1.0 GB instead of 2.2 GB, with the same pages.
+- **Reading the history takes half the time.** Snapshots are read in parallel and parsed as
+  they inflate, and what was open before the newest run is worked out in one pass. On the same
+  history `notify` takes 0.63 s instead of 1.34 s at slightly lower peak memory, and recording
+  a run with `scan --history-dir` saves about 0.7 s. `notify`, `report html`, every
+  `history` command and the recorded index are byte-identical.
 - **Faster .NET and JVM graphs.** An image's .NET assemblies are parsed on all cores (graphs
   still run one at a time, to bound memory), and both call graphs hash with foldhash, seeded per
   process so names in a crafted image cannot pile into one bucket, instead of SipHash. On the 11
