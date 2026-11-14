@@ -146,6 +146,9 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             module.platforms.extend_from_slice(&shared.platforms);
             module.constraints.extend_from_slice(&shared.constraints);
             module.deps.extend_from_slice(&shared.deps);
+            module
+                .project_platforms
+                .extend_from_slice(&shared.project_platforms);
         }
     }
     // `platform(project(":p"))` takes the platform project's versions, by its default path.
@@ -551,6 +554,7 @@ struct Shared {
     deps: Vec<Declared>,
     platforms: Vec<Coordinate>,
     constraints: Vec<Coordinate>,
+    project_platforms: Vec<String>,
 }
 
 impl Module {
@@ -963,6 +967,71 @@ fn scope_of(configuration: &str) -> &'static str {
     }
 }
 
+/// Fold a rich version block into its declaration, so `api("g:a") { version { require("1.0") } }`
+/// over several lines reads as `api("g:a:1.0")`: `strictly` first, then `require`, then
+/// `prefer`. A declaration that already has a version, or a block naming none, is left alone.
+fn fold_rich_versions(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < lines.len() {
+        let line = lines[i];
+        let folded = (|| {
+            let code = line.trim();
+            let open = code.strip_suffix('{')?.trim_end();
+            let (head, call) = open.split_once('(')?;
+            let call = call.strip_suffix(')')?;
+            if head.is_empty() || !head.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                return None;
+            }
+            let (coord, tail) = quoted(call.trim())?;
+            if !tail.trim().is_empty() || coord.matches(':').count() != 1 {
+                return None;
+            }
+            // The block's lines, by brace depth.
+            let mut depth = 0i32;
+            let mut end = i;
+            for (j, l) in lines.iter().enumerate().skip(i) {
+                let code = code_only(l);
+                depth += code.matches('{').count() as i32 - code.matches('}').count() as i32;
+                if depth <= 0 {
+                    end = j;
+                    break;
+                }
+            }
+            if end == i || end - i > 40 {
+                return None;
+            }
+            let body = &lines[i + 1..end];
+            let version = ["strictly(", "require(", "prefer("].iter().find_map(|k| {
+                body.iter().find_map(|l| {
+                    let at = l.find(k)? + k.len();
+                    quoted(l[at..].trim()).map(|(v, _)| v.to_string())
+                })
+            })?;
+            let indent = &line[..line.len() - line.trim_start().len()];
+            Some((format!("{indent}{head}(\"{coord}:{version}\")"), end))
+        })();
+        match folded {
+            Some((joined, end)) => {
+                out.push_str(&joined);
+                out.push('\n');
+                // Keep the line count, so nothing else shifts.
+                for _ in i + 1..=end {
+                    out.push('\n');
+                }
+                i = end + 1;
+            }
+            None => {
+                out.push_str(line);
+                out.push('\n');
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
 /// `a.extendsFrom b, c`, `a.extendsFrom(b)` or `configurations.a.extendsFrom(b)`: each custom
 /// configuration named, to the standard one `a` that takes it in.
 fn extends_from(line: &str, out: &mut BTreeMap<String, String>) {
@@ -1027,6 +1096,7 @@ enum Block {
 fn read_script(text: &str, context: &mut Context) -> Module {
     let mut module = Module::default();
     let mut blocks: Vec<Block> = Vec::new();
+    let text = fold_rich_versions(text);
     for line in text.lines() {
         let trimmed = line.trim();
         let current = blocks.last().copied();
@@ -1035,6 +1105,7 @@ fn read_script(text: &str, context: &mut Context) -> Module {
             module.deps.len(),
             module.platforms.len(),
             module.constraints.len(),
+            module.project_platforms.len(),
         );
         read_line(trimmed, current, &blocks, context, &mut module);
         if shared {
@@ -1050,6 +1121,10 @@ fn read_script(text: &str, context: &mut Context) -> Module {
                 .shared
                 .constraints
                 .extend_from_slice(&module.constraints[before.2..]);
+            module
+                .shared
+                .project_platforms
+                .extend_from_slice(&module.project_platforms[before.3..]);
         }
         let word: String = trimmed
             .chars()
@@ -1240,11 +1315,15 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
         .trim();
     // A custom configuration (`checkstyle`, `developmentOnly`) is off the runtime classpath.
     let declared = rest.trim_start_matches('(').trim_start();
+    // A platform manages versions whichever configuration carries it (Spring Framework's
+    // `dependencyManagement(enforcedPlatform(...))`).
+    let a_platform = declared.starts_with("platform(") || declared.starts_with("enforcedPlatform(");
     let scope = if is_configuration(&name) {
         scope_of(&name)
     } else if let Some(target) = context.extended_by.get(&name) {
         scope_of(target)
-    } else if declared.starts_with(['"', '\''])
+    } else if a_platform
+        || declared.starts_with(['"', '\''])
         || declared.starts_with("group:")
         || declared.starts_with("group =")
         || rest.contains("libs.")
@@ -1272,7 +1351,10 @@ fn read_values(
         if platform {
             module.platforms.push(c);
         } else if block == Block::Constraints {
-            module.constraints.push(c);
+            // A constraint without a version (a `because` only) manages nothing.
+            if c.version.is_some() {
+                module.constraints.push(c);
+            }
         } else {
             module.deps.push(Declared {
                 coordinate: c,
@@ -1289,10 +1371,18 @@ fn read_values(
         }
     }
     if platform {
-        if let Some(path) = rest
+        // `project(":p")`, `project(path: ":p")`, `dependencies.project(path = ":p")`.
+        let project = rest.strip_prefix("dependencies.").unwrap_or(rest);
+        if let Some(path) = project
             .strip_prefix("project(")
-            .or_else(|| rest.strip_prefix("project "))
-            .and_then(|p| quoted(p.trim()))
+            .or_else(|| project.strip_prefix("project "))
+            .map(|p| {
+                let p = p.trim_start();
+                p.strip_prefix("path").map_or(p, |q| {
+                    q.trim_start().trim_start_matches([':', '=']).trim_start()
+                })
+            })
+            .and_then(|p| quoted(p))
             .map(|(p, _)| p)
         {
             module.project_platforms.push(path.to_string());
@@ -1850,11 +1940,48 @@ set = ["a-b", "e"]
                     "dependencies {\n    api platform(project(':platform:app'))\n\
                      \x20   api 'g:a'\n    api 'g:c'\n}\n",
                 ),
+                (
+                    "build.gradle",
+                    "configure(allprojects - project(':platform:app')) {\n\
+                     \x20   dependencies {\n\
+                     \x20       dependencyManagement(enforcedPlatform(dependencies.project(path: \":platform:app\")))\n\
+                     \x20   }\n}\n",
+                ),
+                ("web/build.gradle", "dependencies {\n    api 'g:c'\n}\n"),
             ],
         );
         let r = resolve_gradle(&dir, &repo);
         assert_eq!(versions(&r, "g:a"), ["3.0"], "{:?}", r.missing);
         assert_eq!(versions(&r, "g:c"), ["1.5"], "{:?}", r.missing);
+        assert!(
+            !r.missing.iter().any(|m| m.contains("not managed")),
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn rich_version_blocks_fold_into_their_declaration() {
+        let text = "constraints {\n    api(\"g:a\") {\n        version {\n            require(\"3.8.0\")\n\
+                    \x20           reject(\"[3.2.1]\")\n        }\n    }\n\
+                    \x20   api(\"g:b\") {\n        version { strictly(\"3.0.0\") }\n    }\n\
+                    \x20   api(\"g:c:2.26.1\") {\n        because(\"CVE\")\n    }\n\
+                    \x20   api(\"g:d\") {\n        because(\"no version\")\n    }\n}\n";
+        let folded = fold_rich_versions(text);
+        assert_eq!(folded.lines().count(), text.lines().count());
+        assert!(folded.contains("api(\"g:a:3.8.0\")"), "{folded}");
+        assert!(folded.contains("api(\"g:b:3.0.0\")"), "{folded}");
+        assert!(folded.contains("api(\"g:c:2.26.1\") {"), "{folded}");
+        assert!(folded.contains("api(\"g:d\") {"), "{folded}");
+        let mut context = context("", &[]);
+        let module = read_script(&format!("dependencies {{\n{text}}}\n"), &mut context);
+        let mut got: Vec<String> = module
+            .constraints
+            .iter()
+            .map(|c| format!("{}:{}", c.artifact, c.version.as_deref().unwrap_or("-")))
+            .collect();
+        got.sort();
+        assert_eq!(got, ["a:3.8.0", "b:3.0.0", "c:2.26.1"]);
     }
 
     #[test]
