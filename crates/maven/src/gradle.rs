@@ -35,6 +35,11 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     let mut missing = BTreeSet::new();
     let scripts = build_scripts(dir, &mut missing);
     let mut vars = properties(&dir.join("gradle.properties"));
+    // The wrapper decides which Gradle runs the build: axion picks its Spock by
+    // `GradleVersion.current().version.startsWith("9.")`.
+    if let Some(version) = wrapper_version(dir) {
+        vars.insert(GRADLE_VERSION.to_string(), version);
+    }
     let mut seen_twice = BTreeSet::new();
     let mut aliases = Vec::new();
     for (_, text) in &build_constants(dir) {
@@ -146,9 +151,18 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             .iter()
             .any(|(_, t)| t.contains("io.spring.dependency-management")),
     };
+    // The kordamp enforcer's `ForceDependencies` rule in the settings forces its versions on
+    // every configuration of every project (jreleaser).
+    let settings_forced: Vec<(Coordinate, bool)> = ["settings.gradle", "settings.gradle.kts"]
+        .iter()
+        .filter_map(|f| fleetreach_core::repofile::read_to_string(dir.join(f)).ok())
+        .flat_map(|t| forced_versions(&t, &context.vars, &mut missing))
+        .collect();
     let mut modules: Vec<Module> = Vec::new();
     for (file, text) in &scripts {
         let mut module = read_script(text, &mut context);
+        module.forced = forced_versions(text, &context.vars, &mut missing);
+        module.forced.extend(settings_forced.iter().cloned());
         // Build logic runs at build time and never ships.
         if file.starts_with("buildSrc/") || file.starts_with("build-logic/") {
             module.deps.iter_mut().for_each(|d| d.scope = "test");
@@ -320,7 +334,9 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             .any(|d| d.scope == "runtime");
         let mut main = BTreeSet::new();
         let mut passes: Vec<Pass> = Vec::new();
-        if has_main && (has_test || has_runtime) {
+        // A force on test configurations only leaves the main classpath to itself.
+        let test_force = module.forced.iter().any(|(_, test_only)| *test_only);
+        if has_main && (has_test || has_runtime || test_force) {
             passes.push(Pass::Main);
         }
         if has_main && has_runtime {
@@ -333,7 +349,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                 &module.to_pom(pass),
                 source,
                 &bom_overrides,
-                &module.enforced(),
+                &module.enforced(pass),
                 pass == Pass::Compile,
             ) {
                 Ok(one) => {
@@ -821,6 +837,9 @@ struct Module {
     /// What those projects put on this file's classpaths: their own dependencies, never this
     /// file's declarations (the Spring plugin keeps only a file's own declared versions).
     via_projects: Vec<Declared>,
+    /// `resolutionStrategy.force("g:a:v")`: versions forced over conflict resolution, the
+    /// flag set when only test configurations are forced.
+    forced: Vec<(Coordinate, bool)>,
 }
 
 #[derive(Debug, Default)]
@@ -834,7 +853,7 @@ struct Shared {
 impl Module {
     /// The module as a POM, so BOM imports and versions go through the resolver.
     /// What the Spring dependency-management plugin sets for this build file.
-    fn enforced(&self) -> Enforced {
+    fn enforced(&self, pass: Pass) -> Enforced {
         let triple = |c: &Coordinate| {
             c.version
                 .clone()
@@ -873,6 +892,12 @@ impl Module {
                 .constraints
                 .iter()
                 .filter(|c| c.strict)
+                .chain(
+                    self.forced
+                        .iter()
+                        .filter(|(_, test_only)| !test_only || pass == Pass::Full)
+                        .map(|(c, _)| c),
+                )
                 .filter_map(triple)
                 .collect(),
         }
@@ -1098,6 +1123,87 @@ fn settings_catalog(text: &str) -> Vec<(&'static str, toml::Table)> {
         ("bundles", bundles),
         ("plugins", plugins),
     ]
+}
+
+/// The versions a script forces: `resolutionStrategy.force("g:a:v", ...)`, `force 'g:a:v'`,
+/// and the coordinates of a kordamp enforcer `ForceDependencies` rule. Each is flagged when it
+/// sits in a `configurations.matching { ... 'test' ... }` block, which forces test
+/// classpaths only (conductor's http-task).
+fn forced_versions(
+    text: &str,
+    vars: &BTreeMap<String, String>,
+    missing: &mut BTreeSet<String>,
+) -> Vec<(Coordinate, bool)> {
+    let text = strip_comments(text);
+    let mut out = Vec::new();
+    // Per open brace: whether it opened a test-only configurations block.
+    let mut test_blocks: Vec<bool> = Vec::new();
+    // Inside `force(` still open, or a kordamp rule at this depth.
+    let mut open_call = false;
+    let mut kordamp: Option<usize> = None;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        let test_only = test_blocks.iter().any(|t| *t);
+        let force_at = ["force(", "force '", "force \""].iter().find_map(|p| {
+            trimmed.find(p).filter(|&i| {
+                !trimmed[..i].ends_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
+            })
+        });
+        if trimmed.contains("ForceDependencies") {
+            kordamp = Some(test_blocks.len());
+        }
+        let collect = open_call || force_at.is_some() || kordamp.is_some();
+        if collect {
+            let from = force_at.map_or(trimmed, |i| &trimmed[i..]);
+            for value in strings(from) {
+                if value.matches(':').count() < 2 {
+                    continue;
+                }
+                match coordinate(&value, vars) {
+                    Ok(c) if c.version.is_some() => out.push((c, test_only)),
+                    Ok(_) => {}
+                    Err(e) => {
+                        missing.insert(format!("forced version: {e}"));
+                    }
+                }
+            }
+        }
+        if let Some(i) = force_at.filter(|_| trimmed.contains("force(")) {
+            open_call = !trimmed[i..].contains(')');
+        } else if open_call && trimmed.contains(')') {
+            open_call = false;
+        }
+        let opens_test = trimmed.starts_with("configurations")
+            && (trimmed.contains("'test") || trimmed.contains("\"test"));
+        for c in code_only(line).chars() {
+            match c {
+                '{' => test_blocks.push(opens_test),
+                '}' => {
+                    test_blocks.pop();
+                    if kordamp.is_some_and(|d| test_blocks.len() <= d) {
+                        kordamp = None;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    out
+}
+
+const GRADLE_VERSION: &str = "GradleVersion.current().version";
+
+/// The Gradle version the wrapper downloads (`gradle-9.8.2-bin.zip`).
+fn wrapper_version(dir: &Path) -> Option<String> {
+    let props = properties(&dir.join("gradle/wrapper/gradle-wrapper.properties"));
+    let url = props.get("distributionUrl")?;
+    let file = url.rsplit('/').next()?;
+    let version = file
+        .strip_prefix("gradle-")?
+        .strip_suffix(".zip")?
+        .trim_end_matches("-all")
+        .trim_end_matches("-bin");
+    (!version.is_empty()).then(|| version.to_string())
 }
 
 /// The quoted strings of a line, up to a `//` comment.
@@ -1752,6 +1858,10 @@ fn condition(cond: &str, vars: &BTreeMap<String, String>) -> Option<bool> {
         let right = right.strip_suffix(')')?;
         return Some(value(left)? == value(right)?);
     }
+    if let Some((left, right)) = c.split_once(".startsWith(") {
+        let right = right.strip_suffix(')')?;
+        return Some(value(left)?.starts_with(&value(right)?));
+    }
     if let Some(v) = vars.get(c) {
         return match v.as_str() {
             "true" => Some(true),
@@ -1856,9 +1966,16 @@ fn exclusion(line: &str) -> Option<(String, String)> {
         let tail = tail.strip_prefix([':', '='])?;
         quoted(tail.trim_start()).map(|(v, _)| v.to_string())
     };
-    let (group, module) = (value("group"), value("module"));
+    let (mut group, mut module) = (value("group"), value("module"));
     if group.is_none() && module.is_none() {
-        return None;
+        // The Kotlin DSL's positional `exclude("org.codehaus.groovy", "groovy")` (axion).
+        if rest.contains("mapOf") || rest.contains(" to ") {
+            return None;
+        }
+        let args = strings(rest);
+        group = args.first().cloned();
+        module = args.get(1).cloned();
+        group.as_ref()?;
     }
     Some((
         group.unwrap_or_else(|| "*".to_string()),
@@ -3312,6 +3429,91 @@ set = ["a-b", "e"]
             let want: Vec<_> = expected.iter().map(|v| (*v, *v == "1")).collect();
             assert_eq!(spring, want, "{configuration}: {:?}", r.missing);
         }
+    }
+
+    #[test]
+    fn forced_versions_win_conflict_resolution() {
+        // pulsar's `resolutionStrategy { force(...) }`, conductor's test-only force, and the
+        // kordamp enforcer's `ForceDependencies` rule in jreleaser's settings.
+        let repo = Mem(BTreeMap::from([
+            pom("a", "2", &[]),
+            pom("a", "1", &[]),
+            pom("t", "2", &[]),
+            pom("t", "1", &[]),
+            pom("k", "2", &[]),
+            pom("k", "1", &[]),
+        ]));
+        let dir = tree(
+            "forced",
+            &[
+                ("gradle.properties", "kVersion = 1\n"),
+                (
+                    "settings.gradle",
+                    "enforce {\n    rule(enforcer.rules.ForceDependencies) { r ->\n\
+                     \x20       r.dependencies.addAll \"g:k:$kVersion\",\n\
+                     \x20           \"g:other:3\"\n    }\n}\n",
+                ),
+                (
+                    "build.gradle",
+                    "dependencies {\n    implementation 'g:a:2'\n    implementation 'g:t:2'\n\
+                     \x20   implementation 'g:k:2'\n}\n\
+                     configurations.all {\n    resolutionStrategy {\n        force('g:a:1')\n    }\n}\n\
+                     configurations.matching { it.name.startsWith('test') }.configureEach {\n\
+                     \x20   resolutionStrategy.force 'g:t:1'\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        let of = |name: &str| -> Vec<(String, bool)> {
+            r.packages
+                .iter()
+                .filter(|p| p.name == name)
+                .map(|p| (p.version.clone(), p.dev))
+                .collect()
+        };
+        assert_eq!(of("g:a"), [("1".to_string(), false)], "{:?}", r.missing);
+        assert_eq!(of("g:k"), [("1".to_string(), false)], "{:?}", r.missing);
+        // Forced on the test classpaths only: 2 ships, 1 is what the tests run with.
+        assert_eq!(
+            of("g:t"),
+            [("1".to_string(), true), ("2".to_string(), false)],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn the_wrapper_decides_gradle_version_conditions() {
+        // axion: `if (GradleVersion.current().version.startsWith("9.")) { spock for groovy 4 }`,
+        // with a positional Kotlin `exclude(group, module)` in the taken branch.
+        let repo = Mem(BTreeMap::from([
+            pom("spock4", "1", &[]),
+            pom("spock3", "1", &[]),
+            pom("grgit", "1", &[("groovy", "3")]),
+            pom("groovy", "3", &[]),
+        ]));
+        let dir = tree(
+            "wrapper",
+            &[
+                ("settings.gradle.kts", ""),
+                (
+                    "gradle/wrapper/gradle-wrapper.properties",
+                    "distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.2-bin.zip\n",
+                ),
+                (
+                    "build.gradle.kts",
+                    "dependencies {\n    if (GradleVersion.current().version.startsWith(\"9.\")) {\n\
+                     \x20       implementation(\"g:spock4:1\")\n\
+                     \x20       implementation(\"g:grgit:1\") {\n\
+                     \x20           exclude(\"g\", \"groovy\")\n        }\n    } else {\n\
+                     \x20       implementation(\"g:spock3:1\")\n    }\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        let mut names: Vec<_> = r.packages.iter().map(|p| p.name.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(names, ["g:grgit", "g:spock4"], "{:?}", r.missing);
     }
 
     #[test]
