@@ -191,10 +191,15 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         .iter()
         .map(|m| {
             let (mut platforms, mut constraints) = (Vec::new(), Vec::new());
-            for path in &m.project_platforms {
+            for (path, strict) in &m.project_platforms {
                 if let Some(&i) = by_path.get(path) {
-                    platforms.extend_from_slice(&modules[i].platforms);
-                    constraints.extend_from_slice(&modules[i].constraints);
+                    // `enforcedPlatform(project(...))` forces what the platform project sets.
+                    let mark = |c: &Coordinate| Coordinate {
+                        strict: c.strict || *strict,
+                        ..c.clone()
+                    };
+                    platforms.extend(modules[i].platforms.iter().map(mark));
+                    constraints.extend(modules[i].constraints.iter().map(mark));
                 } else {
                     missing.insert(format!(
                         "platform project `{path}` is not a build file here"
@@ -695,6 +700,9 @@ struct Coordinate {
     /// Managed by the Spring dependency-management plugin (`mavenBom`, `dependency`, Spring
     /// Boot's BOM): its versions win over conflict resolution, as `eachDependency` sets them.
     enforced: bool,
+    /// From an `enforcedPlatform(...)`: its versions win over every request, a version the
+    /// build declares itself included.
+    strict: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -718,7 +726,7 @@ struct Module {
     shared: Shared,
     /// `platform(project(":p"))`: another build file's constraints and platforms manage this
     /// one (a `java-platform` project), by Gradle project path.
-    project_platforms: Vec<String>,
+    project_platforms: Vec<(String, bool)>,
     /// Where the root's shared platforms start in `platforms`: they are applied before this
     /// file's own, so a later import here overrides them.
     shared_from: Option<usize>,
@@ -729,7 +737,7 @@ struct Shared {
     deps: Vec<Declared>,
     platforms: Vec<Coordinate>,
     constraints: Vec<Coordinate>,
-    project_platforms: Vec<String>,
+    project_platforms: Vec<(String, bool)>,
 }
 
 impl Module {
@@ -763,6 +771,18 @@ impl Module {
                 .iter()
                 .filter(|d| d.coordinate.version.is_some())
                 .map(|d| (d.coordinate.group.clone(), d.coordinate.artifact.clone()))
+                .collect(),
+            strict_boms: shared
+                .iter()
+                .chain(own)
+                .filter(|c| c.strict)
+                .filter_map(triple)
+                .collect(),
+            strict_versions: self
+                .constraints
+                .iter()
+                .filter(|c| c.strict)
+                .filter_map(triple)
                 .collect(),
         }
     }
@@ -1092,6 +1112,7 @@ fn library(entry: &toml::Value, versions: Option<&toml::Value>) -> Result<Coordi
         artifact: artifact.to_string(),
         version: version.map(|v| version_text(&v)).transpose()?,
         enforced: false,
+        strict: false,
     })
 }
 
@@ -1147,6 +1168,7 @@ fn coordinate(text: &str, vars: &BTreeMap<String, String>) -> Result<Coordinate,
         artifact: artifact.to_string(),
         version: version.map(version_text).transpose()?,
         enforced: false,
+        strict: false,
     })
 }
 
@@ -1596,6 +1618,13 @@ fn condition(cond: &str, vars: &BTreeMap<String, String>) -> Option<bool> {
         let right = right.strip_suffix(')')?;
         return Some(value(left)? == value(right)?);
     }
+    if let Some(v) = vars.get(c) {
+        return match v.as_str() {
+            "true" => Some(true),
+            "false" => Some(false),
+            _ => None,
+        };
+    }
     for call in ["project.hasProperty(", "hasProperty("] {
         if let Some(inner) = c.strip_prefix(call) {
             let (key, tail) = quoted(inner)?;
@@ -1620,6 +1649,23 @@ fn property_default(value: &str, vars: &BTreeMap<String, String>) -> Option<Stri
         let tail = tail.trim_start().strip_prefix(',')?;
         let (default, end) = quoted(tail.trim_start())?;
         return (end.trim() == ")").then(|| default.to_string());
+    }
+    // `providers.gradleProperty("k").map { ... }.getOrElse(false)`: the default when unset.
+    for (prefix, settable) in [
+        ("providers.gradleProperty(", true),
+        ("providers.systemProperty(", false),
+    ] {
+        if let Some(inner) = v.strip_prefix(prefix) {
+            let (key, _) = quoted(inner)?;
+            if settable && vars.contains_key(key) {
+                return None;
+            }
+            let default = v.rsplit_once(".getOrElse(")?.1.strip_suffix(')')?.trim();
+            return match quoted(default) {
+                Some((d, tail)) if tail.trim().is_empty() => Some(d.to_string()),
+                _ => matches!(default, "true" | "false").then(|| default.to_string()),
+            };
+        }
     }
     let (call, default) = v.split_once("?:")?;
     let (default, tail) = quoted(default.trim())?;
@@ -1776,6 +1822,7 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
             artifact: "spring-boot-dependencies".to_string(),
             version: Some(version.clone()),
             enforced: context.spring_dm,
+            strict: false,
         });
     } else if id == KOTLIN_JVM {
         module.deps.push(Declared {
@@ -1784,6 +1831,7 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
                 artifact: "kotlin-stdlib".to_string(),
                 version: Some(version.clone()),
                 enforced: false,
+                strict: false,
             },
             scope: "compile",
             exclusions: Vec::new(),
@@ -1862,6 +1910,7 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
     read_values(rest, scope, block, context, module);
 }
 
+/// `read_declaration`, with what an `enforcedPlatform(...)` adds marked strict.
 fn read_values(
     text: &str,
     scope: &'static str,
@@ -1869,6 +1918,40 @@ fn read_values(
     context: &mut Context,
     module: &mut Module,
 ) {
+    let before = module.platforms.len();
+    read_declaration(text, scope, block, context, module);
+    if text
+        .trim()
+        .trim_start_matches('(')
+        .trim_start()
+        .starts_with("enforcedPlatform(")
+    {
+        for c in &mut module.platforms[before..] {
+            c.strict = true;
+        }
+    }
+}
+
+fn read_declaration(
+    text: &str,
+    scope: &'static str,
+    block: Block,
+    context: &mut Context,
+    module: &mut Module,
+) {
+    // `cond ? "g:a:1" : "g:a:2"`, when a default build decides `cond`.
+    if let Some((cond, branches)) = text.trim().trim_start_matches('(').split_once(" ? ") {
+        if let Some((yes, no)) = branches.split_once(" : ") {
+            let no = no.trim().trim_end_matches(')').trim();
+            if let Some(taken) = condition(cond, &context.vars) {
+                let pick = if taken { yes.trim() } else { no };
+                if quoted(pick).is_some_and(|(_, tail)| tail.trim().is_empty()) {
+                    read_values(pick, scope, block, context, module);
+                    return;
+                }
+            }
+        }
+    }
     let mut rest = text.trim().trim_start_matches('(').trim();
     let whole = text.trim();
     let add = |module: &mut Module, c: Coordinate, platform: bool| {
@@ -1901,9 +1984,11 @@ fn read_values(
         rest = inner.trim();
     }
     let mut platform = false;
+    let mut strict = false;
     for prefix in ["enforcedPlatform(", "platform(", "testFixtures("] {
         if let Some(inner) = rest.strip_prefix(prefix) {
             platform = prefix != "testFixtures(";
+            strict = prefix == "enforcedPlatform(";
             rest = inner.trim();
             break;
         }
@@ -1923,7 +2008,7 @@ fn read_values(
             .and_then(|p| quoted(p))
             .map(|(p, _)| p)
         {
-            module.project_platforms.push(path.to_string());
+            module.project_platforms.push((path.to_string(), strict));
             return;
         }
         // The Spring Boot plugin's BOM, at the version the plugin is declared with (even one
@@ -1935,6 +2020,7 @@ fn read_values(
                     artifact: "spring-boot-dependencies".to_string(),
                     version: Some(version.clone()),
                     enforced: false,
+                    strict: false,
                 };
                 if block == Block::Dependencies {
                     module.deps.push(Declared {
@@ -2025,6 +2111,7 @@ fn read_values(
                     artifact: format!("kotlin-{short}"),
                     version: Some(v.to_string()),
                     enforced: false,
+                    strict: false,
                 },
                 platform,
             ),
@@ -2933,6 +3020,15 @@ set = ["a-b", "e"]
             ),
             ["2"]
         );
+        // `enforcedPlatform` forces its version, over one the build declares too.
+        assert_eq!(
+            one(
+                "enforced-platform",
+                "dependencies {\n    implementation enforcedPlatform('g:bom:1')\n    implementation 'g:a:1'\n\
+                 \x20   implementation 'g:x:2'\n}\n"
+            ),
+            ["1"]
+        );
         // A plain platform only requests: the highest wins.
         assert_eq!(
             one(
@@ -2964,6 +3060,29 @@ set = ["a-b", "e"]
             Some("no")
         );
         assert_eq!(property_default("System.getenv('E') ?: 'x'", &vars), None);
+        assert_eq!(
+            property_default(
+                "providers.gradleProperty(\"toolchainVersion\").map { (it as int) < 21 }.getOrElse(false)",
+                &vars
+            )
+            .as_deref(),
+            Some("false")
+        );
+        assert_eq!(
+            property_default(
+                "providers.gradleProperty('fromProps').getOrElse('x')",
+                &vars
+            ),
+            None
+        );
+        vars.insert("old".to_string(), "false".to_string());
+        assert_eq!(condition("old", &vars), Some(false));
+        let mut c = context("", &[("old", "false")]);
+        let m = read_script(
+            "dependencies {\n    api(old ? \"g:j:9\" : \"g:j:10\")\n}\n",
+            &mut c,
+        );
+        assert_eq!(rows(&m), [("g:j:10".to_string(), "compile")]);
         vars.insert("e".to_string(), String::new());
         assert_eq!(condition("e == 'true'", &vars), Some(false));
         assert_eq!(condition("!(e != 'true')", &vars), Some(false));

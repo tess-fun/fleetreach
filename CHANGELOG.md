@@ -46,8 +46,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 83.0% of the 9,550 modules at Gradle's version and 88.7% by name, up from 59.7% and
-  70.0% on the same POMs; 92.2% and 96.5% on the 51 builds whose dependencies no build plugin
+  now lists 83.7% of the 9,550 modules at Gradle's version and 89.2% by name, up from 59.7% and
+  70.0% on the same POMs; 93.1% and 97.0% on the 51 builds whose dependencies no build plugin
   adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
@@ -55,9 +55,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over
   conflict resolution, a later import overriding an earlier one, as the plugin sets them;
-  a version the build declares itself is kept. A declared `platform(...)` is listed as a
+  a version the build declares itself is kept. An `enforcedPlatform(...)` forces its versions
+  even over ones the build declares. A declared `platform(...)` is listed as a
   module, as Gradle lists it, without its own dependencies. `if`/`else` branches a default
-  build decides (`System.properties['k'] ?: ''`, `findProperty`, `hasProperty`) are read. Newly read: the root's `subprojects`/`allprojects`/`configure` blocks, Spring
+  build decides (`System.properties['k'] ?: ''`, `findProperty`, `hasProperty`,
+  `providers.gradleProperty(...).getOrElse(...)`, a `cond ? 'a' : 'b'` coordinate) are read.
+  Newly read: the root's `subprojects`/`allprojects`/`configure` blocks, Spring
   `dependencyManagement` (BOM imports, managed versions, and project properties that override
   a BOM's properties), `platform(project(...))` from `java-platform` projects, the Spring Boot
   plugin's `BOM_COORDINATES`, catalog versions as `libs.versions.x`, catalogs declared in the
@@ -65,7 +68,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`strictly`, `require`, `prefer`), custom configurations that a standard one `extendsFrom`,
   map notation on custom configurations, ForgeGradle's `fg.deobf`, plugin versions from a
   `buildscript` `classpath` line with `apply plugin:`, Groovy map entries as `lib."k"`,
-  `set('grpc-java.version', ...)` properties, and variables that name other variables.
+  `set('grpc-java.version', ...)` properties, and variables that name other variables. The
+  harness is in `docs/differential/gradle`.
 - **POM relocations are followed.** A POM with `<distributionManagement><relocation>` resolves
   the way each tool does: Maven resolves the artifact as its new coordinate, and Gradle keeps
   the relocation POM and adds the target (Artemis moved from `org.apache.activemq` to
@@ -74,10 +78,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   POM's parents before interpolating (a project's `<jackson.version>` under a Spring Boot
   parent, artemis-jakarta-client's `jakarta.jms-api.version`). A version left naming an
   undefined property (its parent POM out of reach) is reported instead of listed as
-  `${...}`. Against real Maven 3.9.9 on 271 one-dependency projects built from published
-  artifacts with parents, every project now matches exactly: 1,875 of 1,875 packages, no
-  extras, every scope (before: 265 projects, 4 misses, 20 extras). The harness is in
-  `docs/differential/maven`. The harness is in `docs/differential/gradle`.
+  `${...}`.
+- **POM profiles switch on as Maven switches them.** A profile activated by the JDK
+  (`<jdk>[9,)</jdk>`, assumed a current JDK 21) or by an unset property (`!name`) now applies
+  in Maven builds, and an `activeByDefault` profile then stays off, as Maven decides
+  (xmlunit-core adds jakarta.xml.bind-api this way, so its findings were missed). Gradle builds
+  keep reading only `activeByDefault`, as Gradle does. Profiles that name an OS or a file
+  stay off. Against real Maven 3.9.9, offline in a container, every project now matches
+  exactly, every scope: 271 of 271 one-dependency projects built from published artifacts
+  with parents (1,875 packages; before: 265, 4 misses, 20 extras) and 109 of 109
+  six-dependency projects (3,478 packages; before: 96, 11 misses, 55 extras). The harness is
+  in `docs/differential/maven`.
 - **gradle-consistent-versions' `versions.lock` is read as a full lockfile** (beside its
   `versions.props`), checked so a damaged file is refused.
 - **POMs are read from Gradle's download cache** (`$GRADLE_USER_HOME` or `~/.gradle`,

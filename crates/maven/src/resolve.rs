@@ -248,7 +248,7 @@ fn parse_deps(list: Option<Node<'_, '_>>) -> Vec<Dep> {
         .collect()
 }
 
-fn parse_pom(xml: &str) -> Result<RawPom, String> {
+fn parse_pom(xml: &str, gradle: bool) -> Result<RawPom, String> {
     let doc = Document::parse(xml.trim_start_matches('\u{feff}')).map_err(|e| e.to_string())?;
     let project = doc.root_element();
     if project.tag_name().name() != "project" {
@@ -284,14 +284,30 @@ fn parse_pom(xml: &str) -> Result<RawPom, String> {
     };
     absorb(project, &mut pom);
     if let Some(profiles) = child(project, "profiles") {
-        for profile in children(profiles, "profile") {
-            let active = child(profile, "activation")
+        let profiles: Vec<_> = children(profiles, "profile").collect();
+        let by_default = |p: &Node<'_, '_>| {
+            child(*p, "activation")
                 .and_then(|a| text(a, "activeByDefault"))
                 .as_deref()
-                == Some("true");
-            if active {
-                absorb(profile, &mut pom);
-            }
+                == Some("true")
+        };
+        // Gradle honours only `activeByDefault`. Maven also switches profiles on by the
+        // build's JDK, and then the default ones only when none other in this POM is on.
+        let triggered: Vec<_> = if gradle {
+            Vec::new()
+        } else {
+            profiles
+                .iter()
+                .filter(|p| child(**p, "activation").is_some_and(maven_activation))
+                .collect()
+        };
+        let active: Vec<_> = if triggered.is_empty() {
+            profiles.iter().filter(|p| by_default(p)).collect()
+        } else {
+            triggered
+        };
+        for profile in active {
+            absorb(*profile, &mut pom);
         }
     }
     pom.relocation = child(project, "distributionManagement")
@@ -359,7 +375,7 @@ impl Resolver<'_> {
         if depth > MAX_DEPTH {
             return Err("parent or BOM chain too deep".into());
         }
-        let raw = parse_pom(xml)?;
+        let raw = parse_pom(xml, self.gradle)?;
         let parent = match &raw.parent {
             Some((g, a, v, rel)) => {
                 let local = dir.and_then(|d| {
@@ -372,7 +388,7 @@ impl Resolver<'_> {
                         path = path.join("pom.xml");
                     }
                     let text = fleetreach_core::repofile::read_to_string(&path).ok()?;
-                    let p = parse_pom(&text).ok()?;
+                    let p = parse_pom(&text, self.gradle).ok()?;
                     (p.artifact == *a).then_some((text, path.parent().map(Path::to_path_buf)))
                 });
                 match local {
@@ -676,6 +692,50 @@ fn interpolate(
     out
 }
 
+/// The `java.version` a Maven build is assumed to run on, for `<jdk>` profile activation:
+/// the current LTS, as the differential oracle runs it.
+const JAVA_VERSION: &str = "21.0.5";
+
+/// Whether a profile's `<activation>` conditions switch it on in a Maven build, as Maven 3.9
+/// decides: every condition present must hold, and at least one must be present. `<jdk>` is
+/// matched against [`JAVA_VERSION`] (a `[`/`(` range, else a prefix, `!` negating). `<property>`
+/// is matched with no user properties set, so only `!name` or a `!value` holds. `<os>` and
+/// `<file>` depend on the machine that builds, so a profile that names one stays off.
+fn maven_activation(activation: Node<'_, '_>) -> bool {
+    let mut any = false;
+    for c in activation.children().filter(Node::is_element) {
+        let holds = match c.tag_name().name() {
+            "activeByDefault" => continue,
+            "jdk" => {
+                let jdk = c.text().unwrap_or("").trim();
+                let (negate, jdk) = match jdk.strip_prefix('!') {
+                    Some(rest) => (true, rest.trim()),
+                    None => (false, jdk),
+                };
+                let matched = if jdk.starts_with(['[', '(']) {
+                    parse_ranges(jdk).is_some_and(|rs| rs.iter().any(|r| r.contains(JAVA_VERSION)))
+                } else {
+                    !jdk.is_empty() && JAVA_VERSION.starts_with(jdk)
+                };
+                matched != negate
+            }
+            "property" => {
+                let name = text(c, "name").unwrap_or_default();
+                match text(c, "value").filter(|v| !v.is_empty()) {
+                    Some(value) => value.starts_with('!'),
+                    None => name.starts_with('!'),
+                }
+            }
+            _ => false,
+        };
+        if !holds {
+            return false;
+        }
+        any = true;
+    }
+    any
+}
+
 /// One `[a,b)` style interval; `None` bounds are open.
 struct Interval {
     low: Option<(String, bool)>,
@@ -873,6 +933,9 @@ pub(crate) struct Enforced {
     pub boms: Vec<(String, String, String)>,
     pub versions: Vec<(String, String, String)>,
     pub keep: BTreeSet<(String, String)>,
+    /// `enforcedPlatform(...)`: BOMs and versions forced over everything, `keep` included.
+    pub strict_boms: Vec<(String, String, String)>,
+    pub strict_versions: Vec<(String, String, String)>,
 }
 
 pub(crate) fn resolve_gradle_module(
@@ -893,23 +956,35 @@ pub(crate) fn resolve_gradle_module(
     let modules = vec![r.effective(xml, None, 0)?];
     let local = BTreeMap::new();
     let mut forced = Pins::new();
-    for (g, a, v) in &enforced.boms {
-        r.importing = !r.bom_overrides.is_empty();
-        let bom = r.remote(g, a, v, 1);
-        r.importing = false;
-        for d in bom.iter().flat_map(|b| b.mgmt.values()) {
-            if let Some(version) = d.version.as_ref().filter(|v| !v.starts_with(['[', '('])) {
-                forced.insert(d.mgmt_key(), version.clone());
+    let force = |r: &mut Resolver<'_>,
+                 forced: &mut Pins,
+                 boms: &[(String, String, String)],
+                 versions: &[(String, String, String)]| {
+        for (g, a, v) in boms {
+            r.importing = !r.bom_overrides.is_empty();
+            let bom = r.remote(g, a, v, 1);
+            r.importing = false;
+            for d in bom.iter().flat_map(|b| b.mgmt.values()) {
+                if let Some(version) = d.version.as_ref().filter(|v| !v.starts_with(['[', '('])) {
+                    forced.insert(d.mgmt_key(), version.clone());
+                }
             }
         }
-    }
-    for (g, a, v) in &enforced.versions {
-        forced.insert(
-            (g.clone(), a.clone(), "jar".to_string(), String::new()),
-            v.clone(),
-        );
-    }
+        for (g, a, v) in versions {
+            forced.insert(
+                (g.clone(), a.clone(), "jar".to_string(), String::new()),
+                v.clone(),
+            );
+        }
+    };
+    force(&mut r, &mut forced, &enforced.boms, &enforced.versions);
     forced.retain(|k, _| !enforced.keep.contains(&(k.0.clone(), k.1.clone())));
+    force(
+        &mut r,
+        &mut forced,
+        &enforced.strict_boms,
+        &enforced.strict_versions,
+    );
     let mut pins = forced.clone();
     for _ in 0..MAX_PASSES {
         let mut requests = Pins::new();
@@ -1333,6 +1408,63 @@ mod tests {
             dep("g", "c", "1.5", ""), dep("g", "a", "1", "")));
         let r = resolve(&dir, &repo).unwrap();
         assert_eq!(rows(&r)[1], ("g:c".into(), "1.5".into(), false, false));
+    }
+
+    #[test]
+    fn profiles_switch_on_by_jdk_as_maven_decides() {
+        // xmlunit-core 2.9.0 adds jakarta.xml.bind-api in a `<jdk>[9,)</jdk>` profile, which
+        // Maven on a current JDK turns on. An activeByDefault profile then stays off, and
+        // profiles for an old JDK, an OS, or a set property never apply.
+        let profile = |id: &str, activation: &str, artifact: &str| {
+            format!(
+                "<profile><id>{id}</id><activation>{activation}</activation>\
+                 <dependencies>{}</dependencies></profile>",
+                dep("g", artifact, "1", "")
+            )
+        };
+        let profiles = [
+            profile("modern", "<jdk>[9,)</jdk>", "bind"),
+            profile(
+                "unset",
+                "<property><name>!skipBind</name></property>",
+                "unset",
+            ),
+            profile(
+                "default",
+                "<activeByDefault>true</activeByDefault>",
+                "default",
+            ),
+            profile("old", "<jdk>1.8</jdk>", "old"),
+            profile("notmodern", "<jdk>!21</jdk>", "notmodern"),
+            profile(
+                "os",
+                "<jdk>[9,)</jdk><os><family>windows</family></os>",
+                "os",
+            ),
+            profile("set", "<property><name>withExtra</name></property>", "set"),
+        ]
+        .concat();
+        let mut map = BTreeMap::from([(
+            "g:core:1".to_string(),
+            pom(
+                "g",
+                "core",
+                "1",
+                &format!("<profiles>{profiles}</profiles>"),
+            ),
+        )]);
+        for a in ["bind", "unset", "default", "old", "notmodern", "os", "set"] {
+            map.insert(format!("g:{a}:1"), pom("g", a, "1", ""));
+        }
+        let repo = Mem(map);
+        let dir = project(
+            "jdk-profiles",
+            &format!("<dependencies>{}</dependencies>", dep("g", "core", "1", "")),
+        );
+        let r = resolve(&dir, &repo).unwrap();
+        let mut got: Vec<_> = rows(&r).into_iter().map(|(n, _, _, _)| n).collect();
+        got.sort();
+        assert_eq!(got, ["g:bind", "g:core", "g:unset"], "{:?}", r.missing);
     }
 
     #[test]
