@@ -946,7 +946,15 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   after three fixes it found (a child's property sets its parent's managed versions; an
   undefined property is reported, not listed; profiles switch on by JDK, assumed 21, and
   by an unset `!name` property, with `activeByDefault` only when no other is on, in Maven
-  mode only). Known limit: Gradle keeps a dependency unless every path
+  mode only). Then on real repos (user approved fetching from Maven Central, 2026-11-14;
+  Maven also used the mirrors the projects' POMs declare): real Maven's per-module
+  `dependency:tree` for 14 multi-module repos (657 modules) against one fleetreach SBOM per
+  repo from the same POMs: all 3,555 packages match, 13 of 14 repos identical, 1 extra
+  (netty's OS-activated profile). Seven fixes came from it: nearer BOM imports first at
+  every inheritance level, managed exclusions at every depth, a module from the reactor
+  only at its exact version, `<optional>` from a property (Maven only; Gradle ignores it),
+  one-version ranges without metadata, direct dependencies above a sibling module's, and
+  Maven's own `<jdk>` range reader. Known limit: Gradle keeps a dependency unless every path
   to it excludes it, while the resolver applies the nearest path's exclusions (jreleaser, 1
   package). Every rule came from a real miss: root shared blocks
   (dgs 2% to 61%), Spring `dependencyManagement` read as management, BOM property overrides

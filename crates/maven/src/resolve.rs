@@ -169,6 +169,9 @@ struct Dep {
     kind: Option<String>,
     classifier: Option<String>,
     optional: bool,
+    /// An `<optional>` that names a property (`${prometheus.client.optional}` in the
+    /// Kubernetes client), decided when the dependency is interpolated.
+    optional_expr: Option<String>,
     exclusions: Vec<(String, String)>,
     /// From Gradle module metadata: a `platform` dependency, whose managed versions and
     /// constraints count as requests.
@@ -234,7 +237,8 @@ fn parse_deps(list: Option<Node<'_, '_>>) -> Vec<Dep> {
                 scope: text(d, "scope"),
                 kind: text(d, "type"),
                 classifier: text(d, "classifier"),
-                optional: text(d, "optional").as_deref() == Some("true"),
+                optional: text(d, "optional").is_some_and(|o| maven_true(&o)),
+                optional_expr: text(d, "optional").filter(|o| o.contains("${")),
                 exclusions: child(d, "exclusions")
                     .map(|ex| {
                         children(ex, "exclusion")
@@ -454,10 +458,13 @@ impl Resolver<'_> {
         }
         // Maven merges what a POM inherits before interpolating, so a property this POM sets
         // also decides a version its parent manages (`<jackson.version>` under a Boot parent).
+        // The merged model lists this POM's entries before its parent's, at every level, so
+        // a grandchild tries its parent's imports before its grandparent's (dubbo's Boot 1
+        // modules import Boot 1.5 under a parent whose own BOM imports Boot 2.7).
         let inherit = parent.as_ref().filter(|p| p.raw_inherited);
-        let mut raw_mgmt = inherit.map(|p| p.raw_mgmt.clone()).unwrap_or_default();
-        let parent_mgmt_len = raw_mgmt.len();
-        raw_mgmt.extend(raw.mgmt.iter().cloned());
+        let own_mgmt_len = raw.mgmt.len();
+        let mut raw_mgmt = raw.mgmt.clone();
+        raw_mgmt.extend(inherit.map(|p| p.raw_mgmt.clone()).unwrap_or_default());
         let mut raw_deps = inherit.map(|p| p.raw_deps.clone()).unwrap_or_default();
         raw_deps.extend(raw.deps.iter().cloned());
         // A parent read some other way keeps its own resolved entries.
@@ -465,22 +472,17 @@ impl Resolver<'_> {
             (Some(p), None) => p.mgmt.clone(),
             _ => BTreeMap::new(),
         };
-        let mut parent_imports = Vec::new();
         let mut imports = Vec::new();
         for (i, d) in raw_mgmt.iter().enumerate() {
             let d = self.interp_dep(d, &props);
             if d.scope.as_deref() == Some("import") {
-                // The merged model lists this POM's entries before its parents'.
-                if i < parent_mgmt_len {
-                    parent_imports.push(d);
-                } else {
-                    imports.push(d);
-                }
-                continue;
+                imports.push(d);
+            } else if i < own_mgmt_len {
+                mgmt.insert(d.mgmt_key(), d);
+            } else {
+                mgmt.entry(d.mgmt_key()).or_insert(d);
             }
-            mgmt.insert(d.mgmt_key(), d);
         }
-        imports.extend(parent_imports);
         // Imported BOMs add only what this POM (and its parents) did not manage itself.
         for bom in imports {
             let Some(v) = bom.version.clone() else {
@@ -591,6 +593,11 @@ impl Resolver<'_> {
         d.classifier = d
             .classifier
             .map(|v| interpolate(&v, props, &mut self.missing));
+        // Gradle never treats such a flag as optional: real Gradle lists the Kubernetes
+        // client's Google auth libraries (pulsar).
+        if let Some(o) = d.optional_expr.take().filter(|_| !self.gradle) {
+            d.optional = maven_true(&interpolate(&o, props, &mut self.missing));
+        }
         d
     }
 
@@ -718,6 +725,19 @@ impl Resolver<'_> {
         if !declared.starts_with(['[', '(']) {
             return Some(declared.to_string());
         }
+        // Maven's resolver takes a range of one version (`[1.53.0]`, `[1,1]`) as that version
+        // without reading metadata (grpc-netty-shaded pins grpc-core so).
+        if let Some(inner) = declared.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+            let bounds: Vec<&str> = inner.split(',').map(str::trim).collect();
+            let one = match bounds[..] {
+                [v] => Some(v),
+                [lo, hi] if lo == hi => Some(lo),
+                _ => None,
+            };
+            if let Some(v) = one.filter(|v| !v.is_empty() && !v.contains(['[', ']', '(', ')'])) {
+                return Some(v.to_string());
+            }
+        }
         let ranges = parse_ranges(declared)?;
         let listed = self
             .source
@@ -771,6 +791,70 @@ fn interpolate(
 /// the current LTS, as the differential oracle runs it.
 const JAVA_VERSION: &str = "21.0.5";
 
+/// Maven 3.9's `JdkVersionProfileActivator` range test, which is not the dependency range
+/// parser: the text is split on `,` (Java drops trailing empty pieces), each bound loses its
+/// brackets, a missing upper bound is open, and versions compare on three numeric parts.
+/// dubbo-test-check writes `<jdk>[17,</jdk>`, which Maven reads as 17 and later.
+fn jdk_in_range(java: &str, range: &str) -> bool {
+    let mut pieces: Vec<&str> = range.split(',').collect();
+    while pieces.len() > 1 && pieces.last() == Some(&"") {
+        pieces.pop();
+    }
+    let mut bounds: Vec<(String, bool)> = Vec::new();
+    for p in pieces {
+        if p.starts_with(['[', '(']) {
+            bounds.push((p.replace(['[', '('], ""), p.starts_with('[')));
+        } else if p.ends_with([']', ')']) {
+            bounds.push((p.replace([']', ')'], ""), p.ends_with(']')));
+        } else if p.is_empty() {
+            bounds.push((String::new(), false));
+        }
+    }
+    if bounds.len() < 2 {
+        bounds.push(("99999999".into(), false));
+    }
+    let parts = |s: &str, split: &[char]| -> Option<[u64; 3]> {
+        let mut out = [0; 3];
+        for (slot, t) in out.iter_mut().zip(s.split(split)) {
+            *slot = t.trim().parse().ok()?;
+        }
+        Some(out)
+    };
+    let kept: String = java
+        .chars()
+        .filter(|c| c.is_ascii_digit() || matches!(c, '.' | '-' | '_'))
+        .collect();
+    let Some(value) = parts(&kept, &['.', '-', '_']) else {
+        return false;
+    };
+    // Below (-1), at (0) or above (1) a bound; an open bound passes, a bound Maven
+    // cannot read as numbers never matches.
+    let relation = |(bound, closed): &(String, bool), left: bool| -> Option<i8> {
+        if bound.is_empty() {
+            return Some(if left { 1 } else { -1 });
+        }
+        let b = parts(bound, &['.'])?;
+        Some(match value.cmp(&b) {
+            std::cmp::Ordering::Less => -1,
+            std::cmp::Ordering::Greater => 1,
+            std::cmp::Ordering::Equal if !closed => {
+                if left {
+                    -1
+                } else {
+                    1
+                }
+            }
+            std::cmp::Ordering::Equal => 0,
+        })
+    };
+    match relation(&bounds[0], true) {
+        Some(0) => true,
+        Some(r) if r < 0 => false,
+        Some(_) => relation(&bounds[1], false).is_some_and(|r| r <= 0),
+        None => false,
+    }
+}
+
 /// Whether a profile's `<activation>` conditions switch it on in a Maven build, as Maven 3.9
 /// decides: every condition present must hold, and at least one must be present. `<jdk>` is
 /// matched against [`JAVA_VERSION`] (a `[`/`(` range, else a prefix, `!` negating). `<property>`
@@ -788,7 +872,7 @@ fn maven_activation(activation: Node<'_, '_>) -> bool {
                     None => (false, jdk),
                 };
                 let matched = if jdk.starts_with(['[', '(']) {
-                    parse_ranges(jdk).is_some_and(|rs| rs.iter().any(|r| r.contains(JAVA_VERSION)))
+                    jdk_in_range(JAVA_VERSION, jdk)
                 } else {
                     !jdk.is_empty() && JAVA_VERSION.starts_with(jdk)
                 };
@@ -1199,6 +1283,35 @@ fn request_constraints(eff: &Effective, platform: bool, requests: Option<&mut Pi
     }
 }
 
+/// Maven reads a POM boolean as Java's `Boolean.parseBoolean`: `true` in any case.
+fn maven_true(s: &str) -> bool {
+    s.trim().eq_ignore_ascii_case("true")
+}
+
+/// The build's own module that `dep` names, when its version is the module's: Maven takes a
+/// module from the reactor only at its exact version, and reads any other version from a
+/// repository (easyexcel manages its own `easyexcel-support` module at the published 3.3.4).
+/// An unknown or uninterpolated version still names the module.
+fn sibling<'a>(
+    local: &'a BTreeMap<(String, String), Effective>,
+    dep: &Dep,
+    version: Option<&str>,
+) -> Option<&'a Effective> {
+    let module = local.get(&dep.key())?;
+    let Some(wanted) = version.filter(|v| !v.contains("${")) else {
+        return Some(module);
+    };
+    let mut ignore = BTreeSet::new();
+    let own = module
+        .props
+        .get("project.version")
+        .map(|v| interpolate(v, &module.props, &mut ignore));
+    match own {
+        Some(own) if !own.contains("${") && own != wanted => None,
+        _ => Some(module),
+    }
+}
+
 /// Walk the dependency tree from `modules`. `pins` fix an artifact's version wherever it
 /// appears; `requests`, when given, collects the highest version each artifact was asked for.
 fn walk(
@@ -1218,19 +1331,13 @@ fn walk(
     let mut relocated: BTreeSet<(String, String, String)> = BTreeSet::new();
     // Sibling modules walked through so far, with the widest scope each was reached in.
     let mut through: BTreeMap<(String, String), String> = BTreeMap::new();
+    // A sibling module is queued like any direct dependency, and its own dependencies follow
+    // in its turn, a level below every direct one (nacos's adapter pins slf4j-api 1.7.26
+    // below an inherited dependency on its nacos-common module, which brings 2.0.13).
     for (i, m) in modules.iter().enumerate() {
         for d in &m.deps {
             let scope = d.scope.clone().unwrap_or_else(|| "compile".into());
             if matches!(scope.as_str(), "system" | "import") {
-                continue;
-            }
-            if let Some(sibling) = local.get(&d.key()) {
-                // A sibling module is part of the project, not a package: its dependencies
-                // join this module's tree, mediated here.
-                let name = format!("{}:{}", d.group, d.artifact);
-                graph.add_edges(ROOT, [name.clone()]);
-                through.insert(d.key(), scope.clone());
-                enqueue_children(sibling, &scope, &d.exclusions, 0, &name, i, &mut queue);
                 continue;
             }
             queue.push_back((
@@ -1243,13 +1350,34 @@ fn walk(
             ));
         }
     }
-    while let Some((dep, depth, parent, scope, exclusions, root_ix)) = queue.pop_front() {
+    while let Some((dep, depth, parent, scope, mut exclusions, root_ix)) = queue.pop_front() {
         let key = dep.mgmt_key();
         let name = format!("{}:{}", dep.group, dep.artifact);
+        // Maven's resolver adds a managed entry's exclusions at every depth (its version only
+        // below the direct ones), merged with the dependency's own: Spring Cloud's BOM keeps
+        // archaius-core out of eureka-client, and dubbo's keeps audience-annotations out of a
+        // zookeeper that lists exclusions of its own.
+        if !r.gradle {
+            if let Some(m) = modules[root_ix].mgmt.get(&key) {
+                exclusions.extend(m.exclusions.iter().cloned());
+            }
+        }
         graph.add_edges(&parent, [name.clone()]);
-        if let Some(sibling) = local.get(&dep.key()) {
-            // A sibling reached through another sibling is still part of the project: walk
-            // through it once per wider scope, which also stops a cycle between modules.
+        // A direct dependency's version is its own (management already filled a missing one);
+        // a transitive one takes the root's management first.
+        let managed_version = modules[root_ix]
+            .mgmt
+            .get(&key)
+            .and_then(|m| m.version.as_deref());
+        let wanted = if depth == 0 {
+            dep.version.as_deref()
+        } else {
+            managed_version.or(dep.version.as_deref())
+        };
+        if let Some(sibling) = sibling(local, &dep, wanted) {
+            // A sibling module is part of the project, not a package: its dependencies join
+            // this module's tree, mediated here. Walked through once per wider scope, which
+            // also stops a cycle between modules.
             let wider = through
                 .get(&dep.key())
                 .is_none_or(|seen| scope_rank(&scope) > scope_rank(seen));
@@ -1775,6 +1903,366 @@ mod tests {
         assert_eq!(
             rows(&r),
             [("g:lib".to_string(), "2".to_string(), true, false)],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn another_version_of_a_module_comes_from_the_repository() {
+        // easyexcel builds easyexcel-support 4.0.3 and manages it at the published 3.3.4:
+        // Maven reads 3.3.4 from the repository and lists it, with its own dependencies.
+        let dir = project(
+            "module-other-version",
+            &format!(
+                "<packaging>pom</packaging><modules><module>support</module>\
+                 <module>core</module></modules><dependencyManagement><dependencies>{}\
+                 </dependencies></dependencyManagement>",
+                dep("com.acme", "support", "0.9", "")
+            ),
+        );
+        for (m, body) in [
+            ("support", dep("g", "new", "1", "")),
+            (
+                "core",
+                "<dependency><groupId>com.acme</groupId><artifactId>support</artifactId>\
+                 </dependency>"
+                    .to_string(),
+            ),
+        ] {
+            std::fs::create_dir_all(dir.join(m)).unwrap();
+            std::fs::write(
+                dir.join(m).join("pom.xml"),
+                format!(
+                    "<project><parent><groupId>com.acme</groupId><artifactId>app</artifactId>\
+                     <version>1.0</version></parent><artifactId>{m}</artifactId>\
+                     <dependencies>{body}</dependencies></project>"
+                ),
+            )
+            .unwrap();
+        }
+        let repo = Mem(BTreeMap::from([
+            (
+                "com.acme:support:0.9".to_string(),
+                pom(
+                    "com.acme",
+                    "support",
+                    "0.9",
+                    &format!("<dependencies>{}</dependencies>", dep("g", "old", "1", "")),
+                ),
+            ),
+            ("g:new:1".to_string(), pom("g", "new", "1", "")),
+            ("g:old:1".to_string(), pom("g", "old", "1", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(
+            rows(&r),
+            [
+                ("g:new".to_string(), "1".to_string(), true, false),
+                (
+                    "com.acme:support".to_string(),
+                    "0.9".to_string(),
+                    true,
+                    false
+                ),
+                ("g:old".to_string(), "1".to_string(), false, false),
+            ],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn jdk_ranges_read_as_maven_reads_them() {
+        for (range, on) in [
+            ("[17,", true), // dubbo-test-check, no closing bracket
+            ("[17,)", true),
+            ("[9,)", true),
+            ("[21,22)", true),
+            ("(21.0.5,)", false),
+            ("[1.8,9)", false),
+            ("(,11]", false),
+            ("[22,)", false),
+            ("[x,)", false),
+        ] {
+            assert_eq!(jdk_in_range(JAVA_VERSION, range), on, "{range}");
+        }
+    }
+
+    #[test]
+    fn a_direct_dependency_beats_an_inherited_siblings() {
+        // nacos: logger-adapter-impl declares nacos-common (a module, bringing slf4j-api 2),
+        // and its child logback-adapter-12 pins slf4j-api 1 itself.
+        let dir = project(
+            "sibling-order",
+            "<packaging>pom</packaging><modules><module>common</module>\
+             <module>impl</module></modules>",
+        );
+        let child = |a: &str, parent: &str, body: &str| {
+            format!(
+                "<project><parent><groupId>com.acme</groupId><artifactId>{parent}</artifactId>\
+                 <version>1.0</version></parent><artifactId>{a}</artifactId>{body}</project>"
+            )
+        };
+        let common = format!("<dependencies>{}</dependencies>", dep("g", "lib", "2", ""));
+        let imp = format!(
+            "<packaging>pom</packaging><modules><module>adapter</module></modules>\
+             <dependencies>{}</dependencies>",
+            dep("com.acme", "common", "1.0", "")
+        );
+        let adapter = format!("<dependencies>{}</dependencies>", dep("g", "lib", "1", ""));
+        for (path, xml) in [
+            ("common", child("common", "app", &common)),
+            ("impl", child("impl", "app", &imp)),
+            ("impl/adapter", child("adapter", "impl", &adapter)),
+        ] {
+            std::fs::create_dir_all(dir.join(path)).unwrap();
+            std::fs::write(dir.join(path).join("pom.xml"), xml).unwrap();
+        }
+        let repo = Mem(BTreeMap::from([
+            ("g:lib:1".to_string(), pom("g", "lib", "1", "")),
+            ("g:lib:2".to_string(), pom("g", "lib", "2", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(
+            rows(&r),
+            [
+                ("g:lib".to_string(), "2".to_string(), true, false),
+                ("g:lib".to_string(), "1".to_string(), true, false),
+            ],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn a_one_version_range_needs_no_metadata() {
+        let dir = project(
+            "one-version-range",
+            &format!(
+                "<dependencies>{}{}</dependencies>",
+                dep("g", "a", "[2]", ""),
+                dep("g", "b", "[1, 1]", "")
+            ),
+        );
+        let repo = Mem(BTreeMap::from([
+            ("g:a:2".to_string(), pom("g", "a", "2", "")),
+            ("g:b:1".to_string(), pom("g", "b", "1", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(
+            rows(&r),
+            [
+                ("g:a".to_string(), "2".to_string(), true, false),
+                ("g:b".to_string(), "1".to_string(), true, false),
+            ],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn an_optional_flag_from_a_property() {
+        // The Kubernetes client marks its Prometheus, AWS and Google clients
+        // `<optional>${prometheus.client.optional}</optional>`, set in its parent.
+        let dir = project(
+            "optional-property",
+            &format!("<dependencies>{}</dependencies>", dep("g", "a", "1", "")),
+        );
+        let repo = Mem(BTreeMap::from([
+            (
+                "g:par:1".to_string(),
+                pom(
+                    "g",
+                    "par",
+                    "1",
+                    "<packaging>pom</packaging><properties><opt>True</opt></properties>",
+                ),
+            ),
+            (
+                "g:a:1".to_string(),
+                format!(
+                    "<project><parent><groupId>g</groupId><artifactId>par</artifactId>\
+                     <version>1</version></parent><artifactId>a</artifactId>\
+                     <dependencies>{}{}</dependencies></project>",
+                    dep("g", "gone", "1", "<optional>${opt}</optional>"),
+                    dep("g", "kept", "1", "<optional>${no.such}</optional>")
+                ),
+            ),
+            ("g:gone:1".to_string(), pom("g", "gone", "1", "")),
+            ("g:kept:1".to_string(), pom("g", "kept", "1", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(
+            rows(&r),
+            [
+                ("g:a".to_string(), "1".to_string(), true, false),
+                ("g:kept".to_string(), "1".to_string(), false, false),
+            ],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn managed_exclusions_prune_a_transitive_dependency() {
+        let dir = project(
+            "managed-exclusions",
+            &format!(
+                "<dependencyManagement><dependencies>{}</dependencies></dependencyManagement>\
+                 <dependencies>{}</dependencies>",
+                dep(
+                    "g",
+                    "b",
+                    "1",
+                    "<exclusions><exclusion><groupId>g</groupId><artifactId>gone</artifactId>\
+                     </exclusion></exclusions>"
+                ),
+                dep("g", "a", "1", "")
+            ),
+        );
+        let with = |a: &str, child: &str| {
+            pom(
+                "g",
+                a,
+                "1",
+                &format!("<dependencies>{}</dependencies>", dep("g", child, "1", "")),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            ("g:a:1".to_string(), with("a", "b")),
+            ("g:b:1".to_string(), with("b", "gone")),
+            ("g:gone:1".to_string(), pom("g", "gone", "1", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(
+            rows(&r),
+            [
+                ("g:a".to_string(), "1".to_string(), true, false),
+                ("g:b".to_string(), "1".to_string(), false, false),
+            ],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn managed_exclusions_join_a_direct_dependencys_own() {
+        // dubbo's zookeeper starter excludes logback itself; the managed entry's
+        // audience-annotations exclusion still applies.
+        let excl = |a: &str| {
+            format!("<exclusion><groupId>g</groupId><artifactId>{a}</artifactId></exclusion>")
+        };
+        let dir = project(
+            "managed-exclusions-direct",
+            &format!(
+                "<dependencyManagement><dependencies>{}</dependencies></dependencyManagement>\
+                 <dependencies>{}</dependencies>",
+                dep(
+                    "g",
+                    "zk",
+                    "1",
+                    &format!("<exclusions>{}</exclusions>", excl("audience"))
+                ),
+                dep(
+                    "g",
+                    "zk",
+                    "1",
+                    &format!("<exclusions>{}</exclusions>", excl("logback"))
+                )
+            ),
+        );
+        let repo = Mem(BTreeMap::from([
+            (
+                "g:zk:1".to_string(),
+                pom(
+                    "g",
+                    "zk",
+                    "1",
+                    &format!(
+                        "<dependencies>{}{}{}</dependencies>",
+                        dep("g", "audience", "1", ""),
+                        dep("g", "logback", "1", ""),
+                        dep("g", "jute", "1", "")
+                    ),
+                ),
+            ),
+            ("g:audience:1".to_string(), pom("g", "audience", "1", "")),
+            ("g:logback:1".to_string(), pom("g", "logback", "1", "")),
+            ("g:jute:1".to_string(), pom("g", "jute", "1", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(
+            rows(&r),
+            [
+                ("g:zk".to_string(), "1".to_string(), true, false),
+                ("g:jute".to_string(), "1".to_string(), false, false),
+            ],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn a_parents_import_beats_the_grandparents() {
+        // dubbo's Boot 1 modules: the root imports a BOM managing Boot 2.7, their parent
+        // imports Boot 1.5, and Maven tries the nearer import first.
+        let import = |a: &str| {
+            format!(
+                "<dependencyManagement><dependencies><dependency><groupId>b</groupId>\
+                 <artifactId>{a}</artifactId><version>1</version><type>pom</type>\
+                 <scope>import</scope></dependency></dependencies></dependencyManagement>"
+            )
+        };
+        let dir = project(
+            "nearer-import",
+            &format!(
+                "<packaging>pom</packaging><modules><module>mid</module></modules>{}",
+                import("new")
+            ),
+        );
+        std::fs::create_dir_all(dir.join("mid").join("leaf")).unwrap();
+        std::fs::write(
+            dir.join("mid").join("pom.xml"),
+            format!(
+                "<project><parent><groupId>com.acme</groupId><artifactId>app</artifactId>\
+                 <version>1.0</version></parent><artifactId>mid</artifactId>\
+                 <packaging>pom</packaging><modules><module>leaf</module></modules>{}\
+                 </project>",
+                import("old")
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("mid").join("leaf").join("pom.xml"),
+            "<project><parent><groupId>com.acme</groupId><artifactId>mid</artifactId>\
+             <version>1.0</version></parent><artifactId>leaf</artifactId><dependencies>\
+             <dependency><groupId>g</groupId><artifactId>lib</artifactId></dependency>\
+             </dependencies></project>",
+        )
+        .unwrap();
+        let bom = |a: &str, v: &str| {
+            pom(
+                "b",
+                a,
+                "1",
+                &format!(
+                    "<packaging>pom</packaging><dependencyManagement><dependencies>{}\
+                     </dependencies></dependencyManagement>",
+                    dep("g", "lib", v, "")
+                ),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            ("b:new:1".to_string(), bom("new", "2")),
+            ("b:old:1".to_string(), bom("old", "1")),
+            ("g:lib:1".to_string(), pom("g", "lib", "1", "")),
+            ("g:lib:2".to_string(), pom("g", "lib", "2", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(
+            rows(&r),
+            [("g:lib".to_string(), "1".to_string(), true, false)],
             "{:?}",
             r.missing
         );
