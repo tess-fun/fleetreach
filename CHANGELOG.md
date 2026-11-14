@@ -138,6 +138,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   declares Red Hat's, so `lang-tag [1.4.3,)` is 1.7.0.redhat-00003); a module's own dependencies come before inherited ones; a
   managed `provided` or `test` scope holds on every path; and element names XML forbids but
   Maven reads (`<Xlint:-unchecked/>`) no longer fail the POM.
+- **And on a third batch of 30 real repos: 1,697 of 1,767 modules identical, the other 70
+  differing only by OS- or CPU-activated profiles.** Real Maven's per-module tree for
+  shardingsphere, inlong, cxf, tika, hudi, streampipes and 23 others (kylin left out: its
+  build needs a private repository). The fixes: a `test-jar` dependency is the `tests` jar
+  for mediation and management (hudi-io); `.mvn/maven.config` profiles and `-D` properties
+  apply (spring-cloud-gateway); an exclusion can name a property (drill's
+  `${calcite.groupId}`); a scope Maven does not know, such as `optional`, still takes part in
+  mediation (kudu-client's audience-annotations in hive); `RELEASE` and `LATEST` versions
+  come from the newest repository metadata (COLA's junit-jupiter); and a published POM
+  whose `system` dependency has no absolute path is read with no dependencies, as Maven
+  does (druid 1.2.6 in inlong).
 - **gradle-consistent-versions' `versions.lock` is read as a full lockfile** (beside its
   `versions.props`), checked so a damaged file is refused.
 - **POMs are read from Gradle's download cache** (`$GRADLE_USER_HOME` or `~/.gradle`,

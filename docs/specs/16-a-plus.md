@@ -963,7 +963,11 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   `<file>` activation in the checkout, a widened winner keeps its own exclusions and depth,
   a range stops at its first relocating version, a range's winner keeps its own subtree,
   declared repositories' local version listings join a range, own dependencies before inherited ones, managed
-  provided/test scope on every path, and element names XML forbids. Known limit: Gradle keeps a dependency unless every path
+  provided/test scope on every path, and element names XML forbids. A third batch of 30 repos: 1,697 of 1,767
+  modules identical, the other 70 only OS/CPU profiles (kylin skipped, private repository).
+  Fixes: `test-jar` as the `tests` jar, `.mvn/maven.config` `-P`/`-D`, exclusions
+  interpolated, unknown scopes kept in mediation, `RELEASE`/`LATEST` from metadata, and a
+  published POM with a relative `systemPath` read with no dependencies. Known limit: Gradle keeps a dependency unless every path
   to it excludes it, while the resolver applies the nearest path's exclusions (jreleaser, 1
   package). Every rule came from a real miss: root shared blocks
   (dgs 2% to 61%), Spring `dependencyManagement` read as management, BOM property overrides

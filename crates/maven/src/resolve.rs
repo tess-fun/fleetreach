@@ -204,11 +204,59 @@ struct Dep {
     platform: bool,
     /// Relocations followed to reach this coordinate, which bounds a relocation cycle.
     hops: u8,
+    /// A `system` dependency's `<systemPath>`.
+    system_path: Option<String>,
 }
 
 impl Dep {
+    /// A `system` dependency whose path Maven's model validator rejects: missing, or not
+    /// absolute. A property Maven fills from its own environment (`${java.home}`,
+    /// `${env.JAVA_HOME}`) counts as absolute.
+    fn bad_system_path(&self) -> bool {
+        if self.scope.as_deref() != Some("system") {
+            return false;
+        }
+        let Some(path) = self.system_path.as_deref().map(str::trim) else {
+            return true;
+        };
+        let bytes = path.as_bytes();
+        let drive = bytes.len() > 2
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b':'
+            && matches!(bytes[2], b'/' | b'\\');
+        let from_env = ["${env.", "${java.home}", "${user.home}", "${maven.home}"]
+            .iter()
+            .any(|p| path.starts_with(p));
+        !(path.starts_with(['/', '\\']) || drive || from_env)
+    }
     fn key(&self) -> (String, String) {
         (self.group.clone(), self.artifact.clone())
+    }
+    /// The artifact this dependency names as Maven's resolver sees it: group, artifact, file
+    /// extension and classifier, a type becoming its extension and default classifier
+    /// (`test-jar` is `jar` + `tests`). Mediation and transitive management go by this:
+    /// hadoop-minicluster's `test-jar` hadoop-common is hudi's managed `tests` jar.
+    fn artifact_key(&self) -> (String, String, String, String) {
+        let kind = self.kind.as_deref().unwrap_or("jar");
+        let (ext, classifier) = match kind {
+            "test-jar" => ("jar", "tests"),
+            "ejb-client" => ("jar", "client"),
+            "java-source" => ("jar", "sources"),
+            "javadoc" => ("jar", "javadoc"),
+            "ejb" | "maven-plugin" | "java" => ("jar", ""),
+            other => (other, ""),
+        };
+        let classifier = self
+            .classifier
+            .clone()
+            .filter(|c| !c.is_empty())
+            .unwrap_or_else(|| classifier.to_string());
+        (
+            self.group.clone(),
+            self.artifact.clone(),
+            ext.to_string(),
+            classifier,
+        )
     }
     fn mgmt_key(&self) -> (String, String, String, String) {
         (
@@ -278,6 +326,7 @@ fn parse_deps(list: Option<Node<'_, '_>>) -> Vec<Dep> {
                     .unwrap_or_default(),
                 platform: false,
                 hops: 0,
+                system_path: text(d, "systemPath"),
             })
         })
         .collect()
@@ -335,12 +384,77 @@ fn drop_plain_doctype(xml: &str) -> Option<String> {
 }
 
 fn parse_pom(xml: &str, gradle: bool) -> Result<RawPom, String> {
-    parse_pom_in(xml, gradle, None)
+    parse_pom_in(xml, gradle, None, &MavenCli::default())
+}
+
+/// The `-P` and `-D` arguments of a build's `.mvn/maven.config`, which Maven puts in front
+/// of every command line (spring-cloud-gateway's `-P spring`).
+#[derive(Debug, Clone, Default)]
+struct MavenCli {
+    /// Profile ids switched on, for the build's own POMs.
+    on: BTreeSet<String>,
+    /// Profile ids switched off (`!id` or `-id`).
+    off: BTreeSet<String>,
+    /// User properties: they decide `<property>` activation and override POM properties.
+    props: BTreeMap<String, String>,
+}
+
+impl MavenCli {
+    /// Read `<dir>/.mvn/maven.config`; a missing or unreadable file is an empty one. Every
+    /// other option (`-T1C`, `--no-transfer-progress`) is ignored, and `#` starts a comment.
+    fn read(dir: &Path) -> Self {
+        let mut cli = Self::default();
+        let Ok(text) =
+            fleetreach_core::repofile::read_to_string(dir.join(".mvn").join("maven.config"))
+        else {
+            return cli;
+        };
+        let tokens: Vec<&str> = text
+            .lines()
+            .map(|l| l.split('#').next().unwrap_or(""))
+            .flat_map(str::split_whitespace)
+            .collect();
+        let mut i = 0;
+        while i < tokens.len() {
+            let t = tokens[i];
+            i += 1;
+            let mut value = |flag: &str, long: &str| -> Option<String> {
+                if t == flag || t == long {
+                    let v = tokens.get(i).map(|v| (*v).to_string());
+                    i += 1;
+                    v
+                } else {
+                    t.strip_prefix(flag)
+                        .filter(|v| !v.is_empty())
+                        .map(str::to_string)
+                }
+            };
+            if let Some(list) = value("-P", "--activate-profiles") {
+                for id in list.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                    match id.strip_prefix(['!', '-']) {
+                        Some(off) => cli.off.insert(off.trim_start_matches('?').to_string()),
+                        None => cli.on.insert(id.trim_start_matches(['+', '?']).to_string()),
+                    };
+                }
+            } else if let Some(def) = value("-D", "--define") {
+                let (k, v) = def.split_once('=').unwrap_or((def.as_str(), "true"));
+                if !k.is_empty() {
+                    cli.props.insert(k.to_string(), v.to_string());
+                }
+            }
+        }
+        cli
+    }
 }
 
 /// [`parse_pom`] for a POM of this build, in `basedir`, where a profile's `<file>` activation
-/// is checked against the checkout.
-fn parse_pom_in(xml: &str, gradle: bool, basedir: Option<&Path>) -> Result<RawPom, String> {
+/// is checked against the checkout and `.mvn/maven.config`'s `-P` ids apply.
+fn parse_pom_in(
+    xml: &str,
+    gradle: bool,
+    basedir: Option<&Path>,
+    cli: &MavenCli,
+) -> Result<RawPom, String> {
     let xml = xml.trim_start_matches('\u{feff}');
     let repaired;
     let doc = match Document::parse(xml) {
@@ -397,17 +511,30 @@ fn parse_pom_in(xml: &str, gradle: bool, basedir: Option<&Path>) -> Result<RawPo
                 == Some("true")
         };
         // Gradle honours only `activeByDefault`. Maven also switches profiles on by the
-        // build's JDK, and then the default ones only when none other in this POM is on.
+        // build's JDK, and then the default ones only when none other in this POM is on. In
+        // the build's own POMs, `-P` ids from `.mvn/maven.config` switch profiles on or off.
+        let id = |p: &Node<'_, '_>| text(*p, "id").unwrap_or_default();
+        let named = |p: &Node<'_, '_>, set: &BTreeSet<String>| {
+            !gradle && basedir.is_some() && set.contains(&id(p))
+        };
         let triggered: Vec<_> = if gradle {
             Vec::new()
         } else {
             profiles
                 .iter()
-                .filter(|p| child(**p, "activation").is_some_and(|a| maven_activation(a, basedir)))
+                .filter(|p| !named(p, &cli.off))
+                .filter(|p| {
+                    named(p, &cli.on)
+                        || child(**p, "activation")
+                            .is_some_and(|a| maven_activation(a, basedir, &cli.props))
+                })
                 .collect()
         };
         let active: Vec<_> = if triggered.is_empty() {
-            profiles.iter().filter(|p| by_default(p)).collect()
+            profiles
+                .iter()
+                .filter(|p| by_default(p) && !named(p, &cli.off))
+                .collect()
         } else {
             triggered
         };
@@ -501,6 +628,8 @@ struct Resolver<'s> {
     loose: BTreeSet<MgmtKey>,
     /// The repository ids this Maven build's own POMs declare.
     repo_ids: BTreeSet<String>,
+    /// The build's `.mvn/maven.config` arguments (Maven only).
+    cli: MavenCli,
 }
 
 impl Resolver<'_> {
@@ -514,7 +643,7 @@ impl Resolver<'_> {
         if depth > MAX_DEPTH {
             return Err("parent or BOM chain too deep".into());
         }
-        let raw = parse_pom_in(xml, self.gradle, dir)?;
+        let raw = parse_pom_in(xml, self.gradle, dir, &self.cli)?;
         let parent = match &raw.parent {
             Some((g, a, v, rel)) => {
                 let local = dir.and_then(|d| {
@@ -553,6 +682,12 @@ impl Resolver<'_> {
         let mut props: BTreeMap<String, String> =
             parent.as_ref().map(|p| p.props.clone()).unwrap_or_default();
         props.extend(raw.properties.clone());
+        // Maven's user properties (`-D`) override what a POM sets.
+        if !self.gradle {
+            for (k, v) in &self.cli.props {
+                props.insert(k.clone(), v.clone());
+            }
+        }
         if self.importing {
             for (k, v) in &self.bom_overrides {
                 if let Some(slot) = props.get_mut(k) {
@@ -752,6 +887,16 @@ impl Resolver<'_> {
         d.classifier = d
             .classifier
             .map(|v| interpolate(&v, props, &mut self.missing));
+        d.system_path = d
+            .system_path
+            .map(|v| interpolate(&v, props, &mut BTreeSet::new()));
+        // Exclusions are part of the model too: drill's JDBC driver excludes
+        // `${calcite.groupId}:calcite-core` from its java-exec module.
+        let mut quiet = BTreeSet::new();
+        for (g, a) in &mut d.exclusions {
+            *g = interpolate(g, props, &mut quiet);
+            *a = interpolate(a, props, &mut quiet);
+        }
         // Gradle never treats such a flag as optional: real Gradle lists the Kubernetes
         // client's Google auth libraries (pulsar).
         if let Some(o) = d.optional_expr.take().filter(|_| !self.gradle) {
@@ -787,7 +932,19 @@ impl Resolver<'_> {
                 }
             }
             Some(xml) => match self.effective(&xml, None, depth) {
-                Ok(eff) => Some(eff),
+                Ok(mut eff) => {
+                    // Maven refuses a published model whose `system` dependency has no
+                    // absolute `<systemPath>` and lists the artifact with no dependencies:
+                    // druid 1.2.6 points at `${project.basedir}/lib/openjdk-1.8-tools.jar`.
+                    if !self.gradle && eff.deps.iter().any(Dep::bad_system_path) {
+                        self.missing.insert(format!(
+                            "{g}:{a}:{v}: a system dependency has no absolute systemPath, \
+                             so Maven reads none of its dependencies"
+                        ));
+                        eff.deps.clear();
+                    }
+                    Some(eff)
+                }
                 Err(e) => {
                     self.missing.insert(format!("{g}:{a}:{v}: {e}"));
                     None
@@ -901,6 +1058,45 @@ impl Resolver<'_> {
         listed
     }
 
+    /// The version Maven's `RELEASE` or `LATEST` stands for: the `<release>` or `<latest>` of
+    /// the repository metadata updated last (COLA's state machine asks junit-jupiter
+    /// `RELEASE`). Recorded as missing when no metadata names one.
+    fn meta_version(&mut self, g: &str, a: &str, which: &str) -> Option<String> {
+        let tag = if which == "RELEASE" {
+            "release"
+        } else {
+            "latest"
+        };
+        let mut files: Vec<String> = self.source.metadata(g, a).into_iter().collect();
+        for id in &self.repo_ids {
+            files.extend(self.source.repo_metadata(g, a, id));
+        }
+        let picked = files
+            .iter()
+            .filter_map(|xml| {
+                let doc = Document::parse(xml).ok()?;
+                let field = |name: &str| {
+                    doc.descendants()
+                        .find(|n| {
+                            n.tag_name().name() == name
+                                && n.parent()
+                                    .is_some_and(|p| p.tag_name().name() == "versioning")
+                        })
+                        .and_then(|n| n.text())
+                        .map(|t| t.trim().to_string())
+                        .filter(|t| !t.is_empty())
+                };
+                Some((field("lastUpdated").unwrap_or_default(), field(tag)?))
+            })
+            .max()
+            .map(|(_, v)| v);
+        if picked.is_none() {
+            self.missing
+                .insert(format!("{g}:{a}: no metadata names its {which} version"));
+        }
+        picked
+    }
+
     /// Maven's collector reads a range's versions lowest first and stops at the first one that
     /// relocates, following the relocation instead (system-rules asks `junit:junit-dep
     /// [4.9,)`: 4.9 and 4.10, then 4.11-beta-1 moves to `junit:junit`, whose conflict the
@@ -930,6 +1126,9 @@ impl Resolver<'_> {
     /// A concrete version for a declared one: as is, or the highest listed match of a range.
     fn pick_version(&mut self, g: &str, a: &str, declared: &str) -> Option<String> {
         let declared = declared.trim();
+        if !self.gradle && matches!(declared, "RELEASE" | "LATEST") {
+            return self.meta_version(g, a, declared);
+        }
         if !declared.starts_with(['[', '(']) {
             return Some(declared.to_string());
         }
@@ -1066,7 +1265,11 @@ fn jdk_in_range(java: &str, range: &str) -> bool {
 /// is matched with no user properties set, so only `!name` or a `!value` holds. `<file>` is
 /// checked in the build's own folder (`basedir`) and is off for a published POM. `<os>`
 /// depends on the machine that builds, so a profile that names one stays off.
-fn maven_activation(activation: Node<'_, '_>, basedir: Option<&Path>) -> bool {
+fn maven_activation(
+    activation: Node<'_, '_>,
+    basedir: Option<&Path>,
+    user: &BTreeMap<String, String>,
+) -> bool {
     let mut any = false;
     for c in activation.children().filter(Node::is_element) {
         let holds = match c.tag_name().name() {
@@ -1086,9 +1289,17 @@ fn maven_activation(activation: Node<'_, '_>, basedir: Option<&Path>) -> bool {
             }
             "property" => {
                 let name = text(c, "name").unwrap_or_default();
+                let (negate, name) = match name.strip_prefix('!') {
+                    Some(n) => (true, n.to_string()),
+                    None => (false, name),
+                };
+                let set = user.get(&name);
                 match text(c, "value").filter(|v| !v.is_empty()) {
-                    Some(value) => value.starts_with('!'),
-                    None => name.starts_with('!'),
+                    Some(value) => match value.strip_prefix('!') {
+                        Some(not) => set.is_none_or(|v| v != not),
+                        None => set.is_some_and(|v| *v == value),
+                    },
+                    None => set.is_some() != negate,
                 }
             }
             "file" => basedir.is_some_and(|b| file_activation(c, b)),
@@ -1206,18 +1417,24 @@ const COMPILE_ONLY_API: &str = "compile-only-api";
 
 /// Maven's scope of a transitive dependency (`child`) reached through one in `parent`
 /// scope; `None` when it is not on any classpath.
-fn propagate(parent: &str, child: &str) -> Option<&'static str> {
-    match (parent, child) {
-        ("compile" | "provided", COMPILE_ONLY_API) => Some("provided"),
-        ("test", COMPILE_ONLY_API) => Some("test"),
-        (_, COMPILE_ONLY_API) => None,
-        (_, "test" | "provided" | "system" | "import") => None,
-        ("compile", "compile") => Some("compile"),
-        ("compile", "runtime") | ("runtime", "compile" | "runtime") => Some("runtime"),
-        ("provided", "compile" | "runtime") => Some("provided"),
-        ("test", "compile" | "runtime") => Some("test"),
-        _ => None,
-    }
+fn propagate(parent: &str, child: &str) -> Option<String> {
+    let scope = match (parent, child) {
+        ("compile" | "provided", COMPILE_ONLY_API) => "provided",
+        ("test", COMPILE_ONLY_API) => "test",
+        (_, COMPILE_ONLY_API) => return None,
+        (_, "test" | "provided" | "system" | "import") => return None,
+        ("compile", "compile") => "compile",
+        ("compile", "runtime") | ("runtime", "compile" | "runtime") => "runtime",
+        ("provided", "compile" | "runtime") => "provided",
+        ("test", "compile" | "runtime") => "test",
+        // A scope Maven does not know is kept below a compile one and otherwise takes the
+        // parent's: kudu-client 1.17.0 lists audience-annotations as `optional`, which still
+        // wins mediation in hive's kudu handler.
+        ("compile", other) => other,
+        ("test" | "runtime" | "provided", _) => parent,
+        _ => return None,
+    };
+    Some(scope.to_string())
 }
 
 /// How broad a scope is, for Maven's widening when one artifact is reached by several paths.
@@ -1270,7 +1487,7 @@ fn enqueue_children(
             child.clone(),
             depth + 1,
             name.to_string(),
-            next_scope.to_string(),
+            next_scope,
             ex,
             root_ix,
         ));
@@ -1352,6 +1569,7 @@ fn resolve_modules(
         chosen: BTreeMap::new(),
         loose: BTreeSet::new(),
         repo_ids: BTreeSet::new(),
+        cli: MavenCli::read(dir),
     };
     // Where each module lives, first, so the reactor can serve its own parents and BOMs.
     let mut stack = vec![dir.to_path_buf()];
@@ -1363,7 +1581,7 @@ fn resolve_modules(
         let Ok(xml) = fleetreach_core::repofile::read_to_string(d.join("pom.xml")) else {
             continue;
         };
-        let Ok(raw) = parse_pom_in(&xml, false, Some(&d)) else {
+        let Ok(raw) = parse_pom_in(&xml, false, Some(&d), &r.cli) else {
             continue;
         };
         r.repo_ids.extend(raw.repositories.iter().cloned());
@@ -1444,6 +1662,7 @@ pub(crate) fn resolve_gradle_module(
         chosen: BTreeMap::new(),
         loose: BTreeSet::new(),
         repo_ids: BTreeSet::new(),
+        cli: MavenCli::default(),
     };
     let modules = vec![r.effective(xml, None, 0)?];
     let local = BTreeMap::new();
@@ -1687,15 +1906,43 @@ fn walk(
             ));
         }
     }
+    // Maven's resolver manages and mediates by artifact (extension and classifier), Gradle
+    // here by the declared type.
+    let art_mgmt: Vec<BTreeMap<MgmtKey, &Dep>> = modules
+        .iter()
+        .map(|m| {
+            let mut by_artifact = BTreeMap::new();
+            for exact in [true, false] {
+                for (k, d) in &m.mgmt {
+                    if (d.artifact_key() == *k) == exact {
+                        by_artifact.entry(d.artifact_key()).or_insert(d);
+                    }
+                }
+            }
+            by_artifact
+        })
+        .collect();
+    let gradle = r.gradle;
+    let mgmt_of = |root_ix: usize, key: &MgmtKey| -> Option<&Dep> {
+        if gradle {
+            modules[root_ix].mgmt.get(key)
+        } else {
+            art_mgmt[root_ix].get(key).copied()
+        }
+    };
     while let Some((dep, depth, parent, scope, mut exclusions, root_ix)) = queue.pop_front() {
-        let key = dep.mgmt_key();
+        let key = if r.gradle {
+            dep.mgmt_key()
+        } else {
+            dep.artifact_key()
+        };
         let name = format!("{}:{}", dep.group, dep.artifact);
         // Maven's resolver adds a managed entry's exclusions at every depth (its version only
         // below the direct ones), merged with the dependency's own: Spring Cloud's BOM keeps
         // archaius-core out of eureka-client, and dubbo's keeps audience-annotations out of a
         // zookeeper that lists exclusions of its own.
         if !r.gradle {
-            if let Some(m) = modules[root_ix].mgmt.get(&key) {
+            if let Some(m) = mgmt_of(root_ix, &key) {
                 exclusions.extend(m.exclusions.iter().cloned());
             }
         }
@@ -1764,7 +2011,7 @@ fn walk(
             }
         }
         if let Some(requests) = requests.as_deref_mut() {
-            let managed = modules[root_ix].mgmt.get(&key);
+            let managed = mgmt_of(root_ix, &key);
             for version in [
                 dep.version.as_ref(),
                 managed.and_then(|m| m.version.as_ref()),
@@ -1780,7 +2027,7 @@ fn walk(
             // dependencies are followed again in the wider scope. Maven's managed scope holds
             // on every path (seatunnel manages log4j as provided, under hadoop-auth too).
             let managed_scope = (depth > 0 && !r.gradle)
-                .then(|| modules[root_ix].mgmt.get(&key))
+                .then(|| mgmt_of(root_ix, &key))
                 .flatten()
                 .and_then(|m| m.scope.clone())
                 .filter(|s| s != "import");
@@ -1798,9 +2045,7 @@ fn walk(
             continue;
         }
         // The root's management sets transitive versions and scopes.
-        let managed = (depth > 0)
-            .then(|| modules[root_ix].mgmt.get(&dep.mgmt_key()))
-            .flatten();
+        let managed = (depth > 0).then(|| mgmt_of(root_ix, &key)).flatten();
         // A Maven range pin goes to the nearest occurrence that asks for the pinned version
         // itself, which keeps that node's own subtree and exclusions (seatunnel: vitess's
         // grpc-core 1.33.0 wins, not firestore's, which excludes grpc-api from it).
@@ -3223,6 +3468,254 @@ mod tests {
     }
 
     #[test]
+    fn a_test_jar_is_the_tests_classifier_jar() {
+        // hudi manages hadoop-common's `tests` jar at 2.10.2; hadoop-minicluster asks the same
+        // artifact as `<type>test-jar</type>` 2.10.0, which Maven manages and mediates as one.
+        let dir = project(
+            "test-jar",
+            &format!(
+                "<dependencyManagement><dependencies>{}</dependencies></dependencyManagement>\
+                 <dependencies>{}{}</dependencies>",
+                dep("g", "common", "2", "<classifier>tests</classifier>"),
+                dep("g", "common", "2", "<classifier>tests</classifier>"),
+                dep("g", "mini", "1", "")
+            ),
+        );
+        let repo = Mem(BTreeMap::from([
+            (
+                "g:mini:1".to_string(),
+                pom(
+                    "g",
+                    "mini",
+                    "1",
+                    &format!(
+                        "<dependencies>{}</dependencies>",
+                        dep("g", "common", "1", "<type>test-jar</type>")
+                    ),
+                ),
+            ),
+            ("g:common:1".to_string(), pom("g", "common", "1", "")),
+            ("g:common:2".to_string(), pom("g", "common", "2", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        let names: Vec<_> = r
+            .packages
+            .iter()
+            .map(|p| format!("{}:{}", p.name, p.version))
+            .collect();
+        assert_eq!(names, ["g:common:2", "g:mini:1"], "{:?}", r.missing);
+    }
+
+    fn names_of(r: &Resolution) -> Vec<String> {
+        r.packages
+            .iter()
+            .map(|p| format!("{}:{}", p.name, p.version))
+            .collect()
+    }
+
+    #[test]
+    fn an_exclusion_names_a_property() {
+        // drill's JDBC driver excludes `${calcite.groupId}:calcite-core` from java-exec.
+        let dir = project(
+            "excl-prop",
+            &format!(
+                "<properties><cg>x</cg></properties><dependencies>{}</dependencies>",
+                dep(
+                    "g",
+                    "lib",
+                    "1",
+                    "<exclusions><exclusion><groupId>${cg}</groupId>\
+                     <artifactId>bad</artifactId></exclusion></exclusions>"
+                )
+            ),
+        );
+        let repo = Mem(BTreeMap::from([
+            (
+                "g:lib:1".to_string(),
+                pom(
+                    "g",
+                    "lib",
+                    "1",
+                    &format!("<dependencies>{}</dependencies>", dep("x", "bad", "1", "")),
+                ),
+            ),
+            ("x:bad:1".to_string(), pom("x", "bad", "1", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(names_of(&r), ["g:lib:1"], "{:?}", r.missing);
+    }
+
+    #[test]
+    fn an_unknown_scope_still_mediates() {
+        // kudu-client 1.17.0 lists audience-annotations 0.13.0 as `optional`, a scope Maven does
+        // not know: it stays in the tree and its nearer version beats a deeper 0.12.0.
+        let dir = project(
+            "odd-scope",
+            &format!(
+                "<dependencies>{}{}</dependencies>",
+                dep("g", "client", "1", ""),
+                dep("g", "deep", "1", "")
+            ),
+        );
+        let one = |a: &str, child: String| {
+            (
+                format!("g:{a}:1"),
+                pom(
+                    "g",
+                    a,
+                    "1",
+                    &format!("<dependencies>{child}</dependencies>"),
+                ),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            one("client", dep("g", "ann", "2", "<scope>optional</scope>")),
+            one("deep", dep("g", "mid", "1", "")),
+            one("mid", dep("g", "ann", "1", "")),
+            ("g:ann:1".to_string(), pom("g", "ann", "1", "")),
+            ("g:ann:2".to_string(), pom("g", "ann", "2", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(
+            names_of(&r),
+            ["g:client:1", "g:deep:1", "g:ann:2", "g:mid:1"],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn a_relative_system_path_empties_a_published_pom() {
+        // druid 1.2.6 lists tools.jar at `${project.basedir}/lib/...`: Maven rejects the model
+        // and lists druid alone. An absolute or environment path keeps the dependencies.
+        let dir = project(
+            "system-path",
+            &format!(
+                "<dependencies>{}{}</dependencies>",
+                dep("g", "bad", "1", ""),
+                dep("g", "good", "1", "")
+            ),
+        );
+        let with = |a: &str, path: &str| {
+            let system = format!(
+                "<dependency><groupId>com.sun</groupId><artifactId>tools</artifactId>\
+                 <version>1</version><scope>system</scope><systemPath>{path}</systemPath>\
+                 </dependency>"
+            );
+            (
+                format!("g:{a}:1"),
+                pom(
+                    "g",
+                    a,
+                    "1",
+                    &format!(
+                        "<dependencies>{system}{}</dependencies>",
+                        dep("g", &format!("{a}-child"), "1", "")
+                    ),
+                ),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            with("bad", "${project.basedir}/lib/tools.jar"),
+            with("good", "${java.home}/../lib/tools.jar"),
+            ("g:bad-child:1".to_string(), pom("g", "bad-child", "1", "")),
+            (
+                "g:good-child:1".to_string(),
+                pom("g", "good-child", "1", ""),
+            ),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(
+            names_of(&r),
+            ["g:bad:1", "g:good:1", "g:good-child:1"],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn release_is_the_newest_metadatas_release() {
+        // COLA's state machine asks junit-jupiter `RELEASE`; the metadata updated last names it.
+        let dir = project(
+            "meta-release",
+            &format!(
+                "<repositories><repository><id>other</id><url>https://example.invalid</url>\
+                 </repository></repositories><dependencies>{}</dependencies>",
+                dep("g", "j", "RELEASE", "")
+            ),
+        );
+        let meta = |release: &str, updated: &str| {
+            format!(
+                "<metadata><versioning><release>{release}</release><versions>\
+                 <version>{release}</version></versions><lastUpdated>{updated}</lastUpdated>\
+                 </versioning></metadata>"
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            ("g:j:metadata".to_string(), meta("3", "20260102000000")),
+            (
+                "g:j:metadata-other".to_string(),
+                meta("4", "20250101000000"),
+            ),
+            (
+                "g:j:3".to_string(),
+                pom(
+                    "g",
+                    "j",
+                    "3",
+                    &format!("<dependencies>{}</dependencies>", dep("g", "k", "1", "")),
+                ),
+            ),
+            ("g:k:1".to_string(), pom("g", "k", "1", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(names_of(&r), ["g:j:3", "g:k:1"], "{:?}", r.missing);
+    }
+
+    #[test]
+    fn maven_config_profiles_and_properties_apply() {
+        // spring-cloud-gateway's `.mvn/maven.config` says `-P spring`; `-D` sets user
+        // properties, which win over the POM's and switch `<property>` profiles.
+        let profile = |id: &str, activation: &str, a: &str| {
+            format!(
+                "<profile><id>{id}</id>{activation}<dependencies>{}</dependencies></profile>",
+                dep("g", a, "${v}", "")
+            )
+        };
+        let dir = project(
+            "maven-config",
+            &format!(
+                "<properties><v>1</v></properties><profiles>{}{}{}{}{}</profiles>",
+                profile("spring", "", "named"),
+                profile("dflt", "<activation><activeByDefault>true</activeByDefault></activation>", "dflt"),
+                profile("prop", "<activation><property><name>flag</name><value>yes</value></property></activation>", "prop"),
+                profile("gone", "<activation><property><name>!absent</name></property></activation>", "gone"),
+                profile("idle", "", "idle")
+            ),
+        );
+        std::fs::create_dir_all(dir.join(".mvn")).unwrap();
+        std::fs::write(
+            dir.join(".mvn").join("maven.config"),
+            "-T1C --no-transfer-progress\n# a comment -P idle\n-P spring,!gone\n-Dflag=yes -D v=2\n",
+        )
+        .unwrap();
+        let repo = Mem(["named", "dflt", "prop", "gone", "idle"]
+            .iter()
+            .flat_map(|a| ["1", "2"].map(|v| (format!("g:{a}:{v}"), pom("g", a, v, ""))))
+            .collect());
+        let r = resolve(&dir, &repo).unwrap();
+        let mut names: Vec<_> = r
+            .packages
+            .iter()
+            .map(|p| format!("{}:{}", p.name, p.version))
+            .collect();
+        names.sort();
+        assert_eq!(names, ["g:named:2", "g:prop:2"], "{:?}", r.missing);
+        let cli = MavenCli::read(&dir);
+        assert!(cli.on.contains("spring") && cli.off.contains("gone") && !cli.on.contains("idle"));
+    }
+
+    #[test]
     fn file_activation_is_checked_in_the_checkout() {
         // seata: `<exists>test-suite/test-new-version/pom.xml</exists>` with `!excludeTestModules`.
         let profile = |id: &str, cond: &str, a: &str| {
@@ -3552,11 +4045,16 @@ mod tests {
         let r = parse_ranges("(,1.0],[1.2,)").unwrap();
         assert!(r.iter().any(|i| i.contains("0.9")) && !r.iter().any(|i| i.contains("1.1")));
         assert!(parse_ranges("[1.5]").unwrap()[0].contains("1.5"));
-        assert_eq!(propagate("compile", "runtime"), Some("runtime"));
+        assert_eq!(propagate("compile", "runtime"), Some("runtime".into()));
         assert_eq!(propagate("compile", "test"), None);
-        assert_eq!(propagate("test", "compile"), Some("test"));
-        assert_eq!(propagate("compile", COMPILE_ONLY_API), Some("provided"));
-        assert_eq!(propagate("test", COMPILE_ONLY_API), Some("test"));
+        assert_eq!(propagate("test", "compile"), Some("test".into()));
+        assert_eq!(
+            propagate("compile", COMPILE_ONLY_API),
+            Some("provided".into())
+        );
+        assert_eq!(propagate("test", COMPILE_ONLY_API), Some("test".into()));
+        assert_eq!(propagate("compile", "optional"), Some("optional".into()));
+        assert_eq!(propagate("provided", "optional"), Some("provided".into()));
         assert_eq!(propagate("runtime", COMPILE_ONLY_API), None);
     }
 }
