@@ -443,6 +443,13 @@ records):
   - In six cases some patched files map to no method; their other sinks are counted.
   - A PoV runs one path, so "reached" here is a floor on what the graph must reach, not proof
     for a path no test takes.
+- **Recheck at HEAD, 2026-11-13**: the saved oracle runs were judged again with the graph as
+  shipped (after hardening, the parallel parse and the scan wiring). The result is the same: 1 of
+  87 sinks that ran is missed, and 412 of 120,427 covered methods. Each graph is a strict superset
+  of the 2026-11-11 one (up to 1.5% more methods), because a class defined in two jars now keeps
+  what both copies do (three asm jars in VUL4J-1, log4j beside log4j-over-slf4j in VUL4J-38). The
+  new inflate limits left no input unread. The one unread input in VUL4J-64, 65 and 66 was unread
+  before as well.
 
 ### JVM suppression in the scan, 2026-11-12
 
