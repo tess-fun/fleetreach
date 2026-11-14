@@ -1,0 +1,34 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-xhg6-9j5j-w4vf",
+  "aliases": [
+    "CVE-2024-48510"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "DotNetZip",
+    "ProDotNetZip"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Ionic.Zip.ZipEntry",
+      "method": "IsDoneWithOutputToBaseDir"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/mihula/ProDotNetZip/pull/21",
+      "https://github.com/mihula/ProDotNetZip/commit/18486ad6d13742a07a6755ef6edf60d7458f1854"
+    ],
+    "excluded": [
+      {
+        "class": "Ionic.Zip.ZipEntry",
+        "method": "MoveFileInPlace",
+        "reason": "unrelated change in the same release"
+      }
+    ]
+  },
+  "note": "Commit 18486ad rejects an entry whose resolved path leaves the extraction folder in ZipEntry.IsDoneWithOutputToBaseDir, which every ZipEntry.Extract and ZipFile.ExtractAll path goes through. DotNetZip itself has no fixed release."
+}

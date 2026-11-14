@@ -1,0 +1,58 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-wr57-hqmp-fgvh",
+  "aliases": [
+    "CVE-2026-69197"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Umbraco.Cms"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Umbraco.Cms.Api.Common.Rendering.ElementOnlyOutputExpansionStrategy",
+      "method": "GetPropertyValue"
+    },
+    {
+      "class": "Umbraco.Cms.Web.Common.Rendering.ElementOnlyOutputExpansionStrategy",
+      "method": "GetPropertyValue"
+    },
+    {
+      "class": "Umbraco.Cms.Api.Delivery.Rendering.RequestContextOutputExpansionStrategy",
+      "method": "GetPropertyValue"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/umbraco/Umbraco-CMS/commit/26312a3f717a0f33bb3d7d28b14bef3592bdb0fe",
+      "https://github.com/umbraco/Umbraco-CMS/commit/5360e2a9681ce2d0024be374e80339260bcc2511",
+      "https://github.com/umbraco/Umbraco-CMS/commit/a9649da4e5a0786db7688bd6b5036a21df26b015"
+    ],
+    "excluded": [
+      {
+        "class": "Umbraco.Cms.Api.Common.Rendering.ElementOnlyOutputExpansionStrategy",
+        "method": ".ctor",
+        "reason": "constructor wiring for the new access check, or unchanged code"
+      },
+      {
+        "class": "Umbraco.Cms.Api.Common.Rendering.ElementOnlyOutputExpansionStrategy",
+        "method": "GetNextProperties",
+        "reason": "constructor wiring for the new access check, or unchanged code"
+      },
+      {
+        "class": "Umbraco.Cms.Api.Common.Rendering.ElementOnlyOutputExpansionStrategy",
+        "method": "MapMediaProperties",
+        "reason": "constructor wiring for the new access check, or unchanged code"
+      },
+      {
+        "class": "Umbraco.Cms.Api.Delivery.Rendering.RequestContextOutputExpansionStrategyV2",
+        "method": ".ctor",
+        "reason": "constructor wiring for the new access check, or unchanged code"
+      }
+    ]
+  },
+  "note": "Commits 26312a3, a9649da (14 on) and 5360e2a (13) check member access in ElementOnlyOutputExpansionStrategy.GetPropertyValue before a picked content node is expanded. The class is Umbraco.Cms.Web.Common.Rendering in 13 and Umbraco.Cms.Api.Common.Rendering from 16; 12, 14 and 15 expand through the older Umbraco.Cms.Api.Delivery.Rendering.RequestContextOutputExpansionStrategy.GetPropertyValue, which no fixed release patches because those lines get none. The Delivery API controllers that use either are found by ASP.NET routing, so it is reached by name.",
+  "reached_by_name": true
+}

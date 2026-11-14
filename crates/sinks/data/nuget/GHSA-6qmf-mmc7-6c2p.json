@@ -1,0 +1,37 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-6qmf-mmc7-6c2p",
+  "aliases": [
+    "CVE-2023-29337"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Microsoft.Build.NuGetSdkResolver",
+    "NuGet.CommandLine",
+    "NuGet.Commands",
+    "NuGet.Common",
+    "NuGet.PackageManagement",
+    "NuGet.Protocol"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "NuGet.Common.NuGetEnvironment",
+      "method": "GetFolderPath"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/NuGet/NuGet.Client/commit/7fe6b814c901490292f02d8ea12749505fbb959a"
+    ],
+    "excluded": [
+      {
+        "class": "NuGet.Common.NuGetEnvironment",
+        "method": "GetHome",
+        "reason": "unrelated change in the same release"
+      }
+    ]
+  },
+  "note": "Commit 7fe6b81 makes the NuGetScratch temp folder per user with 700 permissions on Linux, where it was shared with world-writable lock folders: NuGetEnvironment.GetFolderPath(NuGetFolderPath.Temp) in NuGet.Common, which every listed package uses for temp and lock files. Linux only; Windows and macOS temp folders are per user."
+}

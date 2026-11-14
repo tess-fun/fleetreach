@@ -1,0 +1,54 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-q62r-8ppj-xvf4",
+  "aliases": [
+    "CVE-2025-32017"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Umbraco.Cms"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "Umbraco.Cms.Core.Services.TemporaryFileService",
+      "method": "Validate"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/umbraco/Umbraco-CMS/commit/06a2a500b358ce15b1e228391eb60bd517c6e833",
+      "https://github.com/umbraco/Umbraco-CMS/commit/d3c1443b14b1076faf13d1bcecc42860fdf5fad8"
+    ],
+    "excluded": [
+      {
+        "class": "Umbraco.Cms.Api.Management.Controllers.TemporaryFile.TemporaryFileControllerBase",
+        "method": "TemporaryFileStatusResult",
+        "reason": "response mapping or unchanged code in the same diff"
+      },
+      {
+        "class": "Umbraco.Cms.Core.Services.TemporaryFileService",
+        "method": "CleanUpOldTempFiles",
+        "reason": "response mapping or unchanged code in the same diff"
+      },
+      {
+        "class": "Umbraco.Cms.Core.Services.TemporaryFileService",
+        "method": "DeleteAsync",
+        "reason": "response mapping or unchanged code in the same diff"
+      },
+      {
+        "class": "Umbraco.Cms.Core.Services.TemporaryFileService",
+        "method": "GetAsync",
+        "reason": "response mapping or unchanged code in the same diff"
+      },
+      {
+        "class": "Umbraco.Cms.Core.Services.TemporaryFileService",
+        "method": "IsAllowedFileExtension",
+        "reason": "response mapping or unchanged code in the same diff"
+      }
+    ]
+  },
+  "note": "Commits 06a2a50 (15.3.1) and d3c1443 (14.3.4) add a file-name check to TemporaryFileService.Validate, which CreateAsync and UpdateAsync call before saving an uploaded temporary file. Only the Management API's temporary-file controller calls it, and that controller is found by ASP.NET routing, so it is reached by name.",
+  "reached_by_name": true
+}

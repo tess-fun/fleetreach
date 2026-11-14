@@ -1,0 +1,67 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-9fc5-q25c-r2wr",
+  "aliases": [
+    "CVE-2014-4172"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "DotNetCasClient"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "DotNetCasClient.Utils.UrlUtil",
+      "method": "ConstructValidateUrl"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/Jasig/dotnet-cas-client/commit/f0e030014fb7a39e5f38469f43199dc590fd0e8d"
+    ],
+    "excluded": [
+      {
+        "class": "DotNetCasClient.Utils.UrlUtil",
+        "method": "ConstructLoginRedirectUrl",
+        "reason": "changed only by the 1.0.2 rebuild for net20, not by the fix"
+      },
+      {
+        "class": "DotNetCasClient.Utils.UrlUtil",
+        "method": "ConstructProxyCallbackUrl",
+        "reason": "changed only by the 1.0.2 rebuild for net20, not by the fix"
+      },
+      {
+        "class": "DotNetCasClient.Utils.UrlUtil",
+        "method": "ConstructProxyTicketRequestUrl",
+        "reason": "changed only by the 1.0.2 rebuild for net20, not by the fix"
+      },
+      {
+        "class": "DotNetCasClient.Utils.UrlUtil",
+        "method": "ConstructServiceUrl",
+        "reason": "changed only by the 1.0.2 rebuild for net20, not by the fix"
+      },
+      {
+        "class": "DotNetCasClient.Utils.UrlUtil",
+        "method": "ConstructSingleSignOutRedirectUrl",
+        "reason": "changed only by the 1.0.2 rebuild for net20, not by the fix"
+      },
+      {
+        "class": "DotNetCasClient.Utils.UrlUtil",
+        "method": "GetProxyRedirectUrl",
+        "reason": "changed only by the 1.0.2 rebuild for net20, not by the fix"
+      },
+      {
+        "class": "DotNetCasClient.Utils.UrlUtil",
+        "method": "RemoveCasArtifactsFromUrl",
+        "reason": "changed only by the 1.0.2 rebuild for net20, not by the fix"
+      },
+      {
+        "class": "DotNetCasClient.Validation.TicketValidator.Cas20ServiceTicketValidator",
+        "method": "ParseResponseFromServer",
+        "reason": "changed only by the 1.0.2 rebuild for net20, not by the fix"
+      }
+    ]
+  },
+  "note": "Commit f0e0300 URL-encodes the service ticket in UrlUtil.ConstructValidateUrl, which built the back-channel validation URL from the raw ticket parameter. Reached wherever the CAS module validates a ticket."
+}

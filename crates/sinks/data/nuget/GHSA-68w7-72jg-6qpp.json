@@ -1,0 +1,43 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-68w7-72jg-6qpp",
+  "aliases": [
+    "CVE-2024-0057"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "NuGet.CommandLine",
+    "NuGet.Packaging"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "NuGet.Packaging.Signing.CertificateChainUtility",
+      "method": "GetCertificateChain"
+    },
+    {
+      "class": "NuGet.Packaging.Signing.CertificateUtility",
+      "method": "IsSelfIssued"
+    },
+    {
+      "class": "NuGet.Packaging.Signing.Signature",
+      "method": "Verify"
+    },
+    {
+      "class": "NuGet.Packaging.Signing.SignatureUtility",
+      "method": "GetCertificateChain"
+    },
+    {
+      "class": "NuGet.Packaging.Signing.Timestamp",
+      "method": "Verify"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/NuGet/NuGet.Client/commit/3333f352ec47f0ebb489f20353dea7017f6cb00c",
+      "https://github.com/NuGet/NuGet.Client/commit/5e1ba955cca14328d2cb5723f211d5fbc9bcacb3"
+    ]
+  },
+  "note": "Commit 5e1ba95 (and 3333f35 on the older lines) treats an X.509 chain that fails to build with no status as a failure: CertificateChainUtility.GetCertificateChain, SignatureUtility.GetCertificateChain and CertificateUtility.IsSelfIssued, used by Signature.Verify and Timestamp.Verify. Reached wherever the app verifies a signed package (NuGet.Packaging signing)."
+}

@@ -1,0 +1,47 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-g3q9-xf95-8hp5",
+  "aliases": [
+    "CVE-2022-41032"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "NuGet.CommandLine",
+    "NuGet.Commands",
+    "NuGet.Protocol"
+  ],
+  "status": "proposed",
+  "verdict": "sinks",
+  "sinks": [
+    {
+      "class": "NuGet.Commands.PackCommandRunner",
+      "method": "WriteResolvedNuSpecToPackageOutputDirectory"
+    },
+    {
+      "class": "NuGet.Commands.PackCommandRunner",
+      "method": "WriteSHA512PackageHash"
+    },
+    {
+      "class": "NuGet.Protocol.HttpCacheUtility",
+      "method": "CreateCacheFileAsync"
+    },
+    {
+      "class": "NuGet.Protocol.Plugins.PluginCacheEntry",
+      "method": "UpdateCacheFileAsync"
+    },
+    {
+      "class": "NuGet.Protocol.Plugins.PluginPackageReader",
+      "method": "GetTemporaryDirectoryPath"
+    },
+    {
+      "class": "NuGet.Protocol.Core.Types.SourceCacheContext",
+      "method": "get_GeneratedTempFolder"
+    }
+  ],
+  "evidence": {
+    "commits": [
+      "https://github.com/NuGet/NuGet.Client/commit/6392863cf83f4870e18f1d02f2463cca633e59ed"
+    ]
+  },
+  "note": "Commit 6392863 stops creating shared world-writable folders and temp files with predictable names: PackCommandRunner's nuspec and SHA512 temp files in NuGet.Commands; HttpCacheUtility.CreateCacheFileAsync, PluginCacheEntry.UpdateCacheFileAsync, PluginPackageReader.GetTemporaryDirectoryPath and SourceCacheContext.GeneratedTempFolder in NuGet.Protocol. Linux only, a local elevation of privilege on a shared machine."
+}

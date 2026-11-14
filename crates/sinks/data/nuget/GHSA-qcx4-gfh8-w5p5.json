@@ -1,0 +1,271 @@
+{
+  "schema": "fleetreach-sinks/1",
+  "id": "GHSA-qcx4-gfh8-w5p5",
+  "aliases": [
+    "CVE-2019-12277"
+  ],
+  "ecosystem": "NuGet",
+  "packages": [
+    "Blogifier.Core"
+  ],
+  "status": "proposed",
+  "verdict": "no-method-sink",
+  "evidence": {
+    "commits": [
+      "https://github.com/blogifierdotnet/Blogifier/commit/3e2ae11f6be8aab82128f223c2916fab5a408be5"
+    ],
+    "excluded": [
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": ".cctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": ".ctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "CopyFilesRecursively",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "CreateFolder",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "DeleteAuthor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "DeleteFile",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "DeleteFolder",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "Find",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "GetAppRoot",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "GetAssets",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "GetFileName",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "GetFullPath",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "GetHtmlTemplate",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "GetThemeData",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "GetThemes",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "GetUrl",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "MapFilesToAssets",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "Reset",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "SaveThemeData",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "SelectTheme",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "TitleFromUri",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "TrimFilePath",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "UploadBase64Image",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "UploadFormFile",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "UploadFromWeb",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "VerifyPath",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "get_Location",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "pathToImage",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "pathToTitle",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.Services.StorageService",
+        "method": "pathToUrl",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": ".cctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": ".ctor",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "Capitalize",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "Contains",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "ExtractTitle",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "IsEmail",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "IsImagePath",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "MaskPassword",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "MdToHtml",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "RemoveDiacritics",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "RemoveExtraHyphen",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "RemoveIllegalCharacters",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "RemoveUnicodePunctuation",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "ReplaceIgnoreCase",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "SanitizeFileName",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "SanitizePath",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "StripHtml",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "ToDescription",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "ToPrettySize",
+        "reason": "added by the fix"
+      },
+      {
+        "class": "Blogifier.Core.StringExtensions",
+        "method": "ToSlug",
+        "reason": "added by the fix"
+      }
+    ]
+  },
+  "note": "The fix (commit 3e2ae11, the 2.4 branch) adds '..' checks to StorageService and AssetsController in Blogifier 2.x. No vulnerable 2.x release was published on nuget.org (1.4.8-beta is followed by the fixed 2.5.5), and the 1.x releases are different code with no StorageService, so no method of a published release carries the flaw."
+}
