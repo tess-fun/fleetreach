@@ -73,6 +73,7 @@ Here the demo fleet's Elixir repo is scanned against a directory with no Hex exp
 ```console
 $ fleetreach scan -c ecosystems/hex.toml --osv-dir no-such-dir >/dev/null; echo "exit $?"
 note: no OSV export for Hex; run `fleetreach db sync` (network build) or pass --osv-dir <dir> laid out as <dir>/<Ecosystem>/all.zip
+error: chat-svc: Hex repo (mix.lock): no OSV DB mirror for the toolchain-free matcher (pass --osv-dir=<dir> or --hex-vuln-db=file://<path>, e.g. the osv.dev Hex export all.zip or an unzipped directory)
 Scanned 0 repo(s) (1 errored): 0 vulns, 0 warning(s); max severity unknown.
 exit 2
 ```
