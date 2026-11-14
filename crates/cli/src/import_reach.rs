@@ -636,7 +636,7 @@ fn bundled_gems(root: &Path, packages: &BTreeMap<String, String>) -> Vec<String>
 fn composer_prefixes(root: &Path, packages: &BTreeMap<String, String>) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
     for path in source_files(root, &["composer.lock"]) {
-        let Some(lock) = read_json(&path) else {
+        let Some(lock) = fleetreach_core::repofile::read_json(&path) else {
             continue;
         };
         let listed = ["packages", "packages-dev"]
@@ -662,7 +662,7 @@ fn composer_prefixes(root: &Path, packages: &BTreeMap<String, String>) -> BTreeM
     }
     // A package can name the same prefix as the project: laravel/pint ships an `App\\`.
     for path in source_files(root, &["composer.json"]) {
-        let Some(manifest) = read_json(&path) else {
+        let Some(manifest) = fleetreach_core::repofile::read_json(&path) else {
             continue;
         };
         for section in ["autoload", "autoload-dev"] {
@@ -677,10 +677,6 @@ fn composer_prefixes(root: &Path, packages: &BTreeMap<String, String>) -> BTreeM
     out
 }
 
-fn read_json(path: &Path) -> Option<serde_json::Value> {
-    serde_json::from_slice(&fleetreach_core::repofile::read(path).ok()?).ok()
-}
-
 /// Package ids, and the assemblies each `obj/project.assets.json` here says a package holds.
 fn assemblies(root: &Path, packages: &BTreeMap<String, String>) -> BTreeMap<String, String> {
     let mut out: BTreeMap<String, String> = packages
@@ -692,7 +688,7 @@ fn assemblies(root: &Path, packages: &BTreeMap<String, String>) -> BTreeMap<Stri
     let walk = WalkDir::new(root).into_iter().flatten();
     let found = walk.filter(|e| e.file_name() == "project.assets.json");
     for entry in found {
-        let Some(assets) = read_json(entry.path()) else {
+        let Some(assets) = fleetreach_core::repofile::read_json(entry.path()) else {
             continue;
         };
         let targets = assets["targets"].as_object().into_iter().flatten();

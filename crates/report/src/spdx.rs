@@ -156,20 +156,7 @@ pub fn to_spdx(
                 })
                 .collect();
         }
-        let mut comment = vec![format!(
-            "{}; {}{}; from {}",
-            fleetreach_core::wire_name(&c.ecosystem),
-            if c.direct { "direct" } else { "transitive" },
-            if c.dev { ", dev only" } else { "" },
-            c.sources.iter().cloned().collect::<Vec<_>>().join(", ")
-        )];
-        if !c.complete {
-            comment.push("from a source read with less than full coverage".to_string());
-        }
-        if let (Some(l), None) = (&c.license, license) {
-            comment.push(format!("license as found: {l}"));
-        }
-        package["comment"] = json!(comment.join("; "));
+        package["comment"] = json!(c.spdx_comment(license));
         packages.push(package);
     }
 

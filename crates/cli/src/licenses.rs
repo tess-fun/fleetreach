@@ -458,7 +458,9 @@ pub fn annotate(inv: &mut RepoInventory, repo_root: &Path, cache: &LicenseCache)
                         .cloned()
                         .map(|l| (l, "package-lock.json"))
                         .or_else(|| {
-                            let manifest = read_json(&installed.get(&key)?.join("package.json"))?;
+                            let manifest = fleetreach_core::repofile::read_json(
+                                installed.get(&key)?.join("package.json"),
+                            )?;
                             json_license(&manifest).map(|l| (l, "node_modules"))
                         });
                     set(p, found);
@@ -525,10 +527,6 @@ pub(crate) fn source_dir(repo_root: &Path, source: &str) -> PathBuf {
         .map_or_else(|| repo_root.to_path_buf(), Path::to_path_buf)
 }
 
-fn read_json(path: &Path) -> Option<serde_json::Value> {
-    serde_json::from_str(&fleetreach_core::repofile::read_to_string(path).ok()?).ok()
-}
-
 /// `license` (a string or `{ type }`), else legacy `licenses: [{ type }]`.
 fn json_license(v: &serde_json::Value) -> Option<License> {
     let mut parts = Vec::new();
@@ -562,7 +560,7 @@ fn json_license(v: &serde_json::Value) -> Option<License> {
 /// `(name, version) -> license` from a `package-lock.json` v2/v3 `packages` map.
 fn npm_lock_licenses(dir: &Path) -> BTreeMap<(String, String), License> {
     let mut out = BTreeMap::new();
-    let Some(lock) = read_json(&dir.join("package-lock.json")) else {
+    let Some(lock) = fleetreach_core::repofile::read_json(dir.join("package-lock.json")) else {
         return out;
     };
     for (key, entry) in lock
@@ -636,7 +634,9 @@ fn npm_dirs(dir: &Path) -> BTreeMap<(String, String), PathBuf> {
             };
             for package in packages {
                 seen += 1;
-                let Some(manifest) = read_json(&package.join("package.json")) else {
+                let Some(manifest) =
+                    fleetreach_core::repofile::read_json(package.join("package.json"))
+                else {
                     continue;
                 };
                 let field = |k: &str| manifest.get(k).and_then(|v| v.as_str()).map(str::to_string);
@@ -668,7 +668,7 @@ fn npm_dirs(dir: &Path) -> BTreeMap<(String, String), PathBuf> {
 /// `name -> license` from `composer.lock` (`packages` and `packages-dev`).
 fn composer_licenses(dir: &Path) -> BTreeMap<String, License> {
     let mut out = BTreeMap::new();
-    let Some(lock) = read_json(&dir.join("composer.lock")) else {
+    let Some(lock) = fleetreach_core::repofile::read_json(dir.join("composer.lock")) else {
         return out;
     };
     for key in ["packages", "packages-dev"] {

@@ -1054,20 +1054,41 @@ fn ours(top: &Path, commit: &str, edit: &Edit) -> bool {
 
 const VERIFIED: &str = "Verified by a fleetreach re-scan";
 
-fn apply_one(
-    edit: &Edit,
+/// A detached work tree a unit's branch is built in: the repo's git top level, the tree, the
+/// repo inside it, and the base commit it starts from.
+struct WorkTree {
+    top: PathBuf,
+    tree: PathBuf,
+    work: PathBuf,
+    base: String,
+}
+
+/// Where an apply starts.
+enum Start {
+    /// A fresh work tree at the base.
+    Tree(WorkTree),
+    /// The branch already holds this unit, verified, on the current base: left as it is.
+    Kept,
+    /// Not applied, and why.
+    Stop(Outcome, String),
+}
+
+/// Ready `branch` of `repo` (fleet id `id`) for an apply. A commit already pushed to the
+/// branch must be fleetreach's (`pushed_ours`) or it is left alone; a branch whose commit
+/// still sits on the base and holds this very unit (`kept_as_is`) is kept, since a rewrite
+/// would only reset its CI and reviews.
+fn start(
     repo: &Repo,
+    id: &str,
+    branch: &str,
     work_root: &Path,
-    scan_args: &[String],
     publishing: bool,
-) -> Applied {
-    let mut out = Applied::new(edit, Outcome::Blocked, "");
+    pushed_ours: impl Fn(&Path, &str) -> bool,
+    kept_as_is: impl Fn(&Path, &str) -> bool,
+) -> Start {
     let top = match git(&repo.path, &["rev-parse", "--show-toplevel"]) {
         Ok(t) => PathBuf::from(t),
-        Err(e) => {
-            out.detail = format!("not a git work tree: {e}");
-            return out;
-        }
+        Err(e) => return Start::Stop(Outcome::Blocked, format!("not a git work tree: {e}")),
     };
     let rel = repo
         .path
@@ -1079,37 +1100,27 @@ fn apply_one(
                 .and_then(|t| p.strip_prefix(t).ok().map(Path::to_path_buf))
         })
         .unwrap_or_default();
-    let branch = branch_name(edit);
-    let tree = work_root.join(format!("{}-{}", safe(&edit.repo), safe(&branch)));
-    let (base, remote) = match base_and_remote(&top, &branch, publishing) {
+    let tree = work_root.join(format!("{}-{}", safe(id), safe(branch)));
+    let (base, remote) = match base_and_remote(&top, branch, publishing) {
         Ok(found) => found,
-        Err(e) => {
-            out.detail = format!("could not read the remote: {e}");
-            return out;
-        }
+        Err(e) => return Start::Stop(Outcome::Blocked, format!("could not read the remote: {e}")),
     };
     if let Some(sha) = &remote {
-        if !ours(&top, sha, edit) {
-            out.outcome = Outcome::Skipped;
-            out.detail = "someone else has pushed to this branch; left alone".to_string();
-            return out;
+        if !pushed_ours(&top, sha) {
+            return Start::Stop(
+                Outcome::Skipped,
+                "someone else has pushed to this branch; left alone".to_string(),
+            );
         }
     }
-    let current = remote
-        .clone()
-        .or_else(|| git(&top, &["rev-parse", "--verify", "--quiet", &branch]).ok());
+    let current = remote.or_else(|| git(&top, &["rev-parse", "--verify", "--quiet", branch]).ok());
     if let Some(sha) = current {
         let parent = git(&top, &["rev-parse", &format!("{sha}^")]);
-        if parent.as_deref() == Ok(base.as_str()) && ours(&top, &sha, edit) {
-            // Nothing moved under it: a rewrite would only reset its CI and reviews.
-            if let Err(e) = git(&top, &["branch", "--force", &branch, &sha]) {
-                out.detail = format!("could not update {branch}: {e}");
-                return out;
-            }
-            out.outcome = Outcome::Verified;
-            out.branch = Some(branch);
-            out.detail = "already verified on the current base".to_string();
-            return out;
+        if parent.as_deref() == Ok(base.as_str()) && kept_as_is(&top, &sha) {
+            return match git(&top, &["branch", "--force", branch, &sha]) {
+                Ok(_) => Start::Kept,
+                Err(e) => Start::Stop(Outcome::Blocked, format!("could not update {branch}: {e}")),
+            };
         }
     }
     let _ = git(&top, &["worktree", "remove", "--force", path_str(&tree)]);
@@ -1128,16 +1139,54 @@ fn apply_one(
             &base,
         ],
     ) {
-        out.detail = format!("could not create a work tree: {e}");
-        return out;
+        return Start::Stop(
+            Outcome::Blocked,
+            format!("could not create a work tree: {e}"),
+        );
     }
-    let cleanup = || {
-        let _ = git(&top, &["worktree", "remove", "--force", path_str(&tree)]);
-    };
-    let work = tree.join(&rel);
     // The work tree holds the repo's files: a read through a link must not leave it, as the
     // edits write back to what they read.
     fleetreach_core::repofile::confine([tree.as_path()]);
+    let work = tree.join(&rel);
+    Start::Tree(WorkTree {
+        top,
+        tree,
+        work,
+        base,
+    })
+}
+
+fn apply_one(
+    edit: &Edit,
+    repo: &Repo,
+    work_root: &Path,
+    scan_args: &[String],
+    publishing: bool,
+) -> Applied {
+    let mut out = Applied::new(edit, Outcome::Blocked, "");
+    let branch = branch_name(edit);
+    let is_ours = |top: &Path, sha: &str| ours(top, sha, edit);
+    let WorkTree {
+        top, tree, work, ..
+    } = match start(
+        repo, &edit.repo, &branch, work_root, publishing, is_ours, is_ours,
+    ) {
+        Start::Tree(t) => t,
+        Start::Kept => {
+            out.outcome = Outcome::Verified;
+            out.branch = Some(branch);
+            out.detail = "already verified on the current base".to_string();
+            return out;
+        }
+        Start::Stop(outcome, why) => {
+            out.outcome = outcome;
+            out.detail = why;
+            return out;
+        }
+    };
+    let cleanup = || {
+        let _ = git(&top, &["worktree", "remove", "--force", path_str(&tree)]);
+    };
 
     let before = match scan(&work, repo, scan_args) {
         Ok(s) => s,
@@ -1245,86 +1294,44 @@ fn apply_group(
             .map(|e| Applied::new(e, outcome.clone(), detail))
             .collect()
     };
-    let top = match git(&repo.path, &["rev-parse", "--show-toplevel"]) {
-        Ok(t) => PathBuf::from(t),
-        Err(e) => return all(Outcome::Blocked, &format!("not a git work tree: {e}")),
-    };
-    let rel = repo
-        .path
-        .canonicalize()
-        .ok()
-        .and_then(|p| {
-            top.canonicalize()
-                .ok()
-                .and_then(|t| p.strip_prefix(t).ok().map(Path::to_path_buf))
-        })
-        .unwrap_or_default();
     let branch = unit.branch.clone();
-    let tree = work_root.join(format!("{}-{}", safe(&unit.repo), safe(&branch)));
-    let (base, remote) = match base_and_remote(&top, &branch, publishing) {
-        Ok(found) => found,
-        Err(e) => return all(Outcome::Blocked, &format!("could not read the remote: {e}")),
-    };
-    let grouped_ours = |sha: &str| {
-        git(&top, &["log", "-1", "--format=%B", sha])
-            .is_ok_and(|m| m.contains(VERIFIED) && m.contains("Campaigns: "))
-    };
-    if let Some(sha) = &remote {
-        if !grouped_ours(sha) {
-            return all(
-                Outcome::Skipped,
-                "someone else has pushed to this branch; left alone",
-            );
-        }
-    }
     let mut wanted: Vec<&str> = unit.edits.iter().map(|e| e.campaign.as_str()).collect();
     wanted.sort_unstable();
-    let current = remote
-        .clone()
-        .or_else(|| git(&top, &["rev-parse", "--verify", "--quiet", &branch]).ok());
-    if let Some(sha) = current {
-        let parent = git(&top, &["rev-parse", &format!("{sha}^")]);
-        let same = git(&top, &["log", "-1", "--format=%B", &sha])
-            .is_ok_and(|m| m.contains(VERIFIED) && m.contains(&group_marker(&wanted)));
-        if parent.as_deref() == Ok(base.as_str()) && same {
-            // Nothing moved under it: a rewrite would only reset its CI and reviews.
-            if let Err(e) = git(&top, &["branch", "--force", &branch, &sha]) {
-                return all(Outcome::Blocked, &format!("could not update {branch}: {e}"));
-            }
+    let pushed_ours = |top: &Path, sha: &str| {
+        git(top, &["log", "-1", "--format=%B", sha])
+            .is_ok_and(|m| m.contains(VERIFIED) && m.contains("Campaigns: "))
+    };
+    let kept_as_is = |top: &Path, sha: &str| {
+        git(top, &["log", "-1", "--format=%B", sha])
+            .is_ok_and(|m| m.contains(VERIFIED) && m.contains(&group_marker(&wanted)))
+    };
+    let WorkTree {
+        top,
+        tree,
+        work,
+        base,
+    } = match start(
+        repo,
+        &unit.repo,
+        &branch,
+        work_root,
+        publishing,
+        pushed_ours,
+        kept_as_is,
+    ) {
+        Start::Tree(t) => t,
+        Start::Kept => {
             let mut out = all(Outcome::Verified, "already verified on the current base");
             for a in &mut out {
                 a.branch = Some(branch.clone());
             }
             return out;
         }
-    }
-    let _ = git(&top, &["worktree", "remove", "--force", path_str(&tree)]);
-    let _ = std::fs::remove_dir_all(&tree);
-    let _ = git(&top, &["worktree", "prune"]);
-    if let Err(e) = git(
-        &top,
-        &[
-            "worktree",
-            "add",
-            "--quiet",
-            "--force",
-            "--detach",
-            path_str(&tree),
-            &base,
-        ],
-    ) {
-        return all(
-            Outcome::Blocked,
-            &format!("could not create a work tree: {e}"),
-        );
-    }
+        Start::Stop(outcome, why) => return all(outcome, &why),
+    };
     let cleanup = || {
         let _ = git(&top, &["worktree", "remove", "--force", path_str(&tree)]);
     };
-    let work = tree.join(&rel);
-    // The work tree holds the repo's files: a read through a link must not leave it, as the
-    // edits write back to what they read.
-    fleetreach_core::repofile::confine([tree.as_path()]);
     let mut before = match scan(&work, repo, scan_args) {
         Ok(s) => s,
         Err(e) => {

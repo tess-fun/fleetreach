@@ -184,6 +184,28 @@ pub(crate) struct Merged {
     pub checksums: BTreeSet<Checksum>,
 }
 
+impl Merged {
+    /// The SPDX package comment: its ecosystem, scope and sources, whether a source was read
+    /// in part, and the license as found when it is not a valid expression (`spdx_license` is
+    /// the one that is).
+    pub(crate) fn spdx_comment(&self, spdx_license: Option<&str>) -> String {
+        let mut comment = vec![format!(
+            "{}; {}{}; from {}",
+            fleetreach_core::wire_name(&self.ecosystem),
+            if self.direct { "direct" } else { "transitive" },
+            if self.dev { ", dev only" } else { "" },
+            self.sources.iter().cloned().collect::<Vec<_>>().join(", ")
+        )];
+        if !self.complete {
+            comment.push("from a source read with less than full coverage".to_string());
+        }
+        if let (Some(l), None) = (&self.license, spdx_license) {
+            comment.push(format!("license as found: {l}"));
+        }
+        comment.join("; ")
+    }
+}
+
 /// A repo's packages by purl, its dependency edges by purl (the repo itself as `root_ref`),
 /// and whether every source was read in full.
 pub(crate) struct Merge {

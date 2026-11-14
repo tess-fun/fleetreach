@@ -65,6 +65,12 @@ pub fn read(path: impl AsRef<Path>) -> Result<Vec<u8>> {
     fs::read(path)
 }
 
+/// A repo's JSON file, parsed; `None` when it cannot be read or is not JSON.
+#[must_use]
+pub fn read_json(path: impl AsRef<Path>) -> Option<serde_json::Value> {
+    serde_json::from_slice(&read(path).ok()?).ok()
+}
+
 /// [`std::fs::read_to_string`] for a repo's file.
 ///
 /// # Errors

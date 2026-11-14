@@ -91,7 +91,7 @@ fn is_local(key: &str) -> bool {
 fn npm_excluding(root: &Path, edit: &Edit, to: &Version) -> Vec<Excluding> {
     let mut out = Vec::new();
     for dir in dirs_with(root, "package-lock.json") {
-        let Some(lock) = read_json(&dir.join("package-lock.json")) else {
+        let Some(lock) = fleetreach_core::repofile::read_json(dir.join("package-lock.json")) else {
             continue;
         };
         let Some(packages) = lock.get("packages") else {
@@ -134,10 +134,6 @@ fn manifest_label(root: &Path, dir: &Path, key: &str) -> String {
     let path = dir.join(key).join("package.json");
     let path = path.strip_prefix(root).unwrap_or(&path);
     path.to_string_lossy().replace('\\', "/")
-}
-
-fn read_json(path: &Path) -> Option<Value> {
-    serde_json::from_slice(&fleetreach_core::repofile::read(path).ok()?).ok()
 }
 
 /// node-semver's limit on a version number, JavaScript's largest exact integer.
@@ -542,7 +538,7 @@ pub fn raise_npm(work: &Path, edit: &Edit) -> Result<Vec<PathBuf>, String> {
     let to = Version::parse(&edit.to).map_err(|e| e.to_string())?;
     let mut lock_dirs = Vec::new();
     for dir in dirs_with(work, "package-lock.json") {
-        let Some(lock) = read_json(&dir.join("package-lock.json")) else {
+        let Some(lock) = fleetreach_core::repofile::read_json(dir.join("package-lock.json")) else {
             continue;
         };
         let entries = lock["packages"].as_object().into_iter().flatten();

@@ -140,25 +140,13 @@ pub fn to_spdx3(
             .license
             .as_deref()
             .filter(|l| spdx::Expression::parse_mode(l, spdx::ParseMode::STRICT).is_ok());
-        let mut comment = vec![format!(
-            "{}; {}{}; from {}",
-            fleetreach_core::wire_name(&c.ecosystem),
-            if c.direct { "direct" } else { "transitive" },
-            if c.dev { ", dev only" } else { "" },
-            c.sources.iter().cloned().collect::<Vec<_>>().join(", ")
-        )];
-        if !c.complete {
-            comment.push("from a source read with less than full coverage".to_string());
-        }
-        match (&c.license, license) {
-            (_, Some(l)) => licenses
+        if let Some(l) = license {
+            licenses
                 .entry(l.to_string())
                 .or_default()
-                .push(package_ids[purl.as_str()].clone()),
-            (Some(l), None) => comment.push(format!("license as found: {l}")),
-            (None, None) => {}
+                .push(package_ids[purl.as_str()].clone());
         }
-        package["comment"] = json!(comment.join("; "));
+        package["comment"] = json!(c.spdx_comment(license));
         graph.push(package);
     }
     for (expression, holders) in &licenses {

@@ -45,6 +45,15 @@ pub fn is_source(path: &str) -> bool {
         .any(|ext| p.ends_with(ext))
 }
 
+/// `src` parsed as a module of the kind its path names; `None` when it does not parse.
+fn parse<'a>(allocator: &'a Allocator, path: &str, src: &'a str) -> Option<Program<'a>> {
+    let source_type = SourceType::from_path(path)
+        .unwrap_or_default()
+        .with_module(true);
+    let ret = Parser::new(allocator, src, source_type).parse();
+    (!ret.fatal_error).then_some(ret.program)
+}
+
 /// Every named function of one file, keyed `path.name`. A file that does not parse gives
 /// nothing (the caller sees no candidates, never a wrong one).
 #[must_use]
@@ -54,15 +63,10 @@ pub fn functions(path: &str, src: &str) -> BTreeMap<String, Method> {
 }
 
 fn functions_here(path: &str, src: &str) -> BTreeMap<String, Method> {
-    let source_type = SourceType::from_path(path)
-        .unwrap_or_default()
-        .with_module(true);
     let allocator = Allocator::default();
-    let ret = Parser::new(&allocator, src, source_type).parse();
-    if ret.fatal_error {
+    let Some(program) = parse(&allocator, path, src) else {
         return BTreeMap::new();
-    }
-    let program = ret.program;
+    };
     let mut finder = Finder::default();
     finder.visit_program(&program);
     let comments: Vec<Span> = program.comments.iter().map(|c| c.span).collect();
@@ -88,21 +92,17 @@ pub fn facts(path: &str, src: &str) -> ModuleFacts {
 }
 
 fn facts_here(path: &str, src: &str) -> ModuleFacts {
-    let source_type = SourceType::from_path(path)
-        .unwrap_or_default()
-        .with_module(true);
     let allocator = Allocator::default();
-    let ret = Parser::new(&allocator, src, source_type).parse();
-    if ret.fatal_error {
+    let Some(program) = parse(&allocator, path, src) else {
         return ModuleFacts::default();
-    }
+    };
     let mut finder = Finder {
         line_starts: std::iter::once(0)
             .chain(src.match_indices('\n').map(|(i, _)| i + 1))
             .collect(),
         ..Finder::default()
     };
-    finder.visit_program(&ret.program);
+    finder.visit_program(&program);
     let mut facts = finder.facts;
     for (name, _) in finder.found {
         facts.functions.entry(name).or_default();
