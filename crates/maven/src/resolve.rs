@@ -497,6 +497,27 @@ impl Resolver<'_> {
                     d.exclusions.clone_from(&m.exclusions);
                 }
             }
+            // Gradle: every declaration requests its version (a sibling project's too), the
+            // highest wins, and the broadest scope.
+            if self.gradle {
+                if let Some(x) = deps.iter_mut().find(|x| x.mgmt_key() == d.mgmt_key()) {
+                    let plain = |v: &Option<String>| {
+                        v.as_deref()
+                            .filter(|v| !v.starts_with(['[', '(']))
+                            .and_then(parse_maven_version)
+                    };
+                    if let (Some(new), Some(old)) = (plain(&d.version), plain(&x.version)) {
+                        if new > old {
+                            x.version.clone_from(&d.version);
+                        }
+                    }
+                    let rank = |s: &Option<String>| scope_rank(s.as_deref().unwrap_or("compile"));
+                    if rank(&d.scope) > rank(&x.scope) {
+                        x.scope.clone_from(&d.scope);
+                    }
+                    continue;
+                }
+            }
             // Maven identifies a dependency by group, artifact, type and classifier: a
             // `test-jar` of an artifact is a different dependency from its jar.
             deps.retain(|x| x.mgmt_key() != d.mgmt_key());
@@ -927,7 +948,8 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
 ///
 /// When `xml` cannot be parsed.
 /// Versions the Spring dependency-management plugin sets: its BOMs' managed versions and its
-/// `dependency` entries, except for artifacts the build declares with a version of its own.
+/// `dependency` entries. An artifact the build declares with a version of its own is managed
+/// at that version instead (the plugin's `overriddenByDependencies`), for every path to it.
 #[derive(Debug, Default)]
 pub(crate) struct Enforced {
     pub boms: Vec<(String, String, String)>,
@@ -978,7 +1000,28 @@ pub(crate) fn resolve_gradle_module(
         }
     };
     force(&mut r, &mut forced, &enforced.boms, &enforced.versions);
-    forced.retain(|k, _| !enforced.keep.contains(&(k.0.clone(), k.1.clone())));
+    // The declared versions as this POM interpolates them; one declared as a range or a
+    // dynamic version is left to conflict resolution.
+    let declared: BTreeMap<(String, String), String> = modules[0]
+        .deps
+        .iter()
+        .filter(|d| {
+            enforced
+                .keep
+                .contains(&(d.group.clone(), d.artifact.clone()))
+        })
+        .filter_map(|d| Some(((d.group.clone(), d.artifact.clone()), d.version.clone()?)))
+        .collect();
+    forced.retain(|k, _| {
+        declared
+            .get(&(k.0.clone(), k.1.clone()))
+            .is_none_or(|v| !v.starts_with(['[', '(']) && !v.contains(['+', '$']))
+    });
+    for (key, version) in forced.iter_mut() {
+        if let Some(v) = declared.get(&(key.0.clone(), key.1.clone())) {
+            version.clone_from(v);
+        }
+    }
     force(
         &mut r,
         &mut forced,

@@ -46,8 +46,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 83.7% of the 9,550 modules at Gradle's version and 89.2% by name, up from 59.7% and
-  70.0% on the same POMs; 93.1% and 97.0% on the 51 builds whose dependencies no build plugin
+  now lists 84.2% of the 9,550 modules at Gradle's version and 89.3% by name, up from 59.7% and
+  70.0% on the same POMs; 93.7% and 97.1% on the 51 builds whose dependencies no build plugin
   adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
@@ -55,8 +55,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over
   conflict resolution, a later import overriding an earlier one, as the plugin sets them;
-  a version the build declares itself is kept. An `enforcedPlatform(...)` forces its versions
-  even over ones the build declares. A declared `platform(...)` is listed as a
+  a version the build declares itself is the managed one for every path to that artifact
+  (conductor's grpc 1.75.0 under Spring Boot's 1.83.1). An `enforcedPlatform(...)` forces its versions
+  even over ones the build declares. A `project(':p')` dependency brings p's own
+  dependencies, platforms and constraints onto the depending project's classpaths, and
+  when an artifact is declared more than once the highest version wins, as in Gradle
+  (mybatis-plus's Boot 3 and 4 starters, ethereum-lists' moshi). `jmh`, `benchmark` and
+  similar source sets of their own are off the main classpath. A declared `platform(...)` is listed as a
   module, as Gradle lists it, without its own dependencies. `if`/`else` branches a default
   build decides (`System.properties['k'] ?: ''`, `findProperty`, `hasProperty`,
   `providers.gradleProperty(...).getOrElse(...)`, a `cond ? 'a' : 'b'` coordinate) are read.

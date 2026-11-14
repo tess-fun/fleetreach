@@ -5,7 +5,7 @@
 //! named in [`Resolution::missing`], and each build file is resolved alone, since two
 //! subprojects can pin different versions.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
 
 use crate::resolve::{resolve_gradle_module, Enforced, PomSource, Resolution, ResolvedDep};
@@ -210,6 +210,57 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         })
         .collect();
     for (module, (platforms, constraints)) in modules.iter_mut().zip(managed) {
+        module.platforms.extend(platforms);
+        module.constraints.extend(constraints);
+    }
+    // `implementation project(":p")` puts p's own dependencies on this file's classpaths, with
+    // p's platforms and constraints (Gradle publishes them with the project), through p's own
+    // project dependencies too. p's `compileOnly` and test dependencies stay in p.
+    let via: Vec<(Vec<Declared>, Vec<Coordinate>, Vec<Coordinate>)> = (0..modules.len())
+        .map(|start| {
+            let (mut deps, mut platforms, mut constraints) = (Vec::new(), Vec::new(), Vec::new());
+            let mut seen = BTreeSet::from([start]);
+            let mut queue: VecDeque<(usize, &'static str)> = modules[start]
+                .project_deps
+                .iter()
+                .filter_map(|(path, scope)| match by_path.get(path) {
+                    Some(&i) => Some((i, *scope)),
+                    None => {
+                        missing.insert(format!("project `{path}` is not a build file here"));
+                        None
+                    }
+                })
+                .collect();
+            while let Some((i, scope)) = queue.pop_front() {
+                if !seen.insert(i) {
+                    continue;
+                }
+                let m = &modules[i];
+                let through = |own: &'static str| match (scope, own) {
+                    (_, "test" | "provided") => None,
+                    ("test" | "provided", _) => Some(scope),
+                    ("runtime", _) | (_, "runtime") => Some("runtime"),
+                    _ => Some("compile"),
+                };
+                for d in &m.deps {
+                    if let Some(scope) = through(d.scope) {
+                        deps.push(Declared { scope, ..d.clone() });
+                    }
+                }
+                let own = m.shared_from.unwrap_or(m.platforms.len());
+                platforms.extend(m.platforms[..own].iter().filter(|c| !c.enforced).cloned());
+                constraints.extend(m.constraints.iter().filter(|c| !c.enforced).cloned());
+                for (path, own) in &m.project_deps {
+                    if let (Some(&j), Some(next)) = (by_path.get(path), through(own)) {
+                        queue.push_back((j, next));
+                    }
+                }
+            }
+            (deps, platforms, constraints)
+        })
+        .collect();
+    for (module, (deps, platforms, constraints)) in modules.iter_mut().zip(via) {
+        module.via_projects = deps;
         module.platforms.extend(platforms);
         module.constraints.extend(constraints);
     }
@@ -730,6 +781,11 @@ struct Module {
     /// Where the root's shared platforms start in `platforms`: they are applied before this
     /// file's own, so a later import here overrides them.
     shared_from: Option<usize>,
+    /// `implementation project(":p")`: by Gradle project path, with this file's scope.
+    project_deps: Vec<(String, &'static str)>,
+    /// What those projects put on this file's classpaths: their own dependencies, never this
+    /// file's declarations (the Spring plugin keeps only a file's own declared versions).
+    via_projects: Vec<Declared>,
 }
 
 #[derive(Debug, Default)]
@@ -817,6 +873,7 @@ impl Module {
         let kept: Vec<&Declared> = self
             .deps
             .iter()
+            .chain(&self.via_projects)
             .filter(|d| !main_only || d.scope != "test")
             .collect();
         // Gradle drops a module's dependency only when every edge to it excludes it, so an
@@ -1250,8 +1307,21 @@ impl Context {
 }
 
 fn scope_of(configuration: &str) -> &'static str {
+    // Source sets of their own (`jmhImplementation`, `benchmarkImplementation`) are on no
+    // main classpath, and never reach a project that depends on this one.
+    const OWN_SOURCE_SETS: &[&str] = &[
+        "jmh",
+        "benchmark",
+        "jcstress",
+        "perf",
+        "e2e",
+        "integration",
+        "sample",
+        "example",
+        "docs",
+    ];
     let lower = configuration.to_ascii_lowercase();
-    if lower.contains("test") {
+    if lower.contains("test") || OWN_SOURCE_SETS.iter().any(|p| lower.starts_with(p)) {
         "test"
     } else if lower.contains("compileonly")
         || lower.contains("annotationprocessor")
@@ -1911,6 +1981,22 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
 }
 
 /// `read_declaration`, with what an `enforcedPlatform(...)` adds marked strict.
+/// The path of `project(":p")`, `project(path: ":p")` or `dependencies.project(path = ":p")`.
+fn project_path(rest: &str) -> Option<&str> {
+    let project = rest.strip_prefix("dependencies.").unwrap_or(rest);
+    project
+        .strip_prefix("project(")
+        .or_else(|| project.strip_prefix("project "))
+        .map(|p| {
+            let p = p.trim_start();
+            p.strip_prefix("path").map_or(p, |q| {
+                q.trim_start().trim_start_matches([':', '=']).trim_start()
+            })
+        })
+        .and_then(|p| quoted(p))
+        .map(|(p, _)| p)
+}
+
 fn read_values(
     text: &str,
     scope: &'static str,
@@ -1994,20 +2080,7 @@ fn read_declaration(
         }
     }
     if platform {
-        // `project(":p")`, `project(path: ":p")`, `dependencies.project(path = ":p")`.
-        let project = rest.strip_prefix("dependencies.").unwrap_or(rest);
-        if let Some(path) = project
-            .strip_prefix("project(")
-            .or_else(|| project.strip_prefix("project "))
-            .map(|p| {
-                let p = p.trim_start();
-                p.strip_prefix("path").map_or(p, |q| {
-                    q.trim_start().trim_start_matches([':', '=']).trim_start()
-                })
-            })
-            .and_then(|p| quoted(p))
-            .map(|(p, _)| p)
-        {
+        if let Some(path) = project_path(rest) {
             module.project_platforms.push((path.to_string(), strict));
             return;
         }
@@ -2048,6 +2121,11 @@ fn read_declaration(
         "dependencies.",
     ];
     if local.iter().any(|p| rest.starts_with(p)) {
+        if block == Block::Dependencies {
+            if let Some(path) = project_path(rest) {
+                module.project_deps.push((path.to_string(), scope));
+            }
+        }
         return;
     }
     if rest.starts_with("group") {
@@ -3020,6 +3098,18 @@ set = ["a-b", "e"]
             ),
             ["2"]
         );
+        // The declared version is the managed one for every path: `a` asking for 2 does not
+        // raise a declared 1 the BOM would set to 3 (conductor's grpc 1.75.0 under Boot).
+        assert_eq!(
+            one(
+                "spring-own-lower",
+                &script(
+                    "        mavenBom 'g:later:1'\n",
+                    "    implementation 'g:a:1'\n    implementation 'g:x:1'\n"
+                )
+            ),
+            ["1"]
+        );
         // `enforcedPlatform` forces its version, over one the build declares too.
         assert_eq!(
             one(
@@ -3037,6 +3127,51 @@ set = ["a-b", "e"]
             ),
             ["2"]
         );
+    }
+
+    #[test]
+    fn a_project_dependency_brings_its_dependencies_and_the_highest_wins() {
+        // ethereum-lists: processor declares moshi 1.15.2 and depends on `:model`, which
+        // declares 1.14.0; Gradle gives processor 1.15.2 and model 1.14.0. A version only `:lib`
+        // asks for reaches `:app` too, raising `:app`'s own lower one.
+        let repo = Mem(BTreeMap::from([
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+            pom("y", "1", &[]),
+            pom("y", "2", &[]),
+        ]));
+        let dir = tree(
+            "project-deps",
+            &[
+                ("settings.gradle", "include 'lib', 'app'\n"),
+                (
+                    "lib/build.gradle",
+                    "dependencies {\n    implementation 'g:x:1'\n    implementation 'g:y:2'\n}\n",
+                ),
+                (
+                    "app/build.gradle",
+                    "dependencies {\n    implementation project(':lib')\n    implementation 'g:x:2'\n\
+                     \x20   implementation 'g:y:1'\n    implementation project(':gone')\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        let set = |name: &str| versions(&r, name).into_iter().collect::<BTreeSet<_>>();
+        // lib keeps its x 1; app takes x 2 (its own, the higher) and y 2 (lib's, the higher).
+        assert_eq!(
+            set("g:x"),
+            BTreeSet::from(["1".to_string(), "2".to_string()])
+        );
+        assert_eq!(set("g:y"), BTreeSet::from(["2".to_string()]));
+        assert!(
+            r.missing.iter().any(|m| m.contains("project `:gone`")),
+            "{:?}",
+            r.missing
+        );
+        // Source sets of their own never reach a main classpath.
+        assert_eq!(scope_of("jmhImplementation"), "test");
+        assert_eq!(scope_of("benchmarkImplementation"), "test");
+        assert_eq!(scope_of("modImplementation"), "compile");
     }
 
     #[test]

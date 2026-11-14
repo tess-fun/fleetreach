@@ -914,9 +914,9 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   ~/fa-testbed/gradle (208 Android/KMP skipped, they need the Android SDK). **56 resolved**;
   47 fail for reasons of their own (dead plugin repositories, toolchains Gradle cannot fetch
   on arm64, files the sparse clone lacks, plugins that need a full checkout). On the same POMs
-  (Gradle's own download cache), **83.7% of 9,550 modules at Gradle's version, 89.2% by name**,
+  (Gradle's own download cache), **84.2% of 9,550 modules at Gradle's version, 89.3% by name**,
   from 59.7% and 70.0% for the reader before this round; median repo 94.1% exact, 41 of 56 at
-  90% or more. **93.1% and 97.0% on the 51 builds whose dependencies no build plugin adds**:
+  90% or more. **93.7% and 97.1% on the 51 builds whose dependencies no build plugin adds**:
   the five others (ideavim and MinecraftDev on the IntelliJ Platform plugin, Paper and
   WorldEdit on paperweight's dev bundle, minecolonies on ForgeGradle) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
@@ -933,7 +933,12 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   conductor), declared platforms listed (about 40 BOMs), default-build `if`/`else` (with
   `providers.gradleProperty(...).getOrElse(...)` and `cond ? 'a' : 'b'` coordinates),
   `enforcedPlatform` versions forced over declared ones (timefold 328 to 344,
-  spring-framework 456 to 469). The
+  spring-framework 456 to 469), a Spring-declared version managed for every path (conductor
+  780 to 801), `project(':p')` dependencies followed with the highest declaration winning
+  (mybatis-plus 340 to 352, CosId 220 to 227), own source sets (`jmh`, `benchmark`) off the
+  main classpath. Known limit: a sibling's `implementation` dependencies reach a consumer's
+  runtime classpath but not its compile classpath, so one graph cannot give both versions
+  (jib-cli's test compile asm 9.5, 1 package). The
   Maven resolver was checked against real Maven too (user approved the
   `maven:3.9.9-eclipse-temurin-21` image, 2026-11-14; `docs/differential/maven`, no
   network, POMs from the same cache): 271 of 271 one-dependency projects identical (1,875
