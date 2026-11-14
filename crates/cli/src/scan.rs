@@ -335,7 +335,7 @@ pub(crate) struct ScanArgs {
     #[arg(
         long,
         value_name = "URL",
-        help = "OSV vulnerability DB for the toolchain-free Maven (Java) matcher, as `file://<path>` to either the osv.dev Maven export `all.zip` (read directly, fastest) or a directory of unzipped OSV JSON records. It reads gradle.lockfile (preferred) or pom.xml and builds nothing, so it needs no --allow-untrusted-builds; without this a Maven repo is an honest gap."
+        help = "OSV vulnerability DB for the toolchain-free Maven (Java) matcher, as `file://<path>` to either the osv.dev Maven export `all.zip` (read directly, fastest) or a directory of unzipped OSV JSON records. It reads a lockfile (gradle.lockfile, or versions.lock from gradle-consistent-versions) when there is one, else pom.xml or the Gradle build scripts, and builds nothing, so it needs no --allow-untrusted-builds; without this a Maven repo is an honest gap."
     )]
     maven_vuln_db: Option<String>,
     #[arg(
@@ -539,7 +539,7 @@ fn sarif_source(repo: Option<&Path>, ecosystem: Ecosystem, package: &str) -> Str
             "obj/project.assets.json",
             "packages.config",
         ],
-        Ecosystem::Maven => &["gradle.lockfile", "pom.xml"],
+        Ecosystem::Maven => &["gradle.lockfile", "versions.lock", "pom.xml"],
         Ecosystem::GitHubActions => {
             let dir = repo.join(".github/workflows");
             let mut workflows: Vec<PathBuf> = std::fs::read_dir(&dir)

@@ -155,6 +155,10 @@ pub(crate) const MATRIX: &[Row] = &[
         page: "maven",
         reads: &[
             full("gradle.lockfile", &[("gradle.lockfile", "")]),
+            full(
+                "versions.lock",
+                &[("versions.lock", ""), ("versions.props", "")],
+            ),
             Input {
                 file: "pom.xml",
                 coverage:

@@ -92,6 +92,101 @@ pub fn check_gradle_lockfile(text: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// The lockfile of the Gradle build in `dir`, by name: `gradle.lockfile` (Gradle's own
+/// dependency locking), else `versions.lock` from Palantir's gradle-consistent-versions, which
+/// counts only beside its `versions.props` (the name alone is too common to claim).
+pub fn gradle_lockfile(dir: &std::path::Path) -> Option<&'static str> {
+    if dir.join("gradle.lockfile").is_file() {
+        Some("gradle.lockfile")
+    } else if dir.join("versions.lock").is_file() && dir.join("versions.props").is_file() {
+        Some("versions.lock")
+    } else {
+        None
+    }
+}
+
+/// Check and parse a lockfile [`gradle_lockfile`] named.
+///
+/// # Errors
+///
+/// The file is damaged ([`check_gradle_lockfile`], [`check_versions_lock`]).
+pub fn read_gradle_lockfile(name: &str, text: &str) -> Result<Vec<InstalledPackage>, String> {
+    if name == "versions.lock" {
+        check_versions_lock(text)?;
+        Ok(parse_versions_lock(text))
+    } else {
+        check_gradle_lockfile(text)?;
+        Ok(parse_gradle_lockfile(text))
+    }
+}
+
+/// Parse gradle-consistent-versions' `versions.lock`: `group:artifact:version (N constraints:
+/// hash)` per line, the production closure first, then a `[Test dependencies]` section.
+/// Like `gradle.lockfile`, every entry is reported transitive.
+pub fn parse_versions_lock(text: &str) -> Vec<InstalledPackage> {
+    let mut packages = Vec::new();
+    for line in text.lines() {
+        let Some(coord) = versions_lock_coordinate(line.trim()) else {
+            continue;
+        };
+        if let Some((name, version)) = coord.rsplit_once(':') {
+            packages.push(InstalledPackage {
+                name: name.to_string(),
+                version: version.to_string(),
+                direct: false,
+            });
+        }
+    }
+    dedupe(packages)
+}
+
+/// `group:artifact:version` of a `versions.lock` entry line.
+fn versions_lock_coordinate(line: &str) -> Option<&str> {
+    let (coord, rest) = line.split_once(" (")?;
+    let parts: Vec<&str> = coord.split(':').collect();
+    let shaped = parts.len() == 3
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && !p.contains(char::is_whitespace))
+        && rest.ends_with(')')
+        && rest.contains("constraint");
+    shaped.then_some(coord)
+}
+
+/// Check that `text` has the shape gradle-consistent-versions writes, so a damaged file is
+/// refused rather than read short.
+///
+/// # Errors
+///
+/// A line that is not a comment, a `[section]` header or a `group:artifact:version (N
+/// constraints: hash)` entry, or a file with no entry at all.
+pub fn check_versions_lock(text: &str) -> Result<(), String> {
+    let mut entries = 0usize;
+    for (n, raw) in text.lines().enumerate() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            continue;
+        }
+        if versions_lock_coordinate(line).is_none() {
+            let shown: String = line.chars().take(60).collect();
+            return Err(format!(
+                "line {}: `{}` is not `group:artifact:version (N constraints: hash)`; the file \
+                 is damaged",
+                n + 1,
+                shown.escape_debug()
+            ));
+        }
+        entries += 1;
+    }
+    if entries == 0 {
+        return Err("has no dependency lines; the file looks cut short".to_string());
+    }
+    Ok(())
+}
+
 /// Parse a `pom.xml` for its direct dependencies with literal versions. A small tag scan (not
 /// a full XML parser): for each `<dependency>…</dependency>` block, read `<groupId>`,
 /// `<artifactId>`, and `<version>`. A dependency with no version, a `${property}` version, or a
@@ -164,6 +259,31 @@ mod tests {
         pkgs.iter()
             .map(|p| (p.name.as_str(), p.version.as_str(), p.direct))
             .collect()
+    }
+
+    #[test]
+    fn parses_and_checks_versions_lock() {
+        let lock = "# Run ./gradlew writeVersionsLocks to regenerate this file. Blank lines are \
+                    to minimize merge conflicts.\n\n\
+                    com.google.guava:guava:33.7.2-jre (3 constraints: 203acbe1)\n\n\
+                    org.jspecify:jspecify:1.0.1 (8 constraints: 967df209)\n\n\
+                    [Test dependencies]\n\n\
+                    junit:junit:4.13.2 (1 constraints: 3c05153b)\n";
+        check_versions_lock(lock).unwrap();
+        assert_eq!(
+            rows(&parse_versions_lock(lock)),
+            [
+                ("com.google.guava:guava", "33.7.2-jre", false),
+                ("junit:junit", "4.13.2", false),
+                ("org.jspecify:jspecify", "1.0.1", false),
+            ]
+        );
+        assert!(check_versions_lock(&lock.replace(" (8 constraints: 967df209)", "")).is_err());
+        assert!(check_versions_lock("# header only\n").is_err());
+        assert_eq!(
+            read_gradle_lockfile("versions.lock", lock).unwrap().len(),
+            3
+        );
     }
 
     #[test]

@@ -74,6 +74,8 @@ pub const SPARSE_PATTERNS: &[&str] = &[
     "**/Package.swift",
     "**/mix.lock",
     "**/gradle.lockfile",
+    "**/versions.lock",
+    "**/versions.props",
     "**/*.gradle",
     "**/*.gradle.kts",
     "**/gradle.properties",

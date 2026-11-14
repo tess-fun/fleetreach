@@ -215,7 +215,7 @@ Options:
           OSV vulnerability DB for the crates.io advisories RustSec does not carry, as `file://<path>` to either the osv.dev crates.io export `all.zip` (read directly, fastest) or a directory of unzipped OSV JSON records. RustSec still answers without it, and the repo is marked partial.
 
       --maven-vuln-db <URL>
-          OSV vulnerability DB for the toolchain-free Maven (Java) matcher, as `file://<path>` to either the osv.dev Maven export `all.zip` (read directly, fastest) or a directory of unzipped OSV JSON records. It reads gradle.lockfile (preferred) or pom.xml and builds nothing, so it needs no --allow-untrusted-builds; without this a Maven repo is an honest gap.
+          OSV vulnerability DB for the toolchain-free Maven (Java) matcher, as `file://<path>` to either the osv.dev Maven export `all.zip` (read directly, fastest) or a directory of unzipped OSV JSON records. It reads a lockfile (gradle.lockfile, or versions.lock from gradle-consistent-versions) when there is one, else pom.xml or the Gradle build scripts, and builds nothing, so it needs no --allow-untrusted-builds; without this a Maven repo is an honest gap.
 
       --sync
           list every [[source]] afresh and clone or refresh its checkouts before scanning (otherwise the cached listing and existing checkouts are used)

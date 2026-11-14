@@ -447,6 +447,7 @@ const LOCKFILES: &[&str] = &[
     "Package.resolved",
     "Manifest.toml",
     "gradle.lockfile",
+    "versions.lock",
 ];
 
 /// When the newest commit touching a lockfile was made. `None` outside git, and in a shallow

@@ -107,6 +107,7 @@ pub fn reads(file: &str) -> bool {
             | "bun.lock"
             | "pom.xml"
             | "gradle.lockfile"
+            | "versions.lock"
             | "mix.lock"
             | "Manifest.toml"
             | "Package.resolved"
@@ -285,7 +286,7 @@ pub fn entry_line_in(file: &str, lines: &[&str], package: &str, version: &str) -
             };
             pick(lines, version, entry, holds)
         }
-        "gradle.lockfile" => {
+        "gradle.lockfile" | "versions.lock" => {
             let key = format!("{package}:");
             pick(lines, version, |l| l.starts_with(&key), any)
         }

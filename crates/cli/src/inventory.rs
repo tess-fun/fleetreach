@@ -217,15 +217,14 @@ pub(crate) fn unit_inventory(
             one(SourceInventory::new(Ecosystem::Hex, "mix.lock", packages).with_graph(&graph))
         }
         Ecosystem::Maven => {
-            if dir.join("gradle.lockfile").is_file() {
-                let text = read(dir, "gradle.lockfile")?;
-                fleetreach_maven::check_gradle_lockfile(&text)
-                    .map_err(|e| format!("gradle.lockfile: {e}"))?;
-                let packages = maven_packages(fleetreach_maven::parse_gradle_lockfile(&text));
+            if let Some(name) = fleetreach_maven::gradle_lockfile(dir) {
+                let text = read(dir, name)?;
+                let installed = fleetreach_maven::read_gradle_lockfile(name, &text)
+                    .map_err(|e| format!("{name}: {e}"))?;
                 one(SourceInventory::new(
                     Ecosystem::Maven,
-                    "gradle.lockfile",
-                    packages,
+                    name,
+                    maven_packages(installed),
                 ))
             } else if crate::orchestrate::is_gradle_without_lock(dir) {
                 let (resolution, reason) = crate::orchestrate::resolve_gradle(dir, maven);

@@ -1986,7 +1986,8 @@ fn dir_ecosystems(dir: &Path, files: &BTreeSet<String>, is_root: bool) -> Vec<Ec
     let gradle = has("settings.gradle")
         || has("settings.gradle.kts")
         || (is_root && fleetreach_maven::has_gradle_build(dir));
-    if has("gradle.lockfile") || (is_root && has("pom.xml")) || gradle {
+    let consistent_versions = has("versions.lock") && has("versions.props");
+    if has("gradle.lockfile") || consistent_versions || (is_root && has("pom.xml")) || gradle {
         found.push(Ecosystem::Maven);
     }
     found
@@ -2347,7 +2348,7 @@ const GHACTIONS: TierC = TierC {
 const MAVEN: TierC = TierC {
     db: "Maven",
     scan: "maven",
-    no_mirror: "Maven repo (gradle.lockfile/pom.xml): no OSV DB mirror for the toolchain-free \
+    no_mirror: "Maven repo (gradle.lockfile, versions.lock or pom.xml): no OSV DB mirror for the toolchain-free \
          matcher (pass --osv-dir=<dir> or --maven-vuln-db=file://<path>, e.g. the osv.dev Maven export \
          all.zip or an unzipped directory)",
 };
@@ -2450,9 +2451,10 @@ fn whole<E>(scan: Result<TierCScan, E>) -> Result<(TierCScan, Vec<Gap>), E> {
 
 pub(crate) const GRADLE_SOURCE: &str = "build.gradle";
 
-/// A Gradle build with neither a `gradle.lockfile` nor a `pom.xml` to read instead.
+/// A Gradle build with neither a lockfile (`gradle.lockfile`, `versions.lock`) nor a `pom.xml`
+/// to read instead.
 pub(crate) fn is_gradle_without_lock(dir: &Path) -> bool {
-    !dir.join("gradle.lockfile").is_file()
+    fleetreach_maven::gradle_lockfile(dir).is_none()
         && !dir.join("pom.xml").is_file()
         && fleetreach_maven::has_gradle_build(dir)
 }
@@ -2530,7 +2532,7 @@ fn scan_maven_repo(
     // (parents, BOMs, mediation) from local repositories, plus Maven Central with
     // `--maven-fetch`; whatever cannot be resolved is named as partial coverage. A POM that
     // cannot be parsed falls back to its declared dependencies, labelled direct-only.
-    if !repo.path.join("gradle.lockfile").is_file() {
+    if fleetreach_maven::gradle_lockfile(&repo.path).is_none() {
         let local = crate::maven_repo::local();
         let mut sources: Vec<&dyn fleetreach_maven::PomSource> = vec![&local];
         if let Some(remote) = remote {
@@ -2575,7 +2577,7 @@ fn scan_maven_repo(
             });
         }
     }
-    let direct_only = !repo.path.join("gradle.lockfile").is_file();
+    let direct_only = fleetreach_maven::gradle_lockfile(&repo.path).is_none();
     match fleetreach_maven::scan_offline(&repo.path, db, &repo.id) {
         Ok(scan) if direct_only => RepoResult::scanned(&repo.id, scan.findings, Vec::new())
             .with_skipped(scan.skipped_unparseable)

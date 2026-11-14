@@ -15,9 +15,7 @@ use fleetreach_core::{Ecosystem, RepoId, VulnFinding};
 
 use crate::db::{affected_fixed, Advisory, MavenDb};
 use crate::error::MavenError;
-use crate::lockfile::{
-    check_gradle_lockfile, parse_gradle_lockfile, parse_pom_xml, InstalledPackage,
-};
+use crate::lockfile::{gradle_lockfile, parse_pom_xml, read_gradle_lockfile, InstalledPackage};
 use crate::version::{parse_maven_version, to_semver, Version};
 
 /// Scan the Java project at `repo_dir` against the preloaded OSV DB, without a Java toolchain.
@@ -31,19 +29,18 @@ use crate::version::{parse_maven_version, to_semver, Version};
 /// lockfile is damaged ([`check_gradle_lockfile`](crate::check_gradle_lockfile)) — failing
 /// closed, so an unreadable/absent manifest is an honest gap.
 pub fn scan_offline(repo_dir: &Path, db: &MavenDb, repo: &RepoId) -> Result<TierCScan, MavenError> {
-    let gradle = repo_dir.join("gradle.lockfile");
     let pom = repo_dir.join("pom.xml");
 
-    let installed: Vec<InstalledPackage> = if gradle.is_file() {
+    let installed: Vec<InstalledPackage> = if let Some(name) = gradle_lockfile(repo_dir) {
+        let gradle = repo_dir.join(name);
         let text = fleetreach_core::repofile::read_to_string(&gradle)
             .map_err(|e| MavenError::db(&gradle, e))?;
-        check_gradle_lockfile(&text).map_err(|e| {
+        read_gradle_lockfile(name, &text).map_err(|e| {
             MavenError::db(
                 &gradle,
                 std::io::Error::new(std::io::ErrorKind::InvalidData, e),
             )
-        })?;
-        parse_gradle_lockfile(&text)
+        })?
     } else {
         let text =
             fleetreach_core::repofile::read_to_string(&pom).map_err(|e| MavenError::db(&pom, e))?;
