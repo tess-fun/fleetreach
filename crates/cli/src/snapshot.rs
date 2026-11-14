@@ -87,6 +87,7 @@ fn classify(path: &str) -> Kind {
     let top = path.split('/').next().unwrap_or(path);
     if name.ends_with(".partial")
         || name == "all.zip.index.json"
+        || name == "all.zip.names.json"
         || top == MANIFEST
         || top.starts_with(".import-")
         || (top.starts_with("snapshot-") && top.ends_with(".json"))

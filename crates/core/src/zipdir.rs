@@ -30,6 +30,8 @@ pub struct Archive {
     /// The file's length, so a read never runs past it.
     len_bytes: u64,
     members: Vec<Member>,
+    /// SHA-256 of the file length, the kept member count and the central directory.
+    fingerprint: String,
 }
 
 /// The error for a member that is not UTF-8 text.
@@ -232,11 +234,33 @@ impl Archive {
                 deflated,
             });
         }
+        let fingerprint = {
+            use sha2::{Digest, Sha256};
+            let mut h = Sha256::new();
+            h.update(len.to_le_bytes());
+            h.update((members.len() as u64).to_le_bytes());
+            h.update(&cd);
+            h.finalize()
+                .iter()
+                .fold(String::with_capacity(64), |mut out, b| {
+                    out.push(char::from(b"0123456789abcdef"[usize::from(b >> 4)]));
+                    out.push(char::from(b"0123456789abcdef"[usize::from(b & 0xf)]));
+                    out
+                })
+        };
         Ok(Archive {
             file,
             len_bytes: len,
             members,
+            fingerprint,
         })
+    }
+
+    /// What the archive holds, as far as its central directory tells: any change to a kept
+    /// member's name, size, checksum or place changes it. Hex SHA-256.
+    #[must_use]
+    pub fn fingerprint(&self) -> &str {
+        &self.fingerprint
     }
 
     /// Members kept.
@@ -268,8 +292,26 @@ impl Archive {
     /// about a megabyte per read, instead of two reads each: npm's export is some 230,000
     /// members, and the reads were most of a scan's time.
     pub fn par_read<R: Send>(&self, f: impl Fn(io::Result<Vec<u8>>) -> R + Sync) -> Vec<R> {
+        self.par_read_some((0..self.members.len()).collect(), f)
+            .into_iter()
+            .map(|(_, r)| r)
+            .collect()
+    }
+
+    /// [`Archive::par_read`] of the members `which` only (indices past the end are left out),
+    /// each result with its member index, in member order.
+    pub fn par_read_some<R: Send>(
+        &self,
+        which: Vec<usize>,
+        f: impl Fn(io::Result<Vec<u8>>) -> R + Sync,
+    ) -> Vec<(usize, R)> {
         use rayon::prelude::*;
-        let mut order: Vec<usize> = (0..self.members.len()).collect();
+        let mut order: Vec<usize> = which
+            .into_iter()
+            .filter(|&i| i < self.members.len())
+            .collect();
+        order.sort_unstable();
+        order.dedup();
         order.sort_by_key(|&i| self.members.get(i).map_or(0, |m| m.header));
         let mut runs: Vec<&[usize]> = Vec::new();
         let mut rest = order.as_slice();
@@ -294,7 +336,7 @@ impl Archive {
             .flat_map_iter(|run| self.read_run(run, &f))
             .collect();
         out.sort_by_key(|(i, _)| *i);
-        out.into_iter().map(|(_, r)| r).collect()
+        out
     }
 
     /// `f` of each member of `run` (sorted by offset), from one read of the bytes they span. A member

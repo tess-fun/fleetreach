@@ -244,7 +244,7 @@ fn locate_in(dir: &Path, eco: Ecosystem) -> Option<PathBuf> {
     }
     let has_records = std::fs::read_dir(&eco_dir).ok()?.flatten().any(|e| {
         e.path().extension().and_then(|x| x.to_str()) == Some("json")
-            && !e.file_name().to_string_lossy().ends_with(".meta.json")
+            && !is_companion(&e.file_name().to_string_lossy())
     });
     has_records.then_some(eco_dir)
 }
@@ -1033,7 +1033,7 @@ fn locate_export(root: &Path, export: &str) -> Option<PathBuf> {
             }
             let has_records = std::fs::read_dir(&dir).ok()?.flatten().any(|e| {
                 e.path().extension().and_then(|x| x.to_str()) == Some("json")
-                    && !e.file_name().to_string_lossy().ends_with(".meta.json")
+                    && !is_companion(&e.file_name().to_string_lossy())
             });
             has_records.then_some(dir)
         })
@@ -1405,6 +1405,12 @@ pub(crate) fn human_age(secs: u64) -> String {
         s if s < 86_400 => format!("{}h", s / 3600),
         s => format!("{}d", s / 86_400),
     }
+}
+
+/// A file kept beside an export that is not an OSV record: its metadata, or the names index
+/// the loader saves next to an `all.zip`.
+fn is_companion(name: &str) -> bool {
+    name.ends_with(".meta.json") || name == "all.zip.names.json" || name == "all.zip.index.json"
 }
 
 #[cfg(test)]

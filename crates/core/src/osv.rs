@@ -289,14 +289,14 @@ pub fn affected_fixed<V: Ord + Clone>(
 // the wire schema, the parallel dir/zip reader, the by-package index, and the parse-once
 // range building all live here, once — the place where a missed case is a false-clean.
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use rayon::prelude::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::semver::{Version, VersionReq};
@@ -676,6 +676,38 @@ fn record_advisories<V: Ord + Clone>(
     Ok(out)
 }
 
+/// A record's `(ecosystem, name)` pairs as written, and the advisories it gives.
+type Named<V> = (Vec<(String, String)>, Vec<(String, Advisory<V>)>);
+
+/// [`record_advisories`] with a filter, also giving the record's `(ecosystem, name)` pairs
+/// as written, for the [`NamesIndex`].
+fn record_advisories_naming<V: Ord + Clone>(
+    body: &str,
+    spec: &Spec<V>,
+    skip: &BTreeSet<String>,
+    keep: Keep<'_>,
+) -> Result<Named<V>, serde_json::Error> {
+    let names: Names<'_> = serde_json::from_str(body)?;
+    let pairs: Vec<(String, String)> = names
+        .affected
+        .iter()
+        .filter_map(|a| {
+            Some((
+                a.package.ecosystem.as_deref()?.to_string(),
+                a.package.name.as_deref()?.to_string(),
+            ))
+        })
+        .collect();
+    let wanted = pairs
+        .iter()
+        .any(|(e, n)| e == spec.ecosystem && keep(&(spec.normalize_name)(n)));
+    if !wanted {
+        return Ok((pairs, Vec::new()));
+    }
+    let out = record_advisories(body, spec, skip, Some(keep))?;
+    Ok((pairs, out))
+}
+
 fn load_dir<V>(
     root: &Path,
     spec: &Spec<V>,
@@ -717,21 +749,149 @@ where
 {
     let archive = crate::zipdir::Archive::open(path, |name| name.ends_with(".json"))
         .map_err(|e| LoadError::new(path, zip_error(e)))?;
+    let text = |body: std::io::Result<Vec<u8>>| {
+        body.and_then(|b| String::from_utf8(b).map_err(|_| crate::zipdir::not_utf8()))
+            .map_err(|e| LoadError::new(path, zip_error(e)))
+    };
 
-    let per_entry: Vec<Vec<(String, Advisory<V>)>> = archive
-        .par_read(|body| {
-            let body = body
-                .and_then(|b| String::from_utf8(b).map_err(|_| crate::zipdir::not_utf8()))
-                .map_err(|e| LoadError::new(path, zip_error(e)))?;
-            record_advisories(&body, spec, skip, keep).map_err(|e| LoadError::new(path, e))
-        })
-        .into_iter()
-        .collect::<Result<_, LoadError>>()?;
+    let per_entry: Vec<Vec<(String, Advisory<V>)>> = match keep {
+        None => archive
+            .par_read(|body| {
+                record_advisories(&text(body)?, spec, skip, None)
+                    .map_err(|e| LoadError::new(path, e))
+            })
+            .into_iter()
+            .collect::<Result<_, LoadError>>()?,
+        Some(keep) => match NamesIndex::read(path, &archive) {
+            // Only the records naming a kept package are read at all.
+            Some(index) => {
+                let wanted = index.members_naming(spec, keep);
+                archive
+                    .par_read_some(wanted, |body| {
+                        record_advisories(&text(body)?, spec, skip, Some(keep))
+                            .map_err(|e| LoadError::new(path, e))
+                    })
+                    .into_iter()
+                    .map(|(_, r)| r)
+                    .collect::<Result<_, LoadError>>()?
+            }
+            // Every record is read as far as its names, which are saved for the next load.
+            None => {
+                let read: Vec<Named<V>> = archive
+                    .par_read(|body| {
+                        record_advisories_naming(&text(body)?, spec, skip, keep)
+                            .map_err(|e| LoadError::new(path, e))
+                    })
+                    .into_iter()
+                    .collect::<Result<_, LoadError>>()?;
+                let (names, per_entry): (Vec<_>, Vec<_>) = read.into_iter().unzip();
+                NamesIndex::build(&archive, names).write(path);
+                per_entry
+            }
+        },
+    };
 
     Ok(OsvDb {
         kept: None,
         by_package: merge(per_entry),
     })
+}
+
+/// `all.zip.names.json`: the `(ecosystem, name)` pairs of every record of an `all.zip`, as
+/// written (not normalized), in member order, tied to the zip by its central directory. With
+/// it a load that keeps a few packages reads only their records; any other zip, or a file
+/// that does not parse, and the load reads every record as before.
+#[derive(Serialize, Deserialize)]
+struct NamesIndex {
+    schema: u32,
+    fingerprint: String,
+    /// Every ecosystem and name, once.
+    strings: Vec<String>,
+    /// Per member, its pairs as indices into `strings`.
+    members: Vec<Vec<(u32, u32)>>,
+}
+
+const NAMES_SCHEMA: u32 = 1;
+
+impl NamesIndex {
+    fn path(zip: &Path) -> PathBuf {
+        let mut name = zip.file_name().unwrap_or_default().to_os_string();
+        name.push(".names.json");
+        zip.with_file_name(name)
+    }
+
+    fn read(zip: &Path, archive: &crate::zipdir::Archive) -> Option<NamesIndex> {
+        let body = std::fs::read(Self::path(zip)).ok()?;
+        let index: NamesIndex = serde_json::from_slice(&body).ok()?;
+        let fits = index.schema == NAMES_SCHEMA
+            && index.fingerprint == archive.fingerprint()
+            && index.members.len() == archive.len()
+            && index.members.iter().flatten().all(|&(e, n)| {
+                (e as usize) < index.strings.len() && (n as usize) < index.strings.len()
+            });
+        fits.then_some(index)
+    }
+
+    fn build(archive: &crate::zipdir::Archive, names: Vec<Vec<(String, String)>>) -> NamesIndex {
+        let mut strings: Vec<String> = Vec::new();
+        let mut at: HashMap<String, u32> = HashMap::new();
+        let mut id = |s: String| -> u32 {
+            if let Some(&i) = at.get(&s) {
+                return i;
+            }
+            let i = u32::try_from(strings.len()).unwrap_or(u32::MAX);
+            strings.push(s.clone());
+            at.insert(s, i);
+            i
+        };
+        let members = names
+            .into_iter()
+            .map(|pairs| pairs.into_iter().map(|(e, n)| (id(e), id(n))).collect())
+            .collect();
+        NamesIndex {
+            schema: NAMES_SCHEMA,
+            fingerprint: archive.fingerprint().to_string(),
+            strings,
+            members,
+        }
+    }
+
+    /// Saved next to the zip when the directory takes it; a load never fails over it.
+    fn write(&self, zip: &Path) {
+        if u32::try_from(self.strings.len()).is_err() {
+            return;
+        }
+        let Ok(body) = serde_json::to_vec(self) else {
+            return;
+        };
+        let path = Self::path(zip);
+        let mut tmp = path.clone().into_os_string();
+        tmp.push(format!(".{}.partial", std::process::id()));
+        let tmp = PathBuf::from(tmp);
+        if std::fs::write(&tmp, body).is_ok() && std::fs::rename(&tmp, &path).is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+    }
+
+    /// The members a record of which names a package `keep` accepts in `spec`'s ecosystem:
+    /// the records [`record_advisories`] would not pass over.
+    fn members_naming<V>(&self, spec: &Spec<V>, keep: Keep<'_>) -> Vec<usize> {
+        let mut wanted_string = vec![None::<bool>; self.strings.len()];
+        let mut wanted = |n: u32| -> bool {
+            let slot = &mut wanted_string[n as usize];
+            *slot.get_or_insert_with(|| keep(&(spec.normalize_name)(&self.strings[n as usize])))
+        };
+        self.members
+            .iter()
+            .enumerate()
+            .filter(|(_, pairs)| {
+                pairs
+                    .iter()
+                    .any(|&(e, n)| self.strings[e as usize] == spec.ecosystem && wanted(n))
+            })
+            .map(|(i, _)| i)
+            .collect()
+    }
 }
 
 /// Fold per-record advisory lists (in their original `affected[]` order) into the by-package
@@ -1634,6 +1794,108 @@ mod tests {
         let full = load(dir.path(), &semver_spec()).unwrap();
         assert_eq!(full.advisories_for("b").len(), 1);
         assert!(!full.missed(), "a full DB never misses");
+    }
+
+    fn write_zip(path: &Path, records: &[(&str, String)]) {
+        use std::io::Write;
+        let mut out = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        for (name, body) in records {
+            out.start_file(*name, options).unwrap();
+            out.write_all(body.as_bytes()).unwrap();
+        }
+        out.finish().unwrap();
+    }
+
+    fn ids(db: &OsvDb<Version>, name: &str) -> Vec<String> {
+        db.advisories_for(name)
+            .iter()
+            .map(|a| a.id.clone())
+            .collect()
+    }
+
+    #[test]
+    fn a_names_index_reads_only_the_records_it_needs_and_follows_the_zip() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip = dir.path().join("all.zip");
+        let sidecar = dir.path().join("all.zip.names.json");
+        write_zip(
+            &zip,
+            &[
+                ("GHSA-1.json", record("GHSA-1", "a", "1.0.0", "")),
+                ("GHSA-2.json", record("GHSA-2", "b", "2.0.0", "")),
+                ("GHSA-3.json", record("GHSA-3", "a", "3.0.0", "")),
+            ],
+        );
+        let spec = semver_spec();
+        let first = load_names(&zip, None, &spec, ["a"]).unwrap();
+        assert_eq!(ids(&first, "a"), ["GHSA-1", "GHSA-3"]);
+        assert!(sidecar.is_file(), "the first filtered load saves the names");
+        let index: NamesIndex = serde_json::from_slice(&std::fs::read(&sidecar).unwrap()).unwrap();
+        let archive = crate::zipdir::Archive::open(&zip, |n| n.ends_with(".json")).unwrap();
+        assert_eq!(index.members_naming(&spec, &|k: &str| k == "b"), [1]);
+        assert_eq!(
+            ids(&load_names(&zip, None, &spec, ["a"]).unwrap(), "a"),
+            ["GHSA-1", "GHSA-3"]
+        );
+
+        // A record now naming `a` too, at the same size: the zip changed, so the index is
+        // read again rather than trusted, and the record is not missed.
+        write_zip(
+            &zip,
+            &[
+                ("GHSA-1.json", record("GHSA-1", "a", "1.0.0", "")),
+                ("GHSA-2.json", record("GHSA-2", "a", "2.0.0", "")),
+                ("GHSA-3.json", record("GHSA-3", "a", "3.0.0", "")),
+            ],
+        );
+        assert_ne!(
+            crate::zipdir::Archive::open(&zip, |n| n.ends_with(".json"))
+                .unwrap()
+                .fingerprint(),
+            archive.fingerprint()
+        );
+        let changed = load_names(&zip, None, &spec, ["a"]).unwrap();
+        assert_eq!(ids(&changed, "a"), ["GHSA-1", "GHSA-2", "GHSA-3"]);
+
+        // An index of another zip, or one that does not parse, is passed over.
+        let other = dir.path().join("other.zip");
+        write_zip(
+            &other,
+            &[("GHSA-9.json", record("GHSA-9", "z", "1.0.0", ""))],
+        );
+        load_names(&other, None, &spec, ["z"]).unwrap();
+        std::fs::copy(dir.path().join("other.zip.names.json"), &sidecar).unwrap();
+        assert_eq!(
+            ids(&load_names(&zip, None, &spec, ["a"]).unwrap(), "a").len(),
+            3
+        );
+        std::fs::write(&sidecar, b"{not json").unwrap();
+        assert_eq!(
+            ids(&load_names(&zip, None, &spec, ["a"]).unwrap(), "a").len(),
+            3
+        );
+        // And a full load never needs it.
+        assert_eq!(ids(&load(&zip, &spec).unwrap(), "a").len(), 3);
+    }
+
+    #[test]
+    fn a_names_index_never_hides_a_broken_record_it_has_not_seen() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip = dir.path().join("all.zip");
+        write_zip(
+            &zip,
+            &[
+                ("GHSA-1.json", record("GHSA-1", "a", "1.0.0", "")),
+                ("GHSA-2.json", "{broken".to_string()),
+            ],
+        );
+        assert!(load_names(&zip, None, &semver_spec(), ["a"]).is_err());
+        assert!(
+            !dir.path().join("all.zip.names.json").exists(),
+            "no index of a zip that does not read in full"
+        );
     }
 
     #[test]

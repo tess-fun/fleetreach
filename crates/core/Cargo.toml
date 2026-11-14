@@ -27,6 +27,8 @@ zip = { version = "9", default-features = false, features = ["deflate-flate2-zli
 # zipdir.rs reads the large exports member by member (pure-Rust inflate on zlib-rs, as zip uses).
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 crc32fast = "1"
+# Fingerprint of an export's central directory, to tie its names index to it. Pure-Rust.
+sha2 = { workspace = true }
 # Severity band + base score from an OSV CVSS_V3 vector. Pure-Rust.
 cvss = { version = "3", default-features = false, features = ["std", "v3"] }
 

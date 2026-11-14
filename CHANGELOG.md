@@ -224,6 +224,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   history read and reuses them. On a 12-run history
   of 10,471 repos the overview takes 45 ms instead of 0.8 to 1.3 s, the triage list 14 ms, and
   the server holds 1.0 GB instead of 2.2 GB, with the same pages.
+- **Scans read only the npm, PyPI and crates.io advisories they need.** Loading the
+  advisories of a few packages used to inflate every record of the export to see its package
+  names; the names of each record are now saved next to the export (`all.zip.names.json`, tied
+  to the export's central directory, so any other export or a damaged file is passed over and
+  the records are read as before). One npm repo scans in 0.15 s instead of 0.43 s, using
+  0.15 CPU-seconds instead of 5.2; 40 npm and PyPI repos in 0.24 s instead of 0.57 s;
+  `whatif` takes 0.06 s instead of 0.37 s and `fix plan` 0.40 s instead of 0.74 s. Reports,
+  SARIF, plans and whatif output are byte-identical.
 - **Reading the history takes half the time.** Snapshots are read in parallel and parsed as
   they inflate, and what was open before the newest run is worked out in one pass. On the same
   history `notify` takes 0.63 s instead of 1.34 s at slightly lower peak memory, and recording
