@@ -40,8 +40,10 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     for (_, text) in &build_constants(dir) {
         kotlin_constants(text, &mut vars, &mut seen_twice);
     }
+    let mut entries = Vec::new();
     for (_, text) in &scripts {
         script_variables(text, &mut vars, &mut seen_twice, &mut aliases);
+        map_entries(text, &mut entries);
     }
     // `val v = extra["k"] as String` and `extra["k"] = Versions.K` name another variable,
     // known once every literal is read.
@@ -54,6 +56,20 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                 _ => {
                     vars.insert(name, value);
                 }
+            }
+        }
+    }
+    // `lib = [ "k": "g:a:${v}" ]` entries, as `lib.k`, once the versions they name are known.
+    for (name, template) in entries {
+        let Ok(value) = expand(&template, &vars) else {
+            continue;
+        };
+        match vars.get(&name) {
+            Some(known) if *known != value => {
+                seen_twice.insert(name);
+            }
+            _ => {
+                vars.insert(name, value);
             }
         }
     }
@@ -401,6 +417,62 @@ fn script_variables(
     }
 }
 
+/// The entries of Groovy map literals, `name = [ "key": "value", ... ]` over several lines (as
+/// `ext.libraries = [...]` builds keep coordinates), as `name.key` and the value as written.
+fn map_entries(text: &str, out: &mut Vec<(String, String)>) {
+    let mut current: Option<String> = None;
+    for line in text.lines() {
+        let mut l = line.trim();
+        if let Some(name) = &current {
+            if l.starts_with(']') {
+                current = None;
+                continue;
+            }
+            let l = l.trim_end_matches(',').trim();
+            let (key, value) = if let Some((key, tail)) = quoted(l) {
+                let Some(value) = tail.trim_start().strip_prefix(':') else {
+                    continue;
+                };
+                (key, value.trim())
+            } else {
+                let Some((key, value)) = l.split_once(':') else {
+                    continue;
+                };
+                let key = key.trim();
+                if key.is_empty() || !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                    continue;
+                }
+                (key, value.trim())
+            };
+            if let Some((value, tail)) = quoted(value) {
+                if tail.trim().is_empty() {
+                    out.push((format!("{name}.{key}"), value.to_string()));
+                }
+            }
+            continue;
+        }
+        for prefix in ["project.ext.", "ext.", "def ", "final "] {
+            l = l.strip_prefix(prefix).unwrap_or(l).trim_start();
+        }
+        let Some((name, open)) = l.split_once('=') else {
+            continue;
+        };
+        let name = name.trim();
+        let plain = !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if plain && open.trim() == "[" {
+            current = Some(name.to_string());
+        }
+    }
+}
+
+/// `lib["k"]` or `lib['k']` as the variable `lib.k`.
+fn map_reference(text: &str) -> Option<String> {
+    let (map, key) = text.split_once('[')?;
+    let (key, tail) = quoted(key.trim())?;
+    let plain = !map.is_empty() && map.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    (plain && tail.trim() == "]").then(|| format!("{map}.{key}"))
+}
+
 /// The variable an unquoted value names: `extra["k"]`, `ext["k"]`, `ext.k`, `property("k")`,
 /// `findProperty("k")` (each with an optional `as String`, `!!` or `.toString()`), or a plain
 /// dotted name such as `Versions.KOTLIN`.
@@ -518,8 +590,19 @@ fn kotlin_constants(text: &str, vars: &mut BTreeMap<String, String>, twice: &mut
 /// The string at the start of `text` and what follows it.
 fn quoted(text: &str) -> Option<(&str, &str)> {
     let q = text.chars().next().filter(|c| *c == '"' || *c == '\'')?;
-    let end = text[1..].find(q)? + 1;
-    Some((&text[1..end], &text[end + 1..]))
+    // A Groovy `${...}` may hold quotes of its own (`"${lib["x"]}"`): skip over it.
+    let bytes = text.as_bytes();
+    let mut i = 1;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'$' if q == '"' && bytes.get(i + 1) == Some(&b'{') => {
+                i += text[i..].find('}')? + 1;
+            }
+            b if b == q as u8 => return Some((&text[1..i], &text[i + 1..])),
+            _ => i += 1,
+        }
+    }
+    None
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -895,6 +978,8 @@ fn expand(text: &str, vars: &BTreeMap<String, String>) -> Result<String, String>
         };
         let name = name.trim();
         let name = name.strip_suffix(".get()").unwrap_or(name);
+        let keyed = map_reference(name);
+        let name = keyed.as_deref().unwrap_or(name);
         let short = [
             "rootProject.ext.",
             "project.ext.",
@@ -1314,6 +1399,15 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
         .trim_start_matches(['"', '\''])
         .trim();
     // A custom configuration (`checkstyle`, `developmentOnly`) is off the runtime classpath.
+    // `testImplementation lib.h2` or `api(lib['x'])`: a map entry or variable holding a
+    // coordinate, read as that string.
+    let bare = rest.trim_start_matches('(').trim_end_matches(')').trim();
+    let resolved = (!bare.starts_with("libs.") && !bare.is_empty())
+        .then(|| map_reference(bare).unwrap_or_else(|| bare.to_string()))
+        .and_then(|key| context.vars.get(&key))
+        .filter(|v| v.contains(':'))
+        .map(|v| format!("\"{v}\""));
+    let rest = resolved.as_deref().unwrap_or(rest);
     let declared = rest.trim_start_matches('(').trim_start();
     // A platform manages versions whichever configuration carries it (Spring Framework's
     // `dependencyManagement(enforcedPlatform(...))`).
@@ -1362,6 +1456,10 @@ fn read_values(
             });
         }
     };
+    // ForgeGradle's `fg.deobf("g:a:v")` remaps the jar; the coordinate is the dependency.
+    if let Some(inner) = rest.strip_prefix("fg.deobf(") {
+        rest = inner.trim();
+    }
     let mut platform = false;
     for prefix in ["enforcedPlatform(", "platform(", "testFixtures("] {
         if let Some(inner) = rest.strip_prefix(prefix) {
@@ -1958,6 +2056,62 @@ set = ["a-b", "e"]
             "{:?}",
             r.missing
         );
+    }
+
+    #[test]
+    fn groovy_map_entries_name_coordinates() {
+        let repo = Mem(BTreeMap::from([
+            pom("a", "3.5.19", &[]),
+            pom("b", "2.0", &[]),
+            pom("c", "1.4", &[]),
+            pom("d", "6.1", &[]),
+        ]));
+        let dir = tree(
+            "groovy-maps",
+            &[
+                ("settings.gradle", ""),
+                (
+                    "build.gradle",
+                    "buildscript {\n    ext {\n        libraries = [\n            aVersion = '3.5.19',\n        ]\n\
+                     \x20       lib = [\n            \"a\"      : \"g:a:${aVersion}\",\n\
+                     \x20           'b-x'    : 'g:b:2.0',\n            c: \"g:c:1.4\",\n\
+                     \x20           \"junit\": \"g:d:6.1\",\n        ]\n    }\n}\n\
+                     dependencies {\n    implementation lib.a\n    api(lib['b-x'])\n\
+                     \x20   testImplementation lib[\"c\"]\n    testImplementation \"${lib[\"junit\"]}\"\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        for (name, want) in [
+            ("g:a", "3.5.19"),
+            ("g:b", "2.0"),
+            ("g:c", "1.4"),
+            ("g:d", "6.1"),
+        ] {
+            assert_eq!(versions(&r, name), [want], "{name} {:?}", r.missing);
+        }
+    }
+
+    #[test]
+    fn forge_deobf_wraps_a_plain_coordinate() {
+        let mut context = context("", &[("project.blockUI_version", "1.0.9"), ("v", "2.1")]);
+        let module = read_script(
+            "dependencies {\n    implementation(fg.deobf(\"com.ldtteam:blockui:${project.blockUI_version}\")){\n\
+             \x20       transitive = false\n    }\n    compileOnly fg.deobf(\"g:x:$v:universal\")\n}\n",
+            &mut context,
+        );
+        let got: Vec<String> = module
+            .deps
+            .iter()
+            .map(|d| {
+                format!(
+                    "{}:{}",
+                    d.coordinate.artifact,
+                    d.coordinate.version.as_deref().unwrap_or("-")
+                )
+            })
+            .collect();
+        assert_eq!(got, ["blockui:1.0.9", "x:2.1"], "{:?}", module.unread);
     }
 
     #[test]

@@ -4,7 +4,9 @@ usage: python3 -I compare.py ORACLE_DIR SBOM_DIR [--misses]
 
 ORACLE_DIR holds run.sh's <repo>.out and <repo>.status; SBOM_DIR holds `fleetreach sbom -f
 cyclonedx --maven-fetch` output, <repo>.cdx.json. The oracle set is every external module on
-any project's compile, runtime, test-compile or test-runtime classpath. A module counts as found
+any project's compile, runtime, test-compile or test-runtime classpath. ForgeGradle reports the
+copies it remaps as `<version>_mapped_<mappings>`, a local name, not a published version; the
+suffix is dropped so the published version is compared. A module counts as found
 when fleetreach lists the same group:name at the same version ("exact") or at any version
 ("name"). Modules Gradle could not resolve are left out of both sides.
 """
@@ -22,7 +24,7 @@ def oracle(path):
         parts = line.split()
         if len(parts) == 4 and parts[0] == "FA":
             g, n, v = parts[3].split(":", 2)
-            mods.add((g, n, v))
+            mods.add((g, n, v.split("_mapped_")[0]))
     return mods
 
 
