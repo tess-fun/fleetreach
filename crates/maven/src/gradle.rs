@@ -140,6 +140,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         catalog,
         plugins,
         used: BTreeSet::new(),
+        exported: true,
         extended_by,
         spring_dm: scripts
             .iter()
@@ -223,7 +224,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             let mut queue: VecDeque<(usize, &'static str)> = modules[start]
                 .project_deps
                 .iter()
-                .filter_map(|(path, scope)| match by_path.get(path) {
+                .filter_map(|(path, scope, _)| match by_path.get(path) {
                     Some(&i) => Some((i, *scope)),
                     None => {
                         missing.insert(format!("project `{path}` is not a build file here"));
@@ -236,22 +237,25 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                     continue;
                 }
                 let m = &modules[i];
-                let through = |own: &'static str| match (scope, own) {
+                // What p declares in `implementation` is on this file's runtime classpath
+                // only; its `api` reaches the compile classpath too.
+                let through = |own: &'static str, exported: bool| match (scope, own) {
                     (_, "test" | "provided") => None,
                     ("test" | "provided", _) => Some(scope),
                     ("runtime", _) | (_, "runtime") => Some("runtime"),
+                    _ if !exported => Some("runtime"),
                     _ => Some("compile"),
                 };
                 for d in &m.deps {
-                    if let Some(scope) = through(d.scope) {
+                    if let Some(scope) = through(d.scope, d.exported) {
                         deps.push(Declared { scope, ..d.clone() });
                     }
                 }
                 let own = m.shared_from.unwrap_or(m.platforms.len());
                 platforms.extend(m.platforms[..own].iter().filter(|c| !c.enforced).cloned());
                 constraints.extend(m.constraints.iter().filter(|c| !c.enforced).cloned());
-                for (path, own) in &m.project_deps {
-                    if let (Some(&j), Some(next)) = (by_path.get(path), through(own)) {
+                for (path, own, exported) in &m.project_deps {
+                    if let (Some(&j), Some(next)) = (by_path.get(path), through(own, *exported)) {
                         queue.push_back((j, next));
                     }
                 }
@@ -274,6 +278,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             scope: "test",
             exclusions: Vec::new(),
             pom: false,
+            exported: false,
         })
         .collect();
     if !unused.is_empty() {
@@ -303,21 +308,33 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             continue;
         }
         // Gradle resolves each configuration on its own, so a test dependency cannot raise a
-        // version on the main classpath. Resolve the main classpath first; what only the full
-        // (test) resolution adds is test-only.
+        // version on the main classpath, nor a runtime one on the compile classpath. Resolve
+        // the main classpath first; what only the compile classpath (without runtime
+        // dependencies) or the full (test) resolution adds is off the runtime classpath.
         let has_test = module.deps.iter().any(|d| d.scope == "test");
         let has_main = module.deps.iter().any(|d| d.scope != "test");
+        let has_runtime = module
+            .deps
+            .iter()
+            .chain(&module.via_projects)
+            .any(|d| d.scope == "runtime");
         let mut main = BTreeSet::new();
-        let passes: &[bool] = match (has_main, has_test) {
-            (true, true) => &[true, false],
-            _ => &[false],
-        };
-        for &main_only in passes {
+        let mut passes: Vec<Pass> = Vec::new();
+        if has_main && (has_test || has_runtime) {
+            passes.push(Pass::Main);
+        }
+        if has_main && has_runtime {
+            passes.push(Pass::Compile);
+        }
+        passes.push(Pass::Full);
+        let split = passes.len() > 1;
+        for &pass in &passes {
             match resolve_gradle_module(
-                &module.to_pom(main_only),
+                &module.to_pom(pass),
                 source,
                 &bom_overrides,
                 &module.enforced(),
+                pass == Pass::Compile,
             ) {
                 Ok(one) => {
                     missing.extend(one.missing);
@@ -326,9 +343,9 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                     }
                     for mut p in one.packages {
                         let key = (p.name.clone(), p.version.clone());
-                        if main_only {
+                        if pass == Pass::Main {
                             main.insert(key.clone());
-                        } else if passes.len() > 1 && !main.contains(&key) {
+                        } else if split && !main.contains(&key) {
                             p.dev = true;
                         }
                         packages
@@ -767,6 +784,20 @@ struct Declared {
     exclusions: Vec<(String, String)>,
     /// A `platform(...)`: Gradle lists the BOM itself as a module of the configuration.
     pom: bool,
+    /// Declared in `api` (or another configuration a consumer compiles against): on the
+    /// compile classpath of a project that depends on this one. `implementation` is not.
+    exported: bool,
+}
+
+/// One of the classpaths a build file is resolved for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pass {
+    /// Compile and runtime, without test dependencies.
+    Main,
+    /// `compileClasspath`: what the main sources compile against.
+    Compile,
+    /// Everything, tests included.
+    Full,
 }
 
 #[derive(Debug, Default)]
@@ -784,8 +815,9 @@ struct Module {
     /// Where the root's shared platforms start in `platforms`: they are applied before this
     /// file's own, so a later import here overrides them.
     shared_from: Option<usize>,
-    /// `implementation project(":p")`: by Gradle project path, with this file's scope.
-    project_deps: Vec<(String, &'static str)>,
+    /// `implementation project(":p")`: by Gradle project path, with this file's scope and
+    /// whether it is exported (`api project(":p")`).
+    project_deps: Vec<(String, &'static str, bool)>,
     /// What those projects put on this file's classpaths: their own dependencies, never this
     /// file's declarations (the Spring plugin keeps only a file's own declared versions).
     via_projects: Vec<Declared>,
@@ -846,8 +878,8 @@ impl Module {
         }
     }
 
-    /// The build file as a POM; with `main_only`, without its test dependencies.
-    fn to_pom(&self, main_only: bool) -> String {
+    /// The build file as a POM, with the dependencies of one resolution `pass`.
+    fn to_pom(&self, pass: Pass) -> String {
         let xml = |text: &str| {
             text.replace('&', "&amp;")
                 .replace('<', "&lt;")
@@ -877,7 +909,11 @@ impl Module {
             .deps
             .iter()
             .chain(&self.via_projects)
-            .filter(|d| !main_only || d.scope != "test")
+            .filter(|d| match pass {
+                Pass::Main => d.scope != "test",
+                Pass::Compile => !matches!(d.scope, "test" | "runtime"),
+                Pass::Full => true,
+            })
             .collect();
         // Gradle drops a module's dependency only when every edge to it excludes it, so an
         // artifact declared twice keeps just the exclusions all its declarations share.
@@ -1287,6 +1323,8 @@ struct Context {
     plugins: BTreeMap<String, String>,
     /// Catalog aliases some build file names.
     used: BTreeSet<String>,
+    /// Whether the declaration being read is exported (see `exported_by`).
+    exported: bool,
     /// `testImplementation.extendsFrom testShadow`: a custom configuration to the standard one
     /// that takes it in, so it gets that one's scope.
     extended_by: BTreeMap<String, String>,
@@ -1469,6 +1507,9 @@ enum Block {
     ManagedVersions,
     /// `subprojects { }`, `allprojects { }`, `configure(subprojects...) { }`.
     Shared,
+    /// `testing { suites { } }` or `testing.suites { }`: JVM test suites, whose
+    /// `dependencies { implementation(...) }` are test dependencies.
+    Suites,
     /// An `if`/`else` branch a default build takes (no `-D` or `-P` flags): read as the
     /// block around it.
     Taken,
@@ -1516,8 +1557,19 @@ fn read_script(text: &str, context: &mut Context) -> Module {
             module.constraints.len(),
             module.project_platforms.len(),
         );
+        let projects_before = module.project_deps.len();
         if decided.is_none() {
             read_line(trimmed, current, &blocks, context, &mut module);
+        }
+        // caffeine's `testing.suites { named<JvmTestSuite>("test") { dependencies {
+        // implementation(libs.jazzer) } } }` is its test classpath.
+        if blocks.contains(&Block::Suites) {
+            for d in &mut module.deps[before.0..] {
+                d.scope = "test";
+            }
+            for p in &mut module.project_deps[projects_before..] {
+                p.1 = "test";
+            }
         }
         // `implementation("g:a:1") { exclude(...) }`: the block's excludes belong to the
         // declarations its opening line made, here and in the shared copy.
@@ -1591,6 +1643,8 @@ fn read_script(text: &str, context: &mut Context) -> Module {
                     || after_word.starts_with("(allprojects")))
         {
             Some(Block::Shared)
+        } else if word == "testing" {
+            Some(Block::Suites)
         } else {
             None
         };
@@ -1916,6 +1970,8 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
             scope: "compile",
             exclusions: Vec::new(),
             pom: false,
+            // The Kotlin plugin adds the standard library to `api`.
+            exported: true,
         });
     }
 }
@@ -1987,7 +2043,23 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
             .push(format!("`{line}` is not a plain declaration"));
         return;
     };
+    let configuration = context
+        .extended_by
+        .get(&name)
+        .map_or(name.as_str(), String::as_str);
+    context.exported = exported_by(configuration);
     read_values(rest, scope, block, context, module);
+    context.exported = true;
+}
+
+/// Whether a configuration's dependencies reach the compile classpath of a project that
+/// depends on this one: `api`, the old `compile`, and the variants ending so
+/// (`commonMainApi`). `implementation` and `runtimeOnly` do not.
+fn exported_by(configuration: &str) -> bool {
+    configuration == "api"
+        || configuration == "compile"
+        || configuration.ends_with("Api")
+        || (configuration.ends_with("Compile") && !configuration.ends_with("TestCompile"))
 }
 
 /// `read_declaration`, with what an `enforcedPlatform(...)` adds marked strict.
@@ -2050,6 +2122,7 @@ fn read_declaration(
     }
     let mut rest = text.trim().trim_start_matches('(').trim();
     let whole = text.trim();
+    let exported = context.exported;
     let add = |module: &mut Module, c: Coordinate, platform: bool| {
         if platform {
             if c.version.is_some() && block == Block::Dependencies {
@@ -2058,6 +2131,7 @@ fn read_declaration(
                     scope,
                     exclusions: Vec::new(),
                     pom: true,
+                    exported,
                 });
             }
             module.platforms.push(c);
@@ -2072,6 +2146,7 @@ fn read_declaration(
                 scope,
                 exclusions: Vec::new(),
                 pom: false,
+                exported,
             });
         }
     };
@@ -2111,6 +2186,7 @@ fn read_declaration(
                         scope,
                         exclusions: Vec::new(),
                         pom: true,
+                        exported,
                     });
                 }
                 module.platforms.push(c);
@@ -2133,7 +2209,9 @@ fn read_declaration(
     if local.iter().any(|p| rest.starts_with(p)) {
         if block == Block::Dependencies {
             if let Some(path) = project_path(rest) {
-                module.project_deps.push((path.to_string(), scope));
+                module
+                    .project_deps
+                    .push((path.to_string(), scope, exported));
             }
         }
         return;
@@ -2241,6 +2319,7 @@ mod tests {
             catalog: Catalog::parse(toml).unwrap(),
             plugins: BTreeMap::new(),
             used: BTreeSet::new(),
+            exported: true,
             extended_by: BTreeMap::new(),
             spring_dm: false,
         }
@@ -3180,12 +3259,12 @@ set = ["a-b", "e"]
         );
         let r = resolve_gradle(&dir, &repo);
         let set = |name: &str| versions(&r, name).into_iter().collect::<BTreeSet<_>>();
-        // lib keeps its x 1; app takes x 2 (its own, the higher) and y 2 (lib's, the higher).
-        assert_eq!(
-            set("g:x"),
-            BTreeSet::from(["1".to_string(), "2".to_string()])
-        );
-        assert_eq!(set("g:y"), BTreeSet::from(["2".to_string()]));
+        // lib keeps its x 1; app takes x 2 (its own, the higher) and, at run time, y 2 (lib's,
+        // the higher). lib's `implementation` stays off app's compile classpath, so app
+        // compiles against its own y 1.
+        let both = BTreeSet::from(["1".to_string(), "2".to_string()]);
+        assert_eq!(set("g:x"), both);
+        assert_eq!(set("g:y"), both);
         assert!(
             r.missing.iter().any(|m| m.contains("project `:gone`")),
             "{:?}",
@@ -3195,6 +3274,76 @@ set = ["a-b", "e"]
         assert_eq!(scope_of("jmhImplementation"), "test");
         assert_eq!(scope_of("benchmarkImplementation"), "test");
         assert_eq!(scope_of("modImplementation"), "compile");
+    }
+
+    #[test]
+    fn a_siblings_implementation_stays_off_the_compile_classpath() {
+        // mybatis-plus's generator compiles against springfox's spring 5.2.0: the 5.3.39 its
+        // sibling declares in `implementation` is on its runtime classpath only. With `api`, the
+        // sibling's version reaches the compile classpath too.
+        let repo = Mem(BTreeMap::from([
+            pom("fox", "1", &[("spring", "1")]),
+            pom("spring", "1", &[]),
+            pom("spring", "2", &[]),
+        ]));
+        for (configuration, expected) in [("implementation", vec!["1", "2"]), ("api", vec!["2"])] {
+            let dir = tree(
+                &format!("sibling-{configuration}"),
+                &[
+                    ("settings.gradle", "include 'lib', 'app'\n"),
+                    (
+                        "lib/build.gradle",
+                        &format!("dependencies {{\n    {configuration} 'g:spring:2'\n}}\n"),
+                    ),
+                    (
+                        "app/build.gradle",
+                        "dependencies {\n    implementation project(':lib')\n\
+                         \x20   implementation 'g:fox:1'\n}\n",
+                    ),
+                ],
+            );
+            let r = resolve_gradle(&dir, &repo);
+            let spring: Vec<_> = r
+                .packages
+                .iter()
+                .filter(|p| p.name == "g:spring")
+                .map(|p| (p.version.as_str(), p.dev))
+                .collect();
+            let want: Vec<_> = expected.iter().map(|v| (*v, *v == "1")).collect();
+            assert_eq!(spring, want, "{configuration}: {:?}", r.missing);
+        }
+    }
+
+    #[test]
+    fn test_suite_dependencies_are_test_dependencies() {
+        // caffeine declares jazzer and lincheck in `testing.suites { named<JvmTestSuite>("test")
+        // { dependencies { implementation(...) } } }`: its test classpath, not the main one.
+        let repo = Mem(BTreeMap::from([
+            pom("a", "1", &[("x", "1")]),
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+        ]));
+        let dir = tree(
+            "test-suites",
+            &[
+                ("settings.gradle", ""),
+                (
+                    "build.gradle.kts",
+                    "dependencies {\n    implementation(\"g:a:1\")\n}\n\
+                     testing.suites {\n    named<JvmTestSuite>(\"test\") {\n\
+                     \x20       dependencies {\n            implementation(\"g:x:2\")\n\
+                     \x20       }\n    }\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        let x: Vec<_> = r
+            .packages
+            .iter()
+            .filter(|p| p.name == "g:x")
+            .map(|p| (p.version.as_str(), p.dev))
+            .collect();
+        assert_eq!(x, [("1", false), ("2", true)], "{:?}", r.missing);
     }
 
     #[test]

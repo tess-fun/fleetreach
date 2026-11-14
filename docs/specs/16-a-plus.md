@@ -914,18 +914,21 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   ~/fa-testbed/gradle (208 Android/KMP skipped, they need the Android SDK). **56 resolved**;
   47 fail for reasons of their own (dead plugin repositories, toolchains Gradle cannot fetch
   on arm64, files the sparse clone lacks, plugins that need a full checkout). On the same POMs
-  (Gradle's own download cache), **85.7% of 9,550 modules at Gradle's version, 90.6% by name**,
+  (Gradle's own download cache), **85.9% of 9,550 modules at Gradle's version, 90.6% by name**,
   from 59.7% and 70.0% for the reader before this round; median repo 98.1% exact, 48 of 56 at
-  90% or more. **95.2% and 98.4% on the 51 builds whose dependencies no build plugin adds**:
+  90% or more. **95.6% and 98.4% on the 51 builds whose dependencies no build plugin adds**:
   the five others (ideavim and MinecraftDev on the IntelliJ Platform plugin, Paper and
   WorldEdit on paperweight's dev bundle, minecolonies on ForgeGradle) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 631 misses remain in
-  the other builds. Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 360 misses remain in
+  the 51 builds, ihub-pub's included. Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
   that Gradle never builds as part of the project. Later rules: the main classpath resolved
   without test dependencies (mybatis-plus's starter-test modules, 117 misses corpus-wide),
-  `exclude` and `transitive = false` (CosId 402 to 346 listed, no exact loss), buildscript
+  `exclude` and `transitive = false` (CosId 402 to 346 listed, no exact loss), the compile
+  classpath resolved apart from the runtime one, a sibling's `implementation` staying off it
+  (mybatis-plus's generator, 20 modules; pulsar's platform built in code from the whole catalog
+  is not read, 2 extras), `testing.suites` dependencies as test ones, buildscript
   `classpath` plugin versions with `apply plugin:` (spring-integration-samples 333 to 414),
   `lib."k"` (mybatis-plus 236 to 340), `set('k', v)` properties and POM relocations, which
   Gradle keeps and adds the target of, unlike Maven, which replaces (spring-integration-samples

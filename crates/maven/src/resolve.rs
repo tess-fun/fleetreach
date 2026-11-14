@@ -630,6 +630,9 @@ struct Resolver<'s> {
     repo_ids: BTreeSet<String>,
     /// The build's `.mvn/maven.config` arguments (Maven only).
     cli: MavenCli,
+    /// Resolving Gradle's `compileClasspath`: runtime-scoped dependencies are not on it and
+    /// take no part in its conflict resolution.
+    compile_only: bool,
 }
 
 impl Resolver<'_> {
@@ -1570,6 +1573,7 @@ fn resolve_modules(
         loose: BTreeSet::new(),
         repo_ids: BTreeSet::new(),
         cli: MavenCli::read(dir),
+        compile_only: false,
     };
     // Where each module lives, first, so the reactor can serve its own parents and BOMs.
     let mut stack = vec![dir.to_path_buf()];
@@ -1647,6 +1651,7 @@ pub(crate) fn resolve_gradle_module(
     source: &dyn PomSource,
     bom_overrides: &BTreeMap<String, String>,
     enforced: &Enforced,
+    compile_only: bool,
 ) -> Result<Resolution, String> {
     const MAX_PASSES: usize = 32;
     let mut r = Resolver {
@@ -1663,6 +1668,7 @@ pub(crate) fn resolve_gradle_module(
         loose: BTreeSet::new(),
         repo_ids: BTreeSet::new(),
         cli: MavenCli::default(),
+        compile_only,
     };
     let modules = vec![r.effective(xml, None, 0)?];
     let local = BTreeMap::new();
@@ -1931,6 +1937,9 @@ fn walk(
         }
     };
     while let Some((dep, depth, parent, scope, mut exclusions, root_ix)) = queue.pop_front() {
+        if r.compile_only && scope == "runtime" {
+            continue;
+        }
         let key = if r.gradle {
             dep.mgmt_key()
         } else {
