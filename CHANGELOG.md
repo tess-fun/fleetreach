@@ -46,16 +46,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 79.2% of the 9,550 modules at Gradle's version and 86.7% by name, up from 59.7% and
-  70.0% on the same POMs; 87.8% and 94.0% on the 51 builds whose dependencies no build plugin
-  adds. Newly read: the root's `subprojects`/`allprojects`/`configure` blocks, Spring
+  now lists 81.7% of the 9,550 modules at Gradle's version and 88.0% by name, up from 59.7% and
+  70.0% on the same POMs; 90.8% and 95.6% on the 51 builds whose dependencies no build plugin
+  adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
+  configuration on its own, so a test library no longer raises a version the shipped code
+  uses. Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  twice keeps only the exclusions both declarations share), which drops about 180 packages
+  Gradle never puts on a classpath. Newly read: the root's `subprojects`/`allprojects`/`configure` blocks, Spring
   `dependencyManagement` (BOM imports, managed versions, and project properties that override
   a BOM's properties), `platform(project(...))` from `java-platform` projects, the Spring Boot
   plugin's `BOM_COORDINATES`, catalog versions as `libs.versions.x`, catalogs declared in the
   settings script, Groovy dependency maps (`lib = [ "k": "g:a:v" ]`), rich version blocks
   (`strictly`, `require`, `prefer`), custom configurations that a standard one `extendsFrom`,
-  map notation on custom configurations, ForgeGradle's `fg.deobf`, and variables that name
-  other variables. The harness is in `docs/differential/gradle`.
+  map notation on custom configurations, ForgeGradle's `fg.deobf`, plugin versions from a
+  `buildscript` `classpath` line with `apply plugin:`, Groovy map entries as `lib."k"`, and
+  variables that name other variables. The harness is in `docs/differential/gradle`.
 - **gradle-consistent-versions' `versions.lock` is read as a full lockfile** (beside its
   `versions.props`), checked so a damaged file is refused.
 - **POMs are read from Gradle's download cache** (`$GRADLE_USER_HOME` or `~/.gradle`,

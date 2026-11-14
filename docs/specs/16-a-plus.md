@@ -914,13 +914,22 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   ~/fa-testbed/gradle (208 Android/KMP skipped, they need the Android SDK). **56 resolved**;
   47 fail for reasons of their own (dead plugin repositories, toolchains Gradle cannot fetch
   on arm64, files the sparse clone lacks, plugins that need a full checkout). On the same POMs
-  (Gradle's own download cache), **79.2% of 9,550 modules at Gradle's version, 86.7% by name**,
-  from 59.7% and 70.0% for the reader before this round; median repo 93% exact, 36 of 56 at
-  90% or more. **87.8% and 94.0% on the 51 builds whose dependencies no build plugin adds**:
+  (Gradle's own download cache), **81.7% of 9,550 modules at Gradle's version, 88.0% by name**,
+  from 59.7% and 70.0% for the reader before this round; median repo 93.3% exact, 37 of 56 at
+  90% or more. **90.8% and 95.6% on the 51 builds whose dependencies no build plugin adds**:
   the five others (ideavim and MinecraftDev on the IntelliJ Platform plugin, Paper and
-  WorldEdit on paperweight's dev bundle, minecolonies on ForgeGradle) hold 1,005 of the 1,991
-  misses, which a static read cannot see by design. Of the rest, 501 are the right package at
-  another version and 485 absent. Every rule came from a real miss: root shared blocks
+  WorldEdit on paperweight's dev bundle, minecolonies on ForgeGradle) hold most of the
+  misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 746 misses remain in
+  the other builds. Packages fleetreach lists that Gradle does not fell from 3,064 to 2,885
+  once exclusions were read; most of the rest are fixture and example builds inside the repos
+  that Gradle never builds as part of the project. Later rules: the main classpath resolved
+  without test dependencies (mybatis-plus's starter-test modules, 117 misses corpus-wide),
+  `exclude` and `transitive = false` (CosId 402 to 346 listed, no exact loss), buildscript
+  `classpath` plugin versions with `apply plugin:` (spring-integration-samples 333 to 414),
+  `lib."k"` (mybatis-plus 236 to 337). Known limit: Gradle keeps a dependency unless every path
+  to it excludes it, while the resolver applies the nearest path's exclusions (jreleaser, 1
+  package). Every rule came from a real miss: root shared blocks
   (dgs 2% to 61%), Spring `dependencyManagement` read as management, BOM property overrides
   (conductor's Jackson), `platform(project(...))` and from a shared block with
   `dependencies.project(path: ...)` under any configuration (spring-framework 3.5% to 83.5%),

@@ -117,8 +117,14 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     }
     for (_, text) in &scripts {
         for line in text.lines() {
-            if let Some((id, Some(version))) = plugin_line(line.trim(), &catalog) {
+            let line = line.trim();
+            if let Some((id, Some(version))) = plugin_line(line, &catalog) {
                 plugins.entry(id).or_insert(version);
+            }
+            // `buildscript { dependencies { classpath "g:a:v" } }` puts a plugin on the
+            // build's classpath at that version; `apply plugin:` then applies it.
+            if let Some((id, version)) = classpath_plugin(line, &vars) {
+                plugins.entry(id.to_string()).or_insert(version);
             }
         }
     }
@@ -205,6 +211,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         .map(|(_, coordinate)| Declared {
             coordinate: coordinate.clone(),
             scope: "test",
+            exclusions: Vec::new(),
         })
         .collect();
     if !unused.is_empty() {
@@ -233,24 +240,42 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         if module.deps.is_empty() {
             continue;
         }
-        match resolve_gradle_module(&module.to_pom(), source, &bom_overrides) {
-            Ok(one) => {
-                missing.extend(one.missing);
-                for (from, to) in one.graph.edges() {
-                    graph.add_edges(from, [to.to_string()]);
+        // Gradle resolves each configuration on its own, so a test dependency cannot raise a
+        // version on the main classpath. Resolve the main classpath first; what only the full
+        // (test) resolution adds is test-only.
+        let has_test = module.deps.iter().any(|d| d.scope == "test");
+        let has_main = module.deps.iter().any(|d| d.scope != "test");
+        let mut main = BTreeSet::new();
+        let passes: &[bool] = match (has_main, has_test) {
+            (true, true) => &[true, false],
+            _ => &[false],
+        };
+        for &main_only in passes {
+            match resolve_gradle_module(&module.to_pom(main_only), source, &bom_overrides) {
+                Ok(one) => {
+                    missing.extend(one.missing);
+                    for (from, to) in one.graph.edges() {
+                        graph.add_edges(from, [to.to_string()]);
+                    }
+                    for mut p in one.packages {
+                        let key = (p.name.clone(), p.version.clone());
+                        if main_only {
+                            main.insert(key.clone());
+                        } else if passes.len() > 1 && !main.contains(&key) {
+                            p.dev = true;
+                        }
+                        packages
+                            .entry(key)
+                            .and_modify(|seen| {
+                                seen.direct |= p.direct;
+                                seen.dev &= p.dev;
+                            })
+                            .or_insert(p);
+                    }
                 }
-                for p in one.packages {
-                    packages
-                        .entry((p.name.clone(), p.version.clone()))
-                        .and_modify(|seen| {
-                            seen.direct |= p.direct;
-                            seen.dev &= p.dev;
-                        })
-                        .or_insert(p);
+                Err(e) => {
+                    missing.insert(e);
                 }
-            }
-            Err(e) => {
-                missing.insert(e);
             }
         }
     }
@@ -467,10 +492,17 @@ fn map_entries(text: &str, out: &mut Vec<(String, String)>) {
 
 /// `lib["k"]` or `lib['k']` as the variable `lib.k`.
 fn map_reference(text: &str) -> Option<String> {
+    let plain =
+        |map: &str| !map.is_empty() && map.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    // Groovy also reads a map entry as `NAME."k"` or `NAME.'k'`.
+    if let Some(at) = text.find(".\"").or_else(|| text.find(".'")) {
+        let (map, key) = (&text[..at], &text[at + 1..]);
+        let (key, tail) = quoted(key)?;
+        return (plain(map) && tail.trim().is_empty()).then(|| format!("{map}.{key}"));
+    }
     let (map, key) = text.split_once('[')?;
     let (key, tail) = quoted(key.trim())?;
-    let plain = !map.is_empty() && map.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
-    (plain && tail.trim() == "]").then(|| format!("{map}.{key}"))
+    (plain(map) && tail.trim() == "]").then(|| format!("{map}.{key}"))
 }
 
 /// The variable an unquoted value names: `extra["k"]`, `ext["k"]`, `ext.k`, `property("k")`,
@@ -616,6 +648,8 @@ struct Coordinate {
 struct Declared {
     coordinate: Coordinate,
     scope: &'static str,
+    /// `exclude(group = "g", module = "a")` in the declaration's block; `*` for a part left out.
+    exclusions: Vec<(String, String)>,
 }
 
 #[derive(Debug, Default)]
@@ -642,7 +676,8 @@ struct Shared {
 
 impl Module {
     /// The module as a POM, so BOM imports and versions go through the resolver.
-    fn to_pom(&self) -> String {
+    /// The build file as a POM; with `main_only`, without its test dependencies.
+    fn to_pom(&self, main_only: bool) -> String {
         let xml = |text: &str| {
             text.replace('&', "&amp;")
                 .replace('<', "&lt;")
@@ -668,8 +703,38 @@ impl Module {
             managed.push_str(&dep(c, ""));
         }
         let mut deps = String::new();
-        for d in &self.deps {
-            deps.push_str(&dep(&d.coordinate, &format!("<scope>{}</scope>", d.scope)));
+        let kept: Vec<&Declared> = self
+            .deps
+            .iter()
+            .filter(|d| !main_only || d.scope != "test")
+            .collect();
+        // Gradle drops a module's dependency only when every edge to it excludes it, so an
+        // artifact declared twice keeps just the exclusions all its declarations share.
+        let mut shared_exclusions: BTreeMap<(&str, &str), Vec<(String, String)>> = BTreeMap::new();
+        for d in &kept {
+            let key = (d.coordinate.group.as_str(), d.coordinate.artifact.as_str());
+            shared_exclusions
+                .entry(key)
+                .and_modify(|common| common.retain(|e| d.exclusions.contains(e)))
+                .or_insert_with(|| d.exclusions.clone());
+        }
+        for d in kept {
+            let mut extra = format!("<scope>{}</scope>", d.scope);
+            let exclusions = shared_exclusions
+                .get(&(d.coordinate.group.as_str(), d.coordinate.artifact.as_str()))
+                .map_or(&d.exclusions, |e| e);
+            if !exclusions.is_empty() {
+                extra.push_str("<exclusions>");
+                for (g, a) in exclusions {
+                    extra.push_str(&format!(
+                        "<exclusion><groupId>{}</groupId><artifactId>{}</artifactId></exclusion>",
+                        xml(g),
+                        xml(a)
+                    ));
+                }
+                extra.push_str("</exclusions>");
+            }
+            deps.push_str(&dep(&d.coordinate, &extra));
         }
         format!(
             "<project><modelVersion>4.0.0</modelVersion><groupId>gradle</groupId>\
@@ -843,6 +908,21 @@ fn strings(line: &str) -> Vec<String> {
 }
 
 const SPRING_BOOT: &str = "org.springframework.boot";
+
+/// The plugin id and version a buildscript `classpath` line brings, for the plugins whose
+/// dependencies the reader adds.
+fn classpath_plugin(line: &str, vars: &BTreeMap<String, String>) -> Option<(&'static str, String)> {
+    let rest = line.strip_prefix("classpath")?;
+    let rest = rest.trim_start().trim_start_matches('(').trim_start();
+    let (text, _) = quoted(rest)?;
+    let c = coordinate(text, vars).ok()?;
+    let id = match (c.group.as_str(), c.artifact.as_str()) {
+        ("org.springframework.boot", "spring-boot-gradle-plugin") => SPRING_BOOT,
+        ("org.jetbrains.kotlin", "kotlin-gradle-plugin") => KOTLIN_JVM,
+        _ => return None,
+    };
+    Some((id, c.version?))
+}
 const KOTLIN_JVM: &str = "org.jetbrains.kotlin.jvm";
 
 /// The plugin a line applies, with its version when the line gives one: `id 'x' version '1'`,
@@ -851,6 +931,16 @@ fn plugin_line(line: &str, catalog: &Catalog) -> Option<(String, Option<String>)
     if let Some(alias) = line.strip_prefix("alias(libs.plugins.") {
         let alias = alias.split(')').next()?;
         return Some((catalog.plugin_aliases.get(alias)?.clone(), None));
+    }
+    // `apply plugin: 'x'` or `apply(plugin = "x")`, which never carry a version.
+    if let Some(rest) = line
+        .strip_prefix("apply plugin:")
+        .or_else(|| line.strip_prefix("apply(plugin ="))
+        .or_else(|| line.strip_prefix("apply(plugin:"))
+    {
+        let (id, _) = quoted(rest.trim())?;
+        let id = if id == "kotlin" { KOTLIN_JVM } else { id };
+        return Some((id.to_string(), None));
     }
     let (id, rest) = if let Some(rest) = line.strip_prefix("kotlin(") {
         let (short, tail) = quoted(rest.trim())?;
@@ -1182,6 +1272,7 @@ fn read_script(text: &str, context: &mut Context) -> Module {
     let mut module = Module::default();
     let mut blocks: Vec<Block> = Vec::new();
     let text = fold_rich_versions(text);
+    let mut open_deps: Option<OpenDeps> = None;
     for line in text.lines() {
         let trimmed = line.trim();
         let current = blocks.last().copied();
@@ -1193,6 +1284,23 @@ fn read_script(text: &str, context: &mut Context) -> Module {
             module.project_platforms.len(),
         );
         read_line(trimmed, current, &blocks, context, &mut module);
+        // `implementation("g:a:1") { exclude(...) }`: the block's excludes belong to the
+        // declarations its opening line made, here and in the shared copy.
+        if let Some(open) = &open_deps {
+            if blocks.len() >= open.depth {
+                if let Some(ex) = exclusion(trimmed) {
+                    for i in open.deps.clone() {
+                        module.deps[i].exclusions.push(ex.clone());
+                    }
+                    for i in open.shared.clone() {
+                        module.shared.deps[i].exclusions.push(ex.clone());
+                    }
+                }
+            } else {
+                open_deps = None;
+            }
+        }
+        let shared_before = module.shared.deps.len();
         if shared {
             module
                 .shared
@@ -1252,7 +1360,8 @@ fn read_script(text: &str, context: &mut Context) -> Module {
             None
         };
         let depth = blocks.len();
-        for c in code_only(line).chars() {
+        let code = code_only(line);
+        for c in code.chars() {
             match c {
                 '{' => blocks.push(Block::Other),
                 '}' => {
@@ -1260,6 +1369,28 @@ fn read_script(text: &str, context: &mut Context) -> Module {
                 }
                 _ => {}
             }
+        }
+        if module.deps.len() > before.0 {
+            let added = before.0..module.deps.len();
+            let shared_added = shared_before..module.shared.deps.len();
+            // A one-line block: `implementation('g:a:1') { exclude group: 'x' }`.
+            if let Some((_, inner)) = trimmed.split_once('{') {
+                for part in inner.split([';', '}']) {
+                    if let Some(ex) = exclusion(part.trim()) {
+                        for i in added.clone() {
+                            module.deps[i].exclusions.push(ex.clone());
+                        }
+                        for i in shared_added.clone() {
+                            module.shared.deps[i].exclusions.push(ex.clone());
+                        }
+                    }
+                }
+            }
+            open_deps = (blocks.len() > depth).then_some(OpenDeps {
+                deps: added,
+                shared: shared_added,
+                depth: blocks.len(),
+            });
         }
         if let Some(mark) = marks {
             if blocks.len() > depth {
@@ -1270,6 +1401,43 @@ fn read_script(text: &str, context: &mut Context) -> Module {
         }
     }
     module
+}
+
+/// Declarations whose block is still open, and the block depth inside it.
+struct OpenDeps {
+    deps: std::ops::Range<usize>,
+    shared: std::ops::Range<usize>,
+    depth: usize,
+}
+
+/// `exclude group: 'g', module: 'a'`, `exclude(group = "g")` or `exclude(module: "a")`, with
+/// `*` for the part left out. `transitive = false` (`isTransitive = false`) excludes everything.
+fn exclusion(line: &str) -> Option<(String, String)> {
+    let flag: String = line.chars().filter(|c| !c.is_whitespace()).collect();
+    if matches!(
+        flag.as_str(),
+        "transitive=false" | "isTransitive=false" | "transitivefalse"
+    ) {
+        return Some(("*".to_string(), "*".to_string()));
+    }
+    let rest = line.strip_prefix("exclude")?;
+    if !rest.starts_with([' ', '(']) {
+        return None;
+    }
+    let value = |key: &str| {
+        let at = rest.find(key)?;
+        let tail = rest[at + key.len()..].trim_start();
+        let tail = tail.strip_prefix([':', '='])?;
+        quoted(tail.trim_start()).map(|(v, _)| v.to_string())
+    };
+    let (group, module) = (value("group"), value("module"));
+    if group.is_none() && module.is_none() {
+        return None;
+    }
+    Some((
+        group.unwrap_or_else(|| "*".to_string()),
+        module.unwrap_or_else(|| "*".to_string()),
+    ))
 }
 
 /// One line of a build script, read by the block it sits in.
@@ -1358,6 +1526,7 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
                 version: Some(version.clone()),
             },
             scope: "compile",
+            exclusions: Vec::new(),
         });
     }
 }
@@ -1453,6 +1622,7 @@ fn read_values(
             module.deps.push(Declared {
                 coordinate: c,
                 scope,
+                exclusions: Vec::new(),
             });
         }
     };
@@ -1714,6 +1884,44 @@ set = ["a-b", "e"]
     }
 
     #[test]
+    fn buildscript_classpath_versions_plugins_applied_by_name() {
+        let mut vars = BTreeMap::new();
+        vars.insert("bootVersion".to_string(), "4.0.0".to_string());
+        assert_eq!(
+            classpath_plugin(
+                "classpath \"org.springframework.boot:spring-boot-gradle-plugin:$bootVersion\"",
+                &vars
+            ),
+            Some((SPRING_BOOT, "4.0.0".to_string()))
+        );
+        assert_eq!(
+            classpath_plugin(
+                "classpath(\"org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0\")",
+                &vars
+            ),
+            Some((KOTLIN_JVM, "2.1.0".to_string()))
+        );
+        assert_eq!(
+            classpath_plugin("classpath 'org.gretty:gretty:4.1.10'", &vars),
+            None
+        );
+        let catalog = Catalog::default();
+        for (line, id) in [
+            ("apply plugin: 'org.springframework.boot'", SPRING_BOOT),
+            ("apply(plugin = \"org.springframework.boot\")", SPRING_BOOT),
+            ("apply plugin: 'kotlin'", KOTLIN_JVM),
+        ] {
+            assert_eq!(plugin_line(line, &catalog), Some((id.to_string(), None)));
+        }
+        let mut c = context("", &[]);
+        c.plugins
+            .insert(SPRING_BOOT.to_string(), "4.0.0".to_string());
+        let m = read_script("apply plugin: 'org.springframework.boot'\n", &mut c);
+        assert_eq!(m.platforms[0].artifact, "spring-boot-dependencies");
+        assert_eq!(m.platforms[0].version.as_deref(), Some("4.0.0"));
+    }
+
+    #[test]
     fn plugins_bring_their_boms_and_libraries() {
         let toml = "[plugins]\nboot = { id = \"org.springframework.boot\", version = \"3.2.0\" }\n";
         let catalog = Catalog::parse(toml).unwrap();
@@ -1843,6 +2051,106 @@ set = ["a-b", "e"]
             .filter(|p| p.name == name)
             .map(|p| p.version.clone())
             .collect()
+    }
+
+    #[test]
+    fn exclusions_in_a_declaration_block_prune_its_tree() {
+        assert_eq!(
+            exclusion("exclude group: 'g', module: 'x'"),
+            Some(("g".to_string(), "x".to_string()))
+        );
+        assert_eq!(
+            exclusion("exclude(module = \"x\")"),
+            Some(("*".to_string(), "x".to_string()))
+        );
+        assert_eq!(exclusion("excludeRules()"), None);
+        for line in [
+            "isTransitive = false",
+            "transitive = false",
+            "transitive false",
+        ] {
+            assert_eq!(exclusion(line), Some(("*".to_string(), "*".to_string())));
+        }
+        assert_eq!(exclusion("isTransitive = true"), None);
+        let repo = Mem(BTreeMap::from([
+            pom("a", "1", &[("x", "1"), ("y", "1")]),
+            pom("b", "1", &[("x", "1"), ("y", "1")]),
+            pom("x", "1", &[]),
+            pom("y", "1", &[]),
+        ]));
+        let dir = tree(
+            "exclusions",
+            &[
+                ("settings.gradle", ""),
+                (
+                    "build.gradle",
+                    "dependencies {\n    api(\"g:a:1\") {\n        exclude(group = \"g\", module = \"x\")\n    }\n}\n",
+                ),
+                (
+                    "sub/build.gradle",
+                    "dependencies {\n    implementation('g:b:1') { exclude group: 'g', module: 'y' }\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        let mut names: Vec<_> = r.packages.iter().map(|p| p.name.as_str()).collect();
+        names.sort_unstable();
+        // `x` comes only through `b` and `y` only through `a`.
+        assert_eq!(names, ["g:a", "g:b", "g:x", "g:y"], "{:?}", r.missing);
+        let dir = tree(
+            "exclusions-one",
+            &[
+                ("settings.gradle", ""),
+                (
+                    "build.gradle",
+                    "dependencies {\n    api(\"g:a:1\") {\n        exclude(group = \"g\", module = \"x\")\n    }\n    api 'g:y:1'\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(versions(&r, "g:x").is_empty(), "{:?}", r.packages);
+        // Declared again without the block, `a` keeps its dependencies.
+        let dir = tree(
+            "exclusions-twice",
+            &[
+                ("settings.gradle", ""),
+                (
+                    "build.gradle",
+                    "dependencies {\n    testImplementation 'g:a:1'\n    agent('g:a:1') { transitive = false }\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:x"), ["1"], "{:?}", r.packages);
+    }
+
+    #[test]
+    fn a_test_dependency_does_not_raise_the_main_classpath() {
+        // Gradle resolves `compileClasspath` without test dependencies: `x` stays 1 there,
+        // and 2 is on the test classpath only.
+        let repo = Mem(BTreeMap::from([
+            pom("a", "1", &[("x", "1")]),
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+        ]));
+        let dir = tree(
+            "main-vs-test",
+            &[
+                ("settings.gradle", ""),
+                (
+                    "build.gradle",
+                    "dependencies {\n    implementation 'g:a:1'\n    testImplementation 'g:x:2'\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        let x: Vec<_> = r
+            .packages
+            .iter()
+            .filter(|p| p.name == "g:x")
+            .map(|p| (p.version.as_str(), p.dev))
+            .collect();
+        assert_eq!(x, [("1", false), ("2", true)], "{:?}", r.missing);
     }
 
     #[test]
@@ -2077,7 +2385,8 @@ set = ["a-b", "e"]
                      \x20           'b-x'    : 'g:b:2.0',\n            c: \"g:c:1.4\",\n\
                      \x20           \"junit\": \"g:d:6.1\",\n        ]\n    }\n}\n\
                      dependencies {\n    implementation lib.a\n    api(lib['b-x'])\n\
-                     \x20   testImplementation lib[\"c\"]\n    testImplementation \"${lib[\"junit\"]}\"\n}\n",
+                     \x20   testImplementation \"${lib.'c'}\"\n    testImplementation \"${lib[\"junit\"]}\"\n\
+                     \x20   implementation \"${lib.\"b-x\"}\"\n}\n",
                 ),
             ],
         );
