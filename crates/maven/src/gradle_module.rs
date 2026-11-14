@@ -30,6 +30,9 @@ pub(crate) struct Variant {
     pub name: String,
     pub dependencies: Vec<ModuleDep>,
     pub constraints: Vec<ModuleDep>,
+    /// What the matching `java-api` variant adds (`compileOnlyApi`: JUnit's apiguardian, the
+    /// OSGi annotations): on compile classpaths only, never at runtime.
+    pub api_only: Vec<ModuleDep>,
 }
 
 /// The runtime variant of a `.module` file. `Err` when the file does not parse or has no
@@ -120,20 +123,41 @@ pub(crate) fn runtime_variant(json: &str) -> Result<Variant, String> {
                 platform: false,
             }],
             constraints: Vec::new(),
+            api_only: Vec::new(),
         });
     }
-    let list = |key: &str| -> Vec<ModuleDep> {
-        best.get(key)
+    let list = |v: &Value, key: &str| -> Vec<ModuleDep> {
+        v.get(key)
             .and_then(Value::as_array)
             .into_iter()
             .flatten()
             .filter_map(entry)
             .collect()
     };
+    let dependencies = list(best, "dependencies");
+    // The `java-api` variant ranked the same way: a compile classpath takes it.
+    let best_rank = rank(best);
+    let api = variants
+        .iter()
+        .filter(|v| default_capability(v) && v.get("available-at").is_none())
+        .filter(|v| attr(v, "org.gradle.usage").as_deref() == Some("java-api"))
+        .find(|v| rank(v).map(|r| (r.0, r.1, r.2, r.3)) == best_rank.map(|r| (r.0, r.1, r.2, r.3)));
+    let api_only = match api {
+        Some(api) if best_rank.is_some_and(|r| r.4 == 2) => list(api, "dependencies")
+            .into_iter()
+            .filter(|d| {
+                !dependencies
+                    .iter()
+                    .any(|r| r.group == d.group && r.module == d.module)
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
     Ok(Variant {
         name,
-        dependencies: list("dependencies"),
-        constraints: list("dependencyConstraints"),
+        dependencies,
+        constraints: list(best, "dependencyConstraints"),
+        api_only,
     })
 }
 
@@ -228,6 +252,27 @@ mod tests {
         );
         assert!(v.dependencies[2].platform);
         assert_eq!(v.constraints[0].module, "c");
+    }
+
+    #[test]
+    fn the_api_variant_adds_compile_only_dependencies() {
+        // junit-jupiter-api: apiguardian-api and opentest4j in apiElements, only opentest4j at
+        // runtime, so apiguardian is on compile classpaths only.
+        let json = r#"{"component":{"group":"org.junit.jupiter","module":"junit-jupiter-api"},"variants":[
+          {"name":"apiElements","attributes":{"org.gradle.usage":"java-api","org.gradle.category":"library"},
+           "dependencies":[{"group":"org.apiguardian","module":"apiguardian-api","version":{"requires":"1.1.2"}},
+                           {"group":"org.opentest4j","module":"opentest4j","version":{"requires":"1.3.0"}}]},
+          {"name":"runtimeElements","attributes":{"org.gradle.usage":"java-runtime","org.gradle.category":"library"},
+           "dependencies":[{"group":"org.opentest4j","module":"opentest4j","version":{"requires":"1.3.0"}}]}
+        ]}"#;
+        let v = runtime_variant(json).unwrap();
+        assert_eq!(v.name, "runtimeElements");
+        let api_only: Vec<_> = v.api_only.iter().map(|d| d.module.as_str()).collect();
+        assert_eq!(api_only, ["apiguardian-api"]);
+        // With only an API variant there is nothing extra to add.
+        let json = r#"{"variants":[{"name":"apiElements","attributes":{"org.gradle.usage":"java-api"},
+           "dependencies":[{"group":"g","module":"a","version":{"requires":"1"}}]}]}"#;
+        assert!(runtime_variant(json).unwrap().api_only.is_empty());
     }
 
     #[test]

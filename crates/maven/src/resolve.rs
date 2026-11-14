@@ -648,10 +648,19 @@ impl Resolver<'_> {
             .iter()
             .map(|c| (c.mgmt_key(), c.clone()))
             .collect();
+        let api_only = variant.api_only.into_iter().map(|d| Dep {
+            scope: Some(COMPILE_ONLY_API.to_string()),
+            ..dep(d)
+        });
         Some(Effective {
             group: g.to_string(),
             artifact: a.to_string(),
-            deps: variant.dependencies.into_iter().map(dep).collect(),
+            deps: variant
+                .dependencies
+                .into_iter()
+                .map(dep)
+                .chain(api_only)
+                .collect(),
             mgmt,
             constraints,
             ..Effective::default()
@@ -824,10 +833,17 @@ fn metadata_versions(xml: &str) -> Vec<String> {
         .collect()
 }
 
+/// The scope of a library's `compileOnlyApi` dependencies, read from Gradle module metadata:
+/// on its consumers' compile classpaths (main and test), never on a runtime one.
+const COMPILE_ONLY_API: &str = "compile-only-api";
+
 /// Maven's scope of a transitive dependency (`child`) reached through one in `parent`
 /// scope; `None` when it is not on any classpath.
 fn propagate(parent: &str, child: &str) -> Option<&'static str> {
     match (parent, child) {
+        ("compile" | "provided", COMPILE_ONLY_API) => Some("provided"),
+        ("test", COMPILE_ONLY_API) => Some("test"),
+        (_, COMPILE_ONLY_API) => None,
         (_, "test" | "provided" | "system" | "import") => None,
         ("compile", "compile") => Some("compile"),
         ("compile", "runtime") | ("runtime", "compile" | "runtime") => Some("runtime"),
@@ -1678,5 +1694,8 @@ mod tests {
         assert_eq!(propagate("compile", "runtime"), Some("runtime"));
         assert_eq!(propagate("compile", "test"), None);
         assert_eq!(propagate("test", "compile"), Some("test"));
+        assert_eq!(propagate("compile", COMPILE_ONLY_API), Some("provided"));
+        assert_eq!(propagate("test", COMPILE_ONLY_API), Some("test"));
+        assert_eq!(propagate("runtime", COMPILE_ONLY_API), None);
     }
 }
