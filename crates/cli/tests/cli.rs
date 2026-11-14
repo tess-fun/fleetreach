@@ -1222,6 +1222,49 @@ fn workflows_are_scanned_alongside_a_lockfile() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+#[cfg(unix)]
+#[test]
+fn sarif_does_not_read_a_workflow_linked_to_a_device() {
+    // SARIF names the workflow that uses an action by reading the repo's workflows; one linked
+    // to /dev/zero (sorted first) once made that read never end.
+    let root = std::env::temp_dir().join(format!("fleetreach-gha-zero-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let workflows = root.join("app/.github/workflows");
+    std::fs::create_dir_all(&workflows).unwrap();
+    std::os::unix::fs::symlink("/dev/zero", workflows.join("a.yml")).unwrap();
+    std::fs::write(
+        workflows.join("ci.yml"),
+        "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      \
+         - uses: tj-actions/changed-files@v44\n",
+    )
+    .unwrap();
+    let fleet = root.join("fleet.toml");
+    std::fs::write(
+        &fleet,
+        format!("[[repo]]\nid = \"app\"\npath = {:?}\n", root.join("app")),
+    )
+    .unwrap();
+    let out = run(&[
+        "scan",
+        "-q",
+        "-c",
+        fleet.to_str().unwrap(),
+        "--db",
+        &db(),
+        "--ghactions-vuln-db",
+        &file_url("ghactions-osv"),
+        "-f",
+        "sarif",
+    ]);
+    assert_eq!(code(&out), 1, "stderr: {}", stderr(&out));
+    assert!(
+        stdout(&out).contains("\"uri\": \".github/workflows/ci.yml\""),
+        "{}",
+        stdout(&out)
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// Repos with a vulnerable workflow, each pushed to a bare `origin`, a fake `gh` that keeps one
 /// request per repo, and the plan to fix them.
 struct FixFleet {
@@ -2684,6 +2727,29 @@ fn vex_without_an_author_stops_before_the_scan() {
         assert!(!stderr(&out).contains("Scanned"), "{}", stderr(&out));
         assert!(stdout(&out).is_empty());
     }
+}
+
+#[test]
+fn csaf_vex_without_a_namespace_stops_before_the_scan() {
+    let out = run(&[
+        "scan",
+        "-c",
+        &cfg("fleet-vuln.toml"),
+        "--db",
+        &db(),
+        "-f",
+        "csaf-vex",
+        "--vex-author",
+        "Example Security",
+    ]);
+    assert_eq!(code(&out), 3, "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("no CSAF publisher namespace"),
+        "{}",
+        stderr(&out)
+    );
+    assert!(!stderr(&out).contains("Scanned"), "{}", stderr(&out));
+    assert!(stdout(&out).is_empty());
 }
 
 #[test]

@@ -129,4 +129,35 @@ mod tests {
             Path::new("/elsewhere/Cargo.toml")
         ));
     }
+
+    #[test]
+    fn links_out_of_a_confined_repo_are_refused() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            let base = tempfile::tempdir().unwrap();
+            let (repo, outside) = (base.path().join("repo"), base.path().join("outside"));
+            fs::create_dir_all(repo.join("src/deep")).unwrap();
+            fs::create_dir_all(&outside).unwrap();
+            fs::write(repo.join("src/deep/a.js"), "a").unwrap();
+            fs::write(outside.join("secret"), "s").unwrap();
+            symlink(outside.join("secret"), repo.join("src/leak")).unwrap();
+            symlink(&outside, repo.join("src/linked")).unwrap();
+            symlink(repo.join("src/deep/a.js"), repo.join("src/inside")).unwrap();
+            confine([repo.as_path()]);
+            // The same directory twice: the second read takes the remembered resolution.
+            for _ in 0..2 {
+                assert_eq!(read_to_string(repo.join("src/deep/a.js")).unwrap(), "a");
+                assert_eq!(
+                    read_to_string(repo.join("src/deep/../deep/a.js")).unwrap(),
+                    "a"
+                );
+                assert_eq!(read_to_string(repo.join("src/inside")).unwrap(), "a");
+                for refused in [repo.join("src/leak"), repo.join("src/linked/secret")] {
+                    let e = read_to_string(&refused).unwrap_err();
+                    assert_eq!(e.kind(), ErrorKind::InvalidInput, "{}", refused.display());
+                }
+            }
+        }
+    }
 }

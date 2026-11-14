@@ -62,7 +62,7 @@ const CACHE_EPOCH: u32 = 4;
 /// graph could survive. Path deps *outside* the manifest dir are not
 /// fingerprinted — a narrow gap.
 pub fn key(manifest_dir: &Path, build: &BuildConfig, driver: &Path) -> Option<String> {
-    let lock = std::fs::read(manifest_dir.join("Cargo.lock")).ok()?;
+    let lock = read_regular(&manifest_dir.join("Cargo.lock"))?;
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     lock.hash(&mut hasher);
     build.toolchain.hash(&mut hasher);
@@ -79,12 +79,21 @@ pub fn key(manifest_dir: &Path, build: &BuildConfig, driver: &Path) -> Option<St
     // the `.rs` source hash does not capture. Fold its bytes in (the strongest leg
     // of the build-config gap; parent-dir / CARGO_HOME configs remain a noted gap).
     for cfg in [".cargo/config.toml", ".cargo/config"] {
-        if let Ok(bytes) = std::fs::read(manifest_dir.join(cfg)) {
+        if let Some(bytes) = read_regular(&manifest_dir.join(cfg)) {
             bytes.hash(&mut hasher);
         }
     }
     hash_repo_sources(manifest_dir, &mut hasher);
     Some(format!("reach-{:016x}", hasher.finish()))
+}
+
+/// A repo file's bytes, if it is a regular file: a link to a device (`/dev/zero`) would
+/// never finish reading.
+fn read_regular(path: &Path) -> Option<Vec<u8>> {
+    std::fs::metadata(path)
+        .ok()
+        .filter(std::fs::Metadata::is_file)?;
+    std::fs::read(path).ok()
 }
 
 /// A cheap fingerprint of the driver binary: `(len, mtime)`. A rebuild rewrites the
@@ -221,7 +230,8 @@ fn hash_repo_sources(dir: &Path, hasher: &mut impl Hasher) {
     for file in files {
         file.to_string_lossy().hash(hasher);
         match std::fs::metadata(&file) {
-            Ok(meta) if meta.len() <= MAX_FILE_BYTES => {
+            // A device (`/dev/zero`) reports length 0 and never ends: only regular files.
+            Ok(meta) if meta.is_file() && meta.len() <= MAX_FILE_BYTES => {
                 if let Ok(bytes) = std::fs::read(&file) {
                     bytes.hash(hasher);
                 }
@@ -273,6 +283,28 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
     use crate::FeatureSelection;
+
+    #[cfg(unix)]
+    #[test]
+    fn key_never_reads_a_device() {
+        let dir = std::env::temp_dir().join(format!("reach-keydev-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join(".cargo")).unwrap();
+        std::fs::write(dir.join("src/main.rs"), b"fn main() {}").unwrap();
+        std::os::unix::fs::symlink("/dev/zero", dir.join("src/zero.rs")).unwrap();
+        std::os::unix::fs::symlink("/dev/zero", dir.join(".cargo/config.toml")).unwrap();
+        let driver = dir.join("driver");
+        std::fs::write(&driver, b"driver-v1").unwrap();
+        let cfg = BuildConfig::new("tc");
+        // A lockfile that is a device: no key (no cache), and no endless read.
+        std::os::unix::fs::symlink("/dev/zero", dir.join("Cargo.lock")).unwrap();
+        assert!(key(&dir, &cfg, &driver).is_none());
+        std::fs::remove_file(dir.join("Cargo.lock")).unwrap();
+        std::fs::write(dir.join("Cargo.lock"), b"lock").unwrap();
+        assert!(key(&dir, &cfg, &driver).is_some());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn key_tracks_repo_source() {

@@ -553,7 +553,9 @@ fn sarif_source(repo: Option<&Path>, ecosystem: Ecosystem, package: &str) -> Str
             let uses = format!("{package}@");
             return workflows
                 .iter()
-                .find(|p| std::fs::read_to_string(p).is_ok_and(|t| t.contains(&uses)))
+                .find(|p| {
+                    fleetreach_core::repofile::read_to_string(p).is_ok_and(|t| t.contains(&uses))
+                })
                 .and_then(|p| p.file_name())
                 .map_or_else(fallback, |name| {
                     format!(".github/workflows/{}", name.to_string_lossy())
@@ -686,9 +688,13 @@ fn scan_and_report(args: &ScanArgs) -> Result<u8, u8> {
         return Ok(crate::why::run_versions(&config, package, json));
     }
     let triage = crate::triage::load_or_fail(&config, args.triage_dir.as_deref())?;
-    // A VEX document needs an author; say so before the scan, not after it.
+    // A VEX document needs an author, and a CSAF one a publisher namespace: say so before
+    // the scan, not after it.
     if matches!(args.format, Format::Vex | Format::CsafVex) {
-        vex_author(args, &config).map_err(|e| usage_fail(&e))?;
+        let author = vex_author(args, &config).map_err(|e| usage_fail(&e))?;
+        if args.format == Format::CsafVex {
+            csaf_namespace(args, &config, &author).map_err(|e| usage_fail(&e))?;
+        }
     }
     let db = advisory_db(args, &config)?;
     let vex_policy = oci_vex_policy(args, &config).map_err(|e| fail(&e))?;
@@ -1841,15 +1847,27 @@ fn render(
             let file = |repo: &fleetreach_core::RepoId, ecosystem: Ecosystem, package: &str| {
                 sarif_source(paths.get(repo.0.as_str()).copied(), ecosystem, package)
             };
-            // Every result in a repo reads the same lockfile.
+            // Every result in a repo reads the same lockfile, and every advisory of one package
+            // asks for the same line: each search scans the whole file.
             let texts = std::cell::RefCell::new(BTreeMap::<PathBuf, Option<String>>::new());
+            let lines =
+                std::cell::RefCell::new(BTreeMap::<(PathBuf, String, String), Option<u32>>::new());
             let line = |repo: &fleetreach_core::RepoId, uri: &str, package: &str, version: &str| {
                 let path = paths.get(repo.0.as_str())?.join(uri);
-                let mut texts = texts.borrow_mut();
-                let text = texts
-                    .entry(path)
-                    .or_insert_with_key(|p| std::fs::read_to_string(p).ok());
-                crate::lockline::entry_line(uri, text.as_deref()?, package, version)
+                let key = (path, package.to_string(), version.to_string());
+                if let Some(found) = lines.borrow().get(&key) {
+                    return *found;
+                }
+                let found = {
+                    let mut texts = texts.borrow_mut();
+                    let text = texts
+                        .entry(key.0.clone())
+                        .or_insert_with_key(|p| fleetreach_core::repofile::read_to_string(p).ok());
+                    text.as_deref()
+                        .and_then(|t| crate::lockline::entry_line(uri, t, package, version))
+                };
+                lines.borrow_mut().insert(key, found);
+                found
             };
             let locate = report::Locate {
                 file: &file,
@@ -1894,19 +1912,8 @@ fn render(
                 Ok(params) => params,
                 Err(e) => return Err(usage_fail(&e)),
             };
-            let namespace = args
-                .csaf_namespace
-                .clone()
-                .or_else(|| config.vex.namespace.clone())
-                .or_else(|| report::namespace_from_author(&params.author));
-            let Some(namespace) =
-                namespace.filter(|n| n.starts_with("https://") || n.starts_with("http://"))
-            else {
-                return Err(usage_fail(
-                    "no CSAF publisher namespace: pass --csaf-namespace <URL>, set \
-                     settings.vex.namespace, or use an email address as the VEX author",
-                ));
-            };
+            let namespace =
+                csaf_namespace(args, config, &params.author).map_err(|e| usage_fail(&e))?;
             let csaf = report::CsafParams {
                 namespace,
                 category: args.csaf_publisher.clone(),
@@ -2048,6 +2055,21 @@ fn vulnrichment_fetch(cves: &[String], offline_enrich: bool) -> crate::vulnrichm
 #[cfg(not(feature = "network"))]
 fn vulnrichment_fetch(_: &[String], _: bool) -> crate::vulnrichment::Vulnrichment {
     Default::default()
+}
+
+/// The CSAF publisher namespace: the flag, `settings.vex.namespace`, or the domain of an
+/// email address given as the author. It must be an http(s) URL.
+fn csaf_namespace(args: &ScanArgs, config: &Config, author: &str) -> Result<String, String> {
+    args.csaf_namespace
+        .clone()
+        .or_else(|| config.vex.namespace.clone())
+        .or_else(|| report::namespace_from_author(author))
+        .filter(|n| n.starts_with("https://") || n.starts_with("http://"))
+        .ok_or_else(|| {
+            "no CSAF publisher namespace: pass --csaf-namespace <URL>, set \
+             settings.vex.namespace, or use an email address as the VEX author"
+                .to_string()
+        })
 }
 
 /// The VEX document's author, from the flag or `settings.vex.author`.

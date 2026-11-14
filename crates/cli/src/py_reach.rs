@@ -46,7 +46,12 @@ const SCRIPT_GROUPS: &[&str] = &["console_scripts", "gui_scripts"];
 /// becomes `Reachable` with a witness; an unreached one keeps `reachable` as the heuristic left
 /// it and records that the import graph did not reach it. Repos are analyzed once and cached.
 pub fn assess(report: &mut FleetReport, config: &Config) {
-    let mut cache: BTreeMap<String, Analysis> = BTreeMap::new();
+    // Every repo a PyPI finding names, analyzed once and in parallel.
+    let mut cache: BTreeMap<String, Analysis> =
+        crate::reach::repos_with_findings(report, config, Ecosystem::Pypi)
+            .into_par_iter()
+            .map(|(id, dir)| (id, analyze(dir)))
+            .collect();
     for finding in &mut report.vulnerabilities {
         if finding.ecosystem != Ecosystem::Pypi {
             continue;
@@ -105,17 +110,25 @@ fn analyze(repo_dir: &Path) -> Analysis {
     let index = ModuleIndex::build(&layout.site_dirs);
 
     let mut graph = DepGraph::new(ENTRY);
-    let mut first_party = BTreeSet::new();
-    for file in &layout.source_files {
-        if let Ok(text) = fleetreach_core::repofile::read_to_string(file) {
-            for module in imported_modules(&text) {
-                let top = module.split('.').next().unwrap_or(&module);
-                if !layout.own_modules.contains(top) {
-                    first_party.extend(index.resolve_or_guess(&module));
+    let first_party: BTreeSet<String> = layout
+        .source_files
+        .par_iter()
+        .map(|file| {
+            let mut found = BTreeSet::new();
+            if let Ok(text) = fleetreach_core::repofile::read_to_string(file) {
+                for module in imported_modules(&text) {
+                    let top = module.split('.').next().unwrap_or(&module);
+                    if !layout.own_modules.contains(top) {
+                        found.extend(index.resolve_or_guess(&module));
+                    }
                 }
             }
-        }
-    }
+            found
+        })
+        .reduce(BTreeSet::new, |mut a, b| {
+            a.extend(b);
+            a
+        });
     graph.add_edges(ENTRY, first_party);
 
     let edges: Vec<(String, BTreeSet<String>)> = index

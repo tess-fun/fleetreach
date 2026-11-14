@@ -1142,6 +1142,9 @@ fn apply_one(
         let _ = git(&top, &["worktree", "remove", "--force", path_str(&tree)]);
     };
     let work = tree.join(&rel);
+    // The work tree holds the repo's files: a read through a link must not leave it, as the
+    // edits write back to what they read.
+    fleetreach_core::repofile::confine([tree.as_path()]);
 
     let before = match scan(&work, repo, scan_args) {
         Ok(s) => s,
@@ -1326,6 +1329,9 @@ fn apply_group(
         let _ = git(&top, &["worktree", "remove", "--force", path_str(&tree)]);
     };
     let work = tree.join(&rel);
+    // The work tree holds the repo's files: a read through a link must not leave it, as the
+    // edits write back to what they read.
+    fleetreach_core::repofile::confine([tree.as_path()]);
     let mut before = match scan(&work, repo, scan_args) {
         Ok(s) => s,
         Err(e) => {
@@ -2286,7 +2292,8 @@ fn cargo_bump(work: &Path, edit: &Edit) -> Result<String, String> {
         ran.push(format!("raised {} in {raised} Cargo.toml", edit.package));
     }
     for dir in dirs_with(work, "Cargo.lock") {
-        let lock = std::fs::read_to_string(dir.join("Cargo.lock")).unwrap_or_default();
+        let lock =
+            fleetreach_core::repofile::read_to_string(dir.join("Cargo.lock")).unwrap_or_default();
         for from in &edit.from {
             let entry = format!("name = \"{}\"\nversion = \"{from}\"", edit.package);
             if !lock.contains(&entry) {
@@ -2322,7 +2329,8 @@ fn npm_bump(work: &Path, edit: &Edit) -> Result<Option<String>, String> {
     let dirs: Vec<PathBuf> = dirs_with(work, "package-lock.json")
         .into_iter()
         .filter(|d| {
-            std::fs::read_to_string(d.join("package-lock.json")).is_ok_and(|t| t.contains(&needle))
+            fleetreach_core::repofile::read_to_string(d.join("package-lock.json"))
+                .is_ok_and(|t| t.contains(&needle))
         })
         .collect();
     for dir in &dirs {
@@ -2353,7 +2361,10 @@ fn go_bump(work: &Path, edit: &Edit) -> Result<String, String> {
     let needle = format!("{} v", edit.package);
     let dirs: Vec<PathBuf> = dirs_with(work, "go.mod")
         .into_iter()
-        .filter(|d| std::fs::read_to_string(d.join("go.mod")).is_ok_and(|t| t.contains(&needle)))
+        .filter(|d| {
+            fleetreach_core::repofile::read_to_string(d.join("go.mod"))
+                .is_ok_and(|t| t.contains(&needle))
+        })
         .collect();
     if dirs.is_empty() {
         return Err(format!("no go.mod requires {}", edit.package));
@@ -2399,11 +2410,14 @@ fn go_bump(work: &Path, edit: &Edit) -> Result<String, String> {
 
 /// The `go` directive of a `go.mod`.
 fn go_directive(path: &Path) -> Option<String> {
-    std::fs::read_to_string(path).ok()?.lines().find_map(|l| {
-        l.trim()
-            .strip_prefix("go ")
-            .map(|v| v.split_whitespace().next().unwrap_or_default().to_string())
-    })
+    fleetreach_core::repofile::read_to_string(path)
+        .ok()?
+        .lines()
+        .find_map(|l| {
+            l.trim()
+                .strip_prefix("go ")
+                .map(|v| v.split_whitespace().next().unwrap_or_default().to_string())
+        })
 }
 
 /// `uv lock --upgrade-package <pkg>==<to> --no-build` where `uv.lock` holds the package:
@@ -2414,7 +2428,10 @@ fn uv_bump(work: &Path, edit: &Edit) -> Result<String, String> {
     let needle = format!("name = \"{}\"", edit.package);
     let dirs: Vec<PathBuf> = dirs_with(work, "uv.lock")
         .into_iter()
-        .filter(|d| std::fs::read_to_string(d.join("uv.lock")).is_ok_and(|t| t.contains(&needle)))
+        .filter(|d| {
+            fleetreach_core::repofile::read_to_string(d.join("uv.lock"))
+                .is_ok_and(|t| t.contains(&needle))
+        })
         .collect();
     if dirs.is_empty() {
         return Err(format!(
@@ -2453,6 +2470,16 @@ fn uv_bump(work: &Path, edit: &Edit) -> Result<String, String> {
 fn actions_bump(work: &Path, edit: &Edit) -> Result<String, String> {
     let from: BTreeSet<&str> = edit.from.iter().map(String::as_str).collect();
     let dir = work.join(".github").join("workflows");
+    // The checkout is the repo's: a linked workflow (or directory) would be read from, and
+    // written to, wherever it points, so only plain files in plain directories are edited.
+    for linked in [work.join(".github"), dir.clone()] {
+        if std::fs::symlink_metadata(&linked).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(format!(
+                "{} is a link; workflows were not edited",
+                linked.display()
+            ));
+        }
+    }
     let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
         .map_err(|e| format!(".github/workflows: {e}"))?
         .flatten()
@@ -2464,9 +2491,19 @@ fn actions_bump(work: &Path, edit: &Edit) -> Result<String, String> {
         })
         .collect();
     files.sort();
+    if let Some(odd) = files
+        .iter()
+        .find(|f| !std::fs::symlink_metadata(f).is_ok_and(|m| m.file_type().is_file()))
+    {
+        return Err(format!(
+            "{} is a link or not a regular file; workflows were not edited",
+            odd.display()
+        ));
+    }
     let mut changed = 0usize;
     for file in &files {
-        let text = std::fs::read_to_string(file).map_err(|e| format!("{}: {e}", file.display()))?;
+        let text = fleetreach_core::repofile::read_to_string(file)
+            .map_err(|e| format!("{}: {e}", file.display()))?;
         let mut out = String::with_capacity(text.len());
         let mut file_changed = false;
         for line in text.split_inclusive('\n') {
@@ -2828,6 +2865,56 @@ mod tests {
             risk_reasons: Vec::new(),
             ssvc: None,
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_workflow_is_neither_read_nor_written() {
+        let base = tempfile::tempdir().unwrap();
+        let (work, outside) = (base.path().join("work"), base.path().join("outside.yml"));
+        let workflows = work.join(".github/workflows");
+        std::fs::create_dir_all(&workflows).unwrap();
+        let uses = "jobs:\n  a:\n    steps:\n      - uses: foo/bar@v1.0.0\n";
+        std::fs::write(&outside, uses).unwrap();
+        std::fs::write(workflows.join("ci.yml"), uses).unwrap();
+        std::os::unix::fs::symlink(&outside, workflows.join("linked.yml")).unwrap();
+        let bump = Edit {
+            ecosystem: Ecosystem::GitHubActions,
+            package: "foo/bar".into(),
+            from: vec!["1.0.0".into()],
+            to: "1.2.0".into(),
+            ..edit()
+        };
+        let err = actions_bump(&work, &bump).unwrap_err();
+        assert!(err.contains("is a link"), "{err}");
+        assert_eq!(
+            std::fs::read_to_string(&outside).unwrap(),
+            uses,
+            "the target was written"
+        );
+        assert_eq!(
+            std::fs::read_to_string(workflows.join("ci.yml")).unwrap(),
+            uses
+        );
+
+        std::fs::remove_file(workflows.join("linked.yml")).unwrap();
+        actions_bump(&work, &bump).unwrap();
+        assert!(std::fs::read_to_string(workflows.join("ci.yml"))
+            .unwrap()
+            .contains("@v1.2.0"));
+
+        // A linked workflows directory is refused as a whole.
+        std::fs::remove_dir_all(&workflows).unwrap();
+        std::fs::create_dir_all(base.path().join("elsewhere")).unwrap();
+        std::fs::write(base.path().join("elsewhere/ci.yml"), uses).unwrap();
+        std::os::unix::fs::symlink(base.path().join("elsewhere"), &workflows).unwrap();
+        assert!(actions_bump(&work, &bump)
+            .unwrap_err()
+            .contains("is a link"));
+        assert_eq!(
+            std::fs::read_to_string(base.path().join("elsewhere/ci.yml")).unwrap(),
+            uses
+        );
     }
 
     #[test]

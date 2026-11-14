@@ -32,6 +32,7 @@ use std::path::Path;
 use fleetreach_core::{
     DepGraph, Ecosystem, FleetReport, Occurrence, ReachVerdict, Reachability, VulnFinding,
 };
+use rayon::prelude::*;
 use walkdir::WalkDir;
 
 use crate::config::Config;
@@ -67,7 +68,13 @@ pub struct Options {
 /// Annotate every npm finding in `report` with import-graph reachability. Repos are analyzed
 /// once and cached. Non-npm findings are left untouched.
 pub fn assess(report: &mut FleetReport, config: &Config, opts: &Options) {
-    let mut cache: BTreeMap<String, Analysis> = BTreeMap::new();
+    // Every repo an npm finding names, analyzed once and in parallel: each walk is mostly
+    // file reads, so one repo at a time leaves the cores idle.
+    let dirs = crate::reach::repos_with_findings(report, config, Ecosystem::Npm);
+    let mut cache: BTreeMap<String, Analysis> = dirs
+        .into_par_iter()
+        .map(|(id, dir)| (id, analyze(dir)))
+        .collect();
 
     for finding in &mut report.vulnerabilities {
         if finding.ecosystem != Ecosystem::Npm {
@@ -195,51 +202,63 @@ fn analyze(repo_dir: &Path) -> Analysis {
 
 /// The set of package names directly imported by the repo's own source (node_modules excluded).
 fn first_party_imports(repo_dir: &Path) -> BTreeSet<String> {
-    let mut set = BTreeSet::new();
-    for entry in WalkDir::new(repo_dir)
+    let files: Vec<std::path::PathBuf> = WalkDir::new(repo_dir)
         .into_iter()
         .filter_entry(|e| e.file_name() != "node_modules" && e.file_name() != ".git")
         .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_file())
-    {
-        if has_ext(entry.path(), SRC_EXTS) {
-            if let Ok(text) = fleetreach_core::repofile::read_to_string(entry.path()) {
-                for spec in import_packages(&text) {
-                    set.insert(spec);
-                }
-            }
-        }
-    }
-    set
+        .filter(|e| e.file_type().is_file() && has_ext(e.path(), SRC_EXTS))
+        .map(walkdir::DirEntry::into_path)
+        .collect();
+    files
+        .par_iter()
+        .map(|path| {
+            fleetreach_core::repofile::read_to_string(path)
+                .map(|text| import_packages(&text))
+                .unwrap_or_default()
+        })
+        .reduce(BTreeSet::new, |mut a, b| {
+            a.extend(b);
+            a
+        })
 }
 
 /// Build the name-level package→package import graph by scanning each installed package's source.
 fn package_graph(node_modules: &Path) -> BTreeMap<String, BTreeSet<String>> {
+    let per_package: Vec<(String, BTreeSet<String>)> = package_dirs(node_modules)
+        .into_par_iter()
+        .filter_map(|pkg_dir| {
+            let name = package_name_of(node_modules, &pkg_dir)?;
+            let deps = package_imports(&pkg_dir, &name);
+            Some((name, deps))
+        })
+        .collect();
     let mut graph: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    for pkg_dir in package_dirs(node_modules) {
-        let Some(name) = package_name_of(node_modules, &pkg_dir) else {
-            continue;
-        };
-        let mut deps = BTreeSet::new();
-        for entry in WalkDir::new(&pkg_dir)
-            .into_iter()
-            .filter_entry(|e| e.file_name() != "node_modules") // its own nested deps handled as their own nodes
-            .filter_map(Result::ok)
-            .filter(|e| e.file_type().is_file())
-        {
-            if has_ext(entry.path(), DEP_EXTS) {
-                if let Ok(text) = fleetreach_core::repofile::read_to_string(entry.path()) {
-                    for spec in import_packages(&text) {
-                        if spec != name {
-                            deps.insert(spec);
-                        }
+    for (name, deps) in per_package {
+        graph.entry(name).or_default().extend(deps);
+    }
+    graph
+}
+
+/// The packages one installed package's source imports, other than itself.
+fn package_imports(pkg_dir: &Path, name: &str) -> BTreeSet<String> {
+    let mut deps = BTreeSet::new();
+    for entry in WalkDir::new(pkg_dir)
+        .into_iter()
+        .filter_entry(|e| e.file_name() != "node_modules") // its own nested deps handled as their own nodes
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file())
+    {
+        if has_ext(entry.path(), DEP_EXTS) {
+            if let Ok(text) = fleetreach_core::repofile::read_to_string(entry.path()) {
+                for spec in import_packages(&text) {
+                    if spec != name {
+                        deps.insert(spec);
                     }
                 }
             }
         }
-        graph.entry(name).or_default().extend(deps);
     }
-    graph
+    deps
 }
 
 /// Every word of every command the project runs: its `package.json` `scripts`, and its CI

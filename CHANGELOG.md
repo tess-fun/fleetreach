@@ -210,6 +210,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`--reachability` runs about 4x faster on npm and PyPI repos.** The npm and PyPI import
+  graphs analyzed one repo at a time, reading every installed file serially; repos, installed
+  packages and first-party files are now read in parallel. On 40 real npm and PyPI repos a
+  scan with `--reachability` went from 36 s to 9.5 s with identical output.
+- **SARIF output runs about 2.5x faster.** Every advisory of one package searched the
+  lockfile for the same line; each search is now done once. On the same 40 repos, 2.6 s to
+  1.0 s, byte-identical.
 - **Faster .NET and JVM graphs.** An image's .NET assemblies are parsed on all cores (graphs
   still run one at a time, to bound memory), and both call graphs hash with foldhash, seeded per
   process so names in a crafted image cannot pile into one bucket, instead of SipHash. On the 11
@@ -243,6 +250,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **SARIF output hung on a workflow linked to a device, and `fix apply` wrote through
+  linked workflows.** To name the workflow that uses an action, SARIF read the repo's
+  workflow files with no guard, so one linked to `/dev/zero` never finished. The Actions bump
+  in `fix apply` read and rewrote workflow files through links, so a linked workflow or
+  workflows directory sent the edit to wherever it pointed. SARIF now reads through the same
+  guard as every other repo file, `fix apply` refuses a linked workflow or directory and keeps
+  every read inside its work tree, and the static-reachability cache key no longer reads a
+  device. A few other repo reads (a crate's own `Cargo.toml` for VEX, triage files, the
+  lockfiles `fix apply` checks) moved to the guard too.
+- **`-f csaf-vex` without a publisher namespace failed only after the scan.** It is now
+  reported before any repo is read, like a missing author.
 - **A damaged lockfile could scan as a smaller, clean project.** The `Gemfile.lock`,
   `mix.lock`, `go.mod`, `gradle.lockfile` and yarn berry readers skipped what they did not
   know, so a stray line at the left margin ended a `Gemfile.lock` `GEM` section early (14 of

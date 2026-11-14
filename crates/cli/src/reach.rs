@@ -418,6 +418,32 @@ fn scan_source(dir: &Path, exts: &[&str], names: &[&str], pred: impl Fn(&str) ->
         })
 }
 
+/// The directory of every configured repo a finding of `ecosystem` names, each once, in id
+/// order: the repos an engine analyzes before it annotates findings.
+pub(crate) fn repos_with_findings<'a>(
+    report: &FleetReport,
+    config: &'a Config,
+    ecosystem: Ecosystem,
+) -> Vec<(String, &'a Path)> {
+    let wanted: std::collections::BTreeSet<&str> = report
+        .vulnerabilities
+        .iter()
+        .filter(|f| f.ecosystem == ecosystem)
+        .flat_map(|f| &f.occurrences)
+        .filter_map(|occ| match occ {
+            Occurrence::InRepo { repo, .. } => Some(repo.0.as_str()),
+            _ => None,
+        })
+        .collect();
+    wanted
+        .into_iter()
+        .filter_map(|id| {
+            let repo = config.repos.iter().find(|r| r.id.0 == id)?;
+            Some((id.to_string(), repo.path.as_path()))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]

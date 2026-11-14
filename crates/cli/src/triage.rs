@@ -199,7 +199,7 @@ fn toml_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
 
 fn read_decision(dir: &Path, path: &Path) -> Result<Decision, String> {
     let at = |e: String| format!("{}: {e}", path.display());
-    let text = std::fs::read_to_string(path).map_err(|e| at(e.to_string()))?;
+    let text = fleetreach_core::repofile::read_to_string(path).map_err(|e| at(e.to_string()))?;
     let decision: Decision = toml::from_str(&text).map_err(|e| at(e.to_string()))?;
     decision.check().map_err(at)?;
     let expected = relative_path(&decision.advisory, decision.ecosystem, &decision.package);
@@ -229,7 +229,7 @@ fn read_default(dir: &Path) -> Result<Vec<Decision>, String> {
     toml_files(dir, &mut paths)?;
     paths.sort();
     let (ours, others): (Vec<_>, Vec<_>) = paths.into_iter().partition(|path| {
-        let text = std::fs::read_to_string(path);
+        let text = fleetreach_core::repofile::read_to_string(path);
         text.map_or(true, |text| text.contains("advisory"))
     });
     for path in others {

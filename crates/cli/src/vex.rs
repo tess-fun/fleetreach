@@ -55,7 +55,7 @@ pub fn resolve_product_id(repo: &Repo, base: Option<&str>) -> String {
 /// The `pkg:cargo/<name>@<version>` PURL for a repo root that is itself a publishable
 /// crate. `None` for a virtual/workspace manifest, an inherited version, or `publish = false`.
 fn crate_purl(repo_path: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(repo_path.join("Cargo.toml")).ok()?;
+    let text = fleetreach_core::repofile::read_to_string(repo_path.join("Cargo.toml")).ok()?;
     let value: toml::Value = toml::from_str(&text).ok()?;
     let pkg = value.get("package")?.as_table()?;
     if pkg.get("publish").and_then(toml::Value::as_bool) == Some(false) {
