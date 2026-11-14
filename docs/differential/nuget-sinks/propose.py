@@ -11,7 +11,7 @@ CERTIFICATE_VERIFY_FAILED and is logged as an error. Run it with SSL_CERT_FILE=/
 Without ids: every HIGH or CRITICAL advisory with a GitHub fix commit, ChakraCore's native
 engine left out.
 """
-import json, os, re, subprocess, sys, urllib.request, zipfile
+import json, os, re, subprocess, sys, urllib.error, urllib.request, zipfile
 
 FLAT = "https://api.nuget.org/v3-flatcontainer"
 TFM_ORDER = ["net8.0", "net9.0", "net10.0", "net7.0", "net6.0", "net5.0", "netcoreapp3.1",
@@ -79,7 +79,9 @@ def siblings(nupkg, package):
     for dep, ver in re.findall(r'<dependency id="([^"]+)" version="([^"]+)"', text):
         if not dep.lower().startswith(package.lower() + "."):
             continue
-        m = re.fullmatch(r"\[?([0-9A-Za-z.+-]+)(?:\s*,\s*\)|\])?", ver.strip())
+        # `1.2.3`, `[1.2.3]`, `[1.2.3, )` or `[1.2.3, 2.0.0)`: the inclusive lower bound, which
+        # is the release built alongside this one.
+        m = re.fullmatch(r"\[?([0-9A-Za-z.+-]+)(?:\s*,\s*[0-9A-Za-z.+-]*\s*\)|\])?", ver.strip())
         if m:
             out.add((dep, m.group(1)))
     return sorted(out)
@@ -91,6 +93,9 @@ def extract(nupkg, dest):
     with zipfile.ZipFile(nupkg) as z:
         for name in z.namelist():
             parts = name.split("/")
+            # lib/<tfm>/x.dll, or lib/x.dll in old packages (no framework folder): "any".
+            if len(parts) == 2 and parts[0].lower() == "lib" and parts[1].lower().endswith(".dll"):
+                parts = ["lib", "any", parts[1]]
             if len(parts) != 3 or parts[0].lower() != "lib" or not parts[2].lower().endswith(".dll"):
                 continue
             tfm, file = parts[1].lower(), os.path.basename(parts[2])
@@ -105,13 +110,17 @@ def extract(nupkg, dest):
 
 
 def best_tfm(old, new):
+    """(old tfm, new tfm): the preferred framework both share, or, when each release ships one
+    framework only (DotNetCasClient lib/ -> lib/net20, Blogifier netcoreapp2.0 -> 3.1), those."""
     common = [t for t in old if t in new]
     if not common:
+        if len(old) == 1 and len(new) == 1:
+            return next(iter(old)), next(iter(new))
         return None
     for t in TFM_ORDER:
         if t in common:
-            return t
-    return sorted(common)[-1]
+            return t, t
+    return sorted(common)[-1], sorted(common)[-1]
 
 
 def changed_files(url):
@@ -127,6 +136,63 @@ def changed_files(url):
     if r.returncode != 0:
         return None
     return [l for l in r.stdout.splitlines() if l.strip()]
+
+
+def prepare(rec, package, work):
+    """(releases, {tfm: dir} per release, (old tfm, new tfm)) for one package, or why not."""
+    lower = package.lower()
+    try:
+        versions = json.loads(get(f"{FLAT}/{lower}/index.json"))["versions"]
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            raise
+        return "no published fixed release"  # listed in the advisory, never on nuget.org
+    pair = pick_releases(rec, package, versions)
+    if not pair:
+        return "no published fixed release"
+    dirs = []
+    for v in pair:
+        d = os.path.join(work, "pkgs", f"{lower}.{v.lower()}")
+        nupkg = d + ".nupkg"
+        if not os.path.exists(nupkg):
+            os.makedirs(os.path.dirname(nupkg), exist_ok=True)
+            get(f"{FLAT}/{lower}/{v.lower()}/{lower}.{v.lower()}.nupkg", nupkg)
+        got = extract(nupkg, d)
+        # Siblings of siblings too: a meta-package can point at another one
+        # (Umbraco.Cms -> Umbraco.Cms.Targets -> Umbraco.Cms.Web.Common).
+        queue, seen = siblings(nupkg, package), set()
+        while queue and len(seen) < 64:
+            dep, dv = queue.pop(0)
+            if dep.lower() in seen:
+                continue
+            seen.add(dep.lower())
+            dl = dep.lower()
+            dn = os.path.join(work, "pkgs", f"{dl}.{dv.lower()}.nupkg")
+            if not os.path.exists(dn):
+                get(f"{FLAT}/{dl}/{dv.lower()}/{dl}.{dv.lower()}.nupkg", dn)
+            got.update(extract(dn, d))
+            queue += siblings(dn, package)
+        dirs.append(got)
+    tfm = best_tfm(*dirs)
+    if not tfm:
+        return f"no shared lib target framework ({pair[0]} -> {pair[1]})"
+    return pair, dirs, tfm
+
+
+def merge(docs):
+    """One draft from the drafts of several packages: every sink once, every note."""
+    out = dict(docs[0])
+    sinks, keys = [], set()
+    for d in docs:
+        for s in d.get("sinks", []):
+            k = json.dumps(s, sort_keys=True)
+            if k not in keys:
+                keys.add(k)
+                sinks.append(s)
+    if sinks:
+        out["verdict"], out["sinks"] = "sinks", sinks
+    out["note"] = " ".join(d.get("note", "") for d in docs).strip()
+    return out
 
 
 def main():
@@ -151,33 +217,7 @@ def main():
             continue
         if os.path.exists(os.path.join(out_dir, rid + ".json")):
             continue
-        package = packages[0]
         try:
-            lower = package.lower()
-            versions = json.loads(get(f"{FLAT}/{lower}/index.json"))["versions"]
-            pair = pick_releases(rec, package, versions)
-            if not pair:
-                print(f"{rid}\tskip\tno published fixed release", file=log, flush=True)
-                continue
-            dirs = []
-            for v in pair:
-                d = os.path.join(work, "pkgs", f"{lower}.{v.lower()}")
-                nupkg = d + ".nupkg"
-                if not os.path.exists(nupkg):
-                    os.makedirs(os.path.dirname(nupkg), exist_ok=True)
-                    get(f"{FLAT}/{lower}/{v.lower()}/{lower}.{v.lower()}.nupkg", nupkg)
-                got = extract(nupkg, d)
-                for dep, dv in siblings(nupkg, package):
-                    dl = dep.lower()
-                    dn = os.path.join(work, "pkgs", f"{dl}.{dv.lower()}.nupkg")
-                    if not os.path.exists(dn):
-                        get(f"{FLAT}/{dl}/{dv.lower()}/{dl}.{dv.lower()}.nupkg", dn)
-                    got.update(extract(dn, d))
-                dirs.append(got)
-            tfm = best_tfm(*dirs)
-            if not tfm:
-                print(f"{rid}\tskip\tno shared lib target framework ({pair[0]} -> {pair[1]})", file=log, flush=True)
-                continue
             files, read_all = [], True
             for c in commits:
                 f = changed_files(c)
@@ -189,23 +229,47 @@ def main():
             os.makedirs(os.path.dirname(list_path), exist_ok=True)
             with open(list_path, "w") as f:
                 f.write("\n".join(files if read_all or files else []))
-            args = [tool, "--id", rid, "--old", dirs[0][tfm], "--new", dirs[1][tfm],
-                    "--releases", f"{package} {pair[0]} -> {pair[1]} ({tfm})", "--files", list_path]
-            for a in rec.get("aliases", []):
-                if re.fullmatch(r"(CVE-\d{4}-\d+|GHSA(-[23456789cfghjmpqrvwx]{4}){3})", a):
-                    args += ["--alias", a]
-            for p in packages:
-                args += ["--package", p]
-            for c in commits:
-                args += ["--commit", c]
-            r = subprocess.run(args, capture_output=True, text=True, timeout=600)
-            if r.returncode != 0:
-                print(f"{rid}\terror\t{r.stderr.strip()[:300]}", file=log, flush=True)
+            # The first affected package with library code in both releases (an advisory can
+            # list a CLI tool or a meta-package first: NuGet.CommandLine before NuGet.Packaging,
+            # Umbraco.Cms before Umbraco.Cms.Core), plus every other affected package whose own
+            # folder the fix commits change: NuGet's CVE-2022-41032 fix spans NuGet.Commands and
+            # NuGet.Protocol, and CVE-2023-29337's is only in NuGet.Common.
+            named = {p for p in packages
+                     if any(f"/{p.lower()}/" in "/" + x.lower() for x in files)}
+            diffed, why, first = [], "no published fixed release", None
+            for package in packages:
+                if first is not None and package not in named:
+                    continue
+                got = prepare(rec, package, work)
+                if isinstance(got, str):
+                    why = got if got != "no published fixed release" else why
+                    continue
+                if first is None:
+                    first = package
+                pair, dirs, tfm = got
+                label = tfm[0] if tfm[0] == tfm[1] else f"{tfm[0]} -> {tfm[1]}"
+                args = [tool, "--id", rid, "--old", dirs[0][tfm[0]], "--new", dirs[1][tfm[1]],
+                        "--releases", f"{package} {pair[0]} -> {pair[1]} ({label})",
+                        "--files", list_path]
+                for a in rec.get("aliases", []):
+                    if re.fullmatch(r"(CVE-\d{4}-\d+|GHSA(-[23456789cfghjmpqrvwx]{4}){3})", a):
+                        args += ["--alias", a]
+                for p in packages:
+                    args += ["--package", p]
+                for c in commits:
+                    args += ["--commit", c]
+                r = subprocess.run(args, capture_output=True, text=True, timeout=600)
+                if r.returncode != 0:
+                    raise RuntimeError(r.stderr.strip()[:300])
+                diffed.append((json.loads(r.stdout), f"{package} {pair[0]} -> {pair[1]} {label}"))
+            if not diffed:
+                print(f"{rid}\tskip\t{why}", file=log, flush=True)
                 continue
+            doc = merge([d for d, _ in diffed])
             with open(os.path.join(out_dir, rid + ".json"), "w") as f:
-                f.write(r.stdout)
-            doc = json.loads(r.stdout)
-            print(f"{rid}\t{doc['verdict']}\t{len(doc.get('sinks', []))} sinks\t{pair[0]} -> {pair[1]} {tfm}", file=log, flush=True)
+                f.write(json.dumps(doc, indent=2) + "\n" if len(diffed) > 1 else r.stdout)
+            print(f"{rid}\t{doc['verdict']}\t{len(doc.get('sinks', []))} sinks\t"
+                  + "; ".join(l for _, l in diffed), file=log, flush=True)
         except Exception as e:  # one advisory's failure never stops the run
             print(f"{rid}\terror\t{type(e).__name__}: {e}"[:400], file=log, flush=True)
 
