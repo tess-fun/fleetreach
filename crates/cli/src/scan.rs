@@ -1848,10 +1848,63 @@ fn render(
                 sarif_source(paths.get(repo.0.as_str()).copied(), ecosystem, package)
             };
             // Every result in a repo reads the same lockfile, and every advisory of one package
-            // asks for the same line: each search scans the whole file.
+            // asks for the same line: each search scans the whole file. So a first pass only
+            // notes the lines asked for, they are found in parallel, one file at a time and
+            // each file split once, and the real pass reads the answers. One the first pass
+            // did not ask for is found when asked.
+            type LineKey = (PathBuf, String, String);
+            let asked = std::cell::RefCell::new(BTreeMap::<LineKey, String>::new());
+            {
+                let note =
+                    |repo: &fleetreach_core::RepoId, uri: &str, package: &str, version: &str| {
+                        if let Some(root) = paths.get(repo.0.as_str()) {
+                            let key = (root.join(uri), package.to_string(), version.to_string());
+                            asked
+                                .borrow_mut()
+                                .entry(key)
+                                .or_insert_with(|| uri.to_string());
+                        }
+                        None
+                    };
+                let probe = report::Locate {
+                    file: &file,
+                    line: &note,
+                };
+                let _ = report::to_sarif_located(fleet_report, &assertions, &probe);
+            }
+            // Per file and the name it was asked by, the packages wanted in it.
+            let mut by_file: BTreeMap<(PathBuf, String), Vec<(String, String)>> = BTreeMap::new();
+            for ((path, package, version), uri) in asked.into_inner() {
+                by_file
+                    .entry((path, uri))
+                    .or_default()
+                    .push((package, version));
+            }
+            let found: BTreeMap<LineKey, Option<u32>> = {
+                use rayon::prelude::*;
+                by_file
+                    .into_par_iter()
+                    .flat_map_iter(|((path, uri), wanted)| {
+                        let text = fleetreach_core::repofile::read_to_string(&path).ok();
+                        let lines: Vec<&str> = text
+                            .as_deref()
+                            .map(|t| t.lines().collect())
+                            .unwrap_or_default();
+                        let answers: Vec<(LineKey, Option<u32>)> = wanted
+                            .into_iter()
+                            .map(|(package, version)| {
+                                let line = text.as_ref().and_then(|_| {
+                                    crate::lockline::entry_line_in(&uri, &lines, &package, &version)
+                                });
+                                ((path.clone(), package, version), line)
+                            })
+                            .collect();
+                        answers
+                    })
+                    .collect()
+            };
             let texts = std::cell::RefCell::new(BTreeMap::<PathBuf, Option<String>>::new());
-            let lines =
-                std::cell::RefCell::new(BTreeMap::<(PathBuf, String, String), Option<u32>>::new());
+            let lines = std::cell::RefCell::new(found);
             let line = |repo: &fleetreach_core::RepoId, uri: &str, package: &str, version: &str| {
                 let path = paths.get(repo.0.as_str())?.join(uri);
                 let key = (path, package.to_string(), version.to_string());

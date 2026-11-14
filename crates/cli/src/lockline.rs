@@ -11,12 +11,17 @@ fn pep503(name: &str) -> String {
 /// The 1-based line of the first of `lines` that `is_entry` accepts and whose next few lines
 /// hold `version`, else of the first accepted at all.
 fn pick(
-    text: &str,
+    lines: &[&str],
     version: &str,
     is_entry: impl Fn(&str) -> bool,
     version_line: impl Fn(&str, &str) -> bool,
 ) -> Option<u32> {
-    let lines: Vec<&str> = text.lines().collect();
+    // Without a version only the first entry can answer: stop there. A SARIF code flow asks
+    // this for each package on a path.
+    if version.is_empty() {
+        let line = lines.iter().position(|l| is_entry(l))?;
+        return u32::try_from(line + 1).ok();
+    }
     let entries = || (0..lines.len()).filter(|i| is_entry(lines[*i]));
     let versioned = entries().find(|i| {
         let near = &lines[*i..lines.len().min(i + 4)];
@@ -146,13 +151,21 @@ pub fn is_manifest(file: &str) -> bool {
 /// `package` at `version` (empty when not known) in `file`, whose contents are `text`.
 #[must_use]
 pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Option<u32> {
+    let lines: Vec<&str> = text.lines().collect();
+    entry_line_in(file, &lines, package, version)
+}
+
+/// [`entry_line`] of a file already split into `lines`, so many packages can be looked up in
+/// one file while splitting it once.
+#[must_use]
+pub fn entry_line_in(file: &str, lines: &[&str], package: &str, version: &str) -> Option<u32> {
     let name = Path::new(file).file_name()?.to_str()?;
     let quoted = |l: &str, v: &str| l.contains(&format!("\"{v}\""));
     let any = |_: &str, _: &str| false;
     match name {
         "Cargo.lock" => {
             let key = format!("name = \"{package}\"");
-            pick(text, version, |l| l == key, quoted)
+            pick(lines, version, |l| l == key, quoted)
         }
         "uv.lock" | "poetry.lock" | "pylock.toml" => {
             let wanted = pep503(package);
@@ -162,11 +175,11 @@ pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Optio
                     .and_then(|r| r.strip_suffix('"'));
                 value.is_some_and(|n| pep503(n) == wanted)
             };
-            pick(text, version, entry, quoted)
+            pick(lines, version, entry, quoted)
         }
         "package-lock.json" | "npm-shrinkwrap.json" => {
             let key = format!("node_modules/{package}\": {{");
-            pick(text, version, |l| l.trim_end().ends_with(&key), quoted)
+            pick(lines, version, |l| l.trim_end().ends_with(&key), quoted)
         }
         "yarn.lock" => {
             let entry = |l: &str| {
@@ -178,14 +191,14 @@ pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Optio
                     })
             };
             let held = |l: &str, v: &str| l.trim().trim_end_matches('"').ends_with(v);
-            pick(text, version, entry, |l, v| {
+            pick(lines, version, entry, |l, v| {
                 l.trim_start().starts_with("version") && held(l, v)
             })
         }
         "pnpm-lock.yaml" => {
             let key = format!("{package}@{version}");
             pick(
-                text,
+                lines,
                 version,
                 |l| {
                     l.trim_start()
@@ -205,13 +218,13 @@ pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Optio
                     l == exact
                 }
             };
-            pick(text, version, entry, any)
+            pick(lines, version, entry, any)
         }
         "composer.lock" => {
             let key = format!("\"name\": \"{package}\"");
             let wanted = key.to_ascii_lowercase();
             pick(
-                text,
+                lines,
                 version,
                 |l| l.trim().trim_end_matches(',').to_ascii_lowercase() == wanted,
                 |l, v| l.contains("\"version\"") && l.contains(v),
@@ -222,7 +235,7 @@ pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Optio
                 let l = l.trim_start().trim_start_matches("require ");
                 l.strip_prefix(package).is_some_and(|r| r.starts_with(' '))
             };
-            pick(text, version, entry, any)
+            pick(lines, version, entry, any)
         }
         "packages.lock.json" | "Pipfile.lock" | "bun.lock" => {
             let key = format!("\"{}\":", package.to_ascii_lowercase());
@@ -231,16 +244,16 @@ pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Optio
             let entry = |l: &str| {
                 l.trim_start().to_ascii_lowercase().starts_with(&key) && (!bun || l.contains('['))
             };
-            pick(text, version, entry, holds)
+            pick(lines, version, entry, holds)
         }
         "gradle.lockfile" => {
             let key = format!("{package}:");
-            pick(text, version, |l| l.starts_with(&key), any)
+            pick(lines, version, |l| l.starts_with(&key), any)
         }
         "packages.config" => {
             let key = format!("id=\"{}\"", package.to_ascii_lowercase());
             pick(
-                text,
+                lines,
                 version,
                 |l| l.to_ascii_lowercase().contains(&key),
                 any,
@@ -252,20 +265,20 @@ pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Optio
                 let end = l.find(|c: char| !(c.is_alphanumeric() || "-_.".contains(c)));
                 pep503(&l[..end.unwrap_or(l.len())]) == wanted
             };
-            pick(text, version, entry, any)
+            pick(lines, version, entry, any)
         }
         "pom.xml" => {
             let artifact = package.rsplit(':').next()?;
             let key = format!("<artifactId>{artifact}</artifactId>");
-            pick(text, version, |l| l.contains(&key), any)
+            pick(lines, version, |l| l.contains(&key), any)
         }
         "mix.lock" => {
             let key = format!("\"{package}\":");
-            pick(text, version, |l| l.trim_start().starts_with(&key), any)
+            pick(lines, version, |l| l.trim_start().starts_with(&key), any)
         }
         "Manifest.toml" => {
             let key = format!("[[deps.{package}]]");
-            pick(text, version, |l| l.trim() == key, any)
+            pick(lines, version, |l| l.trim() == key, any)
         }
         "Package.resolved" => {
             let wanted = package.rsplit('/').next()?.to_ascii_lowercase();
@@ -274,7 +287,7 @@ pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Optio
                 format!("\"package\": \"{wanted}\""),
             ];
             pick(
-                text,
+                lines,
                 version,
                 |l| {
                     let l = l.to_ascii_lowercase();
@@ -287,7 +300,7 @@ pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Optio
             let key = format!("uses: {package}@");
             let tag = version.trim_end_matches(".0");
             pick(
-                text,
+                lines,
                 version,
                 |l| l.contains(&key),
                 |l, _| holds(l, tag) || holds(l, version),
@@ -296,7 +309,7 @@ pub fn entry_line(file: &str, text: &str, package: &str, version: &str) -> Optio
         _ if name.ends_with("proj") || name.ends_with(".props") => {
             let key = format!("include=\"{}\"", package.to_ascii_lowercase());
             pick(
-                text,
+                lines,
                 version,
                 |l| l.to_ascii_lowercase().contains(&key),
                 any,

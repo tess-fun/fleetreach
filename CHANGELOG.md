@@ -216,7 +216,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   scan with `--reachability` went from 36 s to 9.5 s with identical output.
 - **SARIF output runs about 2.5x faster.** Every advisory of one package searched the
   lockfile for the same line; each search is now done once. On the same 40 repos, 2.6 s to
-  1.0 s, byte-identical.
+  1.0 s, byte-identical. The lockfile lines SARIF points at are now also found in parallel,
+  each lockfile split into lines once: on 10,471 repos SARIF output takes 4.9 s instead of
+  9.9 s, byte-identical.
 - **`fleetreach serve` pages load about 20x faster.** Every page read the whole history again,
   inflating and parsing every snapshot; the history is now read once and again only when one
   of its files changes, so a new scan shows on the next page without a restart. The overview
