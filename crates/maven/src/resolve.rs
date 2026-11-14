@@ -838,6 +838,32 @@ impl Resolver<'_> {
         })
     }
 
+    /// Maven's collector reads a range's versions lowest first and stops at the first one that
+    /// relocates, following the relocation instead (system-rules asks `junit:junit-dep
+    /// [4.9,)`: 4.9 and 4.10, then 4.11-beta-1 moves to `junit:junit`, whose conflict the
+    /// project's own junit wins). That version, if any; only for ranges of at most 16
+    /// published versions, so a wide range never reads every POM.
+    fn first_relocating(&mut self, g: &str, a: &str, declared: &str) -> Option<String> {
+        let ranges = parse_ranges(declared.trim())?;
+        let listed = metadata_versions(&self.source.metadata(g, a)?);
+        let mut matching: Vec<_> = listed
+            .into_iter()
+            .filter(|v| ranges.iter().any(|r| r.contains(v)))
+            .filter_map(|v| parse_maven_version(&v).map(|p| (p, v)))
+            .collect();
+        if matching.len() > 16 {
+            return None;
+        }
+        matching.sort_by(|x, y| x.0.cmp(&y.0));
+        matching.into_iter().map(|(_, v)| v).find(|v| {
+            self.remote(g, a, v, 0)
+                .and_then(|eff| eff.relocation)
+                .is_some_and(|(rg, ra, rv)| {
+                    (rg.as_str(), ra.as_str(), rv.as_str()) != (g, a, v.as_str())
+                })
+        })
+    }
+
     /// A concrete version for a declared one: as is, or the highest listed match of a range.
     fn pick_version(&mut self, g: &str, a: &str, declared: &str) -> Option<String> {
         let declared = declared.trim();
@@ -1555,6 +1581,9 @@ fn walk(
     // Mediation is per group, artifact, type and classifier, as in Maven.
     let mut selected: BTreeMap<(String, String, String, String), ResolvedDep> = BTreeMap::new();
     let mut order: Vec<(String, String, String, String)> = Vec::new();
+    // Each winner's own depth and path exclusions: Maven widens a winner's scope but keeps its
+    // subtree (keycloak reaches guava first with `*` excluded, then at compile by grpc).
+    let mut winners: BTreeMap<MgmtKey, (usize, Vec<(String, String)>)> = BTreeMap::new();
     // (dependency, depth, parent node, scope, inherited exclusions, root management)
     let mut queue: Queue = VecDeque::new();
     // Sibling modules walked through so far, with the widest scope each was reached in.
@@ -1682,6 +1711,7 @@ fn walk(
                 existing.scope.clone_from(&scope);
                 existing.dev = matches!(scope.as_str(), "test" | "provided");
                 let version = existing.version.clone();
+                let (depth, exclusions) = winners.get(&key).cloned().unwrap_or((depth, exclusions));
                 if let Some(eff) = r.remote(&dep.group, &dep.artifact, &version, 0) {
                     request_constraints(&eff, dep.platform, requests.as_deref_mut());
                     enqueue_children(&eff, &scope, &exclusions, depth, &name, root_ix, &mut queue);
@@ -1714,9 +1744,14 @@ fn walk(
             Some(s) if depth > 0 && s != "import" => s,
             _ => scope,
         };
-        let Some(version) = r.pick_version(&dep.group, &dep.artifact, &declared) else {
+        let Some(mut version) = r.pick_version(&dep.group, &dep.artifact, &declared) else {
             continue;
         };
+        if !r.gradle && declared.trim_start().starts_with(['[', '(']) {
+            if let Some(v) = r.first_relocating(&dep.group, &dep.artifact, &declared) {
+                version = v;
+            }
+        }
         // Maven resolves a relocated artifact (`<distributionManagement><relocation>`) as its
         // new coordinate; each source moves once, so a cycle stops. Gradle does not follow
         // relocations (real Gradle keeps `junit:junit-dep` and `mysql:mysql-connector-java`).
@@ -1759,6 +1794,7 @@ fn walk(
         );
         if !r.gradle {
             r.chosen.insert(key.clone(), version.clone());
+            winners.insert(key.clone(), (depth, exclusions.clone()));
         }
         order.push(key);
         let Some(eff) = r.remote(&dep.group, &dep.artifact, &version, 0) else {
@@ -2296,6 +2332,110 @@ mod tests {
         let tests = each.iter().find(|(m, _)| m == "com.acme:tests").unwrap();
         let names: Vec<_> = tests.1.iter().map(|d| d.name.as_str()).collect();
         assert_eq!(names, ["g:lib"], "{each:?}");
+    }
+
+    #[test]
+    fn a_widened_winner_keeps_its_own_exclusions() {
+        // keycloak: guava first at test with every child excluded, then at compile through
+        // grpc; Maven makes guava compile and lists none of its children.
+        let excl_all = "<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId>\
+                        </exclusion></exclusions>";
+        let dir = project(
+            "widen-keeps-exclusions",
+            &format!(
+                "<dependencies>{}{}</dependencies>",
+                dep("g", "server", "1", "<scope>test</scope>"),
+                dep("g", "grpc", "1", "")
+            ),
+        );
+        let deps = |d: String| format!("<dependencies>{d}</dependencies>");
+        let repo = Mem(BTreeMap::from([
+            (
+                "g:server:1".to_string(),
+                pom("g", "server", "1", &deps(dep("g", "guava", "1", excl_all))),
+            ),
+            (
+                "g:grpc:1".to_string(),
+                pom("g", "grpc", "1", &deps(dep("g", "mid", "1", ""))),
+            ),
+            (
+                "g:mid:1".to_string(),
+                pom("g", "mid", "1", &deps(dep("g", "guava", "1", ""))),
+            ),
+            (
+                "g:guava:1".to_string(),
+                pom("g", "guava", "1", &deps(dep("g", "j2objc", "1", ""))),
+            ),
+            ("g:j2objc:1".to_string(), pom("g", "j2objc", "1", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        let names: Vec<_> = r
+            .packages
+            .iter()
+            .map(|p| format!("{}:{}", p.name, p.scope))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "g:server:test",
+                "g:grpc:compile",
+                "g:guava:compile",
+                "g:mid:compile"
+            ],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn a_range_stops_at_its_first_relocating_version() {
+        // Sentinel: system-rules asks junit-dep `[4.9,)`; 4.11-beta-1 moves to junit, and the
+        // project's junit 4.12 wins. Maven never reads 4.11.
+        let dir = project(
+            "range-relocates",
+            &format!(
+                "<dependencies>{}{}</dependencies>",
+                dep("g", "junit", "4.12", ""),
+                dep("g", "rules", "1", "")
+            ),
+        );
+        let moved = "<distributionManagement><relocation><artifactId>junit</artifactId>\
+                     </relocation></distributionManagement>";
+        let repo = Mem(BTreeMap::from([
+            ("g:junit:4.12".to_string(), pom("g", "junit", "4.12", "")),
+            (
+                "g:rules:1".to_string(),
+                pom(
+                    "g",
+                    "rules",
+                    "1",
+                    &format!(
+                        "<dependencies>{}</dependencies>",
+                        dep("g", "dep", "[4.9,)", "")
+                    ),
+                ),
+            ),
+            ("g:dep:4.9".to_string(), pom("g", "dep", "4.9", "")),
+            ("g:dep:4.10".to_string(), pom("g", "dep", "4.10", "")),
+            (
+                "g:dep:4.11-beta-1".to_string(),
+                pom("g", "dep", "4.11-beta-1", moved),
+            ),
+            (
+                "g:dep:metadata".to_string(),
+                "<metadata><versioning><versions><version>4.9</version><version>4.10</version>\
+                 <version>4.11-beta-1</version><version>4.11</version></versions></versioning>\
+                 </metadata>"
+                    .to_string(),
+            ),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        let names: Vec<_> = r
+            .packages
+            .iter()
+            .map(|p| format!("{}:{}", p.name, p.version))
+            .collect();
+        assert_eq!(names, ["g:junit:4.12", "g:rules:1"], "{:?}", r.missing);
     }
 
     #[test]
