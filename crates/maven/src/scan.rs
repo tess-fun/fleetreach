@@ -15,7 +15,9 @@ use fleetreach_core::{Ecosystem, RepoId, VulnFinding};
 
 use crate::db::{affected_fixed, Advisory, MavenDb};
 use crate::error::MavenError;
-use crate::lockfile::{parse_gradle_lockfile, parse_pom_xml, InstalledPackage};
+use crate::lockfile::{
+    check_gradle_lockfile, parse_gradle_lockfile, parse_pom_xml, InstalledPackage,
+};
 use crate::version::{parse_maven_version, to_semver, Version};
 
 /// Scan the Java project at `repo_dir` against the preloaded OSV DB, without a Java toolchain.
@@ -25,7 +27,8 @@ use crate::version::{parse_maven_version, to_semver, Version};
 ///
 /// # Errors
 ///
-/// Returns [`MavenError::Db`] if neither `gradle.lockfile` nor `pom.xml` can be read — failing
+/// Returns [`MavenError::Db`] if neither `gradle.lockfile` nor `pom.xml` can be read, or the
+/// lockfile is damaged ([`check_gradle_lockfile`](crate::check_gradle_lockfile)) — failing
 /// closed, so an unreadable/absent manifest is an honest gap.
 pub fn scan_offline(repo_dir: &Path, db: &MavenDb, repo: &RepoId) -> Result<TierCScan, MavenError> {
     let gradle = repo_dir.join("gradle.lockfile");
@@ -34,6 +37,12 @@ pub fn scan_offline(repo_dir: &Path, db: &MavenDb, repo: &RepoId) -> Result<Tier
     let installed: Vec<InstalledPackage> = if gradle.is_file() {
         let text = fleetreach_core::repofile::read_to_string(&gradle)
             .map_err(|e| MavenError::db(&gradle, e))?;
+        check_gradle_lockfile(&text).map_err(|e| {
+            MavenError::db(
+                &gradle,
+                std::io::Error::new(std::io::ErrorKind::InvalidData, e),
+            )
+        })?;
         parse_gradle_lockfile(&text)
     } else {
         let text =
@@ -113,8 +122,14 @@ pub fn scan_resolution(
             version: dep.version.clone(),
             direct: dep.direct,
         };
+        let advisories = db.advisories_for(&dep.name);
+        if advisories.is_empty() {
+            continue;
+        }
+        // Only for a dependency with an advisory: a chain for each of a long chain's
+        // dependencies is quadratic in its length.
         let path = resolution.graph.chain_to(&dep.name);
-        for adv in db.advisories_for(&dep.name) {
+        for adv in advisories {
             if let Some(mut finding) = match_advisory(adv, &pkg, &version, repo, dep.dev) {
                 if let Some(fleetreach_core::Occurrence::InRepo {
                     dependency_path, ..

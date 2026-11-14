@@ -243,6 +243,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A damaged lockfile could scan as a smaller, clean project.** The `Gemfile.lock`,
+  `mix.lock`, `go.mod`, `gradle.lockfile` and yarn berry readers skipped what they did not
+  know, so a stray line at the left margin ended a `Gemfile.lock` `GEM` section early (14 of
+  41 findings lost on one real file), and a file cut short read as a clean project. Each is
+  now checked for the shape its tool writes: Bundler's section headers and `DEPENDENCIES`,
+  a closed `%{...}` map, closed `require (` blocks, Gradle's closing `empty=` line, and an
+  entry for every package a berry entry depends on. A damaged file is an errored repo. Every
+  real file in the test corpus passes: 37 `Gemfile.lock`, 40 `mix.lock`, 5,656 `go.mod`, 40
+  `yarn.lock`. `go.mod` blocks written `require(` are also read now.
+- **A `resolutions` override in a berry `yarn.lock` made the forced package dev.** The
+  lockfile keys the entry by the forced range, while the packages that depend on it keep the
+  range they asked for, so the edge pointed nowhere and a runtime package (lodash in
+  spectral) read as dev, which does not gate by default. A dependency no entry lists now
+  links to the entries under its name.
+- **Block YAML nested a few thousand deep aborted the scan.** The YAML reader limits only
+  flow nesting (`[[[`), so a `pnpm-lock.yaml` or berry `yarn.lock` nesting blocks deeply
+  overflowed the stack. A file nesting past 256 levels is now refused; real lockfiles nest
+  about 30.
+- **A long dependency chain took quadratic time.** npm, Hex, Julia and Maven scans built the
+  introducer chain for every package; a 100,000-package chain in a `package-lock.json` ran
+  past a minute. The chain is now built only for a package with an advisory, which takes
+  about a second.
+- **An errored repo said why only in the JSON.** The table and the other text formats now
+  print each errored repo's reason to stderr.
 - **A crafted JavaScript or Python file could abort or stall a `--reachability` scan.** The
   call graphs read every installed package's source. Deep nesting inside the 2 MiB file cap
   (`((((...`, `a=a=a=...`, nested arrow functions) overflowed the parser's stack, which ends

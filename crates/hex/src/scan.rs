@@ -14,7 +14,7 @@ use fleetreach_core::{DepGraph, Ecosystem, RepoId, VulnFinding};
 
 use crate::db::{affected_fixed, Advisory, HexDb};
 use crate::error::HexError;
-use crate::lockfile::{installed_packages, InstalledPackage};
+use crate::lockfile::{check_lockfile, installed_packages, InstalledPackage};
 
 /// Parse a Hex package version (plain SemVer, tolerating a leading `v`). Public for parity
 /// with the other feeders.
@@ -28,12 +28,19 @@ pub fn parse_hex_version(raw: &str) -> Option<Version> {
 ///
 /// # Errors
 ///
-/// Returns [`HexError::Db`] if `mix.lock` is missing or cannot be read — failing closed, so an
+/// Returns [`HexError::Db`] if `mix.lock` is missing, cannot be read or is damaged
+/// ([`check_lockfile`](crate::check_lockfile)) — failing closed, so an
 /// unreadable/absent lockfile is an honest gap rather than a false-clean scan.
 pub fn scan_offline(repo_dir: &Path, db: &HexDb, repo: &RepoId) -> Result<TierCScan, HexError> {
     let lock_path = repo_dir.join("mix.lock");
     let lock_text = fleetreach_core::repofile::read_to_string(&lock_path)
         .map_err(|e| HexError::db(&lock_path, e))?;
+    check_lockfile(&lock_text).map_err(|e| {
+        HexError::db(
+            &lock_path,
+            std::io::Error::new(std::io::ErrorKind::InvalidData, e),
+        )
+    })?;
     let (installed, graph) = installed_packages(&lock_text);
 
     Ok(scan_installed(&installed, &graph, db, repo))
@@ -54,9 +61,14 @@ pub fn scan_installed(
             skipped_unparseable += 1;
             continue;
         };
-        // The representative introducer chain `[(root), …, pkg]`, computed once per package.
+        let advisories = db.advisories_for(&pkg.name);
+        if advisories.is_empty() {
+            continue;
+        }
+        // The representative introducer chain `[(root), …, pkg]`, only for a package with an
+        // advisory: one for every package of a long chain is quadratic in its length.
         let dependency_path = graph.chain_to(&pkg.name);
-        for adv in db.advisories_for(&pkg.name) {
+        for adv in advisories {
             if let Some(finding) = match_advisory(adv, pkg, &version, &dependency_path, repo) {
                 out.push(finding);
             }

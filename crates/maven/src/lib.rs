@@ -56,7 +56,7 @@ pub use error::{DbError, MavenError};
 /// The OSV version-match outcome, shared with the other ecosystem feeders.
 pub use fleetreach_core::osv::Match;
 pub use gradle::{has_gradle_build, resolve_gradle};
-pub use lockfile::{parse_gradle_lockfile, parse_pom_xml, InstalledPackage};
+pub use lockfile::{check_gradle_lockfile, parse_gradle_lockfile, parse_pom_xml, InstalledPackage};
 pub use resolve::{resolve, Chain, LocalRepositories, PomSource, Resolution, ResolvedDep};
 pub use scan::{scan_located, scan_offline, scan_resolution};
 pub use version::{parse_maven_version, to_semver, Version};

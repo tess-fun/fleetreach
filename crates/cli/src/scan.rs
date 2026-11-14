@@ -1288,6 +1288,16 @@ fn note_scan(args: &ScanArgs, scan: &crate::orchestrate::ScanData) {
             eprintln!("  {} — {:?}", outcome.repo, outcome.status);
         }
     }
+    // The summary line only counts errored repos; each says why here, whatever the format.
+    for outcome in &scan.outcomes {
+        if let ScanStatus::Errored { reason } = &outcome.status {
+            eprintln!(
+                "error: {}: {}",
+                fleetreach_report::sanitize_cell(&outcome.repo.0),
+                fleetreach_report::sanitize_cell(reason.trim_end()),
+            );
+        }
+    }
 
     // Surface toolchain-free packages skipped for an unparseable version, so the skip is
     // visible rather than silent. These are pins with no registry release (a VCS/URL/path

@@ -148,6 +148,7 @@ pub(crate) fn unit_inventory(
         Ecosystem::NuGet => one(fleetreach_nuget::inventory(dir).map_err(|e| e.to_string())?),
         Ecosystem::RubyGems => {
             let body = read(dir, "Gemfile.lock")?;
+            fleetreach_rubygems::check_lockfile(&body).map_err(|e| format!("Gemfile.lock: {e}"))?;
             let mut packages: Vec<Package> = fleetreach_rubygems::installed_gems(&body)
                 .into_iter()
                 .map(|g| Package::new(g.name, g.version, g.direct, false))
@@ -207,6 +208,7 @@ pub(crate) fn unit_inventory(
         }
         Ecosystem::Hex => {
             let lock = read(dir, "mix.lock")?;
+            fleetreach_hex::check_lockfile(&lock).map_err(|e| format!("mix.lock: {e}"))?;
             let (installed, graph) = fleetreach_hex::installed_packages(&lock);
             let packages = installed
                 .into_iter()
@@ -217,6 +219,8 @@ pub(crate) fn unit_inventory(
         Ecosystem::Maven => {
             if dir.join("gradle.lockfile").is_file() {
                 let text = read(dir, "gradle.lockfile")?;
+                fleetreach_maven::check_gradle_lockfile(&text)
+                    .map_err(|e| format!("gradle.lockfile: {e}"))?;
                 let packages = maven_packages(fleetreach_maven::parse_gradle_lockfile(&text));
                 one(SourceInventory::new(
                     Ecosystem::Maven,
@@ -362,6 +366,7 @@ fn maven_packages(installed: Vec<fleetreach_maven::InstalledPackage>) -> Vec<Pac
 /// every module the build needs; before that only direct ones, so older files are partial.
 fn go(dir: &Path) -> Result<SourceInventory, String> {
     let text = read(dir, "go.mod")?;
+    fleetreach_go::check_go_mod(&text).map_err(|e| format!("go.mod: {e}"))?;
     let direct = fleetreach_go::direct_modules(&text);
     let replaces = fleetreach_go::replace_directives(&text);
     let mut packages = Vec::new();

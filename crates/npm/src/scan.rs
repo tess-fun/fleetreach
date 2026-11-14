@@ -54,9 +54,14 @@ pub fn scan_installed(
             skipped_unparseable += 1;
             continue;
         };
-        // The representative introducer chain `[root, …, pkg]`, computed once per package.
+        let advisories = db.advisories_for(&pkg.name);
+        if advisories.is_empty() {
+            continue;
+        }
+        // The representative introducer chain `[root, …, pkg]`, only for a package with an
+        // advisory: one for every package of a long chain is quadratic in its length.
         let dependency_path = graph.chain_to(&pkg.name);
-        for adv in db.advisories_for(&pkg.name) {
+        for adv in advisories {
             if let Some(finding) = match_advisory(adv, pkg, &version, &dependency_path, repo) {
                 out.push(finding);
             }

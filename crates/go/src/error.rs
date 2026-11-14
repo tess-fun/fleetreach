@@ -63,6 +63,15 @@ pub enum GoError {
         #[source]
         source: DbError,
     },
+    /// A `go.mod` at `path` is damaged: it does not have the shape the go command accepts
+    /// ([`check_go_mod`](crate::check_go_mod)), so it is refused rather than read short.
+    #[error("{path}: {message}")]
+    Manifest {
+        /// The damaged manifest.
+        path: PathBuf,
+        /// What is wrong with it.
+        message: String,
+    },
 }
 
 /// Why a file under the offline OSV DB (or a `go.mod`) could not be used.

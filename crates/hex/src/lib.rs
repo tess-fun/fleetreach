@@ -47,5 +47,5 @@ pub use db::{hex_db_path, Advisory, HexDb};
 pub use error::{DbError, HexError};
 /// The OSV version-match outcome, shared with the other ecosystem feeders.
 pub use fleetreach_core::osv::Match;
-pub use lockfile::{installed_packages, InstalledPackage};
+pub use lockfile::{check_lockfile, installed_packages, InstalledPackage};
 pub use scan::{parse_hex_version, scan_installed, scan_offline};

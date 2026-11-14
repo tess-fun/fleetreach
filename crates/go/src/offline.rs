@@ -279,7 +279,8 @@ impl GoDb {
 ///
 /// # Errors
 ///
-/// Returns [`GoError::Db`] if `go.mod` cannot be read — failing closed, so an unreadable
+/// Returns [`GoError::Db`] if `go.mod` cannot be read, or [`GoError::Manifest`] if it is
+/// damaged ([`check_go_mod`](crate::check_go_mod)) — failing closed, so an unreadable
 /// manifest is an honest gap rather than a false-clean scan. (Advisory I/O happened once
 /// in [`GoDb::load`].)
 pub fn scan_offline(
@@ -289,7 +290,11 @@ pub fn scan_offline(
 ) -> Result<Vec<VulnFinding>, GoError> {
     let go_mod_path = module_dir.join("go.mod");
     let go_mod = fleetreach_core::repofile::read_to_string(&go_mod_path)
-        .map_err(|e| GoError::db(go_mod_path, e))?;
+        .map_err(|e| GoError::db(&go_mod_path, e))?;
+    crate::check_go_mod(&go_mod).map_err(|message| GoError::Manifest {
+        path: go_mod_path.clone(),
+        message,
+    })?;
     // Parse go.mod once: the full require list drives matching, the direct set drives
     // direct/transitive classification.
     let required = required_modules(&go_mod);

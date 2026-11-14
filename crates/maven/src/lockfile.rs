@@ -52,6 +52,46 @@ pub fn parse_gradle_lockfile(text: &str) -> Vec<InstalledPackage> {
     dedupe(packages)
 }
 
+/// Check that `text` has the shape Gradle writes, so a damaged lockfile is refused rather
+/// than read short: the reader skips lines it does not know, so a stray line would be
+/// dropped and a file cut short would read as a smaller, clean project.
+///
+/// # Errors
+///
+/// A line that is not a comment, `group:artifact:version=configs` or `empty=configs`, or a
+/// non-empty file with no `empty=` line (Gradle always ends the file with one).
+pub fn check_gradle_lockfile(text: &str) -> Result<(), String> {
+    let mut has_empty = false;
+    for (n, raw) in text.lines().enumerate() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with("empty=") {
+            has_empty = true;
+            continue;
+        }
+        let coord = line.split_once('=').map(|(c, _)| c);
+        if !coord.is_some_and(|c| c.split(':').count() >= 3 && c.split(':').all(|p| !p.is_empty()))
+        {
+            let shown: String = line.chars().take(60).collect();
+            return Err(format!(
+                "line {}: `{}` is not `group:artifact:version=configs`; the file is damaged",
+                n + 1,
+                shown.escape_debug()
+            ));
+        }
+    }
+    if !has_empty && !text.trim().is_empty() {
+        return Err(
+            "has no `empty=` line, which Gradle always writes last; the file looks cut \
+                    short"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
 /// Parse a `pom.xml` for its direct dependencies with literal versions. A small tag scan (not
 /// a full XML parser): for each `<dependency>…</dependency>` block, read `<groupId>`,
 /// `<artifactId>`, and `<version>`. A dependency with no version, a `${property}` version, or a
@@ -181,5 +221,20 @@ empty=annotationProcessor
     fn empty_inputs() {
         assert!(parse_gradle_lockfile("# only comments\n").is_empty());
         assert!(parse_pom_xml("<project></project>").is_empty());
+    }
+
+    #[test]
+    fn a_damaged_gradle_lockfile_is_refused_not_read_short() {
+        let good = "# This is a Gradle generated file for dependency locking.\n# Manual edits can break the build and are not advised.\n# This file is expected to be part of source control.\ncom.google.guava:guava:31.1-jre=compileClasspath,runtimeClasspath\norg.example:lib:1.0:jdk8=runtimeClasspath\nempty=annotationProcessor\n";
+        check_gradle_lockfile(good).unwrap();
+        let cut = &good[..good.find("empty=").unwrap()];
+        assert!(check_gradle_lockfile(cut)
+            .unwrap_err()
+            .contains("cut short"));
+        let stray = good.replacen("org.example", "{{{ ][ garbage\norg.example", 1);
+        assert!(check_gradle_lockfile(&stray)
+            .unwrap_err()
+            .contains("damaged"));
+        assert!(check_gradle_lockfile(&good.replacen("guava:31.1-jre=", "guava=", 1)).is_err());
     }
 }

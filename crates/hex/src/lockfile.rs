@@ -199,6 +199,63 @@ pub fn installed_packages(mix_lock: &str) -> (Vec<InstalledPackage>, DepGraph) {
     (dedupe(packages), graph)
 }
 
+/// Check that `mix_lock` is one whole map literal, so a damaged file is refused rather than
+/// read short: the reader takes every `:hex` tuple it can find, so a file cut short would
+/// read as a smaller, clean project.
+///
+/// # Errors
+///
+/// The text is not `%{ ... }`, or its brackets do not balance outside strings.
+pub fn check_lockfile(mix_lock: &str) -> Result<(), String> {
+    let body = mix_lock.trim();
+    if body.is_empty() {
+        return Ok(());
+    }
+    if !body.starts_with("%{") {
+        return Err("does not start with `%{`; the file is damaged".to_string());
+    }
+    let mut stack: Vec<char> = Vec::new();
+    let (mut quoted, mut escaped) = (false, false);
+    for (i, c) in body.char_indices() {
+        if quoted {
+            match c {
+                _ if escaped => escaped = false,
+                '\\' => escaped = true,
+                '"' => quoted = false,
+                _ => {}
+            }
+            continue;
+        }
+        let open = match c {
+            '"' => {
+                quoted = true;
+                continue;
+            }
+            '{' | '[' => {
+                stack.push(c);
+                continue;
+            }
+            '}' => '{',
+            ']' => '[',
+            _ => continue,
+        };
+        if stack.pop() != Some(open) {
+            return Err(format!(
+                "an unmatched `{c}` at byte {i}; the file is damaged"
+            ));
+        }
+        if stack.is_empty() && !body[i + 1..].trim().is_empty() {
+            return Err(format!(
+                "text after the closing `}}` at byte {i}; the file is damaged"
+            ));
+        }
+    }
+    if quoted || !stack.is_empty() {
+        return Err("the map is never closed; the file looks cut short".to_string());
+    }
+    Ok(())
+}
+
 /// Collapse duplicate `(name, version)` rows into one and sort for deterministic output.
 fn dedupe(packages: Vec<InstalledPackage>) -> Vec<InstalledPackage> {
     let mut by_key: BTreeMap<(String, String), bool> = BTreeMap::new();
@@ -330,5 +387,17 @@ mod tests {
         // `a` requires `b`; `:mix`/`:rebar3` are not deps.
         assert!(direct["a"]);
         assert!(!direct["b"]);
+    }
+
+    #[test]
+    fn a_damaged_lockfile_is_refused_not_read_short() {
+        check_lockfile(LOCK).unwrap();
+        check_lockfile("").unwrap();
+        check_lockfile(r#"%{"a": {:hex, :a, "1.0.0", "x\"}", [:mix], [], "hexpm", "y"}}"#).unwrap();
+        let cut = &LOCK[..LOCK.find("\"decimal\"").unwrap() + 20];
+        assert!(check_lockfile(cut).unwrap_err().contains("cut short"));
+        assert!(check_lockfile(&LOCK.replacen("[:mix], []", "[:mix], [}", 1)).is_err());
+        assert!(check_lockfile(&format!("{LOCK}\n<<<<<<< HEAD")).is_err());
+        assert!(check_lockfile("garbage").is_err());
     }
 }

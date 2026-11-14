@@ -54,40 +54,53 @@ fn link(
             .unwrap_or_else(|| "(root)".to_string()),
         ..Resolved::default()
     };
+    // Every entry under the name a descriptor asks for, for a descriptor no entry lists: a
+    // `resolutions` override keys the entry by the forced range, while the packages that
+    // depend on it keep the range they asked for.
+    let mut by_name: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for entry in &entries {
         let id = format!("{}@{}", entry.name, entry.version);
         for d in &entry.descriptors {
             by_descriptor.insert(d.clone(), id.clone());
+            if let Some((name, _)) = split_name_version(d) {
+                let ids = by_name.entry(name.to_string()).or_default();
+                if !ids.contains(&id) {
+                    ids.push(id.clone());
+                }
+            }
         }
     }
-    for entry in entries {
+    // Every id `descriptor` may stand for. Without an exact entry, all entries of that name:
+    // linking too many only reaches more, so nothing reached at runtime is labeled dev.
+    let targets = |descriptor: &str| -> Vec<String> {
+        if let Some(id) = by_descriptor.get(descriptor) {
+            return vec![id.clone()];
+        }
+        split_name_version(descriptor)
+            .and_then(|(name, _)| by_name.get(name))
+            .cloned()
+            .unwrap_or_default()
+    };
+    for entry in &entries {
         let id = format!("{}@{}", entry.name, entry.version);
-        let deps: Vec<String> = entry
-            .deps
-            .iter()
-            .filter_map(|d| by_descriptor.get(d).cloned())
-            .collect();
+        let deps: Vec<String> = entry.deps.iter().flat_map(|d| targets(d)).collect();
         let node = resolved.nodes.entry(id).or_insert(Node {
-            name: entry.name,
-            version: entry.version,
+            name: entry.name.clone(),
+            version: entry.version.clone(),
             deps: Vec::new(),
         });
         node.deps.extend(deps);
     }
-    let lookup = |name: &str, range: &str| by_descriptor.get(&normalize(name, range)).cloned();
+    let lookup = |name: &str, range: &str| targets(&normalize(name, range));
     for (name, range) in &declared.prod {
-        if let Some(id) = lookup(name, range) {
-            resolved.prod_roots.insert(id);
-        }
+        resolved.prod_roots.extend(lookup(name, range));
     }
     for (name, range) in &declared.dev {
-        if let Some(id) = lookup(name, range) {
-            resolved.dev_roots.insert(id);
-        }
+        resolved.dev_roots.extend(lookup(name, range));
     }
-    for id in extra_prod.iter().filter_map(|d| by_descriptor.get(d)) {
-        if !resolved.dev_roots.contains(id) {
-            resolved.prod_roots.insert(id.clone());
+    for id in extra_prod.iter().flat_map(|d| targets(d)) {
+        if !resolved.dev_roots.contains(&id) {
+            resolved.prod_roots.insert(id);
         }
     }
     if resolved.prod_roots.is_empty() && resolved.dev_roots.is_empty() {
@@ -218,11 +231,21 @@ fn parse_berry(text: &str, declared: &Declared) -> Result<Resolved, String> {
     let doc = docs.first().ok_or("empty yarn.lock")?;
     let mut entries = Vec::new();
     let mut workspace_deps: Vec<String> = Vec::new();
+    // Every name some entry is keyed by, and every name an entry depends on. Berry writes
+    // an entry for each dependency (optional ones for every platform, workspaces and git or
+    // file sources too), so a name with none means the file was cut short or damaged.
+    let mut keyed: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut wanted: BTreeMap<String, String> = BTreeMap::new();
     for (key, entry) in doc.entries() {
         if key == "__metadata" {
             continue;
         }
         let descriptors: Vec<String> = key.split(", ").map(|d| d.trim().to_string()).collect();
+        keyed.extend(
+            descriptors
+                .iter()
+                .filter_map(|d| split_name_version(d).map(|(n, _)| n.to_string())),
+        );
         let resolution = entry
             .str_at("resolution")
             .ok_or_else(|| format!("yarn.lock entry `{key}` has no resolution"))?;
@@ -231,6 +254,13 @@ fn parse_berry(text: &str, declared: &Declared) -> Result<Resolved, String> {
             .flat_map(|s| entry.get(s).map(Y::entries).unwrap_or_default())
             .filter_map(|(name, range)| range.as_str().map(|r| berry_descriptor(name, r)))
             .collect();
+        for d in &deps {
+            if let Some((name, _)) = split_name_version(d) {
+                wanted
+                    .entry(name.to_string())
+                    .or_insert_with(|| key.clone());
+            }
+        }
         match berry_package(resolution) {
             Some((name, _)) => {
                 let version = entry
@@ -248,6 +278,11 @@ fn parse_berry(text: &str, declared: &Declared) -> Result<Resolved, String> {
             // git, file, link, portal, exec: no registry package to match.
             None => {}
         }
+    }
+    if let Some((name, by)) = wanted.iter().find(|(name, _)| !keyed.contains(*name)) {
+        return Err(format!(
+            "`{by}` depends on `{name}`, which has no entry; the file looks cut short or damaged"
+        ));
     }
     Ok(link(entries, declared, &workspace_deps, berry_descriptor))
 }
@@ -447,5 +482,56 @@ __metadata:
             .iter()
             .all(|p| p.name != "local-thing" && p.name != "app"));
         assert_eq!(graph.chain_to("tinyspy"), vec!["app", "vitest", "tinyspy"]);
+    }
+
+    #[test]
+    fn a_resolutions_override_keeps_the_forced_package_runtime() {
+        // `resolutions: {lodash: 4.18.1}` keys the entry by the forced version while the
+        // workspace and `qs` still ask for `^4.17.15`, which no entry lists.
+        let lock = r#"__metadata:
+  version: 8
+
+"app@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "app@workspace:."
+  dependencies:
+    lodash: "npm:^4.17.15"
+    qs: "npm:^6.0.0"
+    vitest: "npm:^1.0.0"
+
+"qs@npm:^6.0.0":
+  version: 6.15.3
+  resolution: "qs@npm:6.15.3"
+  dependencies:
+    lodash: "npm:^4.17.19"
+
+"vitest@npm:^1.0.0":
+  version: 1.6.0
+  resolution: "vitest@npm:1.6.0"
+
+"lodash@npm:4.18.1":
+  version: 4.18.1
+  resolution: "lodash@npm:4.18.1"
+"#;
+        let dir = tempdir(
+            "resolutions",
+            Some(
+                r#"{"name":"app","dependencies":{"lodash":"^4.17.15","qs":"^6.0.0"},
+                "devDependencies":{"vitest":"^1.0.0"},"resolutions":{"lodash":"4.18.1"}}"#,
+            ),
+        );
+        let (installed, graph) = parse(lock, &dir).unwrap().into_parts();
+        let lodash = installed.iter().find(|p| p.name == "lodash").unwrap();
+        assert!(lodash.direct && !lodash.dev, "{lodash:?}");
+        assert!(installed.iter().find(|p| p.name == "vitest").unwrap().dev);
+        assert_eq!(graph.chain_to("lodash"), vec!["app", "lodash"]);
+    }
+
+    #[test]
+    fn a_berry_lockfile_cut_between_entries_is_refused() {
+        let dir = tempdir("berry-cut", None);
+        let cut = &BERRY[..BERRY.find("\"tinyspy@npm").unwrap()];
+        let err = parse(cut, &dir).err().unwrap();
+        assert!(err.contains("`tinyspy`, which has no entry"), "{err}");
     }
 }

@@ -116,6 +116,71 @@ pub fn installed_gems(lock_text: &str) -> Vec<InstalledGem> {
     dedupe(gems)
 }
 
+/// Check that `lock_text` has the shape Bundler writes, so a damaged file is refused rather
+/// than read short. The readers skip what they do not know, so without this a stray line at
+/// the left margin would end the `GEM` section early (every gem below it unread), and a file
+/// cut short would read as a smaller, clean project.
+///
+/// # Errors
+///
+/// A line at the left margin that is not an uppercase section header, a `specs:` gem line
+/// that is not `name (version)`, or no `DEPENDENCIES` section (Bundler always writes one).
+pub fn check_lockfile(lock_text: &str) -> Result<(), String> {
+    let mut section = "";
+    let mut in_specs = false;
+    let mut has_dependencies = false;
+    let mut has_content = false;
+    for (n, line) in lock_text.lines().enumerate() {
+        let indent = line.len() - line.trim_start().len();
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        has_content = true;
+        let shown = || {
+            trimmed
+                .chars()
+                .take(60)
+                .collect::<String>()
+                .escape_debug()
+                .to_string()
+        };
+        if indent == 0 {
+            if !trimmed.bytes().all(|b| b.is_ascii_uppercase() || b == b' ') {
+                return Err(format!(
+                    "line {}: `{}` is not a Bundler section header; the file is damaged",
+                    n + 1,
+                    shown()
+                ));
+            }
+            section = trimmed;
+            has_dependencies |= trimmed == "DEPENDENCIES";
+            in_specs = false;
+            continue;
+        }
+        if !matches!(section, "GEM" | "GIT" | "PATH") {
+            continue;
+        }
+        if indent == 2 {
+            in_specs = trimmed == "specs:";
+        } else if in_specs && indent == 4 && parse_spec(trimmed).is_none() {
+            return Err(format!(
+                "line {}: `{}` under `specs:` is not `name (version)`; the file is damaged",
+                n + 1,
+                shown()
+            ));
+        }
+    }
+    if has_content && !has_dependencies {
+        return Err(
+            "has no DEPENDENCIES section, which Bundler always writes; the file looks \
+                    cut short"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
 /// Build the `dependency_path` provenance graph from `Gemfile.lock`. Nodes are verbatim gem
 /// names; the synthetic root is `"(root)"`. Edges come from two places:
 ///
@@ -402,5 +467,23 @@ DEPENDENCIES
             },
         ]);
         assert_eq!(rows(&gems), vec![("x", "1.0", true)]);
+    }
+
+    #[test]
+    fn a_damaged_lockfile_is_refused_not_read_short() {
+        check_lockfile(LOCK).unwrap();
+        let stray = LOCK.replacen("    rack (", "\u{0}{{{ ][ garbage\n    rack (", 1);
+        assert!(check_lockfile(&stray)
+            .unwrap_err()
+            .contains("section header"));
+        let conflict = LOCK.replacen("    rack (", "<<<<<<< HEAD\n    rack (", 1);
+        assert!(check_lockfile(&conflict).is_err());
+        let bad_spec = LOCK.replacen("    rack (", "    rack 2.2.8\n    rack (", 1);
+        assert!(check_lockfile(&bad_spec)
+            .unwrap_err()
+            .contains("name (version)"));
+        let cut = &LOCK[..LOCK.find("DEPENDENCIES").unwrap()];
+        assert!(check_lockfile(cut).unwrap_err().contains("cut short"));
+        check_lockfile("").unwrap();
     }
 }

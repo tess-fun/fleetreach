@@ -15,7 +15,7 @@ use fleetreach_core::{DepGraph, Ecosystem, RepoId, VulnFinding};
 
 use crate::db::{affected_fixed, Advisory, RubyGemsDb};
 use crate::error::RubyGemsError;
-use crate::lockfile::{dependency_graph, installed_gems, InstalledGem};
+use crate::lockfile::{check_lockfile, dependency_graph, installed_gems, InstalledGem};
 use crate::version::{parse_rubygems_version, to_semver, Version};
 
 /// Scan the Ruby project at `repo_dir` (containing `Gemfile.lock`) against the preloaded
@@ -24,7 +24,8 @@ use crate::version::{parse_rubygems_version, to_semver, Version};
 ///
 /// # Errors
 ///
-/// Returns [`RubyGemsError::Db`] if `Gemfile.lock` is missing or cannot be read — failing
+/// Returns [`RubyGemsError::Db`] if `Gemfile.lock` is missing, cannot be read or is damaged
+/// ([`check_lockfile`](crate::check_lockfile)) — failing
 /// closed, so an unreadable/absent lockfile is an honest gap rather than a false-clean scan.
 pub fn scan_offline(
     repo_dir: &Path,
@@ -34,6 +35,12 @@ pub fn scan_offline(
     let lock_path = repo_dir.join("Gemfile.lock");
     let body = fleetreach_core::repofile::read_to_string(&lock_path)
         .map_err(|e| RubyGemsError::db(&lock_path, e))?;
+    check_lockfile(&body).map_err(|e| {
+        RubyGemsError::db(
+            &lock_path,
+            std::io::Error::new(std::io::ErrorKind::InvalidData, e),
+        )
+    })?;
     let installed = installed_gems(&body);
     let graph = dependency_graph(&body);
 

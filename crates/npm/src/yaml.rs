@@ -42,8 +42,20 @@ impl Node {
     }
 }
 
+/// Deeper than any lockfile nests: past it a file is refused before it is loaded.
+const MAX_BLOCK_DEPTH: usize = 256;
+
 /// Parse every document in `text`.
 pub(crate) fn parse(text: &str) -> Result<Vec<Node>, String> {
+    // The loader, the conversion and the drop all recurse per level, and saphyr limits only
+    // flow collections (`[[[`): block nesting a few thousand deep overflows the stack, which
+    // aborts the process.
+    let depth = block_depth(text);
+    if depth > MAX_BLOCK_DEPTH {
+        return Err(format!(
+            "nests up to {depth} levels deep, past the {MAX_BLOCK_DEPTH} this reader takes"
+        ));
+    }
     let mut parser = saphyr_parser::Parser::new_from_str(text);
     let mut loader: YamlLoader<'_, Yaml<'_>> = YamlLoader::default();
     loader.early_parse(false);
@@ -52,6 +64,33 @@ pub(crate) fn parse(text: &str) -> Result<Vec<Node>, String> {
         return Err(e.to_string());
     }
     Ok(loader.into_documents().iter().map(convert).collect())
+}
+
+/// A bound on how deep the block collections of `text` nest. A nested block collection
+/// starts at a greater column than the one holding it, except a sequence directly under a
+/// mapping key, which may share the key's column; or it starts on the same line after a `- `
+/// or `? ` indicator. So a line indented `n` spaces after `k` indicators is at most
+/// `2 * (n + k) + 2` levels deep.
+fn block_depth(text: &str) -> usize {
+    text.lines()
+        .map(|line| {
+            let b = line.as_bytes();
+            let mut i = b.iter().take_while(|&&c| c == b' ').count();
+            let indent = i;
+            let mut indicators = 0;
+            while matches!(b.get(i), Some(b'-' | b'?'))
+                && matches!(b.get(i + 1), None | Some(b' ' | b'\t'))
+            {
+                indicators += 1;
+                i += 1;
+                while matches!(b.get(i), Some(b' ' | b'\t')) {
+                    i += 1;
+                }
+            }
+            2 * (indent + indicators) + 2
+        })
+        .max()
+        .unwrap_or(0)
 }
 
 fn convert(y: &Yaml<'_>) -> Node {
@@ -82,6 +121,45 @@ fn convert(y: &Yaml<'_>) -> Node {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+
+    fn on_small_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+        std::thread::Builder::new()
+            .stack_size(2 << 20)
+            .spawn(f)
+            .unwrap()
+            .join()
+            .unwrap()
+    }
+
+    #[test]
+    fn the_deepest_nesting_taken_parses_on_a_small_stack() {
+        let block: String = (0..127)
+            .map(|i| format!("{}a{i}:\n", " ".repeat(i)))
+            .collect();
+        let compact = format!("{}x\n", "- ".repeat(127));
+        for text in [block, compact] {
+            assert!(block_depth(&text) <= MAX_BLOCK_DEPTH);
+            assert!(on_small_stack(move || parse(&text).is_ok()));
+        }
+    }
+
+    #[test]
+    fn deeper_block_nesting_is_refused_not_a_stack_overflow() {
+        let block: String = (0..3_000)
+            .map(|i| format!("{}a:\n", "  ".repeat(i)))
+            .collect();
+        let compact = format!("{}x\n", "- ".repeat(500_000));
+        let under_key = format!(
+            "a:\n{}",
+            (0..2_000)
+                .map(|i| format!("{}- b:\n", "  ".repeat(i)))
+                .collect::<String>()
+        );
+        for text in [block, compact, under_key] {
+            let err = on_small_stack(move || parse(&text).unwrap_err());
+            assert!(err.contains("levels deep"), "{err}");
+        }
+    }
 
     #[test]
     fn scalars_keep_their_text() {

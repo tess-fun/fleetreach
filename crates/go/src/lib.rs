@@ -347,7 +347,7 @@ pub fn required_modules(go_mod: &str) -> Vec<RequiredModule> {
             }
             continue;
         }
-        if line.starts_with("require (") {
+        if opens_block(line, "require") {
             in_require_block = true;
         } else if let Some(rest) = line.strip_prefix("require ") {
             if let Some(m) = parse_require(rest.trim()) {
@@ -356,6 +356,93 @@ pub fn required_modules(go_mod: &str) -> Vec<RequiredModule> {
         }
     }
     out
+}
+
+/// Check that `go_mod` has the shape the go command accepts, so a damaged manifest is
+/// refused rather than read short: the readers skip lines they do not know, so a stray line
+/// would be dropped, and a file cut short inside `require (` would read as a smaller, clean
+/// module.
+///
+/// # Errors
+///
+/// A line outside a block that is not a go.mod directive or comment, a `require` entry that
+/// is not `path version`, or a block still open at the end of the file.
+pub fn check_go_mod(go_mod: &str) -> Result<(), String> {
+    const DIRECTIVES: [&str; 10] = [
+        "module",
+        "go",
+        "toolchain",
+        "godebug",
+        "require",
+        "replace",
+        "exclude",
+        "retract",
+        "tool",
+        "ignore",
+    ];
+    let shown = |line: &str| {
+        line.chars()
+            .take(60)
+            .collect::<String>()
+            .escape_debug()
+            .to_string()
+    };
+    let mut block: Option<(&str, usize)> = None;
+    for (n, raw) in go_mod.lines().enumerate() {
+        let line = raw.split("//").next().unwrap_or(raw).trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some((keyword, _)) = block {
+            if line == ")" {
+                block = None;
+            } else if keyword == "require" && !is_require_entry(line) {
+                return Err(format!(
+                    "line {}: `{}` in a require block is not `path version`; the file is damaged",
+                    n + 1,
+                    shown(raw.trim())
+                ));
+            }
+            continue;
+        }
+        let keyword = line
+            .split(|c: char| c.is_whitespace() || c == '(')
+            .next()
+            .unwrap_or_default();
+        if !DIRECTIVES.contains(&keyword) {
+            return Err(format!(
+                "line {}: `{}` is not a go.mod directive; the file is damaged",
+                n + 1,
+                shown(raw.trim())
+            ));
+        }
+        let rest = line[keyword.len()..].trim_start();
+        if rest == "(" {
+            block = Some((keyword, n + 1));
+        } else if keyword == "require" && !is_require_entry(rest) {
+            return Err(format!(
+                "line {}: `{}` is not `require path version`; the file is damaged",
+                n + 1,
+                shown(raw.trim())
+            ));
+        }
+    }
+    match block {
+        Some((keyword, line)) => Err(format!(
+            "the `{keyword} (` block opened on line {line} is never closed; the file looks cut \
+             short"
+        )),
+        None => Ok(()),
+    }
+}
+
+/// `path version`, the shape of one requirement (comment already removed).
+fn is_require_entry(entry: &str) -> bool {
+    let mut parts = entry.split_whitespace();
+    matches!(
+        (parts.next(), parts.next(), parts.next()),
+        (Some(_), Some(version), None) if version.starts_with('v')
+    )
 }
 
 /// The main module path declared by the `module` directive, if present.
@@ -403,7 +490,7 @@ pub fn replace_directives(go_mod: &str) -> Vec<Replace> {
             }
             continue;
         }
-        if line.starts_with("replace (") {
+        if opens_block(line, "replace") {
             in_block = true;
         } else if let Some(rest) = line.strip_prefix("replace ") {
             if let Some(r) = parse_replace(rest) {
@@ -430,6 +517,12 @@ fn parse_replace(entry: &str) -> Option<Replace> {
         to_path,
         to_version,
     })
+}
+
+/// Whether `line` opens a `keyword ( ... )` block; the go command also takes `keyword(`.
+fn opens_block(line: &str, keyword: &str) -> bool {
+    line.strip_prefix(keyword)
+        .is_some_and(|rest| rest.split("//").next().unwrap_or(rest).trim() == "(")
 }
 
 /// Parse one `require` entry (`<module> <version> [// indirect]`).
@@ -517,6 +610,7 @@ pub(crate) fn render_symbols<'a>(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -575,6 +669,30 @@ require (
     #[test]
     fn direct_modules_empty_when_no_manifest() {
         assert!(direct_modules("").is_empty());
+    }
+
+    #[test]
+    fn a_damaged_go_mod_is_refused_not_read_short() {
+        let good = "module example.com/app\n\ngo 1.22\n// a comment\nrequire golang.org/x/text v0.3.0 // indirect\nrequire (\n\tgithub.com/a/b v1.2.3\n\t\"quoted.example/c\" v0.1.0\n)\nreplace(\n\tgithub.com/a/b => ../b\n)\nretract [v1.0.0, v1.1.0]\ntool golang.org/x/tools/cmd/stringer\n";
+        check_go_mod(good).unwrap();
+        assert_eq!(required_modules(good).len(), 3);
+        assert_eq!(
+            replace_directives(good).len(),
+            1,
+            "`replace(` opens a block too"
+        );
+        let cut = &good[..good.find("\n)").unwrap()];
+        assert!(check_go_mod(cut).unwrap_err().contains("never closed"));
+        let stray = good.replacen("go 1.22", "{{{ ][ garbage", 1);
+        assert!(check_go_mod(&stray)
+            .unwrap_err()
+            .contains("not a go.mod directive"));
+        let bad_entry = good.replacen("v1.2.3", "", 1);
+        assert!(check_go_mod(&bad_entry)
+            .unwrap_err()
+            .contains("path version"));
+        assert!(check_go_mod("<<<<<<< HEAD\nmodule x\n").is_err());
+        check_go_mod("").unwrap();
     }
 }
 
