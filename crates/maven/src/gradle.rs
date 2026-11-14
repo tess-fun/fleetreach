@@ -68,6 +68,10 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                 Catalog::default()
             })
         });
+    for (alias, version) in &catalog.versions {
+        vars.entry(format!("libs.versions.{alias}"))
+            .or_insert_with(|| version.clone());
+    }
     let mut plugins = catalog.plugins.clone();
     // A convention plugin often applies Kotlin, with its version set on the plugin's library.
     if let Some(c) = catalog
@@ -351,7 +355,8 @@ fn variable_reference(value: &str) -> Option<String> {
     let v = v.strip_prefix("ext.").unwrap_or(v);
     let plain = !v.is_empty()
         && v.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
-        && v.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.');
+        && v.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.');
     plain.then(|| v.to_string())
 }
 
@@ -411,7 +416,8 @@ fn kotlin_constants(text: &str, vars: &mut BTreeMap<String, String>, twice: &mut
             .strip_prefix("const val ")
             .or_else(|| t.strip_prefix("internal const val "))
         {
-            if let (Some((name, value)), Some((object, _))) = (rest.split_once('='), objects.last()) {
+            if let (Some((name, value)), Some((object, _))) = (rest.split_once('='), objects.last())
+            {
                 let name = name.split(':').next().unwrap_or_default().trim();
                 if let Some((value, tail)) = quoted(value.trim()) {
                     if tail.trim().is_empty() && !value.contains('$') {
@@ -530,6 +536,8 @@ struct Catalog {
     plugins: BTreeMap<String, String>,
     /// Plugin alias to id.
     plugin_aliases: BTreeMap<String, String>,
+    /// `[versions]` by accessor, as scripts name them: `libs.versions.<accessor>`.
+    versions: BTreeMap<String, String>,
     unread: Vec<String>,
 }
 
@@ -543,6 +551,11 @@ impl Catalog {
         let mut catalog = Catalog::default();
         let versions = doc.get("versions");
         let table = |key: &str| doc.get(key).and_then(toml::Value::as_table);
+        for (alias, entry) in table("versions").into_iter().flatten() {
+            if let Ok(version) = catalog_version(entry, None) {
+                catalog.versions.insert(accessor(alias), version);
+            }
+        }
         for (alias, entry) in table("libraries").into_iter().flatten() {
             match library(entry, versions) {
                 Ok(coordinate) => {
@@ -598,10 +611,22 @@ fn plugin_line(line: &str, catalog: &Catalog) -> Option<(String, Option<String>)
         (id.to_string(), tail)
     };
     let rest = rest.trim_start().trim_start_matches(')').trim_start();
-    let version = rest
-        .strip_prefix("version")
-        .and_then(|v| quoted(v.trim_start()))
-        .map(|(v, _)| v.to_string());
+    let version = rest.strip_prefix("version").and_then(|v| {
+        let v = v.trim_start().trim_start_matches('(').trim_start();
+        match quoted(v) {
+            Some((v, _)) => Some(v.to_string()),
+            // `version libs.versions.x.get()`
+            None => {
+                let name = v.trim_end();
+                let name = name
+                    .strip_suffix(".get())")
+                    .or_else(|| name.strip_suffix(".get()"));
+                let name = name.unwrap_or(v).trim_end_matches(')').trim_end();
+                let name = name.strip_prefix("libs.versions.")?;
+                catalog.versions.get(name).cloned()
+            }
+        }
+    });
     Some((id, version))
 }
 
@@ -701,6 +726,7 @@ fn expand(text: &str, vars: &BTreeMap<String, String>) -> Result<String, String>
             (&after[..end], &after[end..])
         };
         let name = name.trim();
+        let name = name.strip_suffix(".get()").unwrap_or(name);
         let short = [
             "rootProject.ext.",
             "project.ext.",
@@ -819,7 +845,10 @@ fn read_script(text: &str, context: &mut Context) -> Module {
         );
         read_line(trimmed, current, &blocks, context, &mut module);
         if shared {
-            module.shared.deps.extend_from_slice(&module.deps[before.0..]);
+            module
+                .shared
+                .deps
+                .extend_from_slice(&module.deps[before.0..]);
             module
                 .shared
                 .platforms
@@ -1280,7 +1309,13 @@ set = ["a-b", "e"]
             plugin_line("alias(libs.plugins.boot)", &catalog),
             Some(("org.springframework.boot".to_string(), None))
         );
-        for line in ["id 'g.x' version '1.0'", "id(\"g.x\") version \"1.0\""] {
+        let catalog = Catalog::parse(&format!("{toml}[versions]\nmy-x = \"1.0\"\n")).unwrap();
+        for line in [
+            "id 'g.x' version '1.0'",
+            "id(\"g.x\") version \"1.0\"",
+            "id(\"g.x\") version libs.versions.my.x.get()",
+            "id(\"g.x\") version(libs.versions.my.x.get())",
+        ] {
             assert_eq!(
                 plugin_line(line, &catalog),
                 Some(("g.x".to_string(), Some("1.0".to_string())))
