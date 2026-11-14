@@ -44,6 +44,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     for (_, text) in &scripts {
         script_variables(text, &mut vars, &mut seen_twice, &mut aliases);
         map_entries(text, &mut entries);
+        set_calls(text, &mut entries);
     }
     // `val v = extra["k"] as String` and `extra["k"] = Versions.K` name another variable,
     // known once every literal is read.
@@ -438,6 +439,32 @@ fn script_variables(
             _ => {
                 vars.insert(name.to_string(), value.to_string());
             }
+        }
+    }
+}
+
+/// `set('k', "v")`, `ext.set("k", "v")` or `extra.set("k", "v")` in an `ext` block: the
+/// spelling for a property name with dots or dashes, as a BOM override (`grpc-java.version`).
+fn set_calls(text: &str, out: &mut Vec<(String, String)>) {
+    for line in text.lines() {
+        let l = line.trim();
+        let Some(rest) = ["set(", "ext.set(", "extra.set(", "project.ext.set("]
+            .iter()
+            .find_map(|p| l.strip_prefix(p))
+        else {
+            continue;
+        };
+        let Some((name, tail)) = quoted(rest.trim_start()) else {
+            continue;
+        };
+        let Some(tail) = tail.trim_start().strip_prefix(',') else {
+            continue;
+        };
+        let Some((value, end)) = quoted(tail.trim_start()) else {
+            continue;
+        };
+        if end.trim() == ")" {
+            out.push((name.to_string(), value.to_string()));
         }
     }
 }
@@ -2125,6 +2152,36 @@ set = ["a-b", "e"]
     }
 
     #[test]
+    fn gradle_keeps_a_relocation_pom_and_adds_its_target() {
+        let repo = Mem(BTreeMap::from([
+            (
+                "old:a:1".to_string(),
+                "<project><groupId>old</groupId><artifactId>a</artifactId><version>1</version>\
+                 <distributionManagement><relocation><groupId>g</groupId></relocation>\
+                 </distributionManagement></project>"
+                    .to_string(),
+            ),
+            pom("a", "1", &[]),
+            pom("a", "2", &[]),
+            pom("b", "1", &[("a", "2")]),
+        ]));
+        let dir = tree(
+            "relocation",
+            &[
+                ("settings.gradle", ""),
+                (
+                    "build.gradle",
+                    "dependencies {\n    implementation 'old:a:1'\n    implementation 'g:b:1'\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "old:a"), ["1"], "{:?}", r.missing);
+        // The target competes with other requests: the highest wins.
+        assert_eq!(versions(&r, "g:a"), ["2"], "{:?}", r.missing);
+    }
+
+    #[test]
     fn a_test_dependency_does_not_raise_the_main_classpath() {
         // Gradle resolves `compileClasspath` without test dependencies: `x` stays 1 there,
         // and 2 is on the test classpath only.
@@ -2530,6 +2587,22 @@ set = ["a-b", "e"]
         assert_eq!(kotlin[1].1["k"]["module"].as_str(), Some("g:k"));
         assert_eq!(kotlin[1].1["k"]["version"].as_str(), Some("2.0"));
         assert_eq!(kotlin[3].1["p"]["version"]["ref"].as_str(), Some("pv"));
+    }
+
+    #[test]
+    fn set_calls_name_dotted_properties() {
+        let mut out = Vec::new();
+        set_calls(
+            "ext {\n  set('grpc-java.version', \"$grpcVersion\")\n  extra.set(\"a-b\", \"1\")\n  set(x)\n}\n",
+            &mut out,
+        );
+        assert_eq!(
+            out,
+            [
+                ("grpc-java.version".to_string(), "$grpcVersion".to_string()),
+                ("a-b".to_string(), "1".to_string())
+            ]
+        );
     }
 
     #[test]

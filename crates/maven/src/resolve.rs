@@ -199,6 +199,9 @@ struct RawPom {
     deps: Vec<Dep>,
     mgmt: Vec<Dep>,
     modules: Vec<String>,
+    /// `<distributionManagement><relocation>`: group, artifact and version it moved to, each
+    /// `None` when unchanged.
+    relocation: Option<(Option<String>, Option<String>, Option<String>)>,
 }
 
 fn child<'a, 'i>(node: Node<'a, 'i>, name: &str) -> Option<Node<'a, 'i>> {
@@ -291,6 +294,15 @@ fn parse_pom(xml: &str) -> Result<RawPom, String> {
             }
         }
     }
+    pom.relocation = child(project, "distributionManagement")
+        .and_then(|d| child(d, "relocation"))
+        .map(|r| {
+            (
+                text(r, "groupId"),
+                text(r, "artifactId"),
+                text(r, "version"),
+            )
+        });
     if let Some(modules) = child(project, "modules") {
         pom.modules = children(modules, "module")
             .filter_map(|m| m.text().map(|t| t.trim().to_string()))
@@ -311,6 +323,8 @@ struct Effective {
     props: BTreeMap<String, String>,
     /// Gradle `dependencyConstraints`: versions requested for artifacts that are present.
     constraints: Vec<Dep>,
+    /// Where this POM says the artifact moved (its own relocation, never a parent's).
+    relocation: Option<(String, String, String)>,
 }
 
 const MAX_DEPTH: usize = 24;
@@ -444,6 +458,33 @@ impl Resolver<'_> {
             deps.retain(|x| x.mgmt_key() != d.mgmt_key());
             deps.push(d);
         }
+        let relocation = raw.relocation.map(|(g, a, v)| {
+            let interp = |x: Option<String>, default: &str, me: &mut Self| {
+                x.map_or_else(
+                    || default.to_string(),
+                    |x| interpolate(&x, &props, &mut me.missing),
+                )
+            };
+            (
+                interp(g, &group, self),
+                interp(a, &raw.artifact, self),
+                interp(v, &version, self),
+            )
+        });
+        // Gradle keeps a relocation POM as a module of its own and depends on the target
+        // (real Gradle lists both `mysql:mysql-connector-java` and `com.mysql:mysql-connector-j`).
+        if self.gradle {
+            if let Some((g, a, v)) = &relocation {
+                if (g, a) != (&group, &raw.artifact) || *v != version {
+                    deps.push(Dep {
+                        group: g.clone(),
+                        artifact: a.clone(),
+                        version: Some(v.clone()),
+                        ..Dep::default()
+                    });
+                }
+            }
+        }
         Ok(Effective {
             group,
             artifact: raw.artifact,
@@ -452,6 +493,7 @@ impl Resolver<'_> {
             modules: raw.modules,
             props,
             constraints: Vec::new(),
+            relocation,
         })
     }
 
@@ -880,6 +922,7 @@ fn walk(
     let mut order: Vec<(String, String, String, String)> = Vec::new();
     // (dependency, depth, parent node, scope, inherited exclusions, root management)
     let mut queue: Queue = VecDeque::new();
+    let mut relocated: BTreeSet<(String, String, String)> = BTreeSet::new();
     for (i, m) in modules.iter().enumerate() {
         for d in &m.deps {
             if local.contains_key(&d.key()) {
@@ -955,6 +998,26 @@ fn walk(
         let Some(version) = r.pick_version(&dep.group, &dep.artifact, &declared) else {
             continue;
         };
+        // Maven resolves a relocated artifact (`<distributionManagement><relocation>`) as its
+        // new coordinate; each source moves once, so a cycle stops. Gradle does not follow
+        // relocations (real Gradle keeps `junit:junit-dep` and `mysql:mysql-connector-java`).
+        if !r.gradle && !local.contains_key(&dep.key()) {
+            let moved = r
+                .remote(&dep.group, &dep.artifact, &version, 0)
+                .and_then(|eff| eff.relocation);
+            if let Some(to) = moved {
+                let from = (dep.group.clone(), dep.artifact.clone(), version.clone());
+                if to != from && relocated.insert(from) {
+                    let (g, a, v) = to;
+                    let mut next = dep.clone();
+                    next.group = g;
+                    next.artifact = a;
+                    next.version = Some(v);
+                    queue.push_front((next, depth, parent, scope, exclusions, root_ix));
+                    continue;
+                }
+            }
+        }
         selected.insert(
             key.clone(),
             ResolvedDep {
@@ -1202,6 +1265,55 @@ mod tests {
             dep("g", "c", "1.5", ""), dep("g", "a", "1", "")));
         let r = resolve(&dir, &repo).unwrap();
         assert_eq!(rows(&r)[1], ("g:c".into(), "1.5".into(), false, false));
+    }
+
+    #[test]
+    fn relocated_artifacts_resolve_as_their_new_coordinate() {
+        let moved = |g: &str, to: &str| {
+            format!("<distributionManagement><relocation><groupId>{to}</groupId></relocation></distributionManagement><!--{g}-->")
+        };
+        let repo = Mem(BTreeMap::from([
+            (
+                "old:a:1".to_string(),
+                pom("old", "a", "1", &moved("old", "new")),
+            ),
+            (
+                "new:a:1".to_string(),
+                pom(
+                    "new",
+                    "a",
+                    "1",
+                    &format!("<dependencies>{}</dependencies>", dep("g", "c", "1", "")),
+                ),
+            ),
+            ("g:c:1".to_string(), pom("g", "c", "1", "")),
+            // A cycle: each moves to the other.
+            (
+                "x:loop:1".to_string(),
+                pom("x", "loop", "1", &moved("x", "y")),
+            ),
+            (
+                "y:loop:1".to_string(),
+                pom("y", "loop", "1", &moved("y", "x")),
+            ),
+        ]));
+        let dir = project(
+            "relocation",
+            &format!(
+                "<dependencies>{}{}</dependencies>",
+                dep("old", "a", "1", ""),
+                dep("x", "loop", "1", "")
+            ),
+        );
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(
+            rows(&r),
+            [
+                ("new:a".into(), "1".into(), true, false),
+                ("x:loop".into(), "1".into(), true, false),
+                ("g:c".into(), "1".into(), false, false),
+            ]
+        );
     }
 
     #[test]
