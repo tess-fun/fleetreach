@@ -60,14 +60,30 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     for name in seen_twice {
         vars.remove(&name);
     }
-    let catalog = fleetreach_core::repofile::read_to_string(dir.join("gradle/libs.versions.toml"))
-        .ok()
-        .map_or_else(Catalog::default, |text| {
-            Catalog::parse(&text).unwrap_or_else(|e| {
+    let mut doc =
+        match fleetreach_core::repofile::read_to_string(dir.join("gradle/libs.versions.toml")) {
+            Ok(text) => toml::from_str::<toml::Table>(&text).unwrap_or_else(|e| {
                 missing.insert(format!("gradle/libs.versions.toml: {e}"));
-                Catalog::default()
-            })
-        });
+                toml::Table::new()
+            }),
+            Err(_) => toml::Table::new(),
+        };
+    // A catalog can also be declared in the settings script; its entries join the file's.
+    for name in ["settings.gradle", "settings.gradle.kts"] {
+        if let Ok(text) = fleetreach_core::repofile::read_to_string(dir.join(name)) {
+            for (section, entries) in settings_catalog(&text) {
+                let slot = doc
+                    .entry(section)
+                    .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+                if let Some(table) = slot.as_table_mut() {
+                    for (key, entry) in entries {
+                        table.entry(key).or_insert(entry);
+                    }
+                }
+            }
+        }
+    }
+    let catalog = Catalog::from_doc(&toml::Value::Table(doc));
     for (alias, version) in &catalog.versions {
         vars.entry(format!("libs.versions.{alias}"))
             .or_insert_with(|| version.clone());
@@ -90,11 +106,18 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             }
         }
     }
+    let mut extended_by = BTreeMap::new();
+    for (_, text) in &scripts {
+        for line in text.lines() {
+            extends_from(line.trim(), &mut extended_by);
+        }
+    }
     let mut context = Context {
         vars,
         catalog,
         plugins,
         used: BTreeSet::new(),
+        extended_by,
     };
     let mut modules: Vec<Module> = Vec::new();
     for (file, text) in &scripts {
@@ -579,8 +602,13 @@ fn accessor(alias: &str) -> String {
 }
 
 impl Catalog {
+    #[cfg(test)]
     fn parse(text: &str) -> Result<Catalog, String> {
         let doc: toml::Value = toml::from_str(text).map_err(|e| e.to_string())?;
+        Ok(Catalog::from_doc(&doc))
+    }
+
+    fn from_doc(doc: &toml::Value) -> Catalog {
         let mut catalog = Catalog::default();
         let versions = doc.get("versions");
         let table = |key: &str| doc.get(key).and_then(toml::Value::as_table);
@@ -620,8 +648,101 @@ impl Catalog {
                 catalog.plugins.insert(id, version);
             }
         }
-        Ok(catalog)
+        catalog
     }
+}
+
+/// The `libs` catalog a settings script declares (`versionCatalogs { create("libs") { ... } }`,
+/// or `.register('libs')`), as `libs.versions.toml` sections: `version`, `library` (with
+/// `version` or `versionRef`, or a `g:a:v` string), `bundle` and `plugin`, in Groovy or Kotlin.
+fn settings_catalog(text: &str) -> Vec<(&'static str, toml::Table)> {
+    let mut versions = toml::Table::new();
+    let mut libraries = toml::Table::new();
+    let mut bundles = toml::Table::new();
+    let mut plugins = toml::Table::new();
+    let mut inside = false;
+    let s = |v: &str| toml::Value::String(v.to_string());
+    for line in text.lines() {
+        let line = line.trim();
+        if line.contains("versionCatalogs") || line.contains("create(\"libs\")") {
+            inside = true;
+        }
+        if !inside {
+            continue;
+        }
+        let words = strings(line);
+        let reference = line.contains("versionRef");
+        let keyword: String = line.chars().take_while(char::is_ascii_alphabetic).collect();
+        let version = |at: usize| -> Option<toml::Value> {
+            let v = words.get(at)?;
+            Some(if reference {
+                let mut t = toml::Table::new();
+                t.insert("ref".to_string(), s(v));
+                toml::Value::Table(t)
+            } else {
+                s(v)
+            })
+        };
+        match (keyword.as_str(), words.len()) {
+            ("version", 2..) => {
+                versions.insert(words[0].clone(), s(&words[1]));
+            }
+            ("library", 2) => {
+                libraries.insert(words[0].clone(), s(&words[1]));
+            }
+            ("library", 3..) => {
+                let mut t = toml::Table::new();
+                t.insert(
+                    "module".to_string(),
+                    s(&format!("{}:{}", words[1], words[2])),
+                );
+                if let Some(v) = version(3) {
+                    t.insert("version".to_string(), v);
+                }
+                libraries.insert(words[0].clone(), toml::Value::Table(t));
+            }
+            ("bundle", 2..) => {
+                let members = words[1..].iter().map(|m| s(m)).collect();
+                bundles.insert(words[0].clone(), toml::Value::Array(members));
+            }
+            ("plugin", 2..) => {
+                let mut t = toml::Table::new();
+                t.insert("id".to_string(), s(&words[1]));
+                if let Some(v) = version(2) {
+                    t.insert("version".to_string(), v);
+                }
+                plugins.insert(words[0].clone(), toml::Value::Table(t));
+            }
+            _ => {}
+        }
+    }
+    vec![
+        ("versions", versions),
+        ("libraries", libraries),
+        ("bundles", bundles),
+        ("plugins", plugins),
+    ]
+}
+
+/// The quoted strings of a line, up to a `//` comment.
+fn strings(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = line;
+    loop {
+        let quote = rest.find(['"', '\'']);
+        let comment = rest.find("//");
+        match (quote, comment) {
+            (Some(q), c) if c.is_none_or(|c| q < c) => match quoted(&rest[q..]) {
+                Some((value, tail)) => {
+                    out.push(value.to_string());
+                    rest = tail;
+                }
+                None => break,
+            },
+            _ => break,
+        }
+    }
+    out
 }
 
 const SPRING_BOOT: &str = "org.springframework.boot";
@@ -788,6 +909,9 @@ struct Context {
     plugins: BTreeMap<String, String>,
     /// Catalog aliases some build file names.
     used: BTreeSet<String>,
+    /// `testImplementation.extendsFrom testShadow`: a custom configuration to the standard one
+    /// that takes it in, so it gets that one's scope.
+    extended_by: BTreeMap<String, String>,
 }
 
 impl Context {
@@ -826,6 +950,32 @@ fn scope_of(configuration: &str) -> &'static str {
         "runtime"
     } else {
         "compile"
+    }
+}
+
+/// `a.extendsFrom b, c`, `a.extendsFrom(b)` or `configurations.a.extendsFrom(b)`: each custom
+/// configuration named, to the standard one `a` that takes it in.
+fn extends_from(line: &str, out: &mut BTreeMap<String, String>) {
+    let line = line.strip_prefix("configurations.").unwrap_or(line);
+    let Some((target, sources)) = line.split_once(".extendsFrom") else {
+        return;
+    };
+    let target = target.trim().trim_end_matches(".get()");
+    if !is_configuration(target) {
+        return;
+    }
+    let sources = sources.trim().trim_start_matches('(');
+    let sources = sources.split(')').next().unwrap_or_default();
+    for source in sources.split(',') {
+        let source = source.trim();
+        let source = source.strip_prefix("configurations.").unwrap_or(source);
+        let plain = !source.is_empty()
+            && source
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if plain && !is_configuration(source) {
+            out.insert(source.to_string(), target.to_string());
+        }
     }
 }
 
@@ -1079,9 +1229,16 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
         .trim_start_matches(['"', '\''])
         .trim();
     // A custom configuration (`checkstyle`, `developmentOnly`) is off the runtime classpath.
+    let declared = rest.trim_start_matches('(').trim_start();
     let scope = if is_configuration(&name) {
         scope_of(&name)
-    } else if rest.trim_start_matches('(').starts_with(['"', '\'']) || rest.contains("libs.") {
+    } else if let Some(target) = context.extended_by.get(&name) {
+        scope_of(target)
+    } else if declared.starts_with(['"', '\''])
+        || declared.starts_with("group:")
+        || declared.starts_with("group =")
+        || rest.contains("libs.")
+    {
         "test"
     } else {
         module
@@ -1260,6 +1417,7 @@ mod tests {
             catalog: Catalog::parse(toml).unwrap(),
             plugins: BTreeMap::new(),
             used: BTreeSet::new(),
+            extended_by: BTreeMap::new(),
         }
     }
 
@@ -1687,6 +1845,91 @@ set = ["a-b", "e"]
         let r = resolve_gradle(&dir, &repo);
         assert_eq!(versions(&r, "g:a"), ["3.0"], "{:?}", r.missing);
         assert_eq!(versions(&r, "g:c"), ["1.5"], "{:?}", r.missing);
+    }
+
+    #[test]
+    fn custom_configurations_take_the_scope_that_extends_them() {
+        let mut map = BTreeMap::new();
+        for line in [
+            "testImplementation.extendsFrom testShadow",
+            "implementation.extendsFrom(shade, bundled)",
+            "configurations.compileOnly.get().extendsFrom(configurations.provided)",
+            "foo.extendsFrom bar",
+        ] {
+            extends_from(line, &mut map);
+        }
+        assert_eq!(map["testShadow"], "testImplementation");
+        assert_eq!(map["shade"], "implementation");
+        assert_eq!(map["bundled"], "implementation");
+        assert_eq!(map["provided"], "compileOnly");
+        assert!(!map.contains_key("bar"));
+
+        let repo = Mem(BTreeMap::from([
+            pom("j", "4.13", &[]),
+            pom("s", "3.2", &[]),
+        ]));
+        let dir = tree(
+            "custom-configurations",
+            &[
+                ("settings.gradle", ""),
+                (
+                    "build.gradle",
+                    "configurations {\n    implementation.extendsFrom shade\n}\n\
+                     dependencies {\n    shade group: 'g', name: 's', version: '3.2'\n\
+                     \x20   testShadow group: 'g', name: 'j', version: '4.13'\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:s"), ["3.2"], "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:j"), ["4.13"], "{:?}", r.missing);
+        let s = r.packages.iter().find(|p| p.name == "g:s").unwrap();
+        assert!(!s.dev);
+    }
+
+    #[test]
+    fn a_catalog_in_the_settings_script_is_read() {
+        let repo = Mem(BTreeMap::from([
+            pom("a", "3.4.9", &[]),
+            pom("b", "0.4.1", &[]),
+            pom("c", "1.2", &[]),
+            pom("k", "2.0", &[]),
+        ]));
+        let dir = tree(
+            "settings-catalog",
+            &[
+                (
+                    "settings.gradle",
+                    "rootProject.name = 'x'\n\
+                     dependencyResolutionManagement.versionCatalogs.register('libs') {\n\
+                     \x20   version 'av', '3.4.9'\n\
+                     \x20   library 'a-lib', 'g', 'a' versionRef 'av' // a comment 'quoted'\n\
+                     \x20   library 'b', 'g', 'b' version '0.4.1'\n\
+                     \x20   library 'c', 'g:c:1.2'\n\
+                     \x20   bundle 'utils', ['b', 'c']\n}\n",
+                ),
+                (
+                    "build.gradle.kts",
+                    "dependencies {\n    implementation(libs.a.lib)\n    implementation(libs.bundles.utils)\n}\n",
+                ),
+                (
+                    "other/settings.gradle.kts",
+                    "dependencyResolutionManagement {\n  versionCatalogs {\n    create(\"libs\") {\n\
+                     \x20     library(\"k\", \"g\", \"k\").version(\"2.0\")\n    }\n  }\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:a"), ["3.4.9"], "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:b"), ["0.4.1"], "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:c"), ["1.2"], "{:?}", r.missing);
+        let kotlin = settings_catalog(
+            "versionCatalogs {\n create(\"libs\") {\n  library(\"k\", \"g\", \"k\").version(\"2.0\")\n\
+             \x20 plugin(\"p\", \"g.p\").versionRef(\"pv\")\n }\n}\n",
+        );
+        assert_eq!(kotlin[1].1["k"]["module"].as_str(), Some("g:k"));
+        assert_eq!(kotlin[1].1["k"]["version"].as_str(), Some("2.0"));
+        assert_eq!(kotlin[3].1["p"]["version"]["ref"].as_str(), Some("pv"));
     }
 
     #[test]
