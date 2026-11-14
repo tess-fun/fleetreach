@@ -42,12 +42,40 @@ pub trait PomSource {
     }
 }
 
-/// POMs from local Maven repository layouts (`~/.m2/repository`, a cache), first hit wins.
+/// POMs from local repositories (`~/.m2/repository`, a cache, Gradle's download cache), first hit
+/// wins.
 pub struct LocalRepositories {
+    /// Maven layout: `<group as dirs>/<artifact>/<version>/<artifact>-<version>.pom`.
     pub roots: Vec<PathBuf>,
+    /// Gradle's download cache (`~/.gradle/caches/modules-2/files-2.1`): `<group>/<artifact>/
+    /// <version>/<sha1>/<file>`, the group kept whole.
+    pub gradle_roots: Vec<PathBuf>,
 }
 
 impl LocalRepositories {
+    /// A file of Gradle's cache, from the first hash folder (in name order) that holds it.
+    /// A coordinate that could leave the cache (a separator, `..`) is never looked up.
+    fn gradle_file(&self, group: &str, artifact: &str, version: &str, ext: &str) -> Option<String> {
+        let plain =
+            |s: &str| !s.is_empty() && !s.starts_with('.') && !s.contains(['/', '\\', '\0']);
+        if !(plain(group) && plain(artifact) && plain(version)) {
+            return None;
+        }
+        let file = format!("{artifact}-{version}.{ext}");
+        self.gradle_roots.iter().find_map(|root| {
+            let dir = root.join(group).join(artifact).join(version);
+            let mut hashes: Vec<PathBuf> = std::fs::read_dir(&dir)
+                .ok()?
+                .flatten()
+                .map(|e| e.path())
+                .collect();
+            hashes.sort();
+            hashes
+                .iter()
+                .find_map(|h| fleetreach_core::repofile::read_to_string(h.join(&file)).ok())
+        })
+    }
+
     fn dir(root: &Path, group: &str, artifact: &str) -> PathBuf {
         let mut p = root.to_path_buf();
         for part in group.split('.') {
@@ -60,12 +88,15 @@ impl LocalRepositories {
 
 impl PomSource for LocalRepositories {
     fn pom(&self, group: &str, artifact: &str, version: &str) -> Option<String> {
-        self.roots.iter().find_map(|root| {
-            let path = Self::dir(root, group, artifact)
-                .join(version)
-                .join(format!("{artifact}-{version}.pom"));
-            fleetreach_core::repofile::read_to_string(path).ok()
-        })
+        self.roots
+            .iter()
+            .find_map(|root| {
+                let path = Self::dir(root, group, artifact)
+                    .join(version)
+                    .join(format!("{artifact}-{version}.pom"));
+                fleetreach_core::repofile::read_to_string(path).ok()
+            })
+            .or_else(|| self.gradle_file(group, artifact, version, "pom"))
     }
 
     fn metadata(&self, group: &str, artifact: &str) -> Option<String> {
@@ -78,12 +109,15 @@ impl PomSource for LocalRepositories {
     }
 
     fn module(&self, group: &str, artifact: &str, version: &str) -> Option<String> {
-        self.roots.iter().find_map(|root| {
-            let path = Self::dir(root, group, artifact)
-                .join(version)
-                .join(format!("{artifact}-{version}.module"));
-            fleetreach_core::repofile::read_to_string(path).ok()
-        })
+        self.roots
+            .iter()
+            .find_map(|root| {
+                let path = Self::dir(root, group, artifact)
+                    .join(version)
+                    .join(format!("{artifact}-{version}.module"));
+                fleetreach_core::repofile::read_to_string(path).ok()
+            })
+            .or_else(|| self.gradle_file(group, artifact, version, "module"))
     }
 }
 
@@ -951,6 +985,33 @@ fn walk(
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
+
+    #[test]
+    fn gradle_cache_files_are_found_by_hash_folder_and_cannot_escape() {
+        let root = std::env::temp_dir().join(format!("fr-gradle-cache-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("org.acme").join("lib").join("1.0").join("3f2a");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("lib-1.0.pom"), "<project/>").unwrap();
+        std::fs::write(dir.join("lib-1.0.module"), "{}").unwrap();
+        std::fs::write(root.join("secret.pom"), "no").unwrap();
+        let local = LocalRepositories {
+            roots: Vec::new(),
+            gradle_roots: vec![root.clone()],
+        };
+        assert_eq!(
+            local.pom("org.acme", "lib", "1.0").as_deref(),
+            Some("<project/>")
+        );
+        assert_eq!(
+            local.module("org.acme", "lib", "1.0").as_deref(),
+            Some("{}")
+        );
+        assert!(local.pom("org.acme", "lib", "2.0").is_none());
+        assert!(local.pom("..", "..", "..").is_none());
+        assert!(local.pom("org.acme/../..", "lib", "1.0").is_none());
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     /// POMs in memory, keyed `g:a:v`.
     struct Mem(BTreeMap<String, String>);

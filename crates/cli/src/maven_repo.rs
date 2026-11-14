@@ -1,5 +1,6 @@
 //! Where the Maven resolver finds POMs: the local Maven repository (`~/.m2/repository`, or
-//! `$MAVEN_REPO_LOCAL`), fleetreach's own POM cache, and, only with `--maven-fetch`, a remote
+//! `$MAVEN_REPO_LOCAL`), fleetreach's own POM cache, Gradle's download cache
+//! (`$GRADLE_USER_HOME` or `~/.gradle`, `caches/modules-2/files-2.1`), and, only with `--maven-fetch`, a remote
 //! repository: the mirror of Maven Central that `settings.xml` names, or Maven Central itself.
 //! Fetching sends each artifact's coordinates to that repository, so it is opt-in; fetched POMs
 //! and listings are kept in the cache (release POMs never change).
@@ -19,7 +20,7 @@ const CENTRAL: &str = "https://repo.maven.apache.org/maven2";
 pub struct FetchArgs {
     #[arg(
         long,
-        help = "resolve pom.xml and Gradle builds with POMs fetched when they are not in ~/.m2, from the mirror of Maven Central that settings.xml names, else Maven Central (sends each artifact's coordinates there); without it, only local repositories are used"
+        help = "resolve pom.xml and Gradle builds with POMs fetched when they are not in ~/.m2 or Gradle's download cache, from the mirror of Maven Central that settings.xml names, else Maven Central (sends each artifact's coordinates there); without it, only local repositories are used"
     )]
     pub maven_fetch: bool,
     #[arg(
@@ -66,7 +67,18 @@ pub fn local() -> LocalRepositories {
     if let Some(cache) = cache_root() {
         roots.push(cache);
     }
-    LocalRepositories { roots }
+    let gradle_home = std::env::var_os("GRADLE_USER_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".gradle")));
+    let gradle_roots = gradle_home
+        .map(|h| h.join("caches").join("modules-2").join("files-2.1"))
+        .into_iter()
+        .collect();
+    LocalRepositories {
+        roots,
+        gradle_roots,
+    }
 }
 
 fn cache_root() -> Option<PathBuf> {
@@ -309,8 +321,15 @@ fn fetch(url: &str, auth: Option<&(String, String)>) -> Option<String> {
             .build()
             .into()
     });
-    // A busy repository answers 429 or 5xx: retry a few times, waiting as it asks (capped),
-    // and say so once rather than reporting the POM as missing without a word.
+    // A busy repository answers 429 or 5xx: retry a few times, waiting as it asks (capped).
+    // If it still refuses, stop asking it for the rest of the run (more requests would only
+    // keep a rate limit in place) and say so once, rather than reporting POMs as missing
+    // without a word.
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static REFUSED: AtomicBool = AtomicBool::new(false);
+    if REFUSED.load(Ordering::Relaxed) {
+        return None;
+    }
     let mut resp = None;
     for attempt in 0..4u32 {
         let mut request = agent.get(url).header(
@@ -327,13 +346,12 @@ fn fetch(url: &str, auth: Option<&(String, String)>) -> Option<String> {
             break;
         }
         if attempt == 3 {
-            static WARNED: std::sync::atomic::AtomicBool =
-                std::sync::atomic::AtomicBool::new(false);
-            if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            if !REFUSED.swap(true, Ordering::Relaxed) {
                 let host = url.split('/').nth(2).unwrap_or(url);
                 eprintln!(
-                    "maven: {host} answered {status} (busy or rate limited); POMs it refused are \
-                     reported as not available, so coverage stays partial. Run again later."
+                    "maven: {host} answered {status} (busy or rate limited); fetching stops for \
+                     this run, POMs not fetched are reported as not available, so coverage \
+                     stays partial. Run again later."
                 );
             }
             return None;

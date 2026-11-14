@@ -8,7 +8,10 @@ fn main() {
         std::process::exit(2);
     };
     let roots: Vec<std::path::PathBuf> = args.map(Into::into).collect();
-    let source = fleetreach_maven::LocalRepositories { roots };
+    let source = fleetreach_maven::LocalRepositories {
+        roots,
+        gradle_roots: Vec::new(),
+    };
     match fleetreach_maven::resolve(std::path::Path::new(&dir), &source) {
         Ok(r) => {
             for p in &r.packages {
