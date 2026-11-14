@@ -116,6 +116,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   module's (nacos's slf4j-api 1.7.26); and `<jdk>` ranges are read as Maven reads them,
   including `[17,` with no closing bracket. The one difference left is netty's
   OS-activated profile, which depends on the machine that builds.
+- **Checked again on 30 more real repos, module by module: 1,983 of 2,136 modules
+  identical.** Real Maven's tree for each module of flink, keycloak, skywalking, seatunnel,
+  dolphinscheduler, hbase and 24 others was compared with fleetreach's per module. Another
+  137 modules differ only by profiles that follow the building machine's OS or CPU (brotli4j
+  and netty natives, hadoop's aarch64 leveldbjni), and 16 by one or two packages each. The
+  fixes: a POM that starts with a plain `<!DOCTYPE project>` is read (oshi-core 6.1.1; its
+  jna was missing from 112 dolphinscheduler modules); a module named with a property
+  (`flink-table-planner_${scala.binary.version}`) is found as a sibling; a nearer version
+  outside a range in the same conflict gives way to the nearest one that fits (zipkin's
+  bcprov 1.81.1); a relocation applies on every path, not only the first (linkis's
+  slf4j-log4j12); a module reached both as a `pom` and as a jar is walked for each (keycloak's
+  integration tests, 82 packages); the build's own module holds its place in mediation
+  (guava-testlib's guava); a profile's `<file>` activation is checked in the checkout
+  (seata's distribution module); a module's own dependencies come before inherited ones; a
+  managed `provided` or `test` scope holds on every path; and element names XML forbids but
+  Maven reads (`<Xlint:-unchecked/>`) no longer fail the POM.
 - **gradle-consistent-versions' `versions.lock` is read as a full lockfile** (beside its
   `versions.props`), checked so a damaged file is refused.
 - **POMs are read from Gradle's download cache** (`$GRADLE_USER_HOME` or `~/.gradle`,

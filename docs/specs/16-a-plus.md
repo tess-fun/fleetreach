@@ -954,7 +954,14 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   every inheritance level, managed exclusions at every depth, a module from the reactor
   only at its exact version, `<optional>` from a property (Maven only; Gradle ignores it),
   one-version ranges without metadata, direct dependencies above a sibling module's, and
-  Maven's own `<jdk>` range reader. Known limit: Gradle keeps a dependency unless every path
+  Maven's own `<jdk>` range reader. A second batch of 30 repos (user approved cloning their
+  POMs, 2026-11-14), compared module by module: 1,983 of 2,136 modules identical, 137 more
+  differ only by OS- or CPU-activated profiles, 16 by one or two packages. Fixes from it: a
+  plain `<!DOCTYPE>` is skipped, a property in a module's artifactId is resolved, versions
+  outside a range in the conflict give way (Maven's NearestVersionSelector), relocation on
+  every path, sibling walks keyed by type, the build's module holds its mediation slot,
+  `<file>` activation in the checkout, own dependencies before inherited ones, managed
+  provided/test scope on every path, and element names XML forbids. Known limit: Gradle keeps a dependency unless every path
   to it excludes it, while the resolver applies the nearest path's exclusions (jreleaser, 1
   package). Every rule came from a real miss: root shared blocks
   (dgs 2% to 61%), Spring `dependencyManagement` read as management, BOM property overrides

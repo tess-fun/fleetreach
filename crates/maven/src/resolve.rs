@@ -176,6 +176,8 @@ struct Dep {
     /// From Gradle module metadata: a `platform` dependency, whose managed versions and
     /// constraints count as requests.
     platform: bool,
+    /// Relocations followed to reach this coordinate, which bounds a relocation cycle.
+    hops: u8,
 }
 
 impl Dep {
@@ -247,13 +249,83 @@ fn parse_deps(list: Option<Node<'_, '_>>) -> Vec<Dep> {
                     })
                     .unwrap_or_default(),
                 platform: false,
+                hops: 0,
             })
         })
         .collect()
 }
 
+/// A copy of `xml` with every element name XML does not allow (a `:` with no namespace, a
+/// leading `-`) renamed, open and close tags alike, or `None` when there is none. Maven's
+/// parser reads such names: hadoop-project 3.1.4 passes `<Xlint:-unchecked/>` to javac.
+fn rename_unreadable_elements(xml: &str) -> Option<String> {
+    let valid = |name: &str| {
+        let mut chars = name.chars();
+        chars.next().is_some_and(|c| c.is_alphabetic() || c == '_')
+            && chars.all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | '_'))
+    };
+    let mut out = String::with_capacity(xml.len());
+    let mut changed = false;
+    let mut rest = xml;
+    while let Some(at) = rest.find('<') {
+        out.push_str(&rest[..=at]);
+        rest = &rest[at + 1..];
+        let close = rest.starts_with('/');
+        if close {
+            out.push('/');
+            rest = &rest[1..];
+        }
+        if rest.starts_with(['?', '!']) {
+            continue;
+        }
+        let end = rest
+            .find(|c: char| c.is_whitespace() || c == '/' || c == '>')
+            .unwrap_or(rest.len());
+        let name = &rest[..end];
+        if !name.is_empty() && !valid(name) {
+            out.push_str("fleetreach-unreadable-element");
+            changed = true;
+        } else {
+            out.push_str(name);
+        }
+        rest = &rest[end..];
+    }
+    out.push_str(rest);
+    changed.then_some(out)
+}
+
+/// A copy of `xml` without its `<!DOCTYPE ...>` when the declaration has no internal subset
+/// (no `[`), or `None`. Maven's parser skips such a line; oshi-core 6.1.1 starts with
+/// `<!DOCTYPE project>`. A declaration with entities stays, so the strict error stands.
+fn drop_plain_doctype(xml: &str) -> Option<String> {
+    let at = xml.find("<!DOCTYPE")?;
+    let len = xml[at..].find('>')? + 1;
+    if xml[at..at + len].contains('[') {
+        return None;
+    }
+    Some(format!("{}{}", &xml[..at], &xml[at + len..]))
+}
+
 fn parse_pom(xml: &str, gradle: bool) -> Result<RawPom, String> {
-    let doc = Document::parse(xml.trim_start_matches('\u{feff}')).map_err(|e| e.to_string())?;
+    parse_pom_in(xml, gradle, None)
+}
+
+/// [`parse_pom`] for a POM of this build, in `basedir`, where a profile's `<file>` activation
+/// is checked against the checkout.
+fn parse_pom_in(xml: &str, gradle: bool, basedir: Option<&Path>) -> Result<RawPom, String> {
+    let xml = xml.trim_start_matches('\u{feff}');
+    let repaired;
+    let doc = match Document::parse(xml) {
+        Ok(doc) => doc,
+        Err(e) => {
+            let plain = drop_plain_doctype(xml);
+            let base = plain.as_deref().unwrap_or(xml);
+            repaired = rename_unreadable_elements(base)
+                .or(plain)
+                .ok_or_else(|| e.to_string())?;
+            Document::parse(&repaired).map_err(|_| e.to_string())?
+        }
+    };
     let project = doc.root_element();
     if project.tag_name().name() != "project" {
         return Err("not a POM (no <project>)".into());
@@ -303,7 +375,7 @@ fn parse_pom(xml: &str, gradle: bool) -> Result<RawPom, String> {
         } else {
             profiles
                 .iter()
-                .filter(|p| child(**p, "activation").is_some_and(maven_activation))
+                .filter(|p| child(**p, "activation").is_some_and(|a| maven_activation(a, basedir)))
                 .collect()
         };
         let active: Vec<_> = if triggered.is_empty() {
@@ -382,6 +454,13 @@ struct Resolver<'s> {
     /// The folders of this build's modules by artifactId: Maven reads a parent or an imported
     /// BOM from the reactor before any repository (dubbo imports its own dependencies BOM).
     reactor: BTreeMap<String, Vec<PathBuf>>,
+    /// The version ranges a Maven walk met, by key: Maven's nearest-wins selector skips a
+    /// version that falls outside any of them.
+    ranges: BTreeMap<MgmtKey, Vec<String>>,
+    /// Every version a Maven walk met for each key, nearest first (a range as its own pick).
+    candidates: BTreeMap<MgmtKey, Vec<String>>,
+    /// The version that walk selected for each key.
+    chosen: BTreeMap<MgmtKey, String>,
 }
 
 impl Resolver<'_> {
@@ -395,7 +474,7 @@ impl Resolver<'_> {
         if depth > MAX_DEPTH {
             return Err("parent or BOM chain too deep".into());
         }
-        let raw = parse_pom(xml, self.gradle)?;
+        let raw = parse_pom_in(xml, self.gradle, dir)?;
         let parent = match &raw.parent {
             Some((g, a, v, rel)) => {
                 let local = dir.and_then(|d| {
@@ -465,8 +544,23 @@ impl Resolver<'_> {
         let own_mgmt_len = raw.mgmt.len();
         let mut raw_mgmt = raw.mgmt.clone();
         raw_mgmt.extend(inherit.map(|p| p.raw_mgmt.clone()).unwrap_or_default());
-        let mut raw_deps = inherit.map(|p| p.raw_deps.clone()).unwrap_or_default();
-        raw_deps.extend(raw.deps.iter().cloned());
+        // Maven lists a POM's own dependencies before the ones it inherits, which only join
+        // when it does not declare them itself: the order decides which of two equally near
+        // transitive versions wins (seatunnel's clickhouse-jdbc httpcore 4.4.13 over one
+        // under an inherited dependency). Gradle keeps the parent's first.
+        let inherited_deps = inherit.map(|p| p.raw_deps.clone()).unwrap_or_default();
+        let own_deps_first = !self.gradle;
+        let mut raw_deps = if own_deps_first {
+            raw.deps.clone()
+        } else {
+            inherited_deps.clone()
+        };
+        let own_deps_len = raw.deps.len();
+        if own_deps_first {
+            raw_deps.extend(inherited_deps);
+        } else {
+            raw_deps.extend(raw.deps.iter().cloned());
+        }
         // A parent read some other way keeps its own resolved entries.
         let mut mgmt = match (&parent, inherit) {
             (Some(p), None) => p.mgmt.clone(),
@@ -498,12 +592,23 @@ impl Resolver<'_> {
                 }
             }
         }
-        let mut deps: Vec<Dep> = match (&parent, inherit) {
+        let resolved_parent_deps = match (&parent, inherit) {
             (Some(p), None) => p.deps.clone(),
             _ => Vec::new(),
         };
-        for d in &raw_deps {
+        let mut deps: Vec<Dep> = if own_deps_first {
+            Vec::new()
+        } else {
+            resolved_parent_deps.clone()
+        };
+        for (i, d) in raw_deps.iter().enumerate() {
             let mut d = self.interp_dep(d, &props);
+            if own_deps_first
+                && i >= own_deps_len
+                && deps.iter().any(|x| x.mgmt_key() == d.mgmt_key())
+            {
+                continue;
+            }
             if let Some(m) = mgmt.get(&d.mgmt_key()) {
                 if d.version.is_none() {
                     d.version.clone_from(&m.version);
@@ -541,6 +646,13 @@ impl Resolver<'_> {
             deps.retain(|x| x.mgmt_key() != d.mgmt_key());
             deps.push(d);
         }
+        if own_deps_first {
+            for d in resolved_parent_deps {
+                if !deps.iter().any(|x| x.mgmt_key() == d.mgmt_key()) {
+                    deps.push(d);
+                }
+            }
+        }
         let relocation = raw.relocation.map(|(g, a, v)| {
             let interp = |x: Option<String>, default: &str, me: &mut Self| {
                 x.map_or_else(
@@ -568,9 +680,16 @@ impl Resolver<'_> {
                 }
             }
         }
+        // flink-table-planner's module is `flink-table-planner_${scala.binary.version}`; Maven
+        // names it with the property's value, and its siblings depend on it by that name.
+        let artifact = if raw.artifact.contains("${") {
+            interpolate(&raw.artifact, &props, &mut self.missing)
+        } else {
+            raw.artifact
+        };
         Ok(Effective {
             group,
-            artifact: raw.artifact,
+            artifact,
             deps,
             mgmt,
             modules: raw.modules,
@@ -858,9 +977,10 @@ fn jdk_in_range(java: &str, range: &str) -> bool {
 /// Whether a profile's `<activation>` conditions switch it on in a Maven build, as Maven 3.9
 /// decides: every condition present must hold, and at least one must be present. `<jdk>` is
 /// matched against [`JAVA_VERSION`] (a `[`/`(` range, else a prefix, `!` negating). `<property>`
-/// is matched with no user properties set, so only `!name` or a `!value` holds. `<os>` and
-/// `<file>` depend on the machine that builds, so a profile that names one stays off.
-fn maven_activation(activation: Node<'_, '_>) -> bool {
+/// is matched with no user properties set, so only `!name` or a `!value` holds. `<file>` is
+/// checked in the build's own folder (`basedir`) and is off for a published POM. `<os>`
+/// depends on the machine that builds, so a profile that names one stays off.
+fn maven_activation(activation: Node<'_, '_>, basedir: Option<&Path>) -> bool {
     let mut any = false;
     for c in activation.children().filter(Node::is_element) {
         let holds = match c.tag_name().name() {
@@ -885,6 +1005,7 @@ fn maven_activation(activation: Node<'_, '_>) -> bool {
                     None => name.starts_with('!'),
                 }
             }
+            "file" => basedir.is_some_and(|b| file_activation(c, b)),
             _ => false,
         };
         if !holds {
@@ -893,6 +1014,37 @@ fn maven_activation(activation: Node<'_, '_>) -> bool {
         any = true;
     }
     any
+}
+
+/// A `<file>` activation in `basedir`: `<exists>` (read first) or `<missing>`, relative to the
+/// module, `${basedir}` or `${project.basedir}` allowed in front (seata's distribution module
+/// is on when `test-suite/test-new-version/pom.xml` exists). A path that names another
+/// property, is absolute or climbs out with `..` does not hold.
+fn file_activation(file: Node<'_, '_>, basedir: &Path) -> bool {
+    let nonempty = |s: &String| !s.is_empty();
+    let (path, want) = match (
+        text(file, "exists").filter(nonempty),
+        text(file, "missing").filter(nonempty),
+    ) {
+        (Some(p), _) => (p, true),
+        (None, Some(p)) => (p, false),
+        (None, None) => return false,
+    };
+    let path = ["${basedir}", "${project.basedir}"]
+        .iter()
+        .find_map(|b| path.strip_prefix(b))
+        .map_or(path.as_str(), |rest| rest.trim_start_matches(['/', '\\']));
+    let rel = Path::new(path);
+    let plain = rel.components().all(|c| {
+        matches!(
+            c,
+            std::path::Component::Normal(_) | std::path::Component::CurDir
+        )
+    });
+    if path.is_empty() || path.contains("${") || !plain {
+        return false;
+    }
+    basedir.join(rel).exists() == want
 }
 
 /// One `[a,b)` style interval; `None` bounds are open.
@@ -1045,6 +1197,62 @@ fn enqueue_children(
 ///
 /// When `dir/pom.xml` cannot be read or parsed: failing closed.
 pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String> {
+    let (each, missing) = resolve_modules(dir, source)?;
+    // Maven mediates each module on its own: one module's nearest version never hides another
+    // module's (pooled, arthas's spring-boot starter took junit-jupiter-api 5.8.2 for every
+    // module, hiding the 5.10.0 the others get). Distinct versions are all listed.
+    let mut packages: Vec<ResolvedDep> = Vec::new();
+    let mut at: BTreeMap<(String, String), usize> = BTreeMap::new();
+    let mut graph = DepGraph::new("(root)");
+    for (_, one, g) in each {
+        for (from, to) in g.edges() {
+            graph.add_edges(from, [to.to_string()]);
+        }
+        for p in one {
+            match at.get(&(p.name.clone(), p.version.clone())) {
+                Some(&i) => {
+                    let seen = &mut packages[i];
+                    seen.direct |= p.direct;
+                    seen.dev &= p.dev;
+                    if scope_rank(&p.scope) > scope_rank(&seen.scope) {
+                        seen.scope.clone_from(&p.scope);
+                    }
+                }
+                None => {
+                    at.insert((p.name.clone(), p.version.clone()), packages.len());
+                    packages.push(p);
+                }
+            }
+        }
+    }
+    Ok(Resolution {
+        packages,
+        graph,
+        missing,
+    })
+}
+
+/// Each reactor module's own resolution (`group:artifact` and its packages), for comparing
+/// with Maven's per-module `dependency:tree`. Not a stable API.
+///
+/// # Errors
+///
+/// As [`resolve`].
+#[doc(hidden)]
+pub fn resolve_each_module(
+    dir: &Path,
+    source: &dyn PomSource,
+) -> Result<Vec<(String, Vec<ResolvedDep>)>, String> {
+    let (each, _) = resolve_modules(dir, source)?;
+    Ok(each.into_iter().map(|(m, p, _)| (m, p)).collect())
+}
+
+type ModuleResults = Vec<(String, Vec<ResolvedDep>, DepGraph)>;
+
+fn resolve_modules(
+    dir: &Path,
+    source: &dyn PomSource,
+) -> Result<(ModuleResults, Vec<String>), String> {
     let mut r = Resolver {
         source,
         cache: BTreeMap::new(),
@@ -1053,6 +1261,9 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
         bom_overrides: BTreeMap::new(),
         importing: false,
         reactor: BTreeMap::new(),
+        ranges: BTreeMap::new(),
+        candidates: BTreeMap::new(),
+        chosen: BTreeMap::new(),
     };
     // Where each module lives, first, so the reactor can serve its own parents and BOMs.
     let mut stack = vec![dir.to_path_buf()];
@@ -1064,7 +1275,7 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
         let Ok(xml) = fleetreach_core::repofile::read_to_string(d.join("pom.xml")) else {
             continue;
         };
-        let Ok(raw) = parse_pom(&xml, false) else {
+        let Ok(raw) = parse_pom_in(&xml, false, Some(&d)) else {
             continue;
         };
         for m in raw.modules.iter().rev() {
@@ -1096,45 +1307,12 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
         .map(|m| ((m.group.clone(), m.artifact.clone()), m.clone()))
         .collect();
 
-    // Maven mediates each module on its own: one module's nearest version never hides another
-    // module's (pooled, arthas's spring-boot starter took junit-jupiter-api 5.8.2 for every
-    // module, hiding the 5.10.0 the others get). Distinct versions are all listed.
-    let mut packages: Vec<ResolvedDep> = Vec::new();
-    let mut at: BTreeMap<(String, String), usize> = BTreeMap::new();
-    let mut graph = DepGraph::new("(root)");
+    let mut each = Vec::new();
     for module in &modules {
-        let (one, g) = walk(
-            &mut r,
-            std::slice::from_ref(module),
-            &local,
-            &Pins::new(),
-            None,
-        );
-        for (from, to) in g.edges() {
-            graph.add_edges(from, [to.to_string()]);
-        }
-        for p in one {
-            match at.get(&(p.name.clone(), p.version.clone())) {
-                Some(&i) => {
-                    let seen = &mut packages[i];
-                    seen.direct |= p.direct;
-                    seen.dev &= p.dev;
-                    if scope_rank(&p.scope) > scope_rank(&seen.scope) {
-                        seen.scope.clone_from(&p.scope);
-                    }
-                }
-                None => {
-                    at.insert((p.name.clone(), p.version.clone()), packages.len());
-                    packages.push(p);
-                }
-            }
-        }
+        let (one, g) = walk_within_ranges(&mut r, module, &local);
+        each.push((format!("{}:{}", module.group, module.artifact), one, g));
     }
-    Ok(Resolution {
-        packages,
-        graph,
-        missing: r.missing.into_iter().collect(),
-    })
+    Ok((each, r.missing.into_iter().collect()))
 }
 
 /// Resolve one POM text the way Gradle does: every version requested anywhere competes and the
@@ -1172,6 +1350,9 @@ pub(crate) fn resolve_gradle_module(
         bom_overrides: bom_overrides.clone(),
         importing: false,
         reactor: BTreeMap::new(),
+        ranges: BTreeMap::new(),
+        candidates: BTreeMap::new(),
+        chosen: BTreeMap::new(),
     };
     let modules = vec![r.effective(xml, None, 0)?];
     let local = BTreeMap::new();
@@ -1255,6 +1436,54 @@ pub(crate) fn resolve_gradle_module(
     })
 }
 
+/// One module's walk where every selected version satisfies the ranges met on the way, as
+/// Maven's `NearestVersionSelector` does: the nearest version outside a range loses to the
+/// nearest version that satisfies them all, a range standing for its own pick (zipkin:
+/// pulsar-client's bcprov 1.78.1 at depth 2 gives way to bcutil's `[1.81,1.82)`, so 1.81.1;
+/// dolphinscheduler: aliyun tea 1.3.1, nearer than tea-openapi's `[1.1.14,2.0.0)` pick 1.4.3,
+/// fits and stays). A conflict no version settles keeps nearest-wins.
+fn walk_within_ranges(
+    r: &mut Resolver<'_>,
+    module: &Effective,
+    local: &BTreeMap<(String, String), Effective>,
+) -> (Vec<ResolvedDep>, DepGraph) {
+    let mut pins = Pins::new();
+    for _ in 0..8 {
+        r.ranges.clear();
+        r.candidates.clear();
+        r.chosen.clear();
+        let (packages, graph) = walk(r, std::slice::from_ref(module), local, &pins, None);
+        let ranges = std::mem::take(&mut r.ranges);
+        let mut changed = false;
+        for (key, specs) in ranges {
+            if pins.contains_key(&key) {
+                continue;
+            }
+            let Some(chosen) = r.chosen.get(&key).cloned() else {
+                continue;
+            };
+            let parsed: Vec<Vec<Interval>> = specs.iter().filter_map(|s| parse_ranges(s)).collect();
+            let fits = |v: &str| parsed.iter().all(|rs| rs.iter().any(|i| i.contains(v)));
+            if fits(&chosen) {
+                continue;
+            }
+            let pick = r
+                .candidates
+                .get(&key)
+                .and_then(|c| c.iter().find(|v| fits(v)).cloned());
+            if let Some(v) = pick {
+                pins.insert(key, v);
+                changed = true;
+            }
+        }
+        if !changed {
+            return (packages, graph);
+        }
+    }
+    r.ranges.clear();
+    walk(r, std::slice::from_ref(module), local, &pins, None)
+}
+
 /// Keep the higher of `version` and what `pins` holds for `key`. True if it rose.
 fn raise(pins: &mut Pins, key: MgmtKey, version: &str) -> bool {
     let Some(new) = parse_maven_version(version) else {
@@ -1328,9 +1557,10 @@ fn walk(
     let mut order: Vec<(String, String, String, String)> = Vec::new();
     // (dependency, depth, parent node, scope, inherited exclusions, root management)
     let mut queue: Queue = VecDeque::new();
-    let mut relocated: BTreeSet<(String, String, String)> = BTreeSet::new();
     // Sibling modules walked through so far, with the widest scope each was reached in.
-    let mut through: BTreeMap<(String, String), String> = BTreeMap::new();
+    // Keyed by type and classifier too: keycloak's integration tests take a module as a `pom`
+    // with every child excluded, and the same module's jar through keycloak-junit5.
+    let mut through: BTreeMap<MgmtKey, String> = BTreeMap::new();
     // A sibling module is queued like any direct dependency, and its own dependencies follow
     // in its turn, a level below every direct one (nacos's adapter pins slf4j-api 1.7.26
     // below an inherited dependency on its nacos-common module, which brings 2.0.13).
@@ -1377,12 +1607,16 @@ fn walk(
         if let Some(sibling) = sibling(local, &dep, wanted) {
             // A sibling module is part of the project, not a package: its dependencies join
             // this module's tree, mediated here. Walked through once per wider scope, which
-            // also stops a cycle between modules.
+            // also stops a cycle between modules. A nearer published version of the same
+            // artifact already won mediation, and the module is not walked.
+            if !r.gradle && selected.contains_key(&key) {
+                continue;
+            }
             let wider = through
-                .get(&dep.key())
+                .get(&key)
                 .is_none_or(|seen| scope_rank(&scope) > scope_rank(seen));
             if wider {
-                through.insert(dep.key(), scope.clone());
+                through.insert(key.clone(), scope.clone());
                 enqueue_children(
                     sibling,
                     &scope,
@@ -1394,6 +1628,33 @@ fn walk(
                 );
             }
             continue;
+        }
+        // A module met first holds its place in mediation: guava-testlib's own guava module
+        // wins over the guava 32.0.0-jre that truth asks for further down.
+        if !r.gradle && through.contains_key(&key) {
+            continue;
+        }
+        if !r.gradle && !pins.contains_key(&key) {
+            if let Some(w) = wanted.filter(|w| !w.contains("${")) {
+                let is_range = w.trim_start().starts_with(['[', '(']);
+                let seen = r.ranges.get(&key).is_some_and(|s| s.iter().any(|s| s == w));
+                if is_range && !seen {
+                    r.ranges.entry(key.clone()).or_default().push(w.to_string());
+                }
+                let candidate = if is_range {
+                    (!seen)
+                        .then(|| r.pick_version(&dep.group, &dep.artifact, w))
+                        .flatten()
+                } else {
+                    Some(w.to_string())
+                };
+                if let Some(c) = candidate {
+                    let list = r.candidates.entry(key.clone()).or_default();
+                    if !list.contains(&c) {
+                        list.push(c);
+                    }
+                }
+            }
         }
         if let Some(requests) = requests.as_deref_mut() {
             let managed = modules[root_ix].mgmt.get(&key);
@@ -1409,7 +1670,14 @@ fn walk(
         if let Some(existing) = selected.get_mut(&key) {
             // Nearest wins for the version; the scope widens to the broadest path
             // (compile > runtime > provided > test), and a widened artifact's own
-            // dependencies are followed again in the wider scope.
+            // dependencies are followed again in the wider scope. Maven's managed scope holds
+            // on every path (seatunnel manages log4j as provided, under hadoop-auth too).
+            let managed_scope = (depth > 0 && !r.gradle)
+                .then(|| modules[root_ix].mgmt.get(&key))
+                .flatten()
+                .and_then(|m| m.scope.clone())
+                .filter(|s| s != "import");
+            let scope = managed_scope.unwrap_or(scope);
             if !existing.direct && scope_rank(&scope) > scope_rank(&existing.scope) {
                 existing.scope.clone_from(&scope);
                 existing.dev = matches!(scope.as_str(), "test" | "provided");
@@ -1457,13 +1725,23 @@ fn walk(
                 .remote(&dep.group, &dep.artifact, &version, 0)
                 .and_then(|eff| eff.relocation);
             if let Some(to) = moved {
+                // The resolver selects a relocated dependency again, now with its managed
+                // scope, and a transitive `provided` or `test` one is left out: seatunnel
+                // manages slf4j-log4j12 as provided, and 1.7.36 relocates to slf4j-reload4j.
+                let own_scope = managed.and_then(|m| m.scope.as_deref());
+                if depth > 0 && matches!(own_scope, Some("provided" | "test")) {
+                    continue;
+                }
                 let from = (dep.group.clone(), dep.artifact.clone(), version.clone());
-                if to != from && relocated.insert(from) {
+                // Every path relocates (linkis reaches slf4j-log4j12 by a test path and a
+                // compile one, and Maven lists only slf4j-reload4j); a chain stops at 8 hops.
+                if to != from && dep.hops < 8 {
                     let (g, a, v) = to;
                     let mut next = dep.clone();
                     next.group = g;
                     next.artifact = a;
                     next.version = Some(v);
+                    next.hops = dep.hops + 1;
                     queue.push_front((next, depth, parent, scope, exclusions, root_ix));
                     continue;
                 }
@@ -1479,6 +1757,9 @@ fn walk(
                 scope: scope.clone(),
             },
         );
+        if !r.gradle {
+            r.chosen.insert(key.clone(), version.clone());
+        }
         order.push(key);
         let Some(eff) = r.remote(&dep.group, &dep.artifact, &version, 0) else {
             continue;
@@ -1862,6 +2143,207 @@ mod tests {
     }
 
     #[test]
+    fn a_nearer_version_outside_a_range_gives_way() {
+        // zipkin: pulsar-client asks bcprov 1.78.1 at depth 2, its bcutil `[1.81,1.82)` at
+        // depth 3; Maven selects 1.81.1, the range's pick.
+        let dir = project(
+            "range-wins",
+            &format!(
+                "<dependencies>{}{}</dependencies>",
+                dep("g", "a", "1", ""),
+                dep("g", "b", "1", "")
+            ),
+        );
+        let deps = |d: String| format!("<dependencies>{d}</dependencies>");
+        let repo = Mem(BTreeMap::from([
+            (
+                "g:a:1".to_string(),
+                pom("g", "a", "1", &deps(dep("g", "x", "1", ""))),
+            ),
+            (
+                "g:b:1".to_string(),
+                pom("g", "b", "1", &deps(dep("g", "c", "1", ""))),
+            ),
+            (
+                "g:c:1".to_string(),
+                pom("g", "c", "1", &deps(dep("g", "x", "[2,3)", ""))),
+            ),
+            ("g:x:1".to_string(), pom("g", "x", "1", "")),
+            ("g:x:2.5".to_string(), pom("g", "x", "2.5", "")),
+            (
+                "g:x:metadata".to_string(),
+                "<metadata><versioning><versions><version>1</version><version>2</version>\
+                 <version>2.5</version><version>3</version></versions></versioning></metadata>"
+                    .to_string(),
+            ),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        let x: Vec<_> = r.packages.iter().filter(|p| p.name == "g:x").collect();
+        assert_eq!(x.len(), 1);
+        assert_eq!(x[0].version, "2.5", "{:?}", r.missing);
+        // The nearest version that fits wins over the range's own pick (dolphinscheduler:
+        // aliyun tea 1.3.1 stays under tea-openapi's `[1.1.14,2.0.0)`).
+        let mut repo = repo;
+        repo.0.insert(
+            "g:b:1".to_string(),
+            pom(
+                "g",
+                "b",
+                "1",
+                &deps(format!(
+                    "{}{}",
+                    dep("g", "x", "2.2", ""),
+                    dep("g", "c", "1", "")
+                )),
+            ),
+        );
+        repo.0
+            .insert("g:x:2.2".to_string(), pom("g", "x", "2.2", ""));
+        let r = resolve(&dir, &repo).unwrap();
+        let x: Vec<_> = r.packages.iter().filter(|p| p.name == "g:x").collect();
+        assert_eq!(x[0].version, "2.2", "{:?}", r.missing);
+    }
+
+    #[test]
+    fn a_module_holds_its_place_in_mediation() {
+        // guava-testlib: its own guava module, then truth asking guava 32.0.0-jre deeper.
+        let dir = project(
+            "module-mediates",
+            "<packaging>pom</packaging><modules><module>testlib</module><module>core</module>\
+             </modules>",
+        );
+        let modules = [
+            (
+                "testlib",
+                format!(
+                    "{}{}",
+                    dep("com.acme", "core", "1.0", ""),
+                    dep("g", "truth", "1", "")
+                ),
+            ),
+            ("core", String::new()),
+        ];
+        for (m, d) in modules {
+            std::fs::create_dir_all(dir.join(m)).unwrap();
+            let body = format!("<dependencies>{d}</dependencies>");
+            std::fs::write(
+                dir.join(m).join("pom.xml"),
+                pom("com.acme", m, "1.0", &body),
+            )
+            .unwrap();
+        }
+        let repo = Mem(BTreeMap::from([
+            (
+                "g:truth:1".to_string(),
+                pom(
+                    "g",
+                    "truth",
+                    "1",
+                    &format!(
+                        "<dependencies>{}</dependencies>",
+                        dep("com.acme", "core", "0.9", "")
+                    ),
+                ),
+            ),
+            (
+                "com.acme:core:0.9".to_string(),
+                pom("com.acme", "core", "0.9", ""),
+            ),
+        ]));
+        let each = resolve_each_module(&dir, &repo).unwrap();
+        let testlib = each.iter().find(|(m, _)| m == "com.acme:testlib").unwrap();
+        let names: Vec<_> = testlib.1.iter().map(|d| d.name.as_str()).collect();
+        assert_eq!(names, ["g:truth"], "{each:?}");
+    }
+
+    #[test]
+    fn a_sibling_as_a_pom_and_as_a_jar_is_walked_for_each() {
+        // keycloak's quarkus integration tests: the server-deployment module as a `pom` with
+        // every child excluded, and its jar again through keycloak-junit5.
+        let dir = project(
+            "sibling-types",
+            "<packaging>pom</packaging><modules><module>tests</module><module>junit</module>\
+             <module>deploy</module></modules>",
+        );
+        let excl_all = "<type>pom</type><exclusions><exclusion><groupId>*</groupId>\
+                        <artifactId>*</artifactId></exclusion></exclusions>";
+        let modules = [
+            (
+                "tests",
+                format!(
+                    "{}{}",
+                    dep("com.acme", "deploy", "1.0", excl_all),
+                    dep("com.acme", "junit", "1.0", "")
+                ),
+            ),
+            ("junit", dep("com.acme", "deploy", "1.0", "")),
+            ("deploy", dep("g", "lib", "1", "")),
+        ];
+        for (m, d) in modules {
+            std::fs::create_dir_all(dir.join(m)).unwrap();
+            let body = format!("<dependencies>{d}</dependencies>");
+            std::fs::write(
+                dir.join(m).join("pom.xml"),
+                pom("com.acme", m, "1.0", &body),
+            )
+            .unwrap();
+        }
+        let repo = Mem(BTreeMap::from([(
+            "g:lib:1".to_string(),
+            pom("g", "lib", "1", ""),
+        )]));
+        let each = resolve_each_module(&dir, &repo).unwrap();
+        let tests = each.iter().find(|(m, _)| m == "com.acme:tests").unwrap();
+        let names: Vec<_> = tests.1.iter().map(|d| d.name.as_str()).collect();
+        assert_eq!(names, ["g:lib"], "{each:?}");
+    }
+
+    #[test]
+    fn a_module_named_with_a_property_is_a_sibling() {
+        // flink: `flink-table-planner_${scala.binary.version}` is one of the build's modules,
+        // and flink-avro depends on it as `flink-table-planner_2.12`.
+        let dir = project(
+            "named-by-property",
+            "<packaging>pom</packaging><modules><module>planner</module><module>avro</module>\
+             </modules>",
+        );
+        let modules = [
+            (
+                "planner",
+                "planner_${sv}",
+                format!(
+                    "<properties><sv>2.12</sv></properties><dependencies>{}</dependencies>",
+                    dep("g", "lib", "1", "")
+                ),
+            ),
+            (
+                "avro",
+                "avro",
+                format!(
+                    "<dependencies>{}</dependencies>",
+                    dep("com.acme", "planner_2.12", "1.0", "")
+                ),
+            ),
+        ];
+        for (d, a, body) in modules {
+            std::fs::create_dir_all(dir.join(d)).unwrap();
+            std::fs::write(
+                dir.join(d).join("pom.xml"),
+                pom("com.acme", a, "1.0", &body),
+            )
+            .unwrap();
+        }
+        let repo = Mem(BTreeMap::from([(
+            "g:lib:1".to_string(),
+            pom("g", "lib", "1", ""),
+        )]));
+        let each = resolve_each_module(&dir, &repo).unwrap();
+        let avro = each.iter().find(|(m, _)| m == "com.acme:avro").unwrap();
+        let names: Vec<_> = avro.1.iter().map(|d| d.name.as_str()).collect();
+        assert_eq!(names, ["g:lib"], "{each:?}");
+    }
+
+    #[test]
     fn a_bom_from_the_reactor_manages_the_build() {
         // dubbo's parent imports dubbo-dependencies-bom, one of its own modules at
         // `${revision}`: Maven reads it from the reactor, not a repository.
@@ -1987,6 +2469,97 @@ mod tests {
         ] {
             assert_eq!(jdk_in_range(JAVA_VERSION, range), on, "{range}");
         }
+    }
+
+    #[test]
+    fn element_names_maven_reads_but_xml_does_not() {
+        // hadoop-project 3.1.4: `<Xlint:-unchecked/>` in a compiler plugin's configuration.
+        let xml = format!(
+            "<project><groupId>g</groupId><artifactId>a</artifactId><version>1</version>\
+             <dependencyManagement><dependencies>{}</dependencies></dependencyManagement>\
+             <build><plugins><plugin><configuration><compilerArguments><Xlint/>\
+             <Xlint:-unchecked/><a:b>x</a:b></compilerArguments></configuration></plugin>\
+             </plugins></build></project>",
+            dep("g", "lib", "2", "")
+        );
+        let pom = parse_pom(&xml, false).unwrap();
+        assert_eq!(pom.mgmt.len(), 1);
+        // Still refused: a POM that is broken in another way, or only half there.
+        assert!(parse_pom(
+            "<project><artifactId>a</artifactId><Xlint:-u></project>",
+            false
+        )
+        .is_err());
+        assert!(parse_pom("<project><artifactId>a</artifactId>", false).is_err());
+        assert!(rename_unreadable_elements("<project><a>1</a></project>").is_none());
+    }
+
+    #[test]
+    fn a_plain_doctype_is_skipped_as_maven_does() {
+        // oshi-core 6.1.1 and oshi-parent 6.1.1 start with `<!DOCTYPE project>`.
+        let xml = "<?xml version=\"1.0\"?>\n<!DOCTYPE project>\n<project><artifactId>a\
+                   </artifactId><version>1</version></project>";
+        assert_eq!(parse_pom(xml, false).unwrap().artifact, "a");
+        // Entities stay refused.
+        let entities = "<!DOCTYPE project [<!ENTITY x \"y\">]><project><artifactId>&x;\
+                        </artifactId></project>";
+        assert!(parse_pom(entities, false).is_err());
+    }
+
+    #[test]
+    fn own_dependencies_come_before_inherited_ones() {
+        // seatunnel's clickhouse connector: its own clickhouse-jdbc brings httpcore 4.4.13,
+        // and a dependency inherited from the parent brings 4.4.16 at the same depth.
+        let dir = project(
+            "own-first",
+            &format!(
+                "<packaging>pom</packaging><modules><module>c</module></modules>\
+                 <dependencies>{}</dependencies>",
+                dep("g", "p", "1", "")
+            ),
+        );
+        std::fs::create_dir_all(dir.join("c")).unwrap();
+        std::fs::write(
+            dir.join("c").join("pom.xml"),
+            format!(
+                "<project><parent><groupId>com.acme</groupId><artifactId>app</artifactId>\
+                 <version>1.0</version></parent><artifactId>c</artifactId>\
+                 <dependencies>{}</dependencies></project>",
+                dep("g", "jdbc", "1", "")
+            ),
+        )
+        .unwrap();
+        let with = |a: &str, v: &str| {
+            pom(
+                "g",
+                a,
+                "1",
+                &format!("<dependencies>{}</dependencies>", dep("g", "core", v, "")),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            ("g:p:1".to_string(), with("p", "2")),
+            ("g:jdbc:1".to_string(), with("jdbc", "1")),
+            ("g:core:1".to_string(), pom("g", "core", "1", "")),
+            ("g:core:2".to_string(), pom("g", "core", "2", "")),
+        ]));
+        let each = resolve_each_module(&dir, &repo).unwrap();
+        let c: Vec<(String, String)> = each
+            .iter()
+            .find(|(m, _)| m == "com.acme:c")
+            .unwrap()
+            .1
+            .iter()
+            .map(|p| (p.name.clone(), p.version.clone()))
+            .collect();
+        assert_eq!(
+            c,
+            [
+                ("g:jdbc".to_string(), "1".to_string()),
+                ("g:p".to_string(), "1".to_string()),
+                ("g:core".to_string(), "1".to_string()),
+            ]
+        );
     }
 
     #[test]
@@ -2269,6 +2842,49 @@ mod tests {
     }
 
     #[test]
+    fn file_activation_is_checked_in_the_checkout() {
+        // seata: `<exists>test-suite/test-new-version/pom.xml</exists>` with `!excludeTestModules`.
+        let profile = |id: &str, cond: &str, a: &str| {
+            format!(
+                "<profile><id>{id}</id><activation><file>{cond}</file><property>\
+                 <name>!skip</name></property></activation><dependencies>{}</dependencies>\
+                 </profile>",
+                dep("g", a, "1", "")
+            )
+        };
+        let dir = project(
+            "file-activation",
+            &format!(
+                "<profiles>{}{}{}{}{}</profiles>",
+                profile("on", "<exists>suite/pom.xml</exists>", "exists"),
+                profile("off", "<exists>${basedir}/nope.txt</exists>", "absent"),
+                profile("gone", "<missing>nope.txt</missing>", "missing"),
+                profile(
+                    "up",
+                    "<exists>../file-activation/suite/pom.xml</exists>",
+                    "up"
+                ),
+                profile("prop", "<exists>${other}/suite/pom.xml</exists>", "prop")
+            ),
+        );
+        std::fs::create_dir_all(dir.join("suite")).unwrap();
+        std::fs::write(dir.join("suite").join("pom.xml"), "<project/>").unwrap();
+        let repo = Mem(["exists", "absent", "missing", "up", "prop"]
+            .iter()
+            .map(|a| (format!("g:{a}:1"), pom("g", a, "1", "")))
+            .collect());
+        let r = resolve(&dir, &repo).unwrap();
+        let names: Vec<_> = r.packages.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["g:exists", "g:missing"], "{:?}", r.missing);
+        // A published POM has no folder: its `<file>` profiles stay off.
+        let xml = format!(
+            "<project><artifactId>a</artifactId><profiles>{}</profiles></project>",
+            profile("on", "<missing>nope.txt</missing>", "x")
+        );
+        assert!(parse_pom(&xml, false).unwrap().deps.is_empty());
+    }
+
+    #[test]
     fn profiles_switch_on_by_jdk_as_maven_decides() {
         // xmlunit-core 2.9.0 adds jakarta.xml.bind-api in a `<jdk>[9,)</jdk>` profile, which
         // Maven on a current JDK turns on. An activeByDefault profile then stays off, and
@@ -2422,7 +3038,16 @@ mod tests {
                     &format!("<dependencies>{}</dependencies>", dep("g", "c", "1", "")),
                 ),
             ),
-            ("g:c:1".to_string(), pom("g", "c", "1", "")),
+            // A second path to the old coordinate relocates too (linkis: slf4j-log4j12).
+            (
+                "g:c:1".to_string(),
+                pom(
+                    "g",
+                    "c",
+                    "1",
+                    &format!("<dependencies>{}</dependencies>", dep("old", "a", "1", "")),
+                ),
+            ),
             // A cycle: each moves to the other.
             (
                 "x:loop:1".to_string(),
@@ -2449,6 +3074,62 @@ mod tests {
                 ("x:loop".into(), "1".into(), true, false),
                 ("g:c".into(), "1".into(), false, false),
             ]
+        );
+    }
+
+    #[test]
+    fn managed_provided_holds_on_every_path_and_drops_a_relocation() {
+        // seatunnel manages log4j and slf4j-log4j12 as provided; hadoop-common brings both at
+        // compile, and slf4j-log4j12 1.7.36 relocates to slf4j-reload4j.
+        let managed = |a: &str| dep("g", a, "1", "<scope>provided</scope>");
+        let dir = project(
+            "managed-provided",
+            &format!(
+                "<dependencyManagement><dependencies>{}{}</dependencies>\
+                 </dependencyManagement><dependencies>{}{}</dependencies>",
+                managed("log4j"),
+                managed("binding"),
+                dep("g", "auth", "1", ""),
+                dep("g", "common", "1", "")
+            ),
+        );
+        let with = |a: &str, children: &[&str]| {
+            let deps: String = children.iter().map(|c| dep("g", c, "1", "")).collect();
+            pom("g", a, "1", &format!("<dependencies>{deps}</dependencies>"))
+        };
+        let repo = Mem(BTreeMap::from([
+            ("g:auth:1".to_string(), with("auth", &["log4j"])),
+            ("g:common:1".to_string(), with("common", &["mid"])),
+            ("g:mid:1".to_string(), with("mid", &["log4j", "binding"])),
+            ("g:log4j:1".to_string(), pom("g", "log4j", "1", "")),
+            (
+                "g:binding:1".to_string(),
+                pom(
+                    "g",
+                    "binding",
+                    "1",
+                    "<distributionManagement><relocation><artifactId>reload</artifactId>\
+                     </relocation></distributionManagement>",
+                ),
+            ),
+            ("g:reload:1".to_string(), pom("g", "reload", "1", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        let got: Vec<(String, String)> = r
+            .packages
+            .iter()
+            .map(|p| (p.name.clone(), p.scope.clone()))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("g:auth".to_string(), "compile".to_string()),
+                ("g:common".to_string(), "compile".to_string()),
+                ("g:log4j".to_string(), "provided".to_string()),
+                ("g:mid".to_string(), "compile".to_string()),
+            ],
+            "{:?}",
+            r.missing
         );
     }
 
