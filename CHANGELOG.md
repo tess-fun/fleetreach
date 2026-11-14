@@ -116,13 +116,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   module's (nacos's slf4j-api 1.7.26); and `<jdk>` ranges are read as Maven reads them,
   including `[17,` with no closing bracket. The one difference left is netty's
   OS-activated profile, which depends on the machine that builds.
-- **Checked again on 30 more real repos, module by module: 1,997 of 2,136 modules
-  identical.** Real Maven's tree for each module of flink, keycloak, skywalking, seatunnel,
+- **Checked again on 30 more real repos, module by module: 1,999 of 2,136 modules
+  identical, and every other one differs only by a machine-dependent profile.** Real Maven's tree for each module of flink, keycloak, skywalking, seatunnel,
   dolphinscheduler, hbase and 24 others was compared with fleetreach's per module. Another
   137 modules differ only by profiles that follow the building machine's OS or CPU (brotli4j
-  and netty natives, hadoop's aarch64 leveldbjni), and 2 by one package each (flink's
-  lang-tag, whose version Maven read from a project's Red Hat mirror, and one grpc-api in
-  seatunnel's dist module). The fixes: a POM that starts with a plain `<!DOCTYPE project>` is read (oshi-core 6.1.1; its
+  and netty natives, hadoop's aarch64 leveldbjni). The fixes: a POM that starts with a plain `<!DOCTYPE project>` is read (oshi-core 6.1.1; its
   jna was missing from 112 dolphinscheduler modules); a module named with a property
   (`flink-table-planner_${scala.binary.version}`) is found as a sibling; a nearer version
   outside a range in the same conflict gives way to the nearest one that fits (zipkin's
@@ -133,7 +131,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (seata's distribution module); a winner whose scope widens keeps its own path's exclusions
   and depth (keycloak's guava, excluded down to nothing, then reached at compile by grpc);
   a version range stops at its first version that relocates, as Maven's collector does
-  (system-rules' `junit-dep [4.9,)`); a module's own dependencies come before inherited ones; a
+  (system-rules' `junit-dep [4.9,)`); a range's winner is the nearest occurrence that asks
+  for the fitting version itself, with its own subtree (seatunnel's grpc-core 1.33.0 under
+  vitess, not firestore's copy, which excludes grpc-api); a range also reads the version
+  listing of each repository the build declares, from the local repository only (flink
+  declares Red Hat's, so `lang-tag [1.4.3,)` is 1.7.0.redhat-00003); a module's own dependencies come before inherited ones; a
   managed `provided` or `test` scope holds on every path; and element names XML forbids but
   Maven reads (`<Xlint:-unchecked/>`) no longer fail the POM.
 - **gradle-consistent-versions' `versions.lock` is read as a full lockfile** (beside its

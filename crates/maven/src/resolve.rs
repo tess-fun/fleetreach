@@ -40,6 +40,12 @@ pub trait PomSource {
     fn module(&self, _group: &str, _artifact: &str, _version: &str) -> Option<String> {
         None
     }
+    /// The version listing of `group:artifact` that the repository `repo_id` gave, kept
+    /// beside the local copy as `maven-metadata-<id>.xml`, if available. Maven merges the
+    /// listing of every repository a build declares into a range's candidates.
+    fn repo_metadata(&self, _group: &str, _artifact: &str, _repo_id: &str) -> Option<String> {
+        None
+    }
 }
 
 /// POMs from local repositories (`~/.m2/repository`, a cache, Gradle's download cache), first hit
@@ -119,6 +125,23 @@ impl PomSource for LocalRepositories {
             })
             .or_else(|| self.gradle_file(group, artifact, version, "module"))
     }
+
+    fn repo_metadata(&self, group: &str, artifact: &str, repo_id: &str) -> Option<String> {
+        // An id is a file-name part only: anything that could leave the folder is refused.
+        let plain = !repo_id.is_empty()
+            && repo_id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+            && !repo_id.contains("..");
+        if !plain {
+            return None;
+        }
+        self.roots.iter().find_map(|root| {
+            let file =
+                Self::dir(root, group, artifact).join(format!("maven-metadata-{repo_id}.xml"));
+            fleetreach_core::repofile::read_to_string(file).ok()
+        })
+    }
 }
 
 /// Try each source in order.
@@ -133,6 +156,9 @@ impl PomSource for Chain<'_> {
     }
     fn module(&self, g: &str, a: &str, v: &str) -> Option<String> {
         self.0.iter().find_map(|s| s.module(g, a, v))
+    }
+    fn repo_metadata(&self, g: &str, a: &str, id: &str) -> Option<String> {
+        self.0.iter().find_map(|s| s.repo_metadata(g, a, id))
     }
 }
 
@@ -207,6 +233,8 @@ struct RawPom {
     /// `<distributionManagement><relocation>`: group, artifact and version it moved to, each
     /// `None` when unchanged.
     relocation: Option<(Option<String>, Option<String>, Option<String>)>,
+    /// The ids of the `<repositories>` this POM declares.
+    repositories: Vec<String>,
 }
 
 fn child<'a, 'i>(node: Node<'a, 'i>, name: &str) -> Option<Node<'a, 'i>> {
@@ -394,6 +422,13 @@ fn parse_pom_in(xml: &str, gradle: bool, basedir: Option<&Path>) -> Result<RawPo
             }
         }
     }
+    pom.repositories = child(project, "repositories")
+        .map(|r| {
+            children(r, "repository")
+                .filter_map(|r| text(r, "id"))
+                .collect()
+        })
+        .unwrap_or_default();
     pom.relocation = child(project, "distributionManagement")
         .and_then(|d| child(d, "relocation"))
         .map(|r| {
@@ -461,6 +496,11 @@ struct Resolver<'s> {
     candidates: BTreeMap<MgmtKey, Vec<String>>,
     /// The version that walk selected for each key.
     chosen: BTreeMap<MgmtKey, String>,
+    /// Range pins placed at the nearest occurrence, because no occurrence that asks the
+    /// pinned version itself was reached.
+    loose: BTreeSet<MgmtKey>,
+    /// The repository ids this Maven build's own POMs declare.
+    repo_ids: BTreeSet<String>,
 }
 
 impl Resolver<'_> {
@@ -838,6 +878,29 @@ impl Resolver<'_> {
         })
     }
 
+    /// The published versions of `g:a`: the default listing, merged in a Maven build with
+    /// those of the repositories the build declares (flink declares Red Hat's, whose
+    /// `lang-tag` 1.7.0.redhat-00003 is the highest match of `[1.4.3,)`).
+    fn listed_versions(&mut self, g: &str, a: &str) -> Option<Vec<String>> {
+        let mut listed = self
+            .source
+            .metadata(g, a)
+            .map(|xml| metadata_versions(&xml));
+        if !self.gradle {
+            for id in &self.repo_ids {
+                if let Some(xml) = self.source.repo_metadata(g, a, id) {
+                    let all = listed.get_or_insert_with(Vec::new);
+                    for v in metadata_versions(&xml) {
+                        if !all.contains(&v) {
+                            all.push(v);
+                        }
+                    }
+                }
+            }
+        }
+        listed
+    }
+
     /// Maven's collector reads a range's versions lowest first and stops at the first one that
     /// relocates, following the relocation instead (system-rules asks `junit:junit-dep
     /// [4.9,)`: 4.9 and 4.10, then 4.11-beta-1 moves to `junit:junit`, whose conflict the
@@ -845,7 +908,7 @@ impl Resolver<'_> {
     /// published versions, so a wide range never reads every POM.
     fn first_relocating(&mut self, g: &str, a: &str, declared: &str) -> Option<String> {
         let ranges = parse_ranges(declared.trim())?;
-        let listed = metadata_versions(&self.source.metadata(g, a)?);
+        let listed = self.listed_versions(g, a)?;
         let mut matching: Vec<_> = listed
             .into_iter()
             .filter(|v| ranges.iter().any(|r| r.contains(v)))
@@ -884,10 +947,7 @@ impl Resolver<'_> {
             }
         }
         let ranges = parse_ranges(declared)?;
-        let listed = self
-            .source
-            .metadata(g, a)
-            .map(|xml| metadata_versions(&xml));
+        let listed = self.listed_versions(g, a);
         let Some(listed) = listed else {
             self.missing.insert(format!(
                 "{g}:{a}: range {declared} needs maven-metadata.xml"
@@ -1290,6 +1350,8 @@ fn resolve_modules(
         ranges: BTreeMap::new(),
         candidates: BTreeMap::new(),
         chosen: BTreeMap::new(),
+        loose: BTreeSet::new(),
+        repo_ids: BTreeSet::new(),
     };
     // Where each module lives, first, so the reactor can serve its own parents and BOMs.
     let mut stack = vec![dir.to_path_buf()];
@@ -1304,6 +1366,7 @@ fn resolve_modules(
         let Ok(raw) = parse_pom_in(&xml, false, Some(&d)) else {
             continue;
         };
+        r.repo_ids.extend(raw.repositories.iter().cloned());
         for m in raw.modules.iter().rev() {
             stack.push(d.join(m));
         }
@@ -1379,6 +1442,8 @@ pub(crate) fn resolve_gradle_module(
         ranges: BTreeMap::new(),
         candidates: BTreeMap::new(),
         chosen: BTreeMap::new(),
+        loose: BTreeSet::new(),
+        repo_ids: BTreeSet::new(),
     };
     let modules = vec![r.effective(xml, None, 0)?];
     let local = BTreeMap::new();
@@ -1474,6 +1539,7 @@ fn walk_within_ranges(
     local: &BTreeMap<(String, String), Effective>,
 ) -> (Vec<ResolvedDep>, DepGraph) {
     let mut pins = Pins::new();
+    r.loose.clear();
     for _ in 0..8 {
         r.ranges.clear();
         r.candidates.clear();
@@ -1502,12 +1568,22 @@ fn walk_within_ranges(
                 changed = true;
             }
         }
+        // A pin no occurrence of its own reached is placed at the nearest one instead, so a
+        // package is never lost.
+        for key in pins.keys() {
+            if !r.chosen.contains_key(key) && r.loose.insert(key.clone()) {
+                changed = true;
+            }
+        }
         if !changed {
+            r.loose.clear();
             return (packages, graph);
         }
     }
     r.ranges.clear();
-    walk(r, std::slice::from_ref(module), local, &pins, None)
+    let out = walk(r, std::slice::from_ref(module), local, &pins, None);
+    r.loose.clear();
+    out
 }
 
 /// Keep the higher of `version` and what `pins` holds for `key`. True if it rose.
@@ -1584,6 +1660,8 @@ fn walk(
     // Each winner's own depth and path exclusions: Maven widens a winner's scope but keeps its
     // subtree (keycloak reaches guava first with `*` excluded, then at compile by grpc).
     let mut winners: BTreeMap<MgmtKey, (usize, Vec<(String, String)>)> = BTreeMap::new();
+    // The widest scope of occurrences a range pin passed over before its winner.
+    let mut skipped_scope: BTreeMap<MgmtKey, String> = BTreeMap::new();
     // (dependency, depth, parent node, scope, inherited exclusions, root management)
     let mut queue: Queue = VecDeque::new();
     // Sibling modules walked through so far, with the widest scope each was reached in.
@@ -1723,6 +1801,30 @@ fn walk(
         let managed = (depth > 0)
             .then(|| modules[root_ix].mgmt.get(&dep.mgmt_key()))
             .flatten();
+        // A Maven range pin goes to the nearest occurrence that asks for the pinned version
+        // itself, which keeps that node's own subtree and exclusions (seatunnel: vitess's
+        // grpc-core 1.33.0 wins, not firestore's, which excludes grpc-api from it).
+        if let Some(pin) = pins
+            .get(&key)
+            .filter(|_| !r.gradle && !r.loose.contains(&key))
+        {
+            let own = managed
+                .and_then(|m| m.version.clone())
+                .or(dep.version.clone())
+                .and_then(|v| r.pick_version(&dep.group, &dep.artifact, &v));
+            if own.as_ref() != Some(pin) {
+                // Its scope still counts: Maven widens the winner over every occurrence.
+                let s = match managed.and_then(|m| m.scope.clone()) {
+                    Some(s) if depth > 0 && s != "import" => s,
+                    _ => scope,
+                };
+                let wide = skipped_scope.entry(key).or_insert_with(|| s.clone());
+                if scope_rank(&s) > scope_rank(wide) {
+                    *wide = s;
+                }
+                continue;
+            }
+        }
         let declared = pins
             .get(&key)
             .cloned()
@@ -1742,6 +1844,10 @@ fn walk(
         }
         let scope = match managed.and_then(|m| m.scope.clone()) {
             Some(s) if depth > 0 && s != "import" => s,
+            _ => scope,
+        };
+        let scope = match skipped_scope.remove(&key) {
+            Some(s) if scope_rank(&s) > scope_rank(&scope) => s,
             _ => scope,
         };
         let Some(mut version) = r.pick_version(&dep.group, &dep.artifact, &declared) else {
@@ -1842,6 +1948,28 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    #[test]
+    fn repository_listings_are_read_by_plain_id_only() {
+        let root = std::env::temp_dir().join(format!("fr-repo-meta-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("org").join("acme").join("lib");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("maven-metadata-redhat.xml"), "<metadata/>").unwrap();
+        std::fs::write(root.join("org").join("maven-metadata-x.xml"), "no").unwrap();
+        let local = LocalRepositories {
+            roots: vec![root.clone()],
+            gradle_roots: Vec::new(),
+        };
+        assert_eq!(
+            local.repo_metadata("org.acme", "lib", "redhat").as_deref(),
+            Some("<metadata/>")
+        );
+        assert!(local.repo_metadata("org.acme", "lib", "other").is_none());
+        assert!(local.repo_metadata("org.acme", "lib", "../../x").is_none());
+        assert!(local.repo_metadata("org.acme", "lib", "").is_none());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// POMs in memory, keyed `g:a:v`.
     struct Mem(BTreeMap<String, String>);
 
@@ -1851,6 +1979,9 @@ mod tests {
         }
         fn metadata(&self, g: &str, a: &str) -> Option<String> {
             self.0.get(&format!("{g}:{a}:metadata")).cloned()
+        }
+        fn repo_metadata(&self, g: &str, a: &str, id: &str) -> Option<String> {
+            self.0.get(&format!("{g}:{a}:metadata-{id}")).cloned()
         }
     }
 
@@ -2332,6 +2463,116 @@ mod tests {
         let tests = each.iter().find(|(m, _)| m == "com.acme:tests").unwrap();
         let names: Vec<_> = tests.1.iter().map(|d| d.name.as_str()).collect();
         assert_eq!(names, ["g:lib"], "{each:?}");
+    }
+
+    #[test]
+    fn a_range_reads_the_listings_of_declared_repositories() {
+        // flink declares Red Hat's repository; `lang-tag [1.4.3,)` then picks
+        // 1.7.0.redhat-00003, which only that listing has. Undeclared listings are not read.
+        let listing = |vs: &[&str]| {
+            let vs: String = vs
+                .iter()
+                .map(|v| format!("<version>{v}</version>"))
+                .collect();
+            format!("<metadata><versioning><versions>{vs}</versions></versioning></metadata>")
+        };
+        let body = |repos: &str| {
+            format!(
+                "{repos}<dependencies>{}</dependencies>",
+                dep("g", "tag", "[1.4,)", "")
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            ("g:tag:metadata".to_string(), listing(&["1.4", "1.7"])),
+            (
+                "g:tag:metadata-redhat".to_string(),
+                listing(&["1.7.0.redhat-3"]),
+            ),
+            ("g:tag:metadata-other".to_string(), listing(&["9"])),
+            ("g:tag:1.7".to_string(), pom("g", "tag", "1.7", "")),
+            (
+                "g:tag:1.7.0.redhat-3".to_string(),
+                pom("g", "tag", "1.7.0.redhat-3", ""),
+            ),
+            ("g:tag:9".to_string(), pom("g", "tag", "9", "")),
+        ]));
+        let declared = project(
+            "repo-listing",
+            &body("<repositories><repository><id>redhat</id><url>https://x</url></repository></repositories>"),
+        );
+        let r = resolve(&declared, &repo).unwrap();
+        assert_eq!(r.packages[0].version, "1.7.0.redhat-3", "{:?}", r.missing);
+        let plain = project("repo-listing-none", &body(""));
+        assert_eq!(resolve(&plain, &repo).unwrap().packages[0].version, "1.7");
+    }
+
+    #[test]
+    fn a_range_winner_keeps_its_own_subtree() {
+        // seatunnel-dist: firestore brings grpc-core 1.52.1 with grpc-api excluded, and
+        // grpc-netty's `[1.33.0]` makes vitess's grpc-core 1.33.0 win, with its grpc-api.
+        let excl = "<exclusions><exclusion><groupId>g</groupId><artifactId>api</artifactId>\
+                    </exclusion></exclusions>";
+        let dir = project(
+            "range-winner-subtree",
+            &format!(
+                "<dependencies>{}{}</dependencies>",
+                dep("g", "firestore", "1", ""),
+                dep("g", "vitess", "1", "")
+            ),
+        );
+        let deps = |d: String| format!("<dependencies>{d}</dependencies>");
+        let repo = Mem(BTreeMap::from([
+            (
+                "g:firestore:1".to_string(),
+                pom("g", "firestore", "1", &deps(dep("g", "core", "2", excl))),
+            ),
+            (
+                "g:vitess:1".to_string(),
+                pom(
+                    "g",
+                    "vitess",
+                    "1",
+                    &deps(format!(
+                        "{}{}",
+                        dep("g", "core", "1", ""),
+                        dep("g", "netty", "1", "")
+                    )),
+                ),
+            ),
+            (
+                "g:netty:1".to_string(),
+                pom("g", "netty", "1", &deps(dep("g", "core", "[1]", ""))),
+            ),
+            (
+                "g:core:1".to_string(),
+                pom("g", "core", "1", &deps(dep("g", "api", "1", ""))),
+            ),
+            (
+                "g:core:2".to_string(),
+                pom("g", "core", "2", &deps(dep("g", "api", "2", ""))),
+            ),
+            ("g:api:1".to_string(), pom("g", "api", "1", "")),
+            ("g:api:2".to_string(), pom("g", "api", "2", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        let mut names: Vec<_> = r
+            .packages
+            .iter()
+            .map(|p| format!("{}:{}", p.name, p.version))
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            [
+                "g:api:1",
+                "g:core:1",
+                "g:firestore:1",
+                "g:netty:1",
+                "g:vitess:1"
+            ],
+            "{:?}",
+            r.missing
+        );
     }
 
     #[test]
