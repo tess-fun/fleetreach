@@ -9,7 +9,7 @@
     "NuGet.CommandLine",
     "NuGet.Packaging"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -39,5 +39,9 @@
       "https://github.com/NuGet/NuGet.Client/commit/5e1ba955cca14328d2cb5723f211d5fbc9bcacb3"
     ]
   },
-  "note": "Commit 5e1ba95 (and 3333f35 on the older lines) treats an X.509 chain that fails to build with no status as a failure: CertificateChainUtility.GetCertificateChain, SignatureUtility.GetCertificateChain and CertificateUtility.IsSelfIssued, used by Signature.Verify and Timestamp.Verify. Reached wherever the app verifies a signed package (NuGet.Packaging signing)."
+  "note": "Commit 5e1ba95 (and 3333f35 on the older lines) treats an X.509 chain that fails to build with no status as a failure: CertificateChainUtility.GetCertificateChain, SignatureUtility.GetCertificateChain and CertificateUtility.IsSelfIssued, used by Signature.Verify and Timestamp.Verify. Reached wherever the app verifies a signed package (NuGet.Packaging signing).",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

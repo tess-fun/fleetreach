@@ -13,7 +13,7 @@
     "NuGet.PackageManagement",
     "NuGet.Protocol"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -33,5 +33,9 @@
       }
     ]
   },
-  "note": "Commit 7fe6b81 makes the NuGetScratch temp folder per user with 700 permissions on Linux, where it was shared with world-writable lock folders: NuGetEnvironment.GetFolderPath(NuGetFolderPath.Temp) in NuGet.Common, which every listed package uses for temp and lock files. Linux only; Windows and macOS temp folders are per user."
+  "note": "Commit 7fe6b81 makes the NuGetScratch temp folder per user with 700 permissions on Linux, where it was shared with world-writable lock folders: NuGetEnvironment.GetFolderPath(NuGetFolderPath.Temp) in NuGet.Common, which every listed package uses for temp and lock files. Linux only; Windows and macOS temp folders are per user.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

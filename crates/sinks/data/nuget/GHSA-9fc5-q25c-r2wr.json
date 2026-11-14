@@ -8,7 +8,7 @@
   "packages": [
     "DotNetCasClient"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -63,5 +63,9 @@
       }
     ]
   },
-  "note": "Commit f0e0300 URL-encodes the service ticket in UrlUtil.ConstructValidateUrl, which built the back-channel validation URL from the raw ticket parameter. Reached wherever the CAS module validates a ticket."
+  "note": "Commit f0e0300 URL-encodes the service ticket in UrlUtil.ConstructValidateUrl, which built the back-channel validation URL from the raw ticket parameter. Reached wherever the CAS module validates a ticket.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

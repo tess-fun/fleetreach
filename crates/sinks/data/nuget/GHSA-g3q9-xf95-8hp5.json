@@ -10,7 +10,7 @@
     "NuGet.Commands",
     "NuGet.Protocol"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -43,5 +43,9 @@
       "https://github.com/NuGet/NuGet.Client/commit/6392863cf83f4870e18f1d02f2463cca633e59ed"
     ]
   },
-  "note": "Commit 6392863 stops creating shared world-writable folders and temp files with predictable names: PackCommandRunner's nuspec and SHA512 temp files in NuGet.Commands; HttpCacheUtility.CreateCacheFileAsync, PluginCacheEntry.UpdateCacheFileAsync, PluginPackageReader.GetTemporaryDirectoryPath and SourceCacheContext.GeneratedTempFolder in NuGet.Protocol. Linux only, a local elevation of privilege on a shared machine."
+  "note": "Commit 6392863 stops creating shared world-writable folders and temp files with predictable names: PackCommandRunner's nuspec and SHA512 temp files in NuGet.Commands; HttpCacheUtility.CreateCacheFileAsync, PluginCacheEntry.UpdateCacheFileAsync, PluginPackageReader.GetTemporaryDirectoryPath and SourceCacheContext.GeneratedTempFolder in NuGet.Protocol. Linux only, a local elevation of privilege on a shared machine.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

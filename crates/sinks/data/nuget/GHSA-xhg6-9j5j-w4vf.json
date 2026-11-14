@@ -9,7 +9,7 @@
     "DotNetZip",
     "ProDotNetZip"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -30,5 +30,9 @@
       }
     ]
   },
-  "note": "Commit 18486ad rejects an entry whose resolved path leaves the extraction folder in ZipEntry.IsDoneWithOutputToBaseDir, which every ZipEntry.Extract and ZipFile.ExtractAll path goes through. DotNetZip itself has no fixed release."
+  "note": "Commit 18486ad rejects an entry whose resolved path leaves the extraction folder in ZipEntry.IsDoneWithOutputToBaseDir, which every ZipEntry.Extract and ZipFile.ExtractAll path goes through. DotNetZip itself has no fixed release.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
