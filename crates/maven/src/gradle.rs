@@ -366,7 +366,10 @@ fn build_scripts(dir: &Path, missing: &mut BTreeSet<String>) -> Vec<(String, Str
                 continue;
             };
             if kind.is_dir() {
-                if !SKIPPED_DIRS.contains(&name.as_str()) {
+                // Under `src/`, only `src/main` holds build logic (precompiled script plugins);
+                // `src/test/resources` and the like hold fixture builds Gradle never runs.
+                let fixtures = current.file_name().is_some_and(|p| p == "src") && name != "main";
+                if !SKIPPED_DIRS.contains(&name.as_str()) && !fixtures {
                     stack.push(entry.path());
                 }
                 continue;
@@ -3192,6 +3195,39 @@ set = ["a-b", "e"]
         assert_eq!(scope_of("jmhImplementation"), "test");
         assert_eq!(scope_of("benchmarkImplementation"), "test");
         assert_eq!(scope_of("modImplementation"), "compile");
+    }
+
+    #[test]
+    fn fixture_builds_under_src_are_not_read() {
+        // spring-boot's plugin tests keep builds in src/test/resources; one sets
+        // `def kotlinVersion = ... ?: 'none'`, which must not clash with gradle.properties.
+        let repo = Mem(BTreeMap::from([
+            pom("x", "2.4", &[]),
+            pom("fixture", "1", &[]),
+        ]));
+        let dir = tree(
+            "src-fixtures",
+            &[
+                ("settings.gradle", ""),
+                ("gradle.properties", "kotlinVersion=2.4\n"),
+                (
+                    "build.gradle",
+                    "dependencies {\n    implementation \"g:x:$kotlinVersion\"\n}\n",
+                ),
+                (
+                    "src/test/resources/fixture.gradle",
+                    "def kotlinVersion = project.findProperty('kotlin.version') ?: 'none'\n\
+                     dependencies {\n    implementation 'g:fixture:1'\n}\n",
+                ),
+                (
+                    "build-logic/src/main/groovy/conv.gradle",
+                    "dependencies {\n    implementation 'g:x:2.4'\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:x"), ["2.4"]);
+        assert!(versions(&r, "g:fixture").is_empty(), "{:?}", r.packages);
     }
 
     #[test]
