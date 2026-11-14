@@ -44,6 +44,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a shadowed jar or a test-framework feature variant), its dependencies, and constraints that
   raise versions or manage an imported BOM. On three Kotlin builds this adds 27 to 36 packages
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
+- **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
+  Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
+  now lists 79.2% of the 9,550 modules at Gradle's version and 86.7% by name, up from 59.7% and
+  70.0% on the same POMs; 87.8% and 94.0% on the 51 builds whose dependencies no build plugin
+  adds. Newly read: the root's `subprojects`/`allprojects`/`configure` blocks, Spring
+  `dependencyManagement` (BOM imports, managed versions, and project properties that override
+  a BOM's properties), `platform(project(...))` from `java-platform` projects, the Spring Boot
+  plugin's `BOM_COORDINATES`, catalog versions as `libs.versions.x`, catalogs declared in the
+  settings script, Groovy dependency maps (`lib = [ "k": "g:a:v" ]`), rich version blocks
+  (`strictly`, `require`, `prefer`), custom configurations that a standard one `extendsFrom`,
+  map notation on custom configurations, ForgeGradle's `fg.deobf`, and variables that name
+  other variables. The harness is in `docs/differential/gradle`.
+- **gradle-consistent-versions' `versions.lock` is read as a full lockfile** (beside its
+  `versions.props`), checked so a damaged file is refused.
+- **POMs are read from Gradle's download cache** (`$GRADLE_USER_HOME` or `~/.gradle`,
+  `caches/modules-2/files-2.1`), so a machine that has built the project resolves it offline.
 - **Poetry projects without a lock, and `-e .`, are read.** A `pyproject.toml` with only
   `[tool.poetry.dependencies]` and no `poetry.lock` was an errored gap; its constraints are
   now written as PEP 440 (`^`, `~`, wildcards, exact versions, `python` and `markers`) and read
@@ -272,6 +288,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A busy or rate-limited POM repository no longer reads as missing POMs without a word.**
+  A 429 or 5xx is retried three times (waiting as `Retry-After` asks, at most 10 s); if the
+  repository still refuses, fleetreach stops asking it for the rest of the run and says so
+  once, naming the host, and coverage stays partial.
 - **SARIF output hung on a workflow linked to a device, and `fix apply` wrote through
   linked workflows.** To name the workflow that uses an action, SARIF read the repo's
   workflow files with no guard, so one linked to `/dev/zero` never finished. The Actions bump

@@ -905,8 +905,33 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   (no dependencies), and BOMs with only constraints (bouncycastle). On ideavim, okhttp and
   bitwarden it adds 32, 36 and 27 packages (`-jvm` artifacts, BOM nodes) and drops only iOS/JS
   artifacts and API-only dependencies, as Gradle does on a JVM runtime classpath; PetClinic is
-  unchanged. **Not yet measured against real Gradle**: the Gradle image was removed with the
-  Docker cleanup and pulling it again needs the user's OK.
+  unchanged.
+- **Result (1.7.0, Gradle against real Gradle, 2026-11-14)**: the user approved the
+  `gradle:8.14.3` images (JDK 21, 17, 11) and running the corpus's build scripts in throwaway
+  containers (`docs/differential/gradle`: `run.sh` copies a repo, runs `faDeps` from
+  `init.gradle` over the compile, runtime, test-compile and test-runtime classpaths, 3.5 GB,
+  20-minute kill; `compare.py` scores). Corpus: the 103 JVM builds of 311 sparse clones in
+  ~/fa-testbed/gradle (208 Android/KMP skipped, they need the Android SDK). **56 resolved**;
+  47 fail for reasons of their own (dead plugin repositories, toolchains Gradle cannot fetch
+  on arm64, files the sparse clone lacks, plugins that need a full checkout). On the same POMs
+  (Gradle's own download cache), **79.2% of 9,550 modules at Gradle's version, 86.7% by name**,
+  from 59.7% and 70.0% for the reader before this round; median repo 93% exact, 36 of 56 at
+  90% or more. **87.8% and 94.0% on the 51 builds whose dependencies no build plugin adds**:
+  the five others (ideavim and MinecraftDev on the IntelliJ Platform plugin, Paper and
+  WorldEdit on paperweight's dev bundle, minecolonies on ForgeGradle) hold 1,005 of the 1,991
+  misses, which a static read cannot see by design. Of the rest, 501 are the right package at
+  another version and 485 absent. Every rule came from a real miss: root shared blocks
+  (dgs 2% to 61%), Spring `dependencyManagement` read as management, BOM property overrides
+  (conductor's Jackson), `platform(project(...))` and from a shared block with
+  `dependencies.project(path: ...)` under any configuration (spring-framework 3.5% to 83.5%),
+  `BOM_COORDINATES`, `libs.versions.x` (komga), settings-script catalogs (ForgeGradle 0 to 10
+  packages), Groovy dependency maps and quotes inside `${}` (mybatis-plus, jib 6.5% to 93.5%),
+  rich version blocks and versionless constraints (dgs to 87.9%), `extendsFrom` and map
+  notation (Skript), `fg.deobf`. Also new: gradle-consistent-versions' `versions.lock` read as
+  a full lockfile (palantir 34 of 34) and Gradle's download cache as a POM source. Two traps:
+  Maven Central rate-limited this host's IPv6 address after repeated `--maven-fetch` runs, so
+  fleetreach now stops asking a host that keeps refusing; and ForgeGradle reports remapped
+  copies as `<version>_mapped_<mappings>`, which `compare.py` strips.
 - **Result (1.7.0, Python)**: `scan --resolve-python` (named so, not `--resolve`, since the
   consent is per ecosystem) on 185 repos (110 popular GitHub Python repos with no lockfile, by
   their root manifests, plus the testbed): 143 sets, 90 resolved, 44 fail for a package with no
