@@ -8,7 +8,7 @@
   "packages": [
     "Blogifier.Core"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "no-method-sink",
   "evidence": {
     "commits": [
@@ -267,5 +267,9 @@
       }
     ]
   },
-  "note": "The fix (commit 3e2ae11, the 2.4 branch) adds '..' checks to StorageService and AssetsController in Blogifier 2.x. No vulnerable 2.x release was published on nuget.org (1.4.8-beta is followed by the fixed 2.5.5), and the 1.x releases are different code with no StorageService, so no method of a published release carries the flaw."
+  "note": "The fix (commit 3e2ae11, the 2.4 branch) adds '..' checks to StorageService and AssetsController in Blogifier 2.x. No vulnerable 2.x release was published on nuget.org (1.4.8-beta is followed by the fixed 2.5.5), and the 1.x releases are different code with no StorageService, so no method of a published release carries the flaw.",
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

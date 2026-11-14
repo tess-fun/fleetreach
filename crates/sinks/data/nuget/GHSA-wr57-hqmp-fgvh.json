@@ -8,7 +8,7 @@
   "packages": [
     "Umbraco.Cms"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -53,6 +53,10 @@
       }
     ]
   },
-  "note": "Commits 26312a3, a9649da (14 on) and 5360e2a (13) check member access in ElementOnlyOutputExpansionStrategy.GetPropertyValue before a picked content node is expanded. The class is Umbraco.Cms.Web.Common.Rendering in 13 and Umbraco.Cms.Api.Common.Rendering from 16; 12, 14 and 15 expand through the older Umbraco.Cms.Api.Delivery.Rendering.RequestContextOutputExpansionStrategy.GetPropertyValue, which no fixed release patches because those lines get none. The Delivery API controllers that use either are found by ASP.NET routing, so it is reached by name.",
-  "reached_by_name": true
+  "note": "Commits 26312a3, a9649da (14 on) and 5360e2a (13) check member access in ElementOnlyOutputExpansionStrategy.GetPropertyValue before a picked content node is expanded. The class is Umbraco.Cms.Web.Common.Rendering in 13 and Umbraco.Cms.Api.Common.Rendering from 16; 12, 14 and 15 expand through the older Umbraco.Cms.Api.Delivery.Rendering.RequestContextOutputExpansionStrategy.GetPropertyValue, which no fixed release patches because those lines get none. The Delivery API controllers that use either are found by ASP.NET routing, not by the app's code: no sink reached proves nothing.",
+  "reached_by_name": true,
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }

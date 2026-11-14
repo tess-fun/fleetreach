@@ -8,7 +8,7 @@
   "packages": [
     "Umbraco.Cms"
   ],
-  "status": "proposed",
+  "status": "reviewed",
   "verdict": "sinks",
   "sinks": [
     {
@@ -49,6 +49,10 @@
       }
     ]
   },
-  "note": "Commits 06a2a50 (15.3.1) and d3c1443 (14.3.4) add a file-name check to TemporaryFileService.Validate, which CreateAsync and UpdateAsync call before saving an uploaded temporary file. Only the Management API's temporary-file controller calls it, and that controller is found by ASP.NET routing, so it is reached by name.",
-  "reached_by_name": true
+  "note": "Commits 06a2a50 (15.3.1) and d3c1443 (14.3.4) add a file-name check to TemporaryFileService.Validate, which CreateAsync and UpdateAsync call before saving an uploaded temporary file. Only the Management API's temporary-file controller calls it, and ASP.NET routing finds that controller, not the app's code: no sink reached proves nothing.",
+  "reached_by_name": true,
+  "review": {
+    "by": "tess-fun",
+    "date": "2026-11-13"
+  }
 }
