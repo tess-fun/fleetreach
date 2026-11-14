@@ -309,14 +309,45 @@ fn fetch(url: &str, auth: Option<&(String, String)>) -> Option<String> {
             .build()
             .into()
     });
-    let mut request = agent.get(url).header(
-        "User-Agent",
-        concat!("fleetreach/", env!("CARGO_PKG_VERSION")),
-    );
-    if let Some((user, password)) = auth {
-        request = request.header("Authorization", basic(user, password));
+    // A busy repository answers 429 or 5xx: retry a few times, waiting as it asks (capped),
+    // and say so once rather than reporting the POM as missing without a word.
+    let mut resp = None;
+    for attempt in 0..4u32 {
+        let mut request = agent.get(url).header(
+            "User-Agent",
+            concat!("fleetreach/", env!("CARGO_PKG_VERSION")),
+        );
+        if let Some((user, password)) = auth {
+            request = request.header("Authorization", basic(user, password));
+        }
+        let r = request.call().ok()?;
+        let status = r.status().as_u16();
+        if status != 429 && status < 500 {
+            resp = Some(r);
+            break;
+        }
+        if attempt == 3 {
+            static WARNED: std::sync::atomic::AtomicBool =
+                std::sync::atomic::AtomicBool::new(false);
+            if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                let host = url.split('/').nth(2).unwrap_or(url);
+                eprintln!(
+                    "maven: {host} answered {status} (busy or rate limited); POMs it refused are \
+                     reported as not available, so coverage stays partial. Run again later."
+                );
+            }
+            return None;
+        }
+        let wait = r
+            .headers()
+            .get("retry-after")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .unwrap_or(1 << attempt)
+            .min(10);
+        std::thread::sleep(Duration::from_secs(wait));
     }
-    let mut resp = request.call().ok()?;
+    let mut resp = resp?;
     if resp.status().as_u16() != 200 {
         return None;
     }
