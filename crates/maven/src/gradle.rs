@@ -125,6 +125,36 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             module.deps.extend_from_slice(&shared.deps);
         }
     }
+    // `platform(project(":p"))` takes the platform project's versions, by its default path.
+    let by_path: BTreeMap<String, usize> = scripts
+        .iter()
+        .enumerate()
+        .filter_map(|(i, (file, _))| {
+            let dir = Path::new(file).parent()?.to_str()?;
+            Some((format!(":{}", dir.replace('/', ":")), i))
+        })
+        .collect();
+    let managed: Vec<(Vec<Coordinate>, Vec<Coordinate>)> = modules
+        .iter()
+        .map(|m| {
+            let (mut platforms, mut constraints) = (Vec::new(), Vec::new());
+            for path in &m.project_platforms {
+                if let Some(&i) = by_path.get(path) {
+                    platforms.extend_from_slice(&modules[i].platforms);
+                    constraints.extend_from_slice(&modules[i].constraints);
+                } else {
+                    missing.insert(format!(
+                        "platform project `{path}` is not a build file here"
+                    ));
+                }
+            }
+            (platforms, constraints)
+        })
+        .collect();
+    for (module, (platforms, constraints)) in modules.iter_mut().zip(managed) {
+        module.platforms.extend(platforms);
+        module.constraints.extend(constraints);
+    }
     let unused: Vec<Declared> = context
         .catalog
         .libraries
@@ -478,6 +508,9 @@ struct Module {
     /// What a `subprojects { }`, `allprojects { }` or `configure(subprojects...) { }` block
     /// declares: the root build applies it to every other build file.
     shared: Shared,
+    /// `platform(project(":p"))`: another build file's constraints and platforms manage this
+    /// one (a `java-platform` project), by Gradle project path.
+    project_platforms: Vec<String>,
 }
 
 #[derive(Debug, Default)]
@@ -1088,6 +1121,29 @@ fn read_values(
             break;
         }
     }
+    if platform {
+        if let Some(path) = rest
+            .strip_prefix("project(")
+            .or_else(|| rest.strip_prefix("project "))
+            .and_then(|p| quoted(p.trim()))
+            .map(|(p, _)| p)
+        {
+            module.project_platforms.push(path.to_string());
+            return;
+        }
+        // The Spring Boot plugin's BOM, at the version the plugin is declared with (even one
+        // declared `apply false`).
+        if rest.starts_with("SpringBootPlugin.BOM_COORDINATES") {
+            if let Some(version) = context.plugins.get(SPRING_BOOT) {
+                module.platforms.push(Coordinate {
+                    group: "org.springframework.boot".to_string(),
+                    artifact: "spring-boot-dependencies".to_string(),
+                    version: Some(version.clone()),
+                });
+                return;
+            }
+        }
+    }
     let local = [
         "project(",
         "project ",
@@ -1586,6 +1642,51 @@ set = ["a-b", "e"]
         assert_eq!(versions(&r, "g:a"), ["3.0"], "{:?}", r.missing);
         assert_eq!(versions(&r, "g:b"), ["2.0"], "{:?}", r.missing);
         assert_eq!(versions(&r, "g:k"), ["2.2.20"], "{:?}", r.missing);
+    }
+
+    #[test]
+    fn a_platform_project_manages_the_projects_that_import_it() {
+        // halo's shape: a `java-platform` project imports the Spring Boot plugin's BOM (the
+        // plugin declared `apply false` with its version in the catalog) and constrains g:c;
+        // another project takes both through `platform(project(...))`.
+        let bom = (
+            "org.springframework.boot:spring-boot-dependencies:3.5.0".to_string(),
+            "<project><groupId>org.springframework.boot</groupId>\
+             <artifactId>spring-boot-dependencies</artifactId><version>3.5.0</version>\
+             <packaging>pom</packaging><dependencyManagement><dependencies>\
+             <dependency><groupId>g</groupId><artifactId>a</artifactId><version>3.0</version></dependency>\
+             </dependencies></dependencyManagement></project>"
+                .to_string(),
+        );
+        let repo = Mem(BTreeMap::from([
+            bom,
+            pom("a", "3.0", &[]),
+            pom("c", "1.5", &[]),
+        ]));
+        let dir = tree(
+            "platform-project",
+            &[
+                ("settings.gradle", "include 'platform:app', 'api'\n"),
+                (
+                    "gradle/libs.versions.toml",
+                    "[plugins]\nspring-boot = { id = \"org.springframework.boot\", version = \"3.5.0\" }\n",
+                ),
+                (
+                    "platform/app/build.gradle",
+                    "plugins {\n    id 'java-platform'\n    alias(libs.plugins.spring.boot) apply false\n}\n\
+                     dependencies {\n    api platform(SpringBootPlugin.BOM_COORDINATES)\n\
+                     \x20   constraints {\n        api 'g:c:1.5'\n    }\n}\n",
+                ),
+                (
+                    "api/build.gradle",
+                    "dependencies {\n    api platform(project(':platform:app'))\n\
+                     \x20   api 'g:a'\n    api 'g:c'\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:a"), ["3.0"], "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:c"), ["1.5"], "{:?}", r.missing);
     }
 
     #[test]
