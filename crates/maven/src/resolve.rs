@@ -287,6 +287,11 @@ struct Resolver<'s> {
     missing: BTreeSet<String>,
     /// Resolving for Gradle: module metadata is read where published.
     gradle: bool,
+    /// Project properties that override the same-named property of an imported BOM, as the
+    /// Spring dependency-management plugin does (`ext['jackson-bom.version'] = '2.21.7'`).
+    bom_overrides: BTreeMap<String, String>,
+    /// Inside a BOM the build imports, where `bom_overrides` apply.
+    importing: bool,
 }
 
 impl Resolver<'_> {
@@ -339,6 +344,13 @@ impl Resolver<'_> {
         let mut props: BTreeMap<String, String> =
             parent.as_ref().map(|p| p.props.clone()).unwrap_or_default();
         props.extend(raw.properties.clone());
+        if self.importing {
+            for (k, v) in &self.bom_overrides {
+                if let Some(slot) = props.get_mut(k) {
+                    slot.clone_from(v);
+                }
+            }
+        }
         for (k, v) in [
             ("project.groupId", &group),
             ("project.artifactId", &raw.artifact),
@@ -369,7 +381,11 @@ impl Resolver<'_> {
             let Some(v) = bom.version.clone() else {
                 continue;
             };
-            if let Some(eff) = self.remote(&bom.group, &bom.artifact, &v, depth + 1) {
+            let outer = self.importing;
+            self.importing |= depth == 0 && !self.bom_overrides.is_empty();
+            let eff = self.remote(&bom.group, &bom.artifact, &v, depth + 1);
+            self.importing = outer;
+            if let Some(eff) = eff {
                 for (k, d) in eff.mgmt {
                     mgmt.entry(k).or_insert(d);
                 }
@@ -701,6 +717,8 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
         cache: BTreeMap::new(),
         missing: BTreeSet::new(),
         gradle: false,
+        bom_overrides: BTreeMap::new(),
+        importing: false,
     };
     // The reactor: the root POM and every module below it, from local files.
     let mut modules: Vec<Effective> = Vec::new();
@@ -744,6 +762,7 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
 pub(crate) fn resolve_gradle_module(
     xml: &str,
     source: &dyn PomSource,
+    bom_overrides: &BTreeMap<String, String>,
 ) -> Result<Resolution, String> {
     const MAX_PASSES: usize = 32;
     let mut r = Resolver {
@@ -751,6 +770,8 @@ pub(crate) fn resolve_gradle_module(
         cache: BTreeMap::new(),
         missing: BTreeSet::new(),
         gradle: true,
+        bom_overrides: bom_overrides.clone(),
+        importing: false,
     };
     let modules = vec![r.effective(xml, None, 0)?];
     let local = BTreeMap::new();

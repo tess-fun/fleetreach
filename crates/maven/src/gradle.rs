@@ -198,13 +198,23 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         missing.insert(format!("gradle/libs.versions.toml: {line}"));
     }
 
+    // The Spring dependency-management plugin (also applied by Spring Boot's) lets a project
+    // property override the same-named property of an imported BOM.
+    let spring = scripts.iter().any(|(_, t)| {
+        t.contains("io.spring.dependency-management") || t.contains("org.springframework.boot")
+    });
+    let bom_overrides = if spring {
+        context.vars.clone()
+    } else {
+        BTreeMap::new()
+    };
     let mut graph = fleetreach_core::DepGraph::new("(root)");
     let mut packages: BTreeMap<(String, String), ResolvedDep> = BTreeMap::new();
     for module in &modules {
         if module.deps.is_empty() {
             continue;
         }
-        match resolve_gradle_module(&module.to_pom(), source) {
+        match resolve_gradle_module(&module.to_pom(), source, &bom_overrides) {
             Ok(one) => {
                 missing.extend(one.missing);
                 for (from, to) in one.graph.edges() {
@@ -1930,6 +1940,45 @@ set = ["a-b", "e"]
         assert_eq!(kotlin[1].1["k"]["module"].as_str(), Some("g:k"));
         assert_eq!(kotlin[1].1["k"]["version"].as_str(), Some("2.0"));
         assert_eq!(kotlin[3].1["p"]["version"]["ref"].as_str(), Some("pv"));
+    }
+
+    #[test]
+    fn a_project_property_overrides_the_bom_property_of_that_name() {
+        let bom = |name: &str| {
+            (
+                format!("g:{name}:1"),
+                format!(
+                    "<project><groupId>g</groupId><artifactId>{name}</artifactId><version>1</version>\
+                     <packaging>pom</packaging><properties><a.version>1.0</a.version></properties>\
+                     <dependencyManagement><dependencies>\
+                     <dependency><groupId>g</groupId><artifactId>a</artifactId><version>${{a.version}}</version></dependency>\
+                     </dependencies></dependencyManagement></project>"
+                ),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            bom("bom"),
+            pom("a", "1.0", &[]),
+            pom("a", "2.0", &[]),
+        ]));
+        let script = |plugin: &str| {
+            format!(
+                "plugins {{\n    id '{plugin}' version '1.1.7'\n}}\next['a.version'] = '2.0'\n\
+                 dependencyManagement {{\n    imports {{\n        mavenBom 'g:bom:1'\n    }}\n}}\n\
+                 dependencies {{\n    implementation 'g:a'\n}}\n"
+            )
+        };
+        for (plugin, want) in [
+            ("io.spring.dependency-management", "2.0"),
+            ("other.plugin", "1.0"),
+        ] {
+            let dir = tree(
+                &format!("bom-override-{want}"),
+                &[("settings.gradle", ""), ("build.gradle", &script(plugin))],
+            );
+            let r = resolve_gradle(&dir, &repo);
+            assert_eq!(versions(&r, "g:a"), [want], "{plugin} {:?}", r.missing);
+        }
     }
 
     #[test]
