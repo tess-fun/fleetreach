@@ -119,7 +119,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     for (_, text) in &scripts {
         for line in text.lines() {
             let line = line.trim();
-            if let Some((id, Some(version))) = plugin_line(line, &catalog) {
+            if let Some((id, Some(version))) = plugin_line(line, &catalog, &vars) {
                 plugins.entry(id).or_insert(version);
             }
             // `buildscript { dependencies { classpath "g:a:v" } }` puts a plugin on the
@@ -1102,7 +1102,11 @@ const KOTLIN_JVM: &str = "org.jetbrains.kotlin.jvm";
 
 /// The plugin a line applies, with its version when the line gives one: `id 'x' version '1'`,
 /// `id("x") version "1"`, `kotlin("jvm") version "1"` or `alias(libs.plugins.x)`.
-fn plugin_line(line: &str, catalog: &Catalog) -> Option<(String, Option<String>)> {
+fn plugin_line(
+    line: &str,
+    catalog: &Catalog,
+    vars: &BTreeMap<String, String>,
+) -> Option<(String, Option<String>)> {
     if let Some(alias) = line.strip_prefix("alias(libs.plugins.") {
         let alias = alias.split(')').next()?;
         return Some((catalog.plugin_aliases.get(alias)?.clone(), None));
@@ -1138,8 +1142,11 @@ fn plugin_line(line: &str, catalog: &Catalog) -> Option<(String, Option<String>)
                     .strip_suffix(".get())")
                     .or_else(|| name.strip_suffix(".get()"));
                 let name = name.unwrap_or(v).trim_end_matches(')').trim_end();
-                let name = name.strip_prefix("libs.versions.")?;
-                catalog.versions.get(name).cloned()
+                match name.strip_prefix("libs.versions.") {
+                    Some(name) => catalog.versions.get(name).cloned(),
+                    // `version kotlinVersion`, a variable the script sets.
+                    None => vars.get(name).cloned(),
+                }
             }
         }
     });
@@ -1879,7 +1886,7 @@ fn read_line(
 
 /// The dependencies a plugin brings: Spring Boot's BOM and Kotlin's standard library.
 fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
-    let Some((id, _)) = plugin_line(line, &context.catalog) else {
+    let Some((id, _)) = plugin_line(line, &context.catalog, &context.vars) else {
         return;
     };
     let Some(version) = context.plugins.get(&id) else {
@@ -2360,7 +2367,10 @@ set = ["a-b", "e"]
             ("apply(plugin = \"org.springframework.boot\")", SPRING_BOOT),
             ("apply plugin: 'kotlin'", KOTLIN_JVM),
         ] {
-            assert_eq!(plugin_line(line, &catalog), Some((id.to_string(), None)));
+            assert_eq!(
+                plugin_line(line, &catalog, &BTreeMap::new()),
+                Some((id.to_string(), None))
+            );
         }
         let mut c = context("", &[]);
         c.plugins
@@ -2375,7 +2385,7 @@ set = ["a-b", "e"]
         let toml = "[plugins]\nboot = { id = \"org.springframework.boot\", version = \"3.2.0\" }\n";
         let catalog = Catalog::parse(toml).unwrap();
         assert_eq!(
-            plugin_line("alias(libs.plugins.boot)", &catalog),
+            plugin_line("alias(libs.plugins.boot)", &catalog, &BTreeMap::new()),
             Some(("org.springframework.boot".to_string(), None))
         );
         let catalog = Catalog::parse(&format!("{toml}[versions]\nmy-x = \"1.0\"\n")).unwrap();
@@ -2386,15 +2396,25 @@ set = ["a-b", "e"]
             "id(\"g.x\") version(libs.versions.my.x.get())",
         ] {
             assert_eq!(
-                plugin_line(line, &catalog),
+                plugin_line(line, &catalog, &BTreeMap::new()),
                 Some(("g.x".to_string(), Some("1.0".to_string())))
             );
         }
         assert_eq!(
-            plugin_line("kotlin(\"jvm\") version \"2.0.0\"", &catalog)
-                .unwrap()
-                .0,
+            plugin_line(
+                "kotlin(\"jvm\") version \"2.0.0\"",
+                &catalog,
+                &BTreeMap::new()
+            )
+            .unwrap()
+            .0,
             KOTLIN_JVM
+        );
+        // komga: `val kotlinVersion = "2.4.10"` then `kotlin("jvm") version kotlinVersion`.
+        let vars = BTreeMap::from([("kotlinVersion".to_string(), "2.4.10".to_string())]);
+        assert_eq!(
+            plugin_line("kotlin(\"jvm\") version kotlinVersion", &catalog, &vars),
+            Some((KOTLIN_JVM.to_string(), Some("2.4.10".to_string())))
         );
 
         let mut c = context(toml, &[]);
