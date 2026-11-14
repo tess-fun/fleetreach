@@ -5,7 +5,10 @@
 // Resolution is lenient: one unresolvable module never stops the listing.
 allprojects { p ->
     p.tasks.register('faDeps') {
-        notCompatibleWithConfigurationCache('reads configurations at execution time')
+        // Gradle 7.4 and later; older Gradle has no configuration cache to opt out of.
+        if (delegate.respondsTo('notCompatibleWithConfigurationCache', String)) {
+            notCompatibleWithConfigurationCache('reads configurations at execution time')
+        }
         doLast {
             ['compileClasspath', 'runtimeClasspath', 'testCompileClasspath', 'testRuntimeClasspath'].each { n ->
                 def c = p.configurations.findByName(n)

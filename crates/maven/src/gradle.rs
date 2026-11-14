@@ -36,8 +36,26 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     let scripts = build_scripts(dir, &mut missing);
     let mut vars = properties(&dir.join("gradle.properties"));
     let mut seen_twice = BTreeSet::new();
+    let mut aliases = Vec::new();
+    for (_, text) in &build_constants(dir) {
+        kotlin_constants(text, &mut vars, &mut seen_twice);
+    }
     for (_, text) in &scripts {
-        script_variables(text, &mut vars, &mut seen_twice);
+        script_variables(text, &mut vars, &mut seen_twice, &mut aliases);
+    }
+    // `val v = extra["k"] as String` and `extra["k"] = Versions.K` name another variable,
+    // known once every literal is read.
+    for (name, key) in aliases {
+        if let Some(value) = vars.get(&key).cloned() {
+            match vars.get(&name) {
+                Some(known) if *known != value => {
+                    seen_twice.insert(name);
+                }
+                _ => {
+                    vars.insert(name, value);
+                }
+            }
+        }
     }
     for name in seen_twice {
         vars.remove(&name);
@@ -85,6 +103,23 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             missing.insert(format!("{file}: {line}"));
         }
         modules.push(module);
+    }
+    // The root build's `subprojects { }` and `allprojects { }` apply to every other build file
+    // (BOM imports and versions there are how most multi-project builds manage versions).
+    if let Some(root) = scripts
+        .iter()
+        .position(|(f, _)| f == "build.gradle" || f == "build.gradle.kts")
+    {
+        let shared = std::mem::take(&mut modules[root].shared);
+        for (i, (file, _)) in scripts.iter().enumerate() {
+            if i == root || file.starts_with("buildSrc/") || file.starts_with("build-logic/") {
+                continue;
+            }
+            let module = &mut modules[i];
+            module.platforms.extend_from_slice(&shared.platforms);
+            module.constraints.extend_from_slice(&shared.constraints);
+            module.deps.extend_from_slice(&shared.deps);
+        }
     }
     let unused: Vec<Declared> = context
         .catalog
@@ -239,8 +274,15 @@ fn strip_comments(text: &str) -> String {
 }
 
 /// `val x = "1"`, `def x = '1'`, `ext.x = '1'`, `x = '1'` and `extra["x"] = "1"`. A name given
-/// two values is dropped, so a declaration using it is reported instead of guessed.
-fn script_variables(text: &str, vars: &mut BTreeMap<String, String>, twice: &mut BTreeSet<String>) {
+/// two values is dropped, so a declaration using it is reported instead of guessed. A value
+/// naming another variable (`extra["k"] as String`, `property("k")`, `Versions.K`) goes to
+/// `aliases`, resolved once every literal is known.
+fn script_variables(
+    text: &str,
+    vars: &mut BTreeMap<String, String>,
+    twice: &mut BTreeSet<String>,
+    aliases: &mut Vec<(String, String)>,
+) {
     for line in text.lines() {
         let mut l = line.trim();
         for prefix in [
@@ -266,9 +308,16 @@ fn script_variables(text: &str, vars: &mut BTreeMap<String, String>, twice: &mut
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-');
         let Some((value, tail)) = quoted(value.trim()) else {
+            if plain {
+                if let Some(key) = variable_reference(value) {
+                    aliases.push((name.to_string(), key));
+                }
+            }
             continue;
         };
-        if !plain || !tail.trim().is_empty() || value.contains('$') {
+        // A lone trailing comma is an entry of a Groovy list: `libraries = [ v = '1.0', ... ]`.
+        let tail = tail.trim();
+        if !plain || !(tail.is_empty() || tail == ",") || value.contains('$') {
             continue;
         }
         match vars.get(name) {
@@ -277,6 +326,118 @@ fn script_variables(text: &str, vars: &mut BTreeMap<String, String>, twice: &mut
             }
             _ => {
                 vars.insert(name.to_string(), value.to_string());
+            }
+        }
+    }
+}
+
+/// The variable an unquoted value names: `extra["k"]`, `ext["k"]`, `ext.k`, `property("k")`,
+/// `findProperty("k")` (each with an optional `as String`, `!!` or `.toString()`), or a plain
+/// dotted name such as `Versions.KOTLIN`.
+fn variable_reference(value: &str) -> Option<String> {
+    let mut v = value.trim();
+    for suffix in [" as String?", " as String", "!!", ".toString()", ".get()"] {
+        v = v.strip_suffix(suffix).unwrap_or(v).trim_end();
+    }
+    for prefix in ["rootProject.", "project."] {
+        v = v.strip_prefix(prefix).unwrap_or(v);
+    }
+    for call in ["extra[", "ext[", "property(", "findProperty("] {
+        if let Some(inner) = v.strip_prefix(call) {
+            let (key, tail) = quoted(inner.trim())?;
+            return matches!(tail.trim(), "]" | ")").then(|| key.to_string());
+        }
+    }
+    let v = v.strip_prefix("ext.").unwrap_or(v);
+    let plain = !v.is_empty()
+        && v.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+        && v.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.');
+    plain.then(|| v.to_string())
+}
+
+/// Kotlin files of `buildSrc` and `build-logic`, where builds keep version constants.
+fn build_constants(dir: &Path) -> Vec<(PathBuf, String)> {
+    let mut out = Vec::new();
+    let mut stack: Vec<PathBuf> = ["buildSrc", "build-logic"]
+        .iter()
+        .map(|d| dir.join(d))
+        .collect();
+    while let Some(current) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&current) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            let name = entry.file_name().to_string_lossy().to_string();
+            if kind.is_dir() {
+                if !SKIPPED_DIRS.contains(&name.as_str()) {
+                    stack.push(entry.path());
+                }
+            } else if kind.is_file()
+                && name.ends_with(".kt")
+                && out.len() < MAX_FILES
+                && entry.metadata().is_ok_and(|m| m.len() <= MAX_FILE_BYTES)
+            {
+                if let Ok(text) = fleetreach_core::repofile::read_to_string(entry.path()) {
+                    out.push((entry.path(), strip_comments(&text)));
+                }
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// `const val K = "1"` inside `object Versions { }`, as `Versions.K`.
+fn kotlin_constants(text: &str, vars: &mut BTreeMap<String, String>, twice: &mut BTreeSet<String>) {
+    let mut objects: Vec<(String, usize)> = Vec::new();
+    let mut depth = 0usize;
+    for line in text.lines() {
+        let t = line.trim();
+        let word = |p: &str| -> Option<String> {
+            let rest = t.strip_prefix(p)?.trim_start();
+            let name: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect();
+            (!name.is_empty()).then_some(name)
+        };
+        if let Some(name) = word("object ").or_else(|| word("internal object ")) {
+            objects.push((name, depth));
+        }
+        if let Some(rest) = t
+            .strip_prefix("const val ")
+            .or_else(|| t.strip_prefix("internal const val "))
+        {
+            if let (Some((name, value)), Some((object, _))) = (rest.split_once('='), objects.last()) {
+                let name = name.split(':').next().unwrap_or_default().trim();
+                if let Some((value, tail)) = quoted(value.trim()) {
+                    if tail.trim().is_empty() && !value.contains('$') {
+                        let key = format!("{object}.{name}");
+                        match vars.get(&key) {
+                            Some(known) if known != value => {
+                                twice.insert(key);
+                            }
+                            _ => {
+                                vars.insert(key, value.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for c in code_only(line).chars() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth = depth.saturating_sub(1);
+                    while objects.last().is_some_and(|(_, d)| *d >= depth) {
+                        objects.pop();
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -308,6 +469,16 @@ struct Module {
     platforms: Vec<Coordinate>,
     constraints: Vec<Coordinate>,
     unread: Vec<String>,
+    /// What a `subprojects { }`, `allprojects { }` or `configure(subprojects...) { }` block
+    /// declares: the root build applies it to every other build file.
+    shared: Shared,
+}
+
+#[derive(Debug, Default)]
+struct Shared {
+    deps: Vec<Declared>,
+    platforms: Vec<Coordinate>,
+    constraints: Vec<Coordinate>,
 }
 
 impl Module {
@@ -625,6 +796,12 @@ fn is_configuration(name: &str) -> bool {
 enum Block {
     Dependencies,
     Constraints,
+    /// The Spring plugin's `dependencyManagement { }`: `imports { mavenBom ... }` and
+    /// `dependencies { dependency ... }` manage versions.
+    Management,
+    ManagedVersions,
+    /// `subprojects { }`, `allprojects { }`, `configure(subprojects...) { }`.
+    Shared,
     Other,
 }
 
@@ -634,16 +811,35 @@ fn read_script(text: &str, context: &mut Context) -> Module {
     for line in text.lines() {
         let trimmed = line.trim();
         let current = blocks.last().copied();
-        if !matches!(current, Some(Block::Dependencies | Block::Constraints)) {
-            apply_plugin(trimmed, context, &mut module);
+        let shared = blocks.contains(&Block::Shared);
+        let before = (
+            module.deps.len(),
+            module.platforms.len(),
+            module.constraints.len(),
+        );
+        read_line(trimmed, current, &blocks, context, &mut module);
+        if shared {
+            module.shared.deps.extend_from_slice(&module.deps[before.0..]);
+            module
+                .shared
+                .platforms
+                .extend_from_slice(&module.platforms[before.1..]);
+            module
+                .shared
+                .constraints
+                .extend_from_slice(&module.constraints[before.2..]);
         }
-        let opens = trimmed.ends_with('{') || trimmed.contains('{');
         let word: String = trimmed
             .chars()
             .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
             .collect();
         let after_word = trimmed[word.len()..].trim_start();
-        let new_block = if word == "dependencies" && after_word.starts_with('{') {
+        let new_block = if word == "dependencies"
+            && after_word.starts_with('{')
+            && blocks.contains(&Block::Management)
+        {
+            Some(Block::ManagedVersions)
+        } else if word == "dependencies" && after_word.starts_with('{') {
             Some(Block::Dependencies)
         } else if word == "constraints"
             && after_word.starts_with('{')
@@ -656,19 +852,24 @@ fn read_script(text: &str, context: &mut Context) -> Module {
         if let Some(block) = new_block {
             // A one-liner: `dependencies { implementation 'g:a:1' }`.
             let inner = after_word[1..].trim();
-            if let Some(body) = inner.strip_suffix('}') {
-                read_entry(body.trim(), block, context, &mut module);
+            if inner.strip_suffix('}').is_some() {
                 continue;
             }
             blocks.push(block);
-            read_entry(inner, block, context, &mut module);
             continue;
         }
-        if let Some(block @ (Block::Dependencies | Block::Constraints)) = current {
-            if opens || !trimmed.starts_with('}') {
-                read_entry(trimmed, block, context, &mut module);
-            }
-        }
+        let marks = if word == "dependencyManagement" {
+            Some(Block::Management)
+        } else if matches!(word.as_str(), "subprojects" | "allprojects")
+            || (word == "configure"
+                && (after_word.starts_with("(subprojects")
+                    || after_word.starts_with("(allprojects")))
+        {
+            Some(Block::Shared)
+        } else {
+            None
+        };
+        let depth = blocks.len();
         for c in code_only(line).chars() {
             match c {
                 '{' => blocks.push(Block::Other),
@@ -678,8 +879,79 @@ fn read_script(text: &str, context: &mut Context) -> Module {
                 _ => {}
             }
         }
+        if let Some(mark) = marks {
+            if blocks.len() > depth {
+                if let Some(last) = blocks.last_mut() {
+                    *last = mark;
+                }
+            }
+        }
     }
     module
+}
+
+/// One line of a build script, read by the block it sits in.
+fn read_line(
+    trimmed: &str,
+    current: Option<Block>,
+    blocks: &[Block],
+    context: &mut Context,
+    module: &mut Module,
+) {
+    match current {
+        Some(block @ (Block::Dependencies | Block::Constraints)) => {
+            // `constraints {` opens a block; only what follows its brace is an entry.
+            if let Some(after) = trimmed.strip_prefix("constraints") {
+                if let Some(inner) = after.trim_start().strip_prefix('{') {
+                    let inner = inner.trim();
+                    let body = inner.strip_suffix('}').unwrap_or(inner);
+                    read_entry(body.trim(), Block::Constraints, context, module);
+                    return;
+                }
+            }
+            if trimmed.contains('{') || !trimmed.starts_with('}') {
+                read_entry(trimmed, block, context, module);
+            }
+            return;
+        }
+        Some(Block::ManagedVersions) => {
+            // `dependency 'g:a:1'` or `dependency("g:a:1")`; `dependencySet` is not read.
+            if let Some(rest) = trimmed.strip_prefix("dependency") {
+                if rest.starts_with([' ', '(']) {
+                    read_values(rest, "compile", Block::Constraints, context, module);
+                }
+            }
+            return;
+        }
+        _ => {}
+    }
+    apply_plugin(trimmed, context, module);
+    if blocks.contains(&Block::Management) {
+        if let Some(rest) = trimmed.strip_prefix("mavenBom") {
+            let inner = rest.trim().trim_start_matches('(');
+            let inner = inner.trim_end().trim_end_matches(')');
+            read_values(
+                &format!("platform({inner})"),
+                "compile",
+                Block::Dependencies,
+                context,
+                module,
+            );
+        }
+    }
+    // `dependencies { implementation 'g:a:1' }` on one line.
+    let word: String = trimmed
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    let after_word = trimmed[word.len()..].trim_start();
+    if word == "dependencies" && !blocks.contains(&Block::Management) {
+        if let Some(inner) = after_word.strip_prefix('{') {
+            let inner = inner.trim();
+            let body = inner.strip_suffix('}').unwrap_or(inner);
+            read_entry(body.trim(), Block::Dependencies, context, module);
+        }
+    }
 }
 
 /// The dependencies a plugin brings: Spring Boot's BOM and Kotlin's standard library.
@@ -1050,11 +1322,25 @@ set = ["a-b", "e"]
             "val a = \"1\"\next.b = '2'\ndef c = '3'\nc = '4'\nd = compute()\n",
             &mut vars,
             &mut twice,
+            &mut Vec::new(),
         );
         assert_eq!(vars["a"], "1");
         assert_eq!(vars["b"], "2");
         assert!(twice.contains("c"));
         assert!(!vars.contains_key("d"));
+    }
+
+    #[test]
+    fn groovy_list_entries_are_variables() {
+        let mut vars = BTreeMap::new();
+        script_variables(
+            "libraries = [\n    springVersion = '5.3.39',\n    pair = '1', '2'\n]\n",
+            &mut vars,
+            &mut BTreeSet::new(),
+            &mut Vec::new(),
+        );
+        assert_eq!(vars["springVersion"], "5.3.39");
+        assert!(!vars.contains_key("pair"));
     }
 
     #[test]
@@ -1208,6 +1494,77 @@ set = ["a-b", "e"]
             r.missing,
             ["g:nomod:1.0: Gradle module metadata not available, read the POM instead"]
         );
+    }
+
+    #[test]
+    fn a_root_blocks_boms_and_versions_reach_every_subproject() {
+        // A BOM managing g:a, imported in the root's `configure(subprojects...)` through the
+        // Spring plugin with its version in `extra`, a managed version for g:b, and Kotlin's
+        // version as a buildSrc constant.
+        let bom = (
+            "g:bom:4.1.1".to_string(),
+            "<project><groupId>g</groupId><artifactId>bom</artifactId><version>4.1.1</version>\
+             <packaging>pom</packaging><dependencyManagement><dependencies>\
+             <dependency><groupId>g</groupId><artifactId>a</artifactId><version>3.0</version></dependency>\
+             </dependencies></dependencyManagement></project>"
+                .to_string(),
+        );
+        let repo = Mem(BTreeMap::from([
+            bom,
+            pom("a", "3.0", &[]),
+            pom("b", "2.0", &[]),
+            pom("k", "2.2.20", &[]),
+        ]));
+        let dir = tree(
+            "shared-blocks",
+            &[
+                ("settings.gradle.kts", ""),
+                (
+                    "build.gradle.kts",
+                    "allprojects {\n    extra[\"sb.version\"] = \"4.1.1\"\n}\n\
+                     configure(subprojects.filterNot { it in skipped }) {\n\
+                     \x20   val sbVersion = extra[\"sb.version\"] as String\n\
+                     \x20   dependencyManagement {\n\
+                     \x20       imports {\n\
+                     \x20           mavenBom(\"g:bom:$sbVersion\")\n\
+                     \x20       }\n\
+                     \x20       dependencies {\n\
+                     \x20           dependency(\"g:b:2.0\")\n\
+                     \x20       }\n\
+                     \x20   }\n\
+                     \x20   dependencies {\n\
+                     \x20       implementation(\"g:k:${Versions.KOTLIN}\")\n\
+                     \x20   }\n\
+                     }\n",
+                ),
+                (
+                    "buildSrc/src/main/kotlin/Versions.kt",
+                    "object Versions {\n    const val KOTLIN = \"2.2.20\"\n}\n",
+                ),
+                (
+                    "lib/build.gradle.kts",
+                    "dependencies {\n    api(\"g:a\")\n    implementation(\"g:b\")\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:a"), ["3.0"], "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:b"), ["2.0"], "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:k"), ["2.2.20"], "{:?}", r.missing);
+    }
+
+    #[test]
+    fn variable_references_name_another_variable() {
+        for (value, key) in [
+            ("extra[\"sb.version\"] as String", Some("sb.version")),
+            ("rootProject.ext['v']", Some("v")),
+            ("property(\"kotlinVersion\")!!", Some("kotlinVersion")),
+            ("Versions.KOTLIN", Some("Versions.KOTLIN")),
+            ("compute()", None),
+            ("\"1.0\"", None),
+        ] {
+            assert_eq!(variable_reference(value).as_deref(), key, "{value}");
+        }
     }
 
     #[test]
