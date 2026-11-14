@@ -325,6 +325,12 @@ struct Effective {
     constraints: Vec<Dep>,
     /// Where this POM says the artifact moved (its own relocation, never a parent's).
     relocation: Option<(String, String, String)>,
+    /// The management and dependency entries of this POM and its parents as written, parent
+    /// first: Maven interpolates what a child inherits with the child's properties.
+    raw_mgmt: Vec<Dep>,
+    raw_deps: Vec<Dep>,
+    /// Built from a POM, so `raw_mgmt` and `raw_deps` are complete.
+    raw_inherited: bool,
 }
 
 const MAX_DEPTH: usize = 24;
@@ -414,16 +420,35 @@ impl Resolver<'_> {
             props.insert("project.parent.groupId".into(), pg.clone());
             props.insert("parent.version".into(), pv.clone());
         }
-        let mut mgmt = parent.as_ref().map(|p| p.mgmt.clone()).unwrap_or_default();
+        // Maven merges what a POM inherits before interpolating, so a property this POM sets
+        // also decides a version its parent manages (`<jackson.version>` under a Boot parent).
+        let inherit = parent.as_ref().filter(|p| p.raw_inherited);
+        let mut raw_mgmt = inherit.map(|p| p.raw_mgmt.clone()).unwrap_or_default();
+        let parent_mgmt_len = raw_mgmt.len();
+        raw_mgmt.extend(raw.mgmt.iter().cloned());
+        let mut raw_deps = inherit.map(|p| p.raw_deps.clone()).unwrap_or_default();
+        raw_deps.extend(raw.deps.iter().cloned());
+        // A parent read some other way keeps its own resolved entries.
+        let mut mgmt = match (&parent, inherit) {
+            (Some(p), None) => p.mgmt.clone(),
+            _ => BTreeMap::new(),
+        };
+        let mut parent_imports = Vec::new();
         let mut imports = Vec::new();
-        for d in &raw.mgmt {
+        for (i, d) in raw_mgmt.iter().enumerate() {
             let d = self.interp_dep(d, &props);
             if d.scope.as_deref() == Some("import") {
-                imports.push(d);
+                // The merged model lists this POM's entries before its parents'.
+                if i < parent_mgmt_len {
+                    parent_imports.push(d);
+                } else {
+                    imports.push(d);
+                }
                 continue;
             }
             mgmt.insert(d.mgmt_key(), d);
         }
+        imports.extend(parent_imports);
         // Imported BOMs add only what this POM (and its parents) did not manage itself.
         for bom in imports {
             let Some(v) = bom.version.clone() else {
@@ -439,8 +464,11 @@ impl Resolver<'_> {
                 }
             }
         }
-        let mut deps: Vec<Dep> = parent.as_ref().map(|p| p.deps.clone()).unwrap_or_default();
-        for d in &raw.deps {
+        let mut deps: Vec<Dep> = match (&parent, inherit) {
+            (Some(p), None) => p.deps.clone(),
+            _ => Vec::new(),
+        };
+        for d in &raw_deps {
             let mut d = self.interp_dep(d, &props);
             if let Some(m) = mgmt.get(&d.mgmt_key()) {
                 if d.version.is_none() {
@@ -494,6 +522,9 @@ impl Resolver<'_> {
             props,
             constraints: Vec::new(),
             relocation,
+            raw_mgmt,
+            raw_deps,
+            raw_inherited: true,
         })
     }
 
@@ -1021,6 +1052,13 @@ fn walk(
                 .insert(format!("{name}: no version (not managed)"));
             continue;
         };
+        // A property no POM in reach defines (its parent missing): never a version to list.
+        if declared.contains("${") {
+            r.missing.insert(format!(
+                "{name}: version `{declared}` names an undefined property"
+            ));
+            continue;
+        }
         let scope = match managed.and_then(|m| m.scope.clone()) {
             Some(s) if depth > 0 && s != "import" => s,
             _ => scope,
@@ -1295,6 +1333,84 @@ mod tests {
             dep("g", "c", "1.5", ""), dep("g", "a", "1", "")));
         let r = resolve(&dir, &repo).unwrap();
         assert_eq!(rows(&r)[1], ("g:c".into(), "1.5".into(), false, false));
+    }
+
+    #[test]
+    fn a_child_property_sets_a_version_its_parent_manages() {
+        // artemis-jakarta-client sets `jakarta.jms-api.version`, which artemis-pom's
+        // management names: real Maven takes the child's 3.1.0, not the parent's 2.0.3.
+        let repo = Mem(BTreeMap::from([
+            (
+                "g:parent:1".to_string(),
+                pom(
+                    "g",
+                    "parent",
+                    "1",
+                    &format!(
+                        "<properties><api.version>2.0.3</api.version></properties>\
+                         <dependencyManagement><dependencies>{}</dependencies></dependencyManagement>\
+                         <dependencies>{}</dependencies>",
+                        dep("g", "api", "${api.version}", ""),
+                        dep("g", "inherited", "${api.version}", "")
+                    ),
+                ),
+            ),
+            (
+                "g:client:1".to_string(),
+                "<project><parent><groupId>g</groupId><artifactId>parent</artifactId><version>1</version></parent>\
+                 <artifactId>client</artifactId><properties><api.version>3.1.0</api.version></properties>\
+                 <dependencies><dependency><groupId>g</groupId><artifactId>api</artifactId></dependency></dependencies></project>"
+                    .to_string(),
+            ),
+            ("g:api:3.1.0".to_string(), pom("g", "api", "3.1.0", "")),
+            ("g:inherited:3.1.0".to_string(), pom("g", "inherited", "3.1.0", "")),
+        ]));
+        let dir = project(
+            "child-props",
+            &format!(
+                "<dependencies>{}</dependencies>",
+                dep("g", "client", "1", "")
+            ),
+        );
+        let r = resolve(&dir, &repo).unwrap();
+        let mut got: Vec<_> = rows(&r)
+            .into_iter()
+            .map(|(n, v, _, _)| format!("{n}:{v}"))
+            .collect();
+        got.sort();
+        assert_eq!(
+            got,
+            ["g:api:3.1.0", "g:client:1", "g:inherited:3.1.0"],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn an_undefined_property_is_not_listed_as_a_version() {
+        let repo = Mem(BTreeMap::from([(
+            "g:a:1".to_string(),
+            pom(
+                "g",
+                "a",
+                "1",
+                &format!(
+                    "<dependencies>{}</dependencies>",
+                    dep("g", "b", "${nowhere}", "")
+                ),
+            ),
+        )]));
+        let dir = project(
+            "undefined-prop",
+            &format!("<dependencies>{}</dependencies>", dep("g", "a", "1", "")),
+        );
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(rows(&r), [("g:a".into(), "1".into(), true, false)]);
+        assert!(
+            r.missing.iter().any(|m| m.contains("undefined property")),
+            "{:?}",
+            r.missing
+        );
     }
 
     #[test]

@@ -914,7 +914,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   ~/fa-testbed/gradle (208 Android/KMP skipped, they need the Android SDK). **56 resolved**;
   47 fail for reasons of their own (dead plugin repositories, toolchains Gradle cannot fetch
   on arm64, files the sparse clone lacks, plugins that need a full checkout). On the same POMs
-  (Gradle's own download cache), **82.9% of 9,550 modules at Gradle's version, 88.7% by name**,
+  (Gradle's own download cache), **83.0% of 9,550 modules at Gradle's version, 88.7% by name**,
   from 59.7% and 70.0% for the reader before this round; median repo 94.1% exact, 41 of 56 at
   90% or more. **92.2% and 96.5% on the 51 builds whose dependencies no build plugin adds**:
   the five others (ideavim and MinecraftDev on the IntelliJ Platform plugin, Paper and
@@ -930,7 +930,12 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   `lib."k"` (mybatis-plus 236 to 340), `set('k', v)` properties and POM relocations, which
   Gradle keeps and adds the target of, unlike Maven, which replaces (spring-integration-samples
   to 480), Spring-managed versions enforced with later imports winning (dgs, timefold,
-  conductor), declared platforms listed (about 40 BOMs), default-build `if`/`else`. Known limit: Gradle keeps a dependency unless every path
+  conductor), declared platforms listed (about 40 BOMs), default-build `if`/`else`. The
+  Maven resolver was checked against real Maven too (user approved the
+  `maven:3.9.9-eclipse-temurin-21` image, 2026-11-14; `docs/differential/maven`, no
+  network, POMs from the same cache): 271 of 271 one-dependency projects identical, 1,875
+  packages and every scope, after two fixes it found (a child's property sets its parent's
+  managed versions; an undefined property is reported, not listed). Known limit: Gradle keeps a dependency unless every path
   to it excludes it, while the resolver applies the nearest path's exclusions (jreleaser, 1
   package). Every rule came from a real miss: root shared blocks
   (dgs 2% to 61%), Spring `dependencyManagement` read as management, BOM property overrides

@@ -1,0 +1,4 @@
+<settings><profiles><profile><id>local</id>
+<repositories><repository><id>central</id><url>file:///deps</url></repository></repositories>
+<pluginRepositories><pluginRepository><id>central</id><url>file:///plugins</url></pluginRepository></pluginRepositories>
+</profile></profiles><activeProfiles><activeProfile>local</activeProfile></activeProfiles></settings>

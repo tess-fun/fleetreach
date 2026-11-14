@@ -46,7 +46,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 82.9% of the 9,550 modules at Gradle's version and 88.7% by name, up from 59.7% and
+  now lists 83.0% of the 9,550 modules at Gradle's version and 88.7% by name, up from 59.7% and
   70.0% on the same POMs; 92.2% and 96.5% on the 51 builds whose dependencies no build plugin
   adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
@@ -69,7 +69,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **POM relocations are followed.** A POM with `<distributionManagement><relocation>` resolves
   the way each tool does: Maven resolves the artifact as its new coordinate, and Gradle keeps
   the relocation POM and adds the target (Artemis moved from `org.apache.activemq` to
-  `org.apache.artemis`, so findings for the new group were missed). The harness is in `docs/differential/gradle`.
+  `org.apache.artemis`, so findings for the new group were missed).
+- **A property a POM sets now decides the versions its parents manage**, as Maven merges a
+  POM's parents before interpolating (a project's `<jackson.version>` under a Spring Boot
+  parent, artemis-jakarta-client's `jakarta.jms-api.version`). A version left naming an
+  undefined property (its parent POM out of reach) is reported instead of listed as
+  `${...}`. Against real Maven 3.9.9 on 271 one-dependency projects built from published
+  artifacts with parents, every project now matches exactly: 1,875 of 1,875 packages, no
+  extras, every scope (before: 265 projects, 4 misses, 20 extras). The harness is in
+  `docs/differential/maven`. The harness is in `docs/differential/gradle`.
 - **gradle-consistent-versions' `versions.lock` is read as a full lockfile** (beside its
   `versions.props`), checked so a damaged file is refused.
 - **POMs are read from Gradle's download cache** (`$GRADLE_USER_HOME` or `~/.gradle`,
