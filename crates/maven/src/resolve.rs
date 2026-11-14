@@ -835,10 +835,20 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
 /// # Errors
 ///
 /// When `xml` cannot be parsed.
+/// Versions the Spring dependency-management plugin sets: its BOMs' managed versions and its
+/// `dependency` entries, except for artifacts the build declares with a version of its own.
+#[derive(Debug, Default)]
+pub(crate) struct Enforced {
+    pub boms: Vec<(String, String, String)>,
+    pub versions: Vec<(String, String, String)>,
+    pub keep: BTreeSet<(String, String)>,
+}
+
 pub(crate) fn resolve_gradle_module(
     xml: &str,
     source: &dyn PomSource,
     bom_overrides: &BTreeMap<String, String>,
+    enforced: &Enforced,
 ) -> Result<Resolution, String> {
     const MAX_PASSES: usize = 32;
     let mut r = Resolver {
@@ -851,14 +861,34 @@ pub(crate) fn resolve_gradle_module(
     };
     let modules = vec![r.effective(xml, None, 0)?];
     let local = BTreeMap::new();
-    let mut pins = Pins::new();
+    let mut forced = Pins::new();
+    for (g, a, v) in &enforced.boms {
+        r.importing = !r.bom_overrides.is_empty();
+        let bom = r.remote(g, a, v, 1);
+        r.importing = false;
+        for d in bom.iter().flat_map(|b| b.mgmt.values()) {
+            if let Some(version) = d.version.as_ref().filter(|v| !v.starts_with(['[', '('])) {
+                forced.insert(d.mgmt_key(), version.clone());
+            }
+        }
+    }
+    for (g, a, v) in &enforced.versions {
+        forced.insert(
+            (g.clone(), a.clone(), "jar".to_string(), String::new()),
+            v.clone(),
+        );
+    }
+    forced.retain(|k, _| !enforced.keep.contains(&(k.0.clone(), k.1.clone())));
+    let mut pins = forced.clone();
     for _ in 0..MAX_PASSES {
         let mut requests = Pins::new();
         let (packages, graph) = walk(&mut r, &modules, &local, &pins, Some(&mut requests));
         let before = pins.len();
         let mut raised = false;
         for (key, version) in requests {
-            raised |= raise(&mut pins, key, &version);
+            if !forced.contains_key(&key) {
+                raised |= raise(&mut pins, key, &version);
+            }
         }
         if !raised && before == pins.len() {
             return Ok(Resolution {

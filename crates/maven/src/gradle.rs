@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use crate::resolve::{resolve_gradle_module, PomSource, Resolution, ResolvedDep};
+use crate::resolve::{resolve_gradle_module, Enforced, PomSource, Resolution, ResolvedDep};
 
 const SKIPPED_DIRS: &[&str] = &[".git", ".gradle", "build", "node_modules", "target", "out"];
 const MAX_FILES: usize = 2000;
@@ -141,6 +141,9 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         plugins,
         used: BTreeSet::new(),
         extended_by,
+        spring_dm: scripts
+            .iter()
+            .any(|(_, t)| t.contains("io.spring.dependency-management")),
     };
     let mut modules: Vec<Module> = Vec::new();
     for (file, text) in &scripts {
@@ -166,6 +169,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                 continue;
             }
             let module = &mut modules[i];
+            module.shared_from = Some(module.platforms.len());
             module.platforms.extend_from_slice(&shared.platforms);
             module.constraints.extend_from_slice(&shared.constraints);
             module.deps.extend_from_slice(&shared.deps);
@@ -213,6 +217,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             coordinate: coordinate.clone(),
             scope: "test",
             exclusions: Vec::new(),
+            pom: false,
         })
         .collect();
     if !unused.is_empty() {
@@ -252,7 +257,12 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             _ => &[false],
         };
         for &main_only in passes {
-            match resolve_gradle_module(&module.to_pom(main_only), source, &bom_overrides) {
+            match resolve_gradle_module(
+                &module.to_pom(main_only),
+                source,
+                &bom_overrides,
+                &module.enforced(),
+            ) {
                 Ok(one) => {
                     missing.extend(one.missing);
                     for (from, to) in one.graph.edges() {
@@ -419,6 +429,19 @@ fn script_variables(
             && name
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-');
+        if plain {
+            if let Some(v) = property_default(value, vars) {
+                match vars.get(name) {
+                    Some(known) if *known != v => {
+                        twice.insert(name.to_string());
+                    }
+                    _ => {
+                        vars.insert(name.to_string(), v);
+                    }
+                }
+                continue;
+            }
+        }
         let Some((value, tail)) = quoted(value.trim()) else {
             if plain {
                 if let Some(key) = variable_reference(value) {
@@ -669,6 +692,9 @@ struct Coordinate {
     group: String,
     artifact: String,
     version: Option<String>,
+    /// Managed by the Spring dependency-management plugin (`mavenBom`, `dependency`, Spring
+    /// Boot's BOM): its versions win over conflict resolution, as `eachDependency` sets them.
+    enforced: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -677,6 +703,8 @@ struct Declared {
     scope: &'static str,
     /// `exclude(group = "g", module = "a")` in the declaration's block; `*` for a part left out.
     exclusions: Vec<(String, String)>,
+    /// A `platform(...)`: Gradle lists the BOM itself as a module of the configuration.
+    pom: bool,
 }
 
 #[derive(Debug, Default)]
@@ -691,6 +719,9 @@ struct Module {
     /// `platform(project(":p"))`: another build file's constraints and platforms manage this
     /// one (a `java-platform` project), by Gradle project path.
     project_platforms: Vec<String>,
+    /// Where the root's shared platforms start in `platforms`: they are applied before this
+    /// file's own, so a later import here overrides them.
+    shared_from: Option<usize>,
 }
 
 #[derive(Debug, Default)]
@@ -703,6 +734,39 @@ struct Shared {
 
 impl Module {
     /// The module as a POM, so BOM imports and versions go through the resolver.
+    /// What the Spring dependency-management plugin sets for this build file.
+    fn enforced(&self) -> Enforced {
+        let triple = |c: &Coordinate| {
+            c.version
+                .clone()
+                .map(|v| (c.group.clone(), c.artifact.clone(), v))
+        };
+        // The Spring plugin's later imports override earlier ones: the root's shared block
+        // runs before this file.
+        let from = self.shared_from.unwrap_or(self.platforms.len());
+        let (own, shared) = self.platforms.split_at(from);
+        Enforced {
+            boms: shared
+                .iter()
+                .chain(own)
+                .filter(|c| c.enforced)
+                .filter_map(triple)
+                .collect(),
+            versions: self
+                .constraints
+                .iter()
+                .filter(|c| c.enforced)
+                .filter_map(triple)
+                .collect(),
+            keep: self
+                .deps
+                .iter()
+                .filter(|d| d.coordinate.version.is_some())
+                .map(|d| (d.coordinate.group.clone(), d.coordinate.artifact.clone()))
+                .collect(),
+        }
+    }
+
     /// The build file as a POM; with `main_only`, without its test dependencies.
     fn to_pom(&self, main_only: bool) -> String {
         let xml = |text: &str| {
@@ -747,6 +811,13 @@ impl Module {
         }
         for d in kept {
             let mut extra = format!("<scope>{}</scope>", d.scope);
+            if d.pom {
+                // A platform's own dependencies are constraints to Gradle, never followed.
+                extra.push_str(
+                    "<type>pom</type><exclusions><exclusion><groupId>*</groupId>\
+                     <artifactId>*</artifactId></exclusion></exclusions>",
+                );
+            }
             let exclusions = shared_exclusions
                 .get(&(d.coordinate.group.as_str(), d.coordinate.artifact.as_str()))
                 .map_or(&d.exclusions, |e| e);
@@ -1020,6 +1091,7 @@ fn library(entry: &toml::Value, versions: Option<&toml::Value>) -> Result<Coordi
         group: group.to_string(),
         artifact: artifact.to_string(),
         version: version.map(|v| version_text(&v)).transpose()?,
+        enforced: false,
     })
 }
 
@@ -1074,6 +1146,7 @@ fn coordinate(text: &str, vars: &BTreeMap<String, String>) -> Result<Coordinate,
         group: group.to_string(),
         artifact: artifact.to_string(),
         version: version.map(version_text).transpose()?,
+        enforced: false,
     })
 }
 
@@ -1128,6 +1201,8 @@ struct Context {
     /// `testImplementation.extendsFrom testShadow`: a custom configuration to the standard one
     /// that takes it in, so it gets that one's scope.
     extended_by: BTreeMap<String, String>,
+    /// Some script applies the Spring dependency-management plugin.
+    spring_dm: bool,
 }
 
 impl Context {
@@ -1292,6 +1367,9 @@ enum Block {
     ManagedVersions,
     /// `subprojects { }`, `allprojects { }`, `configure(subprojects...) { }`.
     Shared,
+    /// An `if`/`else` branch a default build takes (no `-D` or `-P` flags): read as the
+    /// block around it.
+    Taken,
     Other,
 }
 
@@ -1300,9 +1378,35 @@ fn read_script(text: &str, context: &mut Context) -> Module {
     let mut blocks: Vec<Block> = Vec::new();
     let text = fold_rich_versions(text);
     let mut open_deps: Option<OpenDeps> = None;
+    // Open branches the default build decides: (block depth inside, taken), and the last
+    // one closed, for an `else` on the next line.
+    let mut branches: Vec<(usize, bool)> = Vec::new();
+    let mut closed_branch: Option<bool> = None;
     for line in text.lines() {
         let trimmed = line.trim();
-        let current = blocks.last().copied();
+        let current = blocks.iter().rev().find(|b| **b != Block::Taken).copied();
+        let in_deps = matches!(current, Some(Block::Dependencies | Block::Constraints));
+        let is_else = trimmed
+            .trim_start_matches('}')
+            .trim_start()
+            .strip_prefix("else")
+            .is_some_and(|r| r.trim_start().starts_with('{'));
+        let decided = if is_else {
+            let closing = if trimmed.starts_with('}') {
+                branches
+                    .last()
+                    .filter(|(d, _)| *d == blocks.len())
+                    .map(|b| b.1)
+            } else {
+                closed_branch
+            };
+            closing.map(|taken| !taken)
+        } else if in_deps {
+            if_condition(trimmed).and_then(|c| condition(c, &context.vars))
+        } else {
+            None
+        };
+        closed_branch = None;
         let shared = blocks.contains(&Block::Shared);
         let before = (
             module.deps.len(),
@@ -1310,7 +1414,9 @@ fn read_script(text: &str, context: &mut Context) -> Module {
             module.constraints.len(),
             module.project_platforms.len(),
         );
-        read_line(trimmed, current, &blocks, context, &mut module);
+        if decided.is_none() {
+            read_line(trimmed, current, &blocks, context, &mut module);
+        }
         // `implementation("g:a:1") { exclude(...) }`: the block's excludes belong to the
         // declarations its opening line made, here and in the shared copy.
         if let Some(open) = &open_deps {
@@ -1397,6 +1503,24 @@ fn read_script(text: &str, context: &mut Context) -> Module {
                 _ => {}
             }
         }
+        if let Some(taken) = decided {
+            if is_else && trimmed.starts_with('}') {
+                branches.pop();
+            }
+            if blocks.len() > depth || (is_else && trimmed.starts_with('}')) {
+                if let Some(last) = blocks.last_mut() {
+                    *last = if taken { Block::Taken } else { Block::Other };
+                }
+                branches.push((blocks.len(), taken));
+            }
+        }
+        while let Some(&(d, taken)) = branches.last() {
+            if blocks.len() >= d {
+                break;
+            }
+            branches.pop();
+            closed_branch = Some(taken);
+        }
         if module.deps.len() > before.0 {
             let added = before.0..module.deps.len();
             let shared_added = shared_before..module.shared.deps.len();
@@ -1428,6 +1552,101 @@ fn read_script(text: &str, context: &mut Context) -> Module {
         }
     }
     module
+}
+
+/// The condition of `if (cond) {`.
+fn if_condition(line: &str) -> Option<&str> {
+    let rest = line.strip_prefix("if")?.trim_start().strip_prefix('(')?;
+    let body = rest
+        .trim_end()
+        .strip_suffix('{')?
+        .trim_end()
+        .strip_suffix(')')?;
+    Some(body.trim())
+}
+
+/// A condition a default build decides from what is read: `NAME == 'x'`, `NAME != 'x'`,
+/// `NAME.equals('x')`, `hasProperty('k')` and `!` of these. `None` for anything else.
+fn condition(cond: &str, vars: &BTreeMap<String, String>) -> Option<bool> {
+    let c = cond.trim();
+    if c.contains("&&") || c.contains("||") {
+        return None;
+    }
+    if let Some(inner) = c.strip_prefix('!') {
+        if !inner.starts_with('=') {
+            return condition(inner, vars).map(|b| !b);
+        }
+    }
+    if let Some(inner) = c.strip_prefix('(').and_then(|i| i.strip_suffix(')')) {
+        return condition(inner, vars);
+    }
+    let value = |side: &str| -> Option<String> {
+        let side = side.trim();
+        if let Some((v, tail)) = quoted(side) {
+            return tail.trim().is_empty().then(|| v.to_string());
+        }
+        vars.get(side).cloned()
+    };
+    for (op, equal) in [("==", true), ("!=", false)] {
+        if let Some((left, right)) = c.split_once(op) {
+            return Some((value(left)? == value(right)?) == equal);
+        }
+    }
+    if let Some((left, right)) = c.split_once(".equals(") {
+        let right = right.strip_suffix(')')?;
+        return Some(value(left)? == value(right)?);
+    }
+    for call in ["project.hasProperty(", "hasProperty("] {
+        if let Some(inner) = c.strip_prefix(call) {
+            let (key, tail) = quoted(inner)?;
+            return (tail.trim() == ")").then(|| vars.contains_key(key));
+        }
+    }
+    None
+}
+
+/// `System.properties['k'] ?: 'd'`, `System.getProperty('k', 'd')` or
+/// `findProperty('k') ?: 'd'`: the value a default build sees (no `-D` flags; a `-P` property
+/// only from what is read).
+fn property_default(value: &str, vars: &BTreeMap<String, String>) -> Option<String> {
+    let v = value.trim();
+    let v = v
+        .strip_prefix('(')
+        .and_then(|i| i.strip_suffix(')'))
+        .unwrap_or(v)
+        .trim();
+    if let Some(inner) = v.strip_prefix("System.getProperty(") {
+        let (_, tail) = quoted(inner.trim_start())?;
+        let tail = tail.trim_start().strip_prefix(',')?;
+        let (default, end) = quoted(tail.trim_start())?;
+        return (end.trim() == ")").then(|| default.to_string());
+    }
+    let (call, default) = v.split_once("?:")?;
+    let (default, tail) = quoted(default.trim())?;
+    if !tail.trim().is_empty() {
+        return None;
+    }
+    let call = call.trim();
+    for prefix in ["System.properties[", "System.getProperty("] {
+        if let Some(inner) = call.strip_prefix(prefix) {
+            let (_, tail) = quoted(inner)?;
+            return matches!(tail.trim(), "]" | ")").then(|| default.to_string());
+        }
+    }
+    for prefix in ["project.findProperty(", "findProperty("] {
+        if let Some(inner) = call.strip_prefix(prefix) {
+            let (key, tail) = quoted(inner)?;
+            if tail.trim() != ")" {
+                return None;
+            }
+            return Some(
+                vars.get(key)
+                    .cloned()
+                    .unwrap_or_else(|| default.to_string()),
+            );
+        }
+    }
+    None
 }
 
 /// Declarations whose block is still open, and the block depth inside it.
@@ -1495,7 +1714,11 @@ fn read_line(
             // `dependency 'g:a:1'` or `dependency("g:a:1")`; `dependencySet` is not read.
             if let Some(rest) = trimmed.strip_prefix("dependency") {
                 if rest.starts_with([' ', '(']) {
+                    let before = module.constraints.len();
                     read_values(rest, "compile", Block::Constraints, context, module);
+                    for c in &mut module.constraints[before..] {
+                        c.enforced = true;
+                    }
                 }
             }
             return;
@@ -1507,6 +1730,8 @@ fn read_line(
         if let Some(rest) = trimmed.strip_prefix("mavenBom") {
             let inner = rest.trim().trim_start_matches('(');
             let inner = inner.trim_end().trim_end_matches(')');
+            let before = module.platforms.len();
+            let listed = module.deps.len();
             read_values(
                 &format!("platform({inner})"),
                 "compile",
@@ -1514,6 +1739,11 @@ fn read_line(
                 context,
                 module,
             );
+            // The plugin manages versions with it; it is not a dependency.
+            module.deps.truncate(listed);
+            for c in &mut module.platforms[before..] {
+                c.enforced = true;
+            }
         }
     }
     // `dependencies { implementation 'g:a:1' }` on one line.
@@ -1540,10 +1770,12 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
         return;
     };
     if id == SPRING_BOOT {
+        // Spring Boot applies its BOM through the dependency-management plugin.
         module.platforms.push(Coordinate {
             group: "org.springframework.boot".to_string(),
             artifact: "spring-boot-dependencies".to_string(),
             version: Some(version.clone()),
+            enforced: context.spring_dm,
         });
     } else if id == KOTLIN_JVM {
         module.deps.push(Declared {
@@ -1551,9 +1783,11 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
                 group: "org.jetbrains.kotlin".to_string(),
                 artifact: "kotlin-stdlib".to_string(),
                 version: Some(version.clone()),
+                enforced: false,
             },
             scope: "compile",
             exclusions: Vec::new(),
+            pom: false,
         });
     }
 }
@@ -1639,6 +1873,14 @@ fn read_values(
     let whole = text.trim();
     let add = |module: &mut Module, c: Coordinate, platform: bool| {
         if platform {
+            if c.version.is_some() && block == Block::Dependencies {
+                module.deps.push(Declared {
+                    coordinate: c.clone(),
+                    scope,
+                    exclusions: Vec::new(),
+                    pom: true,
+                });
+            }
             module.platforms.push(c);
         } else if block == Block::Constraints {
             // A constraint without a version (a `because` only) manages nothing.
@@ -1650,6 +1892,7 @@ fn read_values(
                 coordinate: c,
                 scope,
                 exclusions: Vec::new(),
+                pom: false,
             });
         }
     };
@@ -1687,11 +1930,21 @@ fn read_values(
         // declared `apply false`).
         if rest.starts_with("SpringBootPlugin.BOM_COORDINATES") {
             if let Some(version) = context.plugins.get(SPRING_BOOT) {
-                module.platforms.push(Coordinate {
+                let c = Coordinate {
                     group: "org.springframework.boot".to_string(),
                     artifact: "spring-boot-dependencies".to_string(),
                     version: Some(version.clone()),
-                });
+                    enforced: false,
+                };
+                if block == Block::Dependencies {
+                    module.deps.push(Declared {
+                        coordinate: c.clone(),
+                        scope,
+                        exclusions: Vec::new(),
+                        pom: true,
+                    });
+                }
+                module.platforms.push(c);
                 return;
             }
         }
@@ -1771,6 +2024,7 @@ fn read_values(
                     group: "org.jetbrains.kotlin".to_string(),
                     artifact: format!("kotlin-{short}"),
                     version: Some(v.to_string()),
+                    enforced: false,
                 },
                 platform,
             ),
@@ -1813,6 +2067,7 @@ mod tests {
             plugins: BTreeMap::new(),
             used: BTreeSet::new(),
             extended_by: BTreeMap::new(),
+            spring_dm: false,
         }
     }
 
@@ -1866,6 +2121,7 @@ dependencies {
                 ("g:c:3.0".to_string(), "test"),
                 ("g:d:4.0".to_string(), "runtime"),
                 ("g:e:5.0".to_string(), "provided"),
+                ("g:bom:1.0".to_string(), "compile"),
                 ("g:managed:-".to_string(), "compile"),
                 ("g:f:6.0".to_string(), "compile"),
                 ("g:h:7.0".to_string(), "provided"),
@@ -1903,6 +2159,7 @@ set = ["a-b", "e"]
                 ("g:cd:2.0".to_string(), "test"),
                 ("g:ab:1.0".to_string(), "compile"),
                 ("g:e:3.0".to_string(), "compile"),
+                ("g:plain:0.1".to_string(), "compile"),
             ]
         );
         assert_eq!(m.platforms[0].artifact, "plain");
@@ -2587,6 +2844,166 @@ set = ["a-b", "e"]
         assert_eq!(kotlin[1].1["k"]["module"].as_str(), Some("g:k"));
         assert_eq!(kotlin[1].1["k"]["version"].as_str(), Some("2.0"));
         assert_eq!(kotlin[3].1["p"]["version"]["ref"].as_str(), Some("pv"));
+    }
+
+    #[test]
+    fn a_declared_platform_is_listed_without_its_dependencies() {
+        let repo = Mem(BTreeMap::from([
+            pom("chain", "1", &[("x", "1")]),
+            pom("x", "1", &[]),
+        ]));
+        let dir = tree(
+            "platform-listed",
+            &[
+                ("settings.gradle", ""),
+                (
+                    "build.gradle",
+                    "dependencies {\n    implementation platform('g:chain:1')\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        let names: Vec<_> = r.packages.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["g:chain"], "{:?}", r.missing);
+    }
+
+    #[test]
+    fn spring_managed_versions_beat_conflict_resolution() {
+        let bom = |name: &str, x: &str| {
+            (
+                format!("g:{name}:1"),
+                format!(
+                    "<project><groupId>g</groupId><artifactId>{name}</artifactId><version>1</version>\
+                     <dependencyManagement><dependencies><dependency><groupId>g</groupId>\
+                     <artifactId>x</artifactId><version>{x}</version></dependency></dependencies>\
+                     </dependencyManagement></project>"
+                ),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            bom("bom", "1"),
+            bom("later", "3"),
+            pom("a", "1", &[("x", "2")]),
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+            pom("x", "3", &[]),
+            pom("y", "1", &[("x", "2")]),
+        ]));
+        let script = |imports: &str, deps: &str| {
+            format!(
+                "plugins {{ id 'io.spring.dependency-management' version '1.1.7' }}\n\
+                 dependencyManagement {{\n    imports {{\n{imports}    }}\n}}\n\
+                 dependencies {{\n{deps}}}\n"
+            )
+        };
+        let one = |tag: &str, text: &str| {
+            let dir = tree(tag, &[("settings.gradle", ""), ("build.gradle", text)]);
+            versions(&resolve_gradle(&dir, &repo), "g:x")
+        };
+        // `a` asks for x 2; the BOM's 1 wins, as the plugin sets it.
+        assert_eq!(
+            one(
+                "spring-enforced",
+                &script(
+                    "        mavenBom 'g:bom:1'\n",
+                    "    implementation 'g:a:1'\n"
+                )
+            ),
+            ["1"]
+        );
+        // A later import overrides an earlier one.
+        assert_eq!(
+            one(
+                "spring-later",
+                &script(
+                    "        mavenBom 'g:bom:1'\n        mavenBom 'g:later:1'\n",
+                    "    implementation 'g:a:1'\n"
+                )
+            ),
+            ["3"]
+        );
+        // A version the build declares itself is kept.
+        assert_eq!(
+            one(
+                "spring-own",
+                &script(
+                    "        mavenBom 'g:bom:1'\n",
+                    "    implementation 'g:a:1'\n    implementation 'g:x:2'\n"
+                )
+            ),
+            ["2"]
+        );
+        // A plain platform only requests: the highest wins.
+        assert_eq!(
+            one(
+                "platform-highest",
+                "dependencies {\n    implementation platform('g:bom:1')\n    implementation 'g:a:1'\n}\n"
+            ),
+            ["2"]
+        );
+    }
+
+    #[test]
+    fn default_build_branches_are_read() {
+        let mut vars = BTreeMap::new();
+        vars.insert("fromProps".to_string(), "yes".to_string());
+        assert_eq!(
+            property_default("System.properties['e'] ?: ''", &vars).as_deref(),
+            Some("")
+        );
+        assert_eq!(
+            property_default("System.getProperty(\"e\", \"x\")", &vars).as_deref(),
+            Some("x")
+        );
+        assert_eq!(
+            property_default("findProperty('fromProps') ?: 'no'", &vars).as_deref(),
+            Some("yes")
+        );
+        assert_eq!(
+            property_default("(findProperty('k') ?: 'no')", &vars).as_deref(),
+            Some("no")
+        );
+        assert_eq!(property_default("System.getenv('E') ?: 'x'", &vars), None);
+        vars.insert("e".to_string(), String::new());
+        assert_eq!(condition("e == 'true'", &vars), Some(false));
+        assert_eq!(condition("!(e != 'true')", &vars), Some(false));
+        assert_eq!(condition("hasProperty(\"fromProps\")", &vars), Some(true));
+        assert_eq!(condition("project.hasProperty('nope')", &vars), Some(false));
+        assert_eq!(condition("e == 'true' && x", &vars), None);
+        assert_eq!(
+            condition("JavaVersion.current().isJava9Compatible()", &vars),
+            None
+        );
+
+        let repo = Mem(BTreeMap::from([
+            pom("a", "1", &[]),
+            pom("b", "1", &[]),
+            pom("c", "1", &[]),
+            pom("d", "1", &[]),
+        ]));
+        let dir = tree(
+            "branches",
+            &[
+                ("settings.gradle", ""),
+                (
+                    "build.gradle",
+                    "def enterprise = System.properties['enterprise'] ?: ''\n\
+                     dependencies {\n    if (enterprise == 'true') {\n        implementation 'g:a:1'\n\
+                     \x20   } else {\n        implementation 'g:b:1'\n    }\n\
+                     \x20   if (hasProperty('nope')) {\n        implementation 'g:c:1'\n    }\n\
+                     \x20   else {\n        implementation 'g:d:1'\n    }\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        let mut names: Vec<_> = r.packages.iter().map(|p| p.name.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(names, ["g:b", "g:d"], "{:?}", r.missing);
+        assert!(
+            r.missing.iter().all(|m| !m.contains("plain declaration")),
+            "{:?}",
+            r.missing
+        );
     }
 
     #[test]
