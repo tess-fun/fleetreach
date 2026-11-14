@@ -51,6 +51,54 @@ pub(crate) struct App {
     pub title: String,
     /// One decision is written at a time, so two posts to one file both reach its log.
     pub write: Mutex<()>,
+    /// The history as last read, and the files it was read from: every page needs it, and
+    /// reading it means inflating and parsing every snapshot.
+    pub history: Mutex<Option<(Vec<FileStamp>, Arc<history::History>)>>,
+}
+
+/// A history file's name, size and modification time: when none of them changed, neither
+/// did what reading the directory gives.
+type FileStamp = (std::ffi::OsString, u64, Option<std::time::SystemTime>);
+
+/// The history in `app.history_dir`, read again only when its files changed.
+fn load_history(app: &App) -> Result<Arc<history::History>, String> {
+    let stamps = history_stamps(&app.history_dir)?;
+    let mut cached = app
+        .history
+        .lock()
+        .map_err(|_| "the history cache is poisoned".to_string())?;
+    if let Some((seen, h)) = cached.as_ref() {
+        if *seen == stamps {
+            return Ok(Arc::clone(h));
+        }
+    }
+    let h = Arc::new(history::load(&app.history_dir)?);
+    *cached = Some((stamps, Arc::clone(&h)));
+    Ok(h)
+}
+
+/// The stamps of every file `history::load` reads: the snapshots and the index.
+fn history_stamps(dir: &std::path::Path) -> Result<Vec<FileStamp>, String> {
+    let entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let mut stamps: Vec<FileStamp> = entries
+        .flatten()
+        .filter(|e| {
+            let name = e.file_name();
+            let name = name.to_string_lossy();
+            name.ends_with(".json.gz") || name == history::INDEX_FILE
+        })
+        .map(|e| {
+            // Followed like `history::load` reads it, so a link's new target is a change.
+            let meta = std::fs::metadata(e.path()).ok();
+            (
+                e.file_name(),
+                meta.as_ref().map_or(0, std::fs::Metadata::len),
+                meta.and_then(|m| m.modified().ok()),
+            )
+        })
+        .collect();
+    stamps.sort();
+    Ok(stamps)
 }
 
 pub(crate) fn run(args: ServeArgs) -> u8 {
@@ -95,6 +143,7 @@ pub(crate) fn run(args: ServeArgs) -> u8 {
         token,
         title: args.title,
         write: Mutex::new(()),
+        history: Mutex::new(None),
     });
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_io()
@@ -353,7 +402,7 @@ async fn overview(
         Err(r) => return r.into_response(),
     };
     let result = blocking(move || {
-        let h = history::load(&app.history_dir)?;
+        let h = load_history(&app)?;
         let nav = nav(who.as_deref());
         if h.snapshots.is_empty() {
             let body = format!(
@@ -501,7 +550,7 @@ async fn triage_list(
         Err(r) => return r.into_response(),
     };
     let result = blocking(move || -> Result<String, String> {
-        let h = history::load(&app.history_dir)?;
+        let h = load_history(&app)?;
         let decisions = read_decisions(&app)?;
         let today = history::now().date();
         let rows = h
@@ -653,7 +702,7 @@ async fn decide_form(
     };
     let result = blocking(move || -> Result<String, String> {
         let decisions = read_decisions(&app)?;
-        let h = history::load(&app.history_dir)?;
+        let h = load_history(&app)?;
         let row = h.snapshots.last().and_then(|s| {
             rows(&s.report).into_iter().find(|r| {
                 r.ecosystem == ecosystem
@@ -873,7 +922,7 @@ async fn decide(
     let result = blocking(move || {
         let mut change = change;
         // The advisory's other ids, from the newest run, so export can name them all.
-        if let Some(latest) = history::load(&app.history_dir)?.snapshots.last() {
+        if let Some(latest) = load_history(&app)?.snapshots.last() {
             let found = rows(&latest.report).into_iter().find(|r| {
                 r.ecosystem == change.ecosystem
                     && r.package == change.package
@@ -982,6 +1031,7 @@ mod tests {
             token: token.clone(),
             title: "Fleet security report".to_string(),
             write: Mutex::new(()),
+            history: Mutex::new(None),
         });
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
@@ -1099,6 +1149,22 @@ mod tests {
             get(&s, "/triage/decide?advisory=x&ecosystem=nope&package=y").status,
             400
         );
+    }
+
+    #[test]
+    fn a_new_run_shows_without_a_restart() {
+        let s = start(Vec::new(), Some("tester"));
+        assert!(get(&s, "/").body.contains("from 1 run(s)"));
+        assert!(get(&s, "/triage").body.contains("GHSA-test-0001"));
+        // Read again from the cache while nothing changed.
+        assert!(get(&s, "/").body.contains("from 1 run(s)"));
+        let mut fixed = report();
+        fixed.vulnerabilities.clear();
+        fixed.summary.vuln_count = 0;
+        let history_dir = s.dir.path().join("history");
+        history::record(&history_dir, &fixed, Vec::new(), 1, None, Vec::new()).unwrap();
+        assert!(get(&s, "/").body.contains("from 2 run(s)"));
+        assert!(!get(&s, "/triage").body.contains("GHSA-test-0001"));
     }
 
     #[test]

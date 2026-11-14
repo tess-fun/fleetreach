@@ -24,7 +24,7 @@ use crate::assemble::SuppressedOccurrence;
 
 const SNAPSHOT_SCHEMA: &str = "fleetreach-history/1";
 const INDEX_SCHEMA: &str = "fleetreach-history-index/1";
-const INDEX_FILE: &str = "index.json";
+pub(crate) const INDEX_FILE: &str = "index.json";
 const INVENTORY_FILE: &str = "inventory.jsonl";
 
 /// One run as stored: the full report, the occurrences ignores suppressed, and the exit code.
@@ -128,6 +128,33 @@ pub struct History {
     pub unreadable: Vec<String>,
     /// Why the index was rebuilt, when it was.
     pub rebuilt: Option<String>,
+    /// What the reports derive from the snapshots alone, worked out once: a server keeps one
+    /// `History` across many pages.
+    pub(crate) memo: Memo,
+}
+
+/// Lazily derived from a [`History`]'s snapshots, which do not change once loaded.
+#[derive(Default)]
+pub(crate) struct Memo {
+    /// [`present`] of each snapshot, in order.
+    present: std::sync::OnceLock<Vec<Present>>,
+    /// The index rebuilt from every snapshot but the newest, for [`changes`].
+    before_latest: std::sync::OnceLock<Index>,
+}
+
+/// The open findings of one report: each key with its severity and SSVC outcome.
+type Present = BTreeMap<Key, (Severity, Option<Outcome>)>;
+
+impl History {
+    /// [`present`] of snapshot `i`.
+    fn present(&self, i: usize) -> &Present {
+        static EMPTY: std::sync::OnceLock<Present> = std::sync::OnceLock::new();
+        self.memo
+            .present
+            .get_or_init(|| self.snapshots.iter().map(|s| present(&s.report)).collect())
+            .get(i)
+            .unwrap_or_else(|| EMPTY.get_or_init(BTreeMap::new))
+    }
 }
 
 /// The time to stamp a run or measure against: `SOURCE_DATE_EPOCH` when set (reproducible
@@ -149,7 +176,7 @@ pub fn parse_time(s: &str) -> Option<OffsetDateTime> {
 }
 
 /// The keys of every vulnerable in-repo occurrence of `report`.
-fn present(report: &FleetReport) -> BTreeMap<Key, (Severity, Option<Outcome>)> {
+fn present(report: &FleetReport) -> Present {
     let mut ssvc: BTreeMap<(&str, &str, &str, String), Outcome> = BTreeMap::new();
     for d in report.ssvc.iter().flat_map(|s| &s.decisions) {
         let slot = ssvc
@@ -483,6 +510,7 @@ pub fn load(dir: &Path) -> Result<History, String> {
         index,
         unreadable,
         rebuilt,
+        memo: Memo::default(),
     })
 }
 
@@ -621,8 +649,9 @@ pub fn trend(history: &History, by: GroupBy, since: Option<OffsetDateTime>) -> V
     history
         .snapshots
         .iter()
-        .filter(|s| since.is_none_or(|t| parse_time(&s.run.at).is_some_and(|at| at >= t)))
-        .map(|s| {
+        .enumerate()
+        .filter(|(_, s)| since.is_none_or(|t| parse_time(&s.run.at).is_some_and(|at| at >= t)))
+        .map(|(i, s)| {
             let owners: BTreeMap<&str, &str> = s
                 .report
                 .context
@@ -632,8 +661,8 @@ pub fn trend(history: &History, by: GroupBy, since: Option<OffsetDateTime>) -> V
             let ignored: BTreeSet<&Key> = s.suppressed.iter().collect();
             let mut groups: BTreeMap<String, usize> = BTreeMap::new();
             let mut open = 0;
-            for (key, (severity, ssvc)) in present(&s.report) {
-                if ignored.contains(&key) {
+            for (key, &(severity, ssvc)) in history.present(i) {
+                if ignored.contains(key) {
                     continue;
                 }
                 open += 1;
@@ -972,7 +1001,10 @@ pub struct Changes<'a> {
 /// `None` without snapshots.
 pub fn changes(history: &History) -> Option<Changes<'_>> {
     let (latest, earlier) = history.snapshots.split_last()?;
-    let before = rebuild(earlier, None);
+    let before = history
+        .memo
+        .before_latest
+        .get_or_init(|| rebuild(earlier, None));
     let status_before: BTreeMap<&Key, Status> =
         before.entries.iter().map(|e| (&e.key, e.status)).collect();
     let mut new = Vec::new();
@@ -1064,6 +1096,7 @@ mod tests {
             index: Index::default(),
             unreadable: Vec::new(),
             rebuilt: None,
+            memo: Memo::default(),
         };
         assert_eq!(
             AdvisoryLinks::new(&h).url("GHSA-xxxx-yyyy-zzzz"),

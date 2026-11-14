@@ -217,6 +217,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **SARIF output runs about 2.5x faster.** Every advisory of one package searched the
   lockfile for the same line; each search is now done once. On the same 40 repos, 2.6 s to
   1.0 s, byte-identical.
+- **`fleetreach serve` pages load about 20x faster.** Every page read the whole history again,
+  inflating and parsing every snapshot; the history is now read once and again only when one
+  of its files changes, so a new scan shows on the next page without a restart. The overview
+  also works out each run's open findings, and what was open before the newest run, once per
+  history read and reuses them. On a 12-run history
+  of 10,471 repos the overview takes 45 ms instead of 0.8 to 1.3 s, the triage list 14 ms, and
+  the server holds 1.0 GB instead of 2.2 GB, with the same pages.
 - **Faster .NET and JVM graphs.** An image's .NET assemblies are parsed on all cores (graphs
   still run one at a time, to bound memory), and both call graphs hash with foldhash, seeded per
   process so names in a crafted image cannot pile into one bucket, instead of SipHash. On the 11
