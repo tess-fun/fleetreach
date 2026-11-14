@@ -171,16 +171,13 @@ fn segment(name: &str) -> String {
     out
 }
 
-fn ecosystem_name(ecosystem: Ecosystem) -> String {
-    serde_json::to_value(ecosystem)
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_string))
-        .unwrap_or_default()
-}
-
 /// Where the decision on this finding key lives, relative to the triage directory.
 fn relative_path(advisory: &str, ecosystem: Ecosystem, package: &str) -> PathBuf {
-    let file = format!("{}-{}.toml", ecosystem_name(ecosystem), segment(package));
+    let file = format!(
+        "{}-{}.toml",
+        fleetreach_core::wire_name(&ecosystem),
+        segment(package)
+    );
     Path::new(&segment(advisory)).join(file)
 }
 
@@ -595,7 +592,7 @@ fn list(args: &ListArgs) -> Result<(), String> {
             d.state.as_str(),
             d.expires.as_deref().unwrap_or("-"),
             d.advisory,
-            format!("{}/{}", ecosystem_name(d.ecosystem), d.package),
+            format!("{}/{}", fleetreach_core::wire_name(&d.ecosystem), d.package),
             d.assignee.as_deref().unwrap_or("-"),
         );
         println!("{}", report::sanitize_text(&line));

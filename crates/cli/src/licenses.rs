@@ -1145,14 +1145,6 @@ pub struct Decision {
     pub undeclared: Vec<String>,
 }
 
-/// An ecosystem as the JSON reports name it (`cargo`, `npm`).
-pub fn ecosystem_name(ecosystem: Ecosystem) -> String {
-    serde_json::to_value(ecosystem)
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_string))
-        .unwrap_or_default()
-}
-
 /// Decide every package of every inventory. Without a policy everything is allowed (an
 /// inventory only).
 pub fn decide(
@@ -1163,7 +1155,7 @@ pub fn decide(
     let mut out = Vec::new();
     for inv in inventories {
         for source in &inv.sources {
-            let ecosystem = ecosystem_name(source.ecosystem);
+            let ecosystem = fleetreach_core::wire_name(&source.ecosystem);
             for p in &source.packages {
                 let license = p.license.as_deref().map(|l| {
                     normalize(&[l.to_string()]).unwrap_or(License {

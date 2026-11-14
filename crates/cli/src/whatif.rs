@@ -183,7 +183,8 @@ fn parse_bump(text: &str, report: &FleetReport, repo: Option<&str>) -> Result<Bu
                 ),
                 0 => return Err(format!("`{text}`: no finding in the report is on `{spec}`")),
                 _ => {
-                    let names: Vec<String> = ecosystems.iter().map(|e| eco_name(*e)).collect();
+                    let names: Vec<String> =
+                        ecosystems.iter().map(fleetreach_core::wire_name).collect();
                     return Err(format!(
                         "`{text}`: `{spec}` is in {}; name one, as `{}:{spec}@{to}`",
                         names.join(" and "),
@@ -199,13 +200,6 @@ fn parse_bump(text: &str, report: &FleetReport, repo: Option<&str>) -> Result<Bu
         to: to.to_string(),
         repo: repo.map(str::to_string),
     })
-}
-
-fn eco_name(ecosystem: Ecosystem) -> String {
-    serde_json::to_value(ecosystem)
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_string))
-        .unwrap_or_default()
 }
 
 fn package_of(occ: &Occurrence) -> Option<&str> {
@@ -476,7 +470,7 @@ pub(crate) fn evaluate(
         warnings.push(format!(
             "no advisory export read for {}: its bumps are judged by the report's fixed \
              ranges, and new findings on the targets were not looked for",
-            eco_name(eco)
+            fleetreach_core::wire_name(&eco)
         ));
     }
     for out in &outcomes {
@@ -484,7 +478,7 @@ pub(crate) fn evaluate(
             let b = &out.bump;
             warnings.push(format!(
                 "{} {}: no repo has it below {} in a finding",
-                eco_name(b.ecosystem),
+                fleetreach_core::wire_name(&b.ecosystem),
                 b.package,
                 b.to
             ));
@@ -542,7 +536,7 @@ fn render_table(w: &WhatIf) -> String {
         let _ = writeln!(
             s,
             "  {} {} -> {} ({}): clears {}, leaves {}, new {}",
-            eco_name(b.bump.ecosystem),
+            fleetreach_core::wire_name(&b.bump.ecosystem),
             b.bump.package,
             b.bump.to,
             where_,
@@ -650,7 +644,10 @@ fn load_lookups(
                 lookups.insert(eco, found);
             }
             Ok(None) => {}
-            Err(e) => warnings.push(format!("{} export could not be read: {e}", eco_name(eco))),
+            Err(e) => warnings.push(format!(
+                "{} export could not be read: {e}",
+                fleetreach_core::wire_name(&eco)
+            )),
         }
     }
     (lookups, warnings)

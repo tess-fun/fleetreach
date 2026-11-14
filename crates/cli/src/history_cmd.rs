@@ -164,19 +164,16 @@ fn finding_cells(e: &Entry) -> Vec<String> {
         sanitize_cell(&e.key.advisory),
         sanitize_cell(&format!("{}@{}", e.key.package, e.key.version)),
         match e.ssvc {
-            Some(o) => format!("{} / {}", label(&e.severity), o.label()),
-            None => label(&e.severity),
+            Some(o) => format!(
+                "{} / {}",
+                fleetreach_core::wire_name(&e.severity),
+                o.label()
+            ),
+            None => fleetreach_core::wire_name(&e.severity),
         },
         sanitize_cell(e.owner.as_deref().unwrap_or("-")),
         e.first_seen.clone(),
     ]
-}
-
-fn label<T: Serialize>(value: &T) -> String {
-    serde_json::to_value(value)
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_string))
-        .unwrap_or_default()
 }
 
 fn run_trend(args: &TrendArgs) -> u8 {

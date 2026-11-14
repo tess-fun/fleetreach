@@ -650,19 +650,12 @@ impl GroupBy {
         owner: Option<&str>,
     ) -> String {
         match self {
-            GroupBy::Severity => label(&severity),
+            GroupBy::Severity => fleetreach_core::wire_name(&severity),
             GroupBy::Ssvc => ssvc.map_or("(none)".to_string(), |o| o.label().to_string()),
-            GroupBy::Ecosystem => label(&ecosystem),
+            GroupBy::Ecosystem => fleetreach_core::wire_name(&ecosystem),
             GroupBy::Owner => owner.unwrap_or("(no owner)").to_string(),
         }
     }
-}
-
-fn label<T: Serialize>(value: &T) -> String {
-    serde_json::to_value(value)
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_string))
-        .unwrap_or_default()
 }
 
 /// One run's open findings, grouped.

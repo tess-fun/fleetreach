@@ -34,3 +34,38 @@ pub enum Severity {
     High,
     Critical,
 }
+
+impl Severity {
+    /// The name it serializes to (`critical`, `high`, ...).
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Severity::Critical => "critical",
+            Severity::High => "high",
+            Severity::Medium => "medium",
+            Severity::Low => "low",
+            Severity::Unknown => "unknown",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn as_str_is_the_serialized_name() {
+        for s in [
+            Severity::Unknown,
+            Severity::Low,
+            Severity::Medium,
+            Severity::High,
+            Severity::Critical,
+        ] {
+            assert_eq!(
+                serde_json::to_value(s).ok(),
+                Some(serde_json::json!(s.as_str()))
+            );
+        }
+    }
+}

@@ -376,7 +376,7 @@ pub fn build_plan(report: &FleetReport, allow_breaking: bool) -> Plan {
                 Strategy::Blocked,
                 Some(format!(
                     "fix apply does not handle {} yet",
-                    ecosystem_name(item.ecosystem)
+                    fleetreach_core::wire_name(&item.ecosystem)
                 )),
             ),
             Action::Upgrade { .. } => (Strategy::LockBump, None),
@@ -492,17 +492,10 @@ pub(crate) fn campaign_id(
     use sha2::{Digest, Sha256};
     let key = format!(
         "{}\u{1f}{package}\u{1f}{to}\u{1f}{}",
-        ecosystem_name(ecosystem),
+        fleetreach_core::wire_name(&ecosystem),
         advisories.join(",")
     );
     Sha256::digest(key.as_bytes())[..4].to_hex()
-}
-
-fn ecosystem_name(ecosystem: Ecosystem) -> String {
-    serde_json::to_value(ecosystem)
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_string))
-        .unwrap_or_default()
 }
 
 /// Moves targets off advisories of their own, from the exports a scan would read. Never syncs:
@@ -1193,7 +1186,7 @@ fn apply_one(
     let message = format!(
         "{title}\n\nClears {} ({} campaign {}).\nUpdate: {changed}.\n{}\n",
         edit.advisories.join(", "),
-        ecosystem_name(edit.ecosystem),
+        fleetreach_core::wire_name(&edit.ecosystem),
         edit.campaign,
         if outcome == Outcome::Verified {
             format!("{VERIFIED}: the advisories are gone and nothing new appeared.")
@@ -1381,7 +1374,7 @@ fn apply_group(
                                     edit.from.join(", "),
                                     edit.to,
                                     edit.advisories.join(", "),
-                                    ecosystem_name(edit.ecosystem),
+                                    fleetreach_core::wire_name(&edit.ecosystem),
                                     edit.campaign
                                 ));
                                 kept.push(edit);
@@ -1712,7 +1705,7 @@ fn group_body(edits: &[&Edit], applied: &[Applied], group: Group) -> String {
         body.push_str(&format!(
             "| `{}` ({}) | {} | {} | {} |\n",
             edit.package,
-            ecosystem_name(edit.ecosystem),
+            fleetreach_core::wire_name(&edit.ecosystem),
             edit.from.join(", "),
             edit.to,
             edit.advisories.join(", ")
@@ -1994,7 +1987,7 @@ fn pr_body(edit: &Edit, plan: &Plan, ran: &str) -> String {
         edit.package,
         edit.from.join(", "),
         edit.to,
-        ecosystem_name(edit.ecosystem),
+        fleetreach_core::wire_name(&edit.ecosystem),
         edit.advisories.join(", ")
     );
     if !ran.is_empty() {
@@ -2212,7 +2205,7 @@ fn apply_edit(work: &Path, edit: &Edit) -> Result<String, String> {
         }
         other => Err(format!(
             "fix apply does not handle {} yet",
-            ecosystem_name(other)
+            fleetreach_core::wire_name(&other)
         )),
     }
 }
@@ -2590,7 +2583,10 @@ fn scan(work: &Path, repo: &Repo, scan_args: &[String]) -> Result<Scanned, Strin
         repo.glob_max_depth
     );
     if let Some(eco) = repo.ecosystem {
-        body.push_str(&format!("ecosystem = {}\n", toml_str(&ecosystem_name(eco))));
+        body.push_str(&format!(
+            "ecosystem = {}\n",
+            toml_str(&fleetreach_core::wire_name(&eco))
+        ));
     }
     std::fs::write(&fleet, body).map_err(|e| e.to_string())?;
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;

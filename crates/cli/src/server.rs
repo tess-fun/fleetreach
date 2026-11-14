@@ -498,17 +498,10 @@ fn decision_for<'a>(
     })
 }
 
-fn ecosystem_label(e: Ecosystem) -> String {
-    serde_json::to_value(e)
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_string))
-        .unwrap_or_default()
-}
-
 fn decide_link(advisory: &str, ecosystem: Ecosystem, package: &str) -> String {
     let query = form_urlencoded::Serializer::new(String::new())
         .append_pair("advisory", advisory)
-        .append_pair("ecosystem", &ecosystem_label(ecosystem))
+        .append_pair("ecosystem", &fleetreach_core::wire_name(&ecosystem))
         .append_pair("package", package)
         .finish();
     format!("/triage/decide?{query}")
@@ -625,7 +618,7 @@ async fn triage_list(
                 esc(&r.advisory),
                 esc(&r.title),
                 esc(&r.package),
-                esc(&ecosystem_label(r.ecosystem)),
+                esc(&fleetreach_core::wire_name(&r.ecosystem)),
                 esc(&r.repos.iter().cloned().collect::<Vec<_>>().join(", ")),
                 decision,
                 esc(d.and_then(|d| d.assignee.as_deref()).unwrap_or("")),
@@ -661,7 +654,7 @@ async fn triage_list(
                      <td><a href=\"{}\">Open</a></td></tr>",
                     esc(&d.advisory),
                     esc(&d.package),
-                    esc(&ecosystem_label(d.ecosystem)),
+                    esc(&fleetreach_core::wire_name(&d.ecosystem)),
                     esc(d.state.as_str()),
                     esc(&decide_link(&d.advisory, d.ecosystem, &d.package)),
                 );
@@ -763,7 +756,7 @@ fn decide_body(
         "<h1>{}</h1>{notice}<p>{} <small>({})</small></p>",
         esc(advisory),
         esc(package),
-        esc(&ecosystem_label(ecosystem))
+        esc(&fleetreach_core::wire_name(&ecosystem))
     );
     match row {
         Some(r) => {
@@ -811,7 +804,7 @@ fn decide_body(
          <label>State<select name=\"state\">",
         esc(&app.token),
         esc(advisory),
-        esc(&ecosystem_label(ecosystem)),
+        esc(&fleetreach_core::wire_name(&ecosystem)),
         esc(package),
         esc(&row.map(|r| r.aliases.join(",")).unwrap_or_default()),
     );

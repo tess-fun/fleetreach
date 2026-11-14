@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use fleetreach_core::inventory::{Checksum, RepoInventory, ROOT};
 use fleetreach_core::{
-    Coverage, DepSource, Ecosystem, FleetReport, Occurrence, SetAside, Severity, VulnFinding,
+    Coverage, DepSource, Ecosystem, FleetReport, Occurrence, SetAside, VulnFinding,
 };
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
@@ -445,7 +445,7 @@ fn vulnerability_value(v: &BomVuln<'_>, index: usize) -> Value {
             json!((f64::from(score) * 10.0).round() / 10.0),
         );
     }
-    rating.insert("severity".into(), json!(severity_label(f.severity)));
+    rating.insert("severity".into(), json!(f.severity.as_str()));
     if let Some(vector) = &f.cvss_vector {
         let method = if vector.starts_with("CVSS:4") {
             "CVSSv4"
@@ -559,17 +559,6 @@ fn cyclonedx_justification(openvex: &str) -> Option<&'static str> {
     }
 }
 
-/// CycloneDX's severity names.
-fn severity_label(severity: Severity) -> &'static str {
-    match severity {
-        Severity::Critical => "critical",
-        Severity::High => "high",
-        Severity::Medium => "medium",
-        Severity::Low => "low",
-        Severity::Unknown => "unknown",
-    }
-}
-
 fn render(
     inventory: &RepoInventory,
     report: Option<&FleetReport>,
@@ -596,7 +585,7 @@ fn render(
                 "purl": id,
                 "scope": if c.dev { "excluded" } else { "required" },
                 "properties": [
-                    { "name": "fleetreach:ecosystem", "value": ecosystem_name(c.ecosystem) },
+                    { "name": "fleetreach:ecosystem", "value": fleetreach_core::wire_name(&c.ecosystem) },
                     { "name": "fleetreach:direct", "value": c.direct.to_string() },
                     { "name": "fleetreach:source",
                       "value": c.sources.iter().cloned().collect::<Vec<_>>().join(", ") },
@@ -671,7 +660,7 @@ fn render(
     }
     let mut properties: Vec<Value> = Vec::new();
     for source in &inventory.sources {
-        properties.push(json!({ "name": "fleetreach:source", "value": format!("{} ({}, {})", source.source, ecosystem_name(source.ecosystem), source.coverage.label()) }));
+        properties.push(json!({ "name": "fleetreach:source", "value": format!("{} ({}, {})", source.source, fleetreach_core::wire_name(&source.ecosystem), source.coverage.label()) }));
         for reason in &source.coverage_reasons {
             properties.push(json!({ "name": "fleetreach:coverage-gap", "value": reason }));
         }
@@ -721,14 +710,6 @@ fn render(
         json!(format!("urn:uuid:{}", uuid_v8(&digest))),
     );
     serde_json::to_string_pretty(&Value::Object(bom))
-}
-
-/// The ecosystem's stable report name (`npm`, `pypi`, `github-actions`, ...).
-pub(crate) fn ecosystem_name(ecosystem: Ecosystem) -> String {
-    serde_json::to_value(ecosystem)
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_string))
-        .unwrap_or_default()
 }
 
 /// An RFC 9562 version-8 (custom) UUID from the first 16 bytes of a hash.

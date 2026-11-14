@@ -2,7 +2,8 @@
 //! be read from. A format it does not know, or an entry it cannot find, gives no line: the
 //! result then points at the file, never at a guess.
 
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 fn pep503(name: &str) -> String {
     name.to_ascii_lowercase().replace(['_', '.'], "-")
@@ -146,6 +147,44 @@ pub fn is_manifest(file: &str) -> bool {
         || name.ends_with(".gemspec")
         || name.ends_with("proj")
         || name.ends_with(".props")
+}
+
+/// A line asked for: the file, the package and its version (empty when not known).
+pub type Asked = (PathBuf, String, String);
+
+/// [`entry_line`] of every line `asked` names, each with the name the file was asked by: read
+/// in parallel, one file at a time and each file split into lines once. A file that cannot be
+/// read gives no line.
+#[must_use]
+pub fn find_all(asked: BTreeMap<Asked, String>) -> BTreeMap<Asked, Option<u32>> {
+    use rayon::prelude::*;
+    let mut by_file: BTreeMap<(PathBuf, String), Vec<(String, String)>> = BTreeMap::new();
+    for ((path, package, version), uri) in asked {
+        by_file
+            .entry((path, uri))
+            .or_default()
+            .push((package, version));
+    }
+    by_file
+        .into_par_iter()
+        .flat_map_iter(|((path, uri), wanted)| {
+            let text = fleetreach_core::repofile::read_to_string(&path).ok();
+            let lines: Vec<&str> = text
+                .as_deref()
+                .map(|t| t.lines().collect())
+                .unwrap_or_default();
+            let answers: Vec<(Asked, Option<u32>)> = wanted
+                .into_iter()
+                .map(|(package, version)| {
+                    let line = text
+                        .as_ref()
+                        .and_then(|_| entry_line_in(&uri, &lines, &package, &version));
+                    ((path.clone(), package, version), line)
+                })
+                .collect();
+            answers
+        })
+        .collect()
 }
 
 /// `package` at `version` (empty when not known) in `file`, whose contents are `text`.

@@ -19,13 +19,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use fleetreach_core::inventory::RepoInventory;
-use fleetreach_core::{FleetReport, Severity};
+use fleetreach_core::FleetReport;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-use crate::cyclonedx::{
-    advisory_url, bom_vulns, ecosystem_name, merge, uuid_v8, BomVuln, VulnState,
-};
+use crate::cyclonedx::{advisory_url, bom_vulns, merge, uuid_v8, BomVuln, VulnState};
 
 /// The SPDX spec version written.
 pub const SPDX3_VERSION: &str = "3.0.1";
@@ -95,7 +93,7 @@ pub fn to_spdx3(
             format!(
                 "source {} ({}, {})",
                 s.source,
-                ecosystem_name(s.ecosystem),
+                fleetreach_core::wire_name(&s.ecosystem),
                 s.coverage.label()
             )
         })
@@ -144,7 +142,7 @@ pub fn to_spdx3(
             .filter(|l| spdx::Expression::parse_mode(l, spdx::ParseMode::STRICT).is_ok());
         let mut comment = vec![format!(
             "{}; {}{}; from {}",
-            ecosystem_name(c.ecosystem),
+            fleetreach_core::wire_name(&c.ecosystem),
             if c.direct { "direct" } else { "transitive" },
             if c.dev { ", dev only" } else { "" },
             c.sources.iter().cloned().collect::<Vec<_>>().join(", ")
@@ -465,7 +463,7 @@ fn vex_relationship(
             value["security_impactStatement"] = json!(decided.unwrap_or_default());
         }
     }
-    let mut notes = vec![format!("severity {}", severity_label(v.finding.severity))];
+    let mut notes = vec![format!("severity {}", v.finding.severity.as_str())];
     if v.finding.exploit.kev {
         notes.push("in CISA KEV".to_string());
     }
@@ -501,16 +499,6 @@ fn cvss_severity(score: f32) -> &'static str {
         s if s >= 4.0 => "medium",
         s if s > 0.0 => "low",
         _ => "none",
-    }
-}
-
-fn severity_label(severity: Severity) -> &'static str {
-    match severity {
-        Severity::Critical => "critical",
-        Severity::High => "high",
-        Severity::Medium => "medium",
-        Severity::Low => "low",
-        Severity::Unknown => "unknown",
     }
 }
 

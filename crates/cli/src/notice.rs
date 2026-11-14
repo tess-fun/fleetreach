@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use fleetreach_core::Ecosystem;
 
-use crate::licenses::{ecosystem_name, Decision};
+use crate::licenses::Decision;
 use crate::licensetext::{read_license_files, read_nested_license_files, read_notice_files};
 
 /// One package's attribution.
@@ -59,7 +59,14 @@ pub fn attribution(
     let by_name: BTreeMap<(String, &str, &str), &PathBuf> = dirs
         .iter()
         .map(|((eco, name, version), dir)| {
-            ((ecosystem_name(*eco), name.as_str(), version.as_str()), dir)
+            (
+                (
+                    fleetreach_core::wire_name(eco),
+                    name.as_str(),
+                    version.as_str(),
+                ),
+                dir,
+            )
         })
         .collect();
     for d in decisions.iter().filter(|d| d.repo == repo && !d.dev) {
@@ -235,7 +242,7 @@ mod tests {
     fn decision(repo: &str, name: &str, license: &str, dev: bool) -> Decision {
         Decision {
             repo: repo.into(),
-            ecosystem: ecosystem_name(Ecosystem::Cargo),
+            ecosystem: fleetreach_core::wire_name(&Ecosystem::Cargo),
             package: name.into(),
             version: "1.0.0".into(),
             license: Some(license.into()),

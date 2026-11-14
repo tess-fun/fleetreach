@@ -1834,103 +1834,7 @@ fn render(
             Ok(json) => json,
             Err(e) => return Err(fail(&format!("serializing report: {e}"))),
         },
-        Format::Sarif => {
-            // SARIF suppressions (§11): machine not_affected is computed in
-            // to_sarif; approved human assertions are injected here.
-            let product_ids = vex::resolve_product_ids(config);
-            let assertions = vex::build_human_assertions(suppressed, &product_ids, false);
-            let paths: BTreeMap<&str, &Path> = config
-                .repos
-                .iter()
-                .map(|r| (r.id.0.as_str(), r.path.as_path()))
-                .collect();
-            let file = |repo: &fleetreach_core::RepoId, ecosystem: Ecosystem, package: &str| {
-                sarif_source(paths.get(repo.0.as_str()).copied(), ecosystem, package)
-            };
-            // Every result in a repo reads the same lockfile, and every advisory of one package
-            // asks for the same line: each search scans the whole file. So a first pass only
-            // notes the lines asked for, they are found in parallel, one file at a time and
-            // each file split once, and the real pass reads the answers. One the first pass
-            // did not ask for is found when asked.
-            type LineKey = (PathBuf, String, String);
-            let asked = std::cell::RefCell::new(BTreeMap::<LineKey, String>::new());
-            {
-                let note =
-                    |repo: &fleetreach_core::RepoId, uri: &str, package: &str, version: &str| {
-                        if let Some(root) = paths.get(repo.0.as_str()) {
-                            let key = (root.join(uri), package.to_string(), version.to_string());
-                            asked
-                                .borrow_mut()
-                                .entry(key)
-                                .or_insert_with(|| uri.to_string());
-                        }
-                        None
-                    };
-                let probe = report::Locate {
-                    file: &file,
-                    line: &note,
-                };
-                let _ = report::to_sarif_located(fleet_report, &assertions, &probe);
-            }
-            // Per file and the name it was asked by, the packages wanted in it.
-            let mut by_file: BTreeMap<(PathBuf, String), Vec<(String, String)>> = BTreeMap::new();
-            for ((path, package, version), uri) in asked.into_inner() {
-                by_file
-                    .entry((path, uri))
-                    .or_default()
-                    .push((package, version));
-            }
-            let found: BTreeMap<LineKey, Option<u32>> = {
-                use rayon::prelude::*;
-                by_file
-                    .into_par_iter()
-                    .flat_map_iter(|((path, uri), wanted)| {
-                        let text = fleetreach_core::repofile::read_to_string(&path).ok();
-                        let lines: Vec<&str> = text
-                            .as_deref()
-                            .map(|t| t.lines().collect())
-                            .unwrap_or_default();
-                        let answers: Vec<(LineKey, Option<u32>)> = wanted
-                            .into_iter()
-                            .map(|(package, version)| {
-                                let line = text.as_ref().and_then(|_| {
-                                    crate::lockline::entry_line_in(&uri, &lines, &package, &version)
-                                });
-                                ((path.clone(), package, version), line)
-                            })
-                            .collect();
-                        answers
-                    })
-                    .collect()
-            };
-            let texts = std::cell::RefCell::new(BTreeMap::<PathBuf, Option<String>>::new());
-            let lines = std::cell::RefCell::new(found);
-            let line = |repo: &fleetreach_core::RepoId, uri: &str, package: &str, version: &str| {
-                let path = paths.get(repo.0.as_str())?.join(uri);
-                let key = (path, package.to_string(), version.to_string());
-                if let Some(found) = lines.borrow().get(&key) {
-                    return *found;
-                }
-                let found = {
-                    let mut texts = texts.borrow_mut();
-                    let text = texts
-                        .entry(key.0.clone())
-                        .or_insert_with_key(|p| fleetreach_core::repofile::read_to_string(p).ok());
-                    text.as_deref()
-                        .and_then(|t| crate::lockline::entry_line(uri, t, package, version))
-                };
-                lines.borrow_mut().insert(key, found);
-                found
-            };
-            let locate = report::Locate {
-                file: &file,
-                line: &line,
-            };
-            match report::to_sarif_located(fleet_report, &assertions, &locate) {
-                Ok(sarif) => sarif,
-                Err(e) => return Err(fail(&format!("serializing SARIF: {e}"))),
-            }
-        }
+        Format::Sarif => render_sarif(config, fleet_report, suppressed)?,
         Format::Table => report::to_table(fleet_report, std::io::stdout().is_terminal()),
         Format::Impact => report::to_impact(fleet_report, std::io::stdout().is_terminal()),
         Format::Blast => report::to_blast(fleet_report, std::io::stdout().is_terminal()),
@@ -1986,6 +1890,76 @@ fn render(
             }
         }
     })
+}
+
+/// The SARIF log, each result pointing at the line of its package in the file it was read
+/// from when that can be found.
+fn render_sarif(
+    config: &Config,
+    fleet_report: &FleetReport,
+    suppressed: &[SuppressedOccurrence],
+) -> Result<String, u8> {
+    // SARIF suppressions (§11): machine not_affected is computed in
+    // to_sarif; approved human assertions are injected here.
+    let product_ids = vex::resolve_product_ids(config);
+    let assertions = vex::build_human_assertions(suppressed, &product_ids, false);
+    let paths: BTreeMap<&str, &Path> = config
+        .repos
+        .iter()
+        .map(|r| (r.id.0.as_str(), r.path.as_path()))
+        .collect();
+    let file = |repo: &fleetreach_core::RepoId, ecosystem: Ecosystem, package: &str| {
+        sarif_source(paths.get(repo.0.as_str()).copied(), ecosystem, package)
+    };
+    // Every result in a repo reads the same lockfile, and every advisory of one package
+    // asks for the same line: each search scans the whole file. So a first pass only
+    // notes the lines asked for, they are found in parallel, one file at a time and
+    // each file split once, and the real pass reads the answers. One the first pass
+    // did not ask for is found when asked.
+    let asked = std::cell::RefCell::new(BTreeMap::<crate::lockline::Asked, String>::new());
+    {
+        let note = |repo: &fleetreach_core::RepoId, uri: &str, package: &str, version: &str| {
+            if let Some(root) = paths.get(repo.0.as_str()) {
+                let key = (root.join(uri), package.to_string(), version.to_string());
+                asked
+                    .borrow_mut()
+                    .entry(key)
+                    .or_insert_with(|| uri.to_string());
+            }
+            None
+        };
+        let probe = report::Locate {
+            file: &file,
+            line: &note,
+        };
+        let _ = report::to_sarif_located(fleet_report, &assertions, &probe);
+    }
+    let found = crate::lockline::find_all(asked.into_inner());
+    let texts = std::cell::RefCell::new(BTreeMap::<PathBuf, Option<String>>::new());
+    let lines = std::cell::RefCell::new(found);
+    let line = |repo: &fleetreach_core::RepoId, uri: &str, package: &str, version: &str| {
+        let path = paths.get(repo.0.as_str())?.join(uri);
+        let key = (path, package.to_string(), version.to_string());
+        if let Some(found) = lines.borrow().get(&key) {
+            return *found;
+        }
+        let found = {
+            let mut texts = texts.borrow_mut();
+            let text = texts
+                .entry(key.0.clone())
+                .or_insert_with_key(|p| fleetreach_core::repofile::read_to_string(p).ok());
+            text.as_deref()
+                .and_then(|t| crate::lockline::entry_line(uri, t, package, version))
+        };
+        lines.borrow_mut().insert(key, found);
+        found
+    };
+    let locate = report::Locate {
+        file: &file,
+        line: &line,
+    };
+    report::to_sarif_located(fleet_report, &assertions, &locate)
+        .map_err(|e| fail(&format!("serializing SARIF: {e}")))
 }
 
 /// The exit code per §8, plus the opt-in KEV, SSVC, baseline and full-coverage gates.

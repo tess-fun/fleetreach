@@ -145,13 +145,6 @@ pub(crate) fn esc(s: &str) -> String {
     out
 }
 
-fn label<T: serde::Serialize>(value: &T) -> String {
-    serde_json::to_value(value)
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_string))
-        .unwrap_or_default()
-}
-
 fn day(rfc3339: &str) -> &str {
     rfc3339.get(..10).unwrap_or(rfc3339)
 }
@@ -383,9 +376,13 @@ fn trend_section(b: &mut String, h: &History, since: Option<time::OffsetDateTime
     let present: Vec<Severity> = SEVERITIES
         .into_iter()
         .filter(|s| {
-            points
-                .iter()
-                .any(|p| p.groups.get(&label(s)).copied().unwrap_or(0) > 0)
+            points.iter().any(|p| {
+                p.groups
+                    .get(&fleetreach_core::wire_name(s))
+                    .copied()
+                    .unwrap_or(0)
+                    > 0
+            })
         })
         .collect();
     b.push_str("<ul class=\"legend\">");
@@ -394,7 +391,7 @@ fn trend_section(b: &mut String, h: &History, since: Option<time::OffsetDateTime
             b,
             "<li><span class=\"swatch {}\"></span>{}</li>",
             sev_class(*s),
-            label(s)
+            fleetreach_core::wire_name(s)
         );
     }
     if points.iter().any(|p| p.gap) {
@@ -451,7 +448,15 @@ fn trend_section(b: &mut String, h: &History, since: Option<time::OffsetDateTime
         let mut tip = vec![format!("{} · {} open", day(&p.at), p.open)];
         let stacked: Vec<(Severity, usize)> = present
             .iter()
-            .map(|s| (*s, p.groups.get(&label(s)).copied().unwrap_or(0)))
+            .map(|s| {
+                (
+                    *s,
+                    p.groups
+                        .get(&fleetreach_core::wire_name(s))
+                        .copied()
+                        .unwrap_or(0),
+                )
+            })
             .filter(|(_, c)| *c > 0)
             .collect();
         let last = stacked.len().saturating_sub(1);
@@ -485,7 +490,7 @@ fn trend_section(b: &mut String, h: &History, since: Option<time::OffsetDateTime
                     if p.gap { " gap" } else { "" }
                 );
             }
-            tip.push(format!("{}: {count}", label(s)));
+            tip.push(format!("{}: {count}", fleetreach_core::wire_name(s)));
             base += *count as f64;
         }
         if p.gap {
@@ -536,7 +541,11 @@ fn trend_section(b: &mut String, h: &History, since: Option<time::OffsetDateTime
     }
     b.push_str("</svg></figure>\n<details><summary>Table view</summary>\n<div class=\"scroll\"><table><thead><tr><th>Run</th><th>Date</th><th class=\"num\">Open</th>");
     for s in &present {
-        let _ = write!(b, "<th class=\"num\">{}</th>", label(s));
+        let _ = write!(
+            b,
+            "<th class=\"num\">{}</th>",
+            fleetreach_core::wire_name(s)
+        );
     }
     b.push_str("</tr></thead><tbody>\n");
     for p in &points {
@@ -556,7 +565,10 @@ fn trend_section(b: &mut String, h: &History, since: Option<time::OffsetDateTime
             let _ = write!(
                 b,
                 "<td class=\"num\">{}</td>",
-                p.groups.get(&label(s)).copied().unwrap_or(0)
+                p.groups
+                    .get(&fleetreach_core::wire_name(s))
+                    .copied()
+                    .unwrap_or(0)
             );
         }
         b.push_str("</tr>\n");
@@ -568,7 +580,7 @@ fn sev_cell(e: &Entry) -> String {
     let mut s = format!(
         "<span class=\"swatch {}\"></span>{}",
         sev_class(e.severity),
-        label(&e.severity)
+        fleetreach_core::wire_name(&e.severity)
     );
     if let Some(o) = e.ssvc {
         let _ = write!(s, " <span class=\"tag\">SSVC {}</span>", esc(o.label()));
@@ -745,7 +757,12 @@ fn mttr_section(b: &mut String, rows: &[history::Mttr]) {
         return;
     }
     b.push_str("<div class=\"scroll\"><table><thead><tr><th>Severity</th><th class=\"num\">Fixed</th><th class=\"num\">Mean (days)</th><th class=\"num\">Median (days)</th><th class=\"num\">Still open</th></tr></thead><tbody>\n");
-    let rank = |g: &str| SEVERITIES.iter().position(|s| label(s) == g).unwrap_or(9);
+    let rank = |g: &str| {
+        SEVERITIES
+            .iter()
+            .position(|s| fleetreach_core::wire_name(s) == g)
+            .unwrap_or(9)
+    };
     let mut rows: Vec<&history::Mttr> = rows.iter().collect();
     rows.sort_by_key(|r| rank(&r.group));
     for r in rows {

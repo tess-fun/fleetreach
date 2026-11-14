@@ -904,7 +904,7 @@ fn diff_table(entries: &[DiffEntry], color: bool) -> String {
             Cell::new("warning")
         } else {
             maybe_color(
-                Cell::new(severity_label(e.severity.unwrap_or(Severity::Unknown))),
+                Cell::new(e.severity.unwrap_or(Severity::Unknown).as_str()),
                 color.then(|| severity_color(e.severity.unwrap_or(Severity::Unknown))),
             )
         };
@@ -1681,8 +1681,8 @@ fn resolves_text(it: &RemediationItem) -> String {
 /// Severity label with the worst CVSS in the batch appended when known.
 fn remediation_severity_text(it: &RemediationItem) -> String {
     match it.max_cvss {
-        Some(score) => format!("{} {score:.1}", severity_label(it.max_severity)),
-        None => severity_label(it.max_severity).to_string(),
+        Some(score) => format!("{} {score:.1}", it.max_severity.as_str()),
+        None => it.max_severity.as_str().to_string(),
     }
 }
 
@@ -1824,7 +1824,7 @@ pub fn summary_line(report: &FleetReport) -> String {
         s.vuln_count,
         if s.vuln_count == 1 { "" } else { "s" },
         s.warn_count,
-        severity_label(s.max_severity),
+        s.max_severity.as_str(),
     );
     if !s.stale_ignores.is_empty() {
         let ignores: Vec<String> = s.stale_ignores.iter().map(|i| sanitize_cell(i)).collect();
@@ -2131,22 +2131,12 @@ pub(crate) fn fix_target(
         .map(|v| v.to_string())
 }
 
-fn severity_label(severity: Severity) -> &'static str {
-    match severity {
-        Severity::Critical => "critical",
-        Severity::High => "high",
-        Severity::Medium => "medium",
-        Severity::Low => "low",
-        Severity::Unknown => "unknown",
-    }
-}
-
 /// The severity label with the CVSS base score appended when known, e.g.
 /// `high 7.5`. Falls back to the bare label for advisories that carry no CVSS.
 fn severity_cell_text(v: &VulnFinding) -> String {
     match v.cvss_score {
-        Some(score) => format!("{} {score:.1}", severity_label(v.severity)),
-        None => severity_label(v.severity).to_string(),
+        Some(score) => format!("{} {score:.1}", v.severity.as_str()),
+        None => v.severity.as_str().to_string(),
     }
 }
 

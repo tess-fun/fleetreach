@@ -380,13 +380,6 @@ fn render(payload: &Payload, format: NotifyFormat) -> Result<String, String> {
     serde_json::to_string_pretty(&value).map_err(|e| e.to_string())
 }
 
-fn label<T: Serialize>(value: &T) -> String {
-    serde_json::to_value(value)
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_string))
-        .unwrap_or_default()
-}
-
 fn owner_name(owner: Option<&str>) -> &str {
     owner.unwrap_or("(no owner)")
 }
@@ -421,7 +414,7 @@ fn slack_lines(title: &str, items: &[Item], out: &mut Vec<String>) {
             mrkdwn(&i.package),
             mrkdwn(&i.version),
             mrkdwn(&i.repo),
-            label(&i.severity)
+            fleetreach_core::wire_name(&i.severity)
         );
         if let Some(o) = i.ssvc {
             line.push_str(&format!(", SSVC {o}"));
@@ -648,7 +641,7 @@ fn issue_body(campaign: &str, owner: Option<&str>, s: &OwnerState, run: &RunRef)
             cell(&i.package),
             cell(&i.version),
             cell(&i.repo),
-            label(&i.severity),
+            fleetreach_core::wire_name(&i.severity),
             i.ssvc.map(|o| format!(" / {o}")).unwrap_or_default()
         )
     };

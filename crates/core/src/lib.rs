@@ -72,6 +72,16 @@ pub use report::{
 };
 pub use severity::Severity;
 
+/// The name `value` serializes to, as the reports spell it (`npm`, `github-actions`,
+/// `high`); empty for a value that does not serialize to a string.
+#[must_use]
+pub fn wire_name<T: serde::Serialize + ?Sized>(value: &T) -> String {
+    serde_json::to_value(value)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_default()
+}
+
 /// Re-exported so every downstream crate links the *same* `semver`, matching
 /// the version `rustsec` pulls in (§12, avoid version skew).
 pub use semver;

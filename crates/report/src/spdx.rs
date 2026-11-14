@@ -17,7 +17,7 @@ use fleetreach_core::FleetReport;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-use crate::cyclonedx::{advisory_url, bom_vulns, ecosystem_name, merge, uuid_v8, VulnState};
+use crate::cyclonedx::{advisory_url, bom_vulns, merge, uuid_v8, VulnState};
 
 /// The SPDX spec version written.
 pub const SPDX_VERSION: &str = "SPDX-2.3";
@@ -61,12 +61,12 @@ pub fn to_spdx(
                 VulnState::Asserted => "not affected (set aside by a person)",
                 VulnState::AcceptedRisk => "accepted risk (set aside by a person, still affected)",
             };
-            let mut comment = format!("{}: {}; severity {}", v.finding.advisory_id, state, {
-                serde_json::to_value(v.finding.severity)
-                    .ok()
-                    .and_then(|s| s.as_str().map(str::to_string))
-                    .unwrap_or_default()
-            });
+            let mut comment = format!(
+                "{}: {}; severity {}",
+                v.finding.advisory_id,
+                state,
+                fleetreach_core::wire_name(&v.finding.severity)
+            );
             if v.finding.exploit.kev {
                 comment.push_str("; in CISA KEV");
             }
@@ -108,7 +108,7 @@ pub fn to_spdx(
             format!(
                 "source {} ({}, {})",
                 s.source,
-                ecosystem_name(s.ecosystem),
+                fleetreach_core::wire_name(&s.ecosystem),
                 s.coverage.label()
             )
         })
@@ -158,7 +158,7 @@ pub fn to_spdx(
         }
         let mut comment = vec![format!(
             "{}; {}{}; from {}",
-            ecosystem_name(c.ecosystem),
+            fleetreach_core::wire_name(&c.ecosystem),
             if c.direct { "direct" } else { "transitive" },
             if c.dev { ", dev only" } else { "" },
             c.sources.iter().cloned().collect::<Vec<_>>().join(", ")
