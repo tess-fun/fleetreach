@@ -46,8 +46,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 84.2% of the 9,550 modules at Gradle's version and 89.3% by name, up from 59.7% and
-  70.0% on the same POMs; 93.7% and 97.1% on the 51 builds whose dependencies no build plugin
+  now lists 85.7% of the 9,550 modules at Gradle's version and 90.6% by name, up from 59.7% and
+  70.0% on the same POMs; 95.2% and 98.4% on the 51 builds whose dependencies no build plugin
   adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
@@ -61,7 +61,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dependencies, platforms and constraints onto the depending project's classpaths, and
   when an artifact is declared more than once the highest version wins, as in Gradle
   (mybatis-plus's Boot 3 and 4 starters, ethereum-lists' moshi). `jmh`, `benchmark` and
-  similar source sets of their own are off the main classpath. A declared `platform(...)` is listed as a
+  similar source sets of their own are off the main classpath. A library's compile-only API
+  dependencies (from its `.module` file's `java-api` variant) are on compile classpaths only.
+  Build fixtures under `src/` (spring-boot's plugin test projects) are no longer read as part
+  of the build. A declared `platform(...)` is listed as a
   module, as Gradle lists it, without its own dependencies. `if`/`else` branches a default
   build decides (`System.properties['k'] ?: ''`, `findProperty`, `hasProperty`,
   `providers.gradleProperty(...).getOrElse(...)`, a `cond ? 'a' : 'b'` coordinate) are read.
@@ -94,6 +97,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with parents (1,875 packages; before: 265, 4 misses, 20 extras) and 109 of 109
   six-dependency projects (3,478 packages; before: 96, 11 misses, 55 extras). The harness is
   in `docs/differential/maven`.
+- **Maven reactors resolve as Maven builds them.** Each module is mediated on its own, so
+  every version a module ships is listed (pooled, arthas's starter hid the junit-jupiter
+  5.10.0 the other modules get). A BOM or parent that is a module of the same build is read
+  from the build, as Maven's reactor does, so dubbo's and ruoyi-vue-pro's own dependency BOMs
+  now manage their versions (dubbo: 128 dependencies were dropped as unmanaged; ruoyi-vue-pro
+  went from 2 packages to 139). A profile's `<modules>` join the reactor. The build's own
+  modules are walked through, never listed as packages.
 - **gradle-consistent-versions' `versions.lock` is read as a full lockfile** (beside its
   `versions.props`), checked so a damaged file is refused.
 - **POMs are read from Gradle's download cache** (`$GRADLE_USER_HOME` or `~/.gradle`,

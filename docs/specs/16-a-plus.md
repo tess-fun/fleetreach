@@ -914,9 +914,9 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   ~/fa-testbed/gradle (208 Android/KMP skipped, they need the Android SDK). **56 resolved**;
   47 fail for reasons of their own (dead plugin repositories, toolchains Gradle cannot fetch
   on arm64, files the sparse clone lacks, plugins that need a full checkout). On the same POMs
-  (Gradle's own download cache), **84.2% of 9,550 modules at Gradle's version, 89.3% by name**,
-  from 59.7% and 70.0% for the reader before this round; median repo 94.1% exact, 41 of 56 at
-  90% or more. **93.7% and 97.1% on the 51 builds whose dependencies no build plugin adds**:
+  (Gradle's own download cache), **85.7% of 9,550 modules at Gradle's version, 90.6% by name**,
+  from 59.7% and 70.0% for the reader before this round; median repo 98.1% exact, 48 of 56 at
+  90% or more. **95.2% and 98.4% on the 51 builds whose dependencies no build plugin adds**:
   the five others (ideavim and MinecraftDev on the IntelliJ Platform plugin, Paper and
   WorldEdit on paperweight's dev bundle, minecolonies on ForgeGradle) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class

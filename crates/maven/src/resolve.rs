@@ -283,6 +283,7 @@ fn parse_pom(xml: &str, gradle: bool) -> Result<RawPom, String> {
         ));
     };
     absorb(project, &mut pom);
+    let mut profile_modules: Vec<String> = Vec::new();
     if let Some(profiles) = child(project, "profiles") {
         let profiles: Vec<_> = children(profiles, "profile").collect();
         let by_default = |p: &Node<'_, '_>| {
@@ -308,6 +309,13 @@ fn parse_pom(xml: &str, gradle: bool) -> Result<RawPom, String> {
         };
         for profile in active {
             absorb(*profile, &mut pom);
+            // A profile can add reactor modules (dubbo's `<jdk>[17,)</jdk>` ones).
+            if let Some(modules) = child(*profile, "modules") {
+                profile_modules.extend(
+                    children(modules, "module")
+                        .filter_map(|m| m.text().map(|t| t.trim().to_string())),
+                );
+            }
         }
     }
     pom.relocation = child(project, "distributionManagement")
@@ -323,6 +331,11 @@ fn parse_pom(xml: &str, gradle: bool) -> Result<RawPom, String> {
         pom.modules = children(modules, "module")
             .filter_map(|m| m.text().map(|t| t.trim().to_string()))
             .collect();
+    }
+    for m in profile_modules {
+        if !pom.modules.contains(&m) {
+            pom.modules.push(m);
+        }
     }
     Ok(pom)
 }
@@ -362,6 +375,9 @@ struct Resolver<'s> {
     bom_overrides: BTreeMap<String, String>,
     /// Inside a BOM the build imports, where `bom_overrides` apply.
     importing: bool,
+    /// The folders of this build's modules by artifactId: Maven reads a parent or an imported
+    /// BOM from the reactor before any repository (dubbo imports its own dependencies BOM).
+    reactor: BTreeMap<String, Vec<PathBuf>>,
 }
 
 impl Resolver<'_> {
@@ -587,6 +603,10 @@ impl Resolver<'_> {
         }
         // Guard against cycles while this POM is being built.
         self.cache.insert(key.clone(), None);
+        if let Some(eff) = self.reactor_module(g, a, v, depth) {
+            self.cache.insert(key, Some(eff.clone()));
+            return Some(eff);
+        }
         let result = match self.source.pom(g, a, v) {
             Some(xml) if self.gradle && crate::gradle_module::pom_points_to_module(&xml) => {
                 match self.module_effective(g, a, v) {
@@ -615,6 +635,31 @@ impl Resolver<'_> {
         };
         self.cache.insert(key, result.clone());
         result
+    }
+
+    /// `g:a:v` when it is a module of this build: its own folder's POM, matched on the
+    /// coordinates its effective model ends up with.
+    fn reactor_module(&mut self, g: &str, a: &str, v: &str, depth: usize) -> Option<Effective> {
+        let dirs = self.reactor.get(a)?.clone();
+        for d in dirs {
+            let Ok(xml) = fleetreach_core::repofile::read_to_string(d.join("pom.xml")) else {
+                continue;
+            };
+            let Ok(eff) = self.effective(&xml, Some(&d), depth) else {
+                continue;
+            };
+            // `project.version` is as written (`${revision}`), so it is interpolated here.
+            let mut ignore = BTreeSet::new();
+            let version = eff
+                .props
+                .get("project.version")
+                .map(|x| interpolate(x, &eff.props, &mut ignore));
+            let group = interpolate(&eff.group, &eff.props, &mut ignore);
+            if group == g && version.as_deref() == Some(v) {
+                return Some(eff);
+            }
+        }
+        None
     }
 
     /// The runtime variant of `g:a:v`'s Gradle module metadata as an effective model; `None`
@@ -923,7 +968,26 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
         gradle: false,
         bom_overrides: BTreeMap::new(),
         importing: false,
+        reactor: BTreeMap::new(),
     };
+    // Where each module lives, first, so the reactor can serve its own parents and BOMs.
+    let mut stack = vec![dir.to_path_buf()];
+    let mut seen_dirs = BTreeSet::new();
+    while let Some(d) = stack.pop() {
+        if !seen_dirs.insert(d.clone()) || seen_dirs.len() > 500 {
+            continue;
+        }
+        let Ok(xml) = fleetreach_core::repofile::read_to_string(d.join("pom.xml")) else {
+            continue;
+        };
+        let Ok(raw) = parse_pom(&xml, false) else {
+            continue;
+        };
+        for m in raw.modules.iter().rev() {
+            stack.push(d.join(m));
+        }
+        r.reactor.entry(raw.artifact).or_default().push(d);
+    }
     // The reactor: the root POM and every module below it, from local files.
     let mut modules: Vec<Effective> = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
@@ -948,7 +1012,40 @@ pub fn resolve(dir: &Path, source: &dyn PomSource) -> Result<Resolution, String>
         .map(|m| ((m.group.clone(), m.artifact.clone()), m.clone()))
         .collect();
 
-    let (packages, graph) = walk(&mut r, &modules, &local, &Pins::new(), None);
+    // Maven mediates each module on its own: one module's nearest version never hides another
+    // module's (pooled, arthas's spring-boot starter took junit-jupiter-api 5.8.2 for every
+    // module, hiding the 5.10.0 the others get). Distinct versions are all listed.
+    let mut packages: Vec<ResolvedDep> = Vec::new();
+    let mut at: BTreeMap<(String, String), usize> = BTreeMap::new();
+    let mut graph = DepGraph::new("(root)");
+    for module in &modules {
+        let (one, g) = walk(
+            &mut r,
+            std::slice::from_ref(module),
+            &local,
+            &Pins::new(),
+            None,
+        );
+        for (from, to) in g.edges() {
+            graph.add_edges(from, [to.to_string()]);
+        }
+        for p in one {
+            match at.get(&(p.name.clone(), p.version.clone())) {
+                Some(&i) => {
+                    let seen = &mut packages[i];
+                    seen.direct |= p.direct;
+                    seen.dev &= p.dev;
+                    if scope_rank(&p.scope) > scope_rank(&seen.scope) {
+                        seen.scope.clone_from(&p.scope);
+                    }
+                }
+                None => {
+                    at.insert((p.name.clone(), p.version.clone()), packages.len());
+                    packages.push(p);
+                }
+            }
+        }
+    }
     Ok(Resolution {
         packages,
         graph,
@@ -990,6 +1087,7 @@ pub(crate) fn resolve_gradle_module(
         gradle: true,
         bom_overrides: bom_overrides.clone(),
         importing: false,
+        reactor: BTreeMap::new(),
     };
     let modules = vec![r.effective(xml, None, 0)?];
     let local = BTreeMap::new();
@@ -1118,14 +1216,21 @@ fn walk(
     // (dependency, depth, parent node, scope, inherited exclusions, root management)
     let mut queue: Queue = VecDeque::new();
     let mut relocated: BTreeSet<(String, String, String)> = BTreeSet::new();
+    // Sibling modules walked through so far, with the widest scope each was reached in.
+    let mut through: BTreeMap<(String, String), String> = BTreeMap::new();
     for (i, m) in modules.iter().enumerate() {
         for d in &m.deps {
-            if local.contains_key(&d.key()) {
-                // A sibling module: its own dependencies are the project's.
-                continue;
-            }
             let scope = d.scope.clone().unwrap_or_else(|| "compile".into());
             if matches!(scope.as_str(), "system" | "import") {
+                continue;
+            }
+            if let Some(sibling) = local.get(&d.key()) {
+                // A sibling module is part of the project, not a package: its dependencies
+                // join this module's tree, mediated here.
+                let name = format!("{}:{}", d.group, d.artifact);
+                graph.add_edges(ROOT, [name.clone()]);
+                through.insert(d.key(), scope.clone());
+                enqueue_children(sibling, &scope, &d.exclusions, 0, &name, i, &mut queue);
                 continue;
             }
             queue.push_back((
@@ -1142,6 +1247,26 @@ fn walk(
         let key = dep.mgmt_key();
         let name = format!("{}:{}", dep.group, dep.artifact);
         graph.add_edges(&parent, [name.clone()]);
+        if let Some(sibling) = local.get(&dep.key()) {
+            // A sibling reached through another sibling is still part of the project: walk
+            // through it once per wider scope, which also stops a cycle between modules.
+            let wider = through
+                .get(&dep.key())
+                .is_none_or(|seen| scope_rank(&scope) > scope_rank(seen));
+            if wider {
+                through.insert(dep.key(), scope.clone());
+                enqueue_children(
+                    sibling,
+                    &scope,
+                    &exclusions,
+                    depth,
+                    &name,
+                    root_ix,
+                    &mut queue,
+                );
+            }
+            continue;
+        }
         if let Some(requests) = requests.as_deref_mut() {
             let managed = modules[root_ix].mgmt.get(&key);
             for version in [
@@ -1161,11 +1286,7 @@ fn walk(
                 existing.scope.clone_from(&scope);
                 existing.dev = matches!(scope.as_str(), "test" | "provided");
                 let version = existing.version.clone();
-                let eff = match local.get(&dep.key()) {
-                    Some(m) => Some(m.clone()),
-                    None => r.remote(&dep.group, &dep.artifact, &version, 0),
-                };
-                if let Some(eff) = eff {
+                if let Some(eff) = r.remote(&dep.group, &dep.artifact, &version, 0) {
                     request_constraints(&eff, dep.platform, requests.as_deref_mut());
                     enqueue_children(&eff, &scope, &exclusions, depth, &name, root_ix, &mut queue);
                 }
@@ -1203,7 +1324,7 @@ fn walk(
         // Maven resolves a relocated artifact (`<distributionManagement><relocation>`) as its
         // new coordinate; each source moves once, so a cycle stops. Gradle does not follow
         // relocations (real Gradle keeps `junit:junit-dep` and `mysql:mysql-connector-java`).
-        if !r.gradle && !local.contains_key(&dep.key()) {
+        if !r.gradle {
             let moved = r
                 .remote(&dep.group, &dep.artifact, &version, 0)
                 .and_then(|eff| eff.relocation);
@@ -1231,11 +1352,9 @@ fn walk(
             },
         );
         order.push(key);
-        let eff = match local.get(&dep.key()) {
-            Some(m) => Some(m.clone()),
-            None => r.remote(&dep.group, &dep.artifact, &version, 0),
+        let Some(eff) = r.remote(&dep.group, &dep.artifact, &version, 0) else {
+            continue;
         };
-        let Some(eff) = eff else { continue };
         request_constraints(&eff, dep.platform, requests.as_deref_mut());
         enqueue_children(&eff, &scope, &exclusions, depth, &name, root_ix, &mut queue);
     }
@@ -1467,6 +1586,198 @@ mod tests {
             dep("g", "c", "1.5", ""), dep("g", "a", "1", "")));
         let r = resolve(&dir, &repo).unwrap();
         assert_eq!(rows(&r)[1], ("g:c".into(), "1.5".into(), false, false));
+    }
+
+    #[test]
+    fn a_profile_adds_reactor_modules() {
+        // dubbo builds dubbo-mcp only in a `<jdk>[17,)</jdk>` profile; a JDK 8 profile's
+        // module is left out.
+        let dir = project(
+            "profile-modules",
+            "<packaging>pom</packaging><modules><module>core</module></modules><profiles>\
+                 <profile><id>new</id><activation><jdk>[17,)</jdk></activation>\
+                 <modules><module>mcp</module></modules></profile>\
+                 <profile><id>old</id><activation><jdk>1.8</jdk></activation>\
+                 <modules><module>legacy</module></modules></profile></profiles>",
+        );
+        for (m, a) in [("core", "c"), ("mcp", "m"), ("legacy", "l")] {
+            std::fs::create_dir_all(dir.join(m)).unwrap();
+            std::fs::write(
+                dir.join(m).join("pom.xml"),
+                pom(
+                    "com.acme",
+                    m,
+                    "1.0",
+                    &format!("<dependencies>{}</dependencies>", dep("g", a, "1", "")),
+                ),
+            )
+            .unwrap();
+        }
+        let repo = Mem(BTreeMap::from([
+            ("g:c:1".to_string(), pom("g", "c", "1", "")),
+            ("g:m:1".to_string(), pom("g", "m", "1", "")),
+            ("g:l:1".to_string(), pom("g", "l", "1", "")),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        let mut got: Vec<_> = rows(&r).into_iter().map(|(n, _, _, _)| n).collect();
+        got.sort();
+        assert_eq!(got, ["g:c", "g:m"], "{:?}", r.missing);
+    }
+
+    #[test]
+    fn each_reactor_module_mediates_its_own_versions() {
+        // arthas: one module pins junit-jupiter-api 5.8.2, another reaches 5.10.0. Maven
+        // builds each module apart, so both versions ship; one pooled walk kept only one.
+        let dir = project(
+            "per-module",
+            "<packaging>pom</packaging><modules><module>a</module><module>b</module></modules>",
+        );
+        let deps = [
+            ("a", dep("g", "api", "1", "")),
+            ("b", dep("g", "lib", "1", "")),
+        ];
+        for (m, d) in deps {
+            std::fs::create_dir_all(dir.join(m)).unwrap();
+            std::fs::write(
+                dir.join(m).join("pom.xml"),
+                pom(
+                    "com.acme",
+                    m,
+                    "1.0",
+                    &format!("<dependencies>{d}</dependencies>"),
+                ),
+            )
+            .unwrap();
+        }
+        let repo = Mem(BTreeMap::from([
+            ("g:api:1".to_string(), pom("g", "api", "1", "")),
+            ("g:api:2".to_string(), pom("g", "api", "2", "")),
+            (
+                "g:lib:1".to_string(),
+                pom(
+                    "g",
+                    "lib",
+                    "1",
+                    &format!("<dependencies>{}</dependencies>", dep("g", "api", "2", "")),
+                ),
+            ),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        let mut got: Vec<_> = rows(&r).into_iter().map(|(n, v, d, _)| (n, v, d)).collect();
+        got.sort();
+        assert_eq!(
+            got,
+            [
+                ("g:api".to_string(), "1".to_string(), true),
+                ("g:api".to_string(), "2".to_string(), false),
+                ("g:lib".to_string(), "1".to_string(), true),
+            ],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn sibling_modules_are_walked_through_not_listed() {
+        // nacos: the server depends on nacos-api, which depends on nacos-common. Both are
+        // the project's own modules, so only their published dependencies are listed, and a
+        // cycle between modules stops.
+        let dir = project(
+            "siblings",
+            "<packaging>pom</packaging><modules><module>server</module><module>api</module>\
+             <module>common</module></modules>",
+        );
+        let deps = [
+            ("server", dep("com.acme", "api", "1.0", "")),
+            ("api", dep("com.acme", "common", "1.0", "")),
+            (
+                "common",
+                format!(
+                    "{}{}",
+                    dep("g", "lib", "1", ""),
+                    dep("com.acme", "api", "1.0", "<scope>test</scope>")
+                ),
+            ),
+        ];
+        for (m, d) in deps {
+            std::fs::create_dir_all(dir.join(m)).unwrap();
+            std::fs::write(
+                dir.join(m).join("pom.xml"),
+                pom(
+                    "com.acme",
+                    m,
+                    "1.0",
+                    &format!("<dependencies>{d}</dependencies>"),
+                ),
+            )
+            .unwrap();
+        }
+        let repo = Mem(BTreeMap::from([
+            ("g:lib:1".to_string(), pom("g", "lib", "1", "")),
+            // A published copy of a module must not stand in for the module itself.
+            (
+                "com.acme:api:1.0".to_string(),
+                pom("com.acme", "api", "1.0", ""),
+            ),
+            (
+                "com.acme:common:1.0".to_string(),
+                pom("com.acme", "common", "1.0", ""),
+            ),
+        ]));
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(
+            rows(&r),
+            [("g:lib".to_string(), "1".to_string(), true, false)],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn a_bom_from_the_reactor_manages_the_build() {
+        // dubbo's parent imports dubbo-dependencies-bom, one of its own modules at
+        // `${revision}`: Maven reads it from the reactor, not a repository.
+        let dir = project(
+            "reactor-bom",
+            "<packaging>pom</packaging><properties><revision>3.3.7</revision></properties>\
+             <modules><module>bom</module><module>svc</module></modules>\
+             <dependencyManagement><dependencies><dependency><groupId>com.acme</groupId>\
+             <artifactId>bom</artifactId><version>${revision}</version><type>pom</type>\
+             <scope>import</scope></dependency></dependencies></dependencyManagement>",
+        );
+        std::fs::create_dir_all(dir.join("bom")).unwrap();
+        std::fs::write(
+            dir.join("bom").join("pom.xml"),
+            format!(
+                "<project><groupId>com.acme</groupId><artifactId>bom</artifactId>\
+                 <version>${{revision}}</version><packaging>pom</packaging>\
+                 <properties><revision>3.3.7</revision></properties>\
+                 <dependencyManagement><dependencies>{}</dependencies></dependencyManagement>\
+                 </project>",
+                dep("g", "lib", "2", "")
+            ),
+        )
+        .unwrap();
+        std::fs::create_dir_all(dir.join("svc")).unwrap();
+        std::fs::write(
+            dir.join("svc").join("pom.xml"),
+            "<project><parent><groupId>com.acme</groupId><artifactId>app</artifactId>\
+             <version>1.0</version></parent><artifactId>svc</artifactId><dependencies>\
+             <dependency><groupId>g</groupId><artifactId>lib</artifactId></dependency>\
+             </dependencies></project>",
+        )
+        .unwrap();
+        let repo = Mem(BTreeMap::from([(
+            "g:lib:2".to_string(),
+            pom("g", "lib", "2", ""),
+        )]));
+        let r = resolve(&dir, &repo).unwrap();
+        assert_eq!(
+            rows(&r),
+            [("g:lib".to_string(), "2".to_string(), true, false)],
+            "{:?}",
+            r.missing
+        );
     }
 
     #[test]
