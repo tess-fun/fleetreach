@@ -1023,13 +1023,22 @@ impl Resolver<'_> {
             scope: Some(COMPILE_ONLY_API.to_string()),
             ..dep(d)
         });
+        let runtime_only = variant.runtime_only;
         Some(Effective {
             group: g.to_string(),
             artifact: a.to_string(),
             deps: variant
                 .dependencies
                 .into_iter()
-                .map(dep)
+                .map(|d| {
+                    let at_runtime_only = runtime_only
+                        .iter()
+                        .any(|(g, m)| *g == d.group && *m == d.module);
+                    Dep {
+                        scope: at_runtime_only.then(|| "runtime".to_string()),
+                        ..dep(d)
+                    }
+                })
                 .chain(api_only)
                 .collect(),
             mgmt,
@@ -1465,16 +1474,22 @@ fn enqueue_children(
     eff: &Effective,
     scope: &str,
     exclusions: &[(String, String)],
-    depth: usize,
+    (depth, root_ix): (usize, usize),
     name: &str,
-    root_ix: usize,
     queue: &mut Queue,
+    compile_only: bool,
 ) {
     for child in &eff.deps {
         if child.optional {
             continue;
         }
         let child_scope = child.scope.clone().unwrap_or_else(|| "compile".into());
+        // A compile classpath takes no runtime dependency at any depth: Gradle maps a POM's
+        // `runtime` scope, and what only a `.module`'s runtime variant lists, to the runtime
+        // classpath alone (archunit-junit5's engine raises JUnit only at test runtime).
+        if compile_only && child_scope == "runtime" {
+            continue;
+        }
         let Some(next_scope) = propagate(scope, &child_scope) else {
             continue;
         };
@@ -1984,10 +1999,10 @@ fn walk(
                     sibling,
                     &scope,
                     &exclusions,
-                    depth,
+                    (depth, root_ix),
                     &name,
-                    root_ix,
                     &mut queue,
+                    r.compile_only,
                 );
             }
             continue;
@@ -2048,7 +2063,15 @@ fn walk(
                 let (depth, exclusions) = winners.get(&key).cloned().unwrap_or((depth, exclusions));
                 if let Some(eff) = r.remote(&dep.group, &dep.artifact, &version, 0) {
                     request_constraints(&eff, dep.platform, requests.as_deref_mut());
-                    enqueue_children(&eff, &scope, &exclusions, depth, &name, root_ix, &mut queue);
+                    enqueue_children(
+                        &eff,
+                        &scope,
+                        &exclusions,
+                        (depth, root_ix),
+                        &name,
+                        &mut queue,
+                        r.compile_only,
+                    );
                 }
             }
             continue;
@@ -2161,7 +2184,15 @@ fn walk(
             continue;
         };
         request_constraints(&eff, dep.platform, requests.as_deref_mut());
-        enqueue_children(&eff, &scope, &exclusions, depth, &name, root_ix, &mut queue);
+        enqueue_children(
+            &eff,
+            &scope,
+            &exclusions,
+            (depth, root_ix),
+            &name,
+            &mut queue,
+            r.compile_only,
+        );
     }
     let packages = order
         .into_iter()

@@ -156,6 +156,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         spring_dm,
 
         processor: false,
+        runtime_only: false,
     };
     // The kordamp enforcer's `ForceDependencies` rule in the settings forces its versions on
     // every configuration of every project (jreleaser).
@@ -314,6 +315,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             exclusions: Vec::new(),
             pom: false,
             exported: false,
+            runtime_only: false,
         })
         .collect();
     if !unused.is_empty() {
@@ -363,6 +365,13 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         if has_main && has_runtime {
             passes.push(Pass::Compile);
         }
+        let test_runtime_only = module
+            .deps
+            .iter()
+            .any(|d| d.scope == "test" && d.runtime_only);
+        if has_test && (has_runtime || test_runtime_only) {
+            passes.push(Pass::TestCompile);
+        }
         passes.push(Pass::Full);
         let split = passes.len() > 1;
         for &pass in &passes {
@@ -375,7 +384,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                     &no_overrides
                 },
                 &module.enforced(pass),
-                pass == Pass::Compile,
+                matches!(pass, Pass::Compile | Pass::TestCompile),
             ) {
                 Ok(one) => {
                     missing.extend(one.missing);
@@ -831,6 +840,8 @@ struct Declared {
     /// Declared in `api` (or another configuration a consumer compiles against): on the
     /// compile classpath of a project that depends on this one. `implementation` is not.
     exported: bool,
+    /// `testRuntimeOnly`: on the test runtime classpath, not the test compile one.
+    runtime_only: bool,
 }
 
 /// One of the classpaths a build file is resolved for.
@@ -840,6 +851,10 @@ enum Pass {
     Main,
     /// `compileClasspath`: what the main sources compile against.
     Compile,
+    /// `testCompileClasspath`: the tests' compile classpath, without runtime-only
+    /// dependencies or the main `compileOnly` ones (komga's JUnit 5.12.2, raised to 5.14.4 on
+    /// the test runtime classpath by the launcher Spring Boot adds there).
+    TestCompile,
     /// Everything, tests included.
     Full,
 }
@@ -927,7 +942,9 @@ impl Module {
                 .chain(
                     self.forced
                         .iter()
-                        .filter(|(_, test_only)| !test_only || pass == Pass::Full)
+                        .filter(|(_, test_only)| {
+                            !test_only || matches!(pass, Pass::TestCompile | Pass::Full)
+                        })
                         .map(|(c, _)| c),
                 )
                 .filter_map(triple)
@@ -955,7 +972,7 @@ impl Module {
             )
         };
         let mut managed = String::new();
-        let applies = |c: &&Coordinate| pass == Pass::Full || !c.test;
+        let applies = |c: &&Coordinate| matches!(pass, Pass::TestCompile | Pass::Full) || !c.test;
         for p in self.platforms.iter().filter(applies) {
             managed.push_str(&dep(p, "<type>pom</type><scope>import</scope>"));
         }
@@ -970,6 +987,7 @@ impl Module {
             .filter(|d| match pass {
                 Pass::Main => d.scope != "test",
                 Pass::Compile => !matches!(d.scope, "test" | "runtime"),
+                Pass::TestCompile => matches!(d.scope, "compile" | "test") && !d.runtime_only,
                 Pass::Full => true,
             })
             .collect();
@@ -1470,6 +1488,8 @@ struct Context {
     used: BTreeSet<String>,
     /// Whether the declaration being read is exported (see `exported_by`).
     exported: bool,
+    /// Whether it is runtime-only (see `Declared::runtime_only`).
+    runtime_only: bool,
     /// `testImplementation.extendsFrom testShadow`: a custom configuration to the standard one
     /// that takes it in, so it gets that one's scope.
     extended_by: BTreeMap<String, String>,
@@ -2142,6 +2162,7 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
                 exclusions: Vec::new(),
                 pom: false,
                 exported: false,
+                runtime_only: true,
             });
         }
         // Spring Boot applies its BOM through the dependency-management plugin.
@@ -2171,6 +2192,7 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
             pom: false,
             // The Kotlin plugin adds the standard library to `api`.
             exported: true,
+            runtime_only: false,
         });
     }
 }
@@ -2271,6 +2293,7 @@ fn kotlin_dsl(context: &Context, module: &mut Module) {
             exclusions: Vec::new(),
             pom: false,
             exported: false,
+            runtime_only: false,
         });
     }
 }
@@ -2348,6 +2371,7 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
         .map_or(name.as_str(), String::as_str);
     context.exported = exported_by(configuration);
     context.processor = is_processor(configuration);
+    context.runtime_only = configuration.to_ascii_lowercase().contains("runtimeonly");
     let before = (module.platforms.len(), module.constraints.len());
     read_values(rest, scope, block, context, module);
     // Only a named test configuration keeps its platform to the tests: Spring Framework's
@@ -2362,6 +2386,7 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
     }
     context.exported = true;
     context.processor = false;
+    context.runtime_only = false;
 }
 
 /// Whether a configuration's dependencies reach the compile classpath of a project that
@@ -2443,6 +2468,7 @@ fn read_declaration(
     let whole = text.trim();
     let exported = context.exported;
     let processor = context.processor;
+    let runtime_only = context.runtime_only;
     let add = |module: &mut Module, c: Coordinate, platform: bool| {
         if platform && processor {
             // A processor's platform manages that path only; it lists nothing either.
@@ -2454,6 +2480,7 @@ fn read_declaration(
                     exclusions: Vec::new(),
                     pom: true,
                     exported,
+                    runtime_only,
                 });
             }
             module.platforms.push(c);
@@ -2469,6 +2496,7 @@ fn read_declaration(
                 exclusions: Vec::new(),
                 pom: false,
                 exported,
+                runtime_only,
             });
         }
     };
@@ -2521,6 +2549,7 @@ fn read_declaration(
                         exclusions: Vec::new(),
                         pom: true,
                         exported,
+                        runtime_only,
                     });
                 }
                 module.platforms.push(c);
@@ -2658,6 +2687,7 @@ mod tests {
             extended_by: BTreeMap::new(),
             spring_dm: false,
             processor: false,
+            runtime_only: false,
         }
     }
 
@@ -3909,6 +3939,64 @@ set = ["a-b", "e"]
                 .collect();
             assert_eq!(got, expected, "{gradle}: {:?}", r.missing);
         }
+    }
+
+    #[test]
+    fn the_test_compile_classpath_leaves_runtime_dependencies_out() {
+        // komga: the launcher in `testRuntimeOnly` raises JUnit on the test runtime classpath
+        // only; a POM's `runtime` dependency is on no compile classpath at any depth.
+        let runtime_child = (
+            "g:a:1".to_string(),
+            "<project><groupId>g</groupId><artifactId>a</artifactId><version>1</version><dependencies>\
+             <dependency><groupId>g</groupId><artifactId>b</artifactId><version>2</version><scope>runtime</scope></dependency>\
+             </dependencies></project>"
+                .to_string(),
+        );
+        let test_runtime_child = (
+            "g:c:1".to_string(),
+            "<project><groupId>g</groupId><artifactId>c</artifactId><version>1</version><dependencies>\
+             <dependency><groupId>g</groupId><artifactId>t</artifactId><version>2</version><scope>runtime</scope></dependency>\
+             </dependencies></project>"
+                .to_string(),
+        );
+        let repo = Mem(BTreeMap::from([
+            runtime_child,
+            test_runtime_child,
+            pom("b", "1", &[]),
+            pom("b", "2", &[]),
+            pom("t", "1", &[]),
+            pom("t", "2", &[]),
+            pom("r", "1", &[("t", "2")]),
+            pom("z", "1", &[]),
+        ]));
+        let dir = tree(
+            "test-compile",
+            &[(
+                "build.gradle",
+                "dependencies {\n    implementation 'g:a:1'\n    implementation 'g:b:1'\n\
+                 \x20   runtimeOnly 'g:z:1'\n    testImplementation 'g:t:1'\n\
+                 \x20   testImplementation 'g:c:1'\n\
+                 \x20   testRuntimeOnly 'g:r:1'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        let of = |name: &str| -> Vec<(String, bool)> {
+            r.packages
+                .iter()
+                .filter(|p| p.name == name)
+                .map(|p| (p.version.clone(), p.dev))
+                .collect()
+        };
+        let want = |v: &[(&str, bool)]| -> Vec<(String, bool)> {
+            v.iter().map(|(a, b)| ((*a).to_string(), *b)).collect()
+        };
+        assert_eq!(
+            of("g:b"),
+            want(&[("1", true), ("2", false)]),
+            "{:?}",
+            r.missing
+        );
+        assert_eq!(of("g:t"), want(&[("1", true), ("2", true)]));
     }
 
     #[test]

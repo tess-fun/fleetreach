@@ -914,13 +914,13 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   ~/fa-testbed/gradle (208 Android/KMP skipped, they need the Android SDK). **56 resolved**;
   47 fail for reasons of their own (dead plugin repositories, toolchains Gradle cannot fetch
   on arm64, files the sparse clone lacks, plugins that need a full checkout). On the same POMs
-  (Gradle's own download cache), **86.6% of 9,550 modules at Gradle's version, 90.8% by name**,
+  (Gradle's own download cache), **87.0% of 9,550 modules at Gradle's version, 90.8% by name**,
   from 59.7% and 70.0% for the reader before this round; median repo 98.1% exact, 48 of 56 at
-  90% or more. **96.4% and 98.6% on the 51 builds whose dependencies no build plugin adds**:
+  90% or more. **96.7% and 98.6% on the 51 builds whose dependencies no build plugin adds**:
   the five others (ideavim and MinecraftDev on the IntelliJ Platform plugin, Paper and
   WorldEdit on paperweight's dev bundle, minecolonies on ForgeGradle) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 292 misses remain in
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 267 misses remain in
   the 51 builds, ihub-pub's included. Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
   that Gradle never builds as part of the project. Later rules: the main classpath resolved
@@ -937,7 +937,10 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   overrides only in files applying the dependency-management plugin (halo 97.1% to 99.6%),
   `platform(ext map entry)` (jib 93.5% to 99.2%), the dependency-management plugin by catalog
   alias (interview-guide 100%), Boot 3.5+'s test launcher, `kotlin-dsl`'s embedded Kotlin by
-  wrapper version (axion 98.5%, node-gradle 98.5%), buildscript
+  wrapper version (axion 98.5%, node-gradle 98.5%), the test compile classpath on its own and
+  runtime dependencies off every compile classpath at any depth, `.module` runtime-only ones
+  included (komga 96.9%, conductor 99.0%; pulsar +9 dev extras from its code-built catalog
+  platform), buildscript
   `classpath` plugin versions with `apply plugin:` (spring-integration-samples 333 to 414),
   `lib."k"` (mybatis-plus 236 to 340), `set('k', v)` properties and POM relocations, which
   Gradle keeps and adds the target of, unlike Maven, which replaces (spring-integration-samples

@@ -33,6 +33,9 @@ pub(crate) struct Variant {
     /// What the matching `java-api` variant adds (`compileOnlyApi`: JUnit's apiguardian, the
     /// OSGi annotations): on compile classpaths only, never at runtime.
     pub api_only: Vec<ModuleDep>,
+    /// The dependencies the matching `java-api` variant leaves out (`implementation` ones):
+    /// on the runtime classpath only, as group and module.
+    pub runtime_only: Vec<(String, String)>,
 }
 
 /// The runtime variant of a `.module` file. `Err` when the file does not parse or has no
@@ -124,6 +127,7 @@ pub(crate) fn runtime_variant(json: &str) -> Result<Variant, String> {
             }],
             constraints: Vec::new(),
             api_only: Vec::new(),
+            runtime_only: Vec::new(),
         });
     }
     let list = |v: &Value, key: &str| -> Vec<ModuleDep> {
@@ -153,11 +157,27 @@ pub(crate) fn runtime_variant(json: &str) -> Result<Variant, String> {
             .collect(),
         _ => Vec::new(),
     };
+    let runtime_only = match api {
+        Some(api) if best_rank.is_some_and(|r| r.4 == 2) => {
+            let in_api = list(api, "dependencies");
+            dependencies
+                .iter()
+                .filter(|d| {
+                    !in_api
+                        .iter()
+                        .any(|a| a.group == d.group && a.module == d.module)
+                })
+                .map(|d| (d.group.clone(), d.module.clone()))
+                .collect()
+        }
+        _ => Vec::new(),
+    };
     Ok(Variant {
         name,
         dependencies,
         constraints: list(best, "dependencyConstraints"),
         api_only,
+        runtime_only,
     })
 }
 
@@ -252,6 +272,21 @@ mod tests {
         );
         assert!(v.dependencies[2].platform);
         assert_eq!(v.constraints[0].module, "c");
+    }
+
+    #[test]
+    fn what_the_api_variant_leaves_out_is_runtime_only() {
+        // archunit-junit5: its engine is an `implementation` dependency, on the runtime
+        // variant only.
+        let json = r#"{"variants":[
+          {"name":"apiElements","attributes":{"org.gradle.usage":"java-api","org.gradle.category":"library"},
+           "dependencies":[{"group":"g","module":"api","version":{"requires":"1"}}]},
+          {"name":"runtimeElements","attributes":{"org.gradle.usage":"java-runtime","org.gradle.category":"library"},
+           "dependencies":[{"group":"g","module":"api","version":{"requires":"1"}},
+                           {"group":"g","module":"engine","version":{"requires":"1"}}]}
+        ]}"#;
+        let v = runtime_variant(json).unwrap();
+        assert_eq!(v.runtime_only, [("g".to_string(), "engine".to_string())]);
     }
 
     #[test]
