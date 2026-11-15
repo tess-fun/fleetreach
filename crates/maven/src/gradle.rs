@@ -190,6 +190,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             module.platforms.extend_from_slice(&shared.platforms);
             module.constraints.extend_from_slice(&shared.constraints);
             module.deps.extend_from_slice(&shared.deps);
+            module.dm |= shared.dm;
             module
                 .project_platforms
                 .extend_from_slice(&shared.project_platforms);
@@ -321,16 +322,16 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         missing.insert(format!("gradle/libs.versions.toml: {line}"));
     }
 
-    // The Spring dependency-management plugin (also applied by Spring Boot's) lets a project
-    // property override the same-named property of an imported BOM.
-    let spring = scripts.iter().any(|(_, t)| {
-        t.contains("io.spring.dependency-management") || t.contains("org.springframework.boot")
-    });
-    let bom_overrides = if spring {
-        context.vars.clone()
-    } else {
-        BTreeMap::new()
-    };
+    // The Spring dependency-management plugin lets a project property override the
+    // same-named property of a BOM it imports; Gradle's own `platform(...)` reads none. Only
+    // the files that apply it: when none does in a way read here (a convention plugin in
+    // buildSrc applies it), every file is taken to.
+    if context.spring_dm && !modules.iter().any(|m| m.dm) {
+        for m in &mut modules {
+            m.dm = true;
+        }
+    }
+    let no_overrides = BTreeMap::new();
     let mut graph = fleetreach_core::DepGraph::new("(root)");
     let mut packages: BTreeMap<(String, String), ResolvedDep> = BTreeMap::new();
     for module in &modules {
@@ -364,7 +365,11 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             match resolve_gradle_module(
                 &module.to_pom(pass),
                 source,
-                &bom_overrides,
+                if module.dm {
+                    &context.vars
+                } else {
+                    &no_overrides
+                },
                 &module.enforced(pass),
                 pass == Pass::Compile,
             ) {
@@ -859,10 +864,14 @@ struct Module {
     /// `resolutionStrategy.force("g:a:v")`: versions forced over conflict resolution, the
     /// flag set when only test configurations are forced.
     forced: Vec<(Coordinate, bool)>,
+    /// The file applies the Spring dependency-management plugin, whose `mavenBom` imports
+    /// read project properties (halo's `thymeleaf.version` in `:application`, not in `:api`).
+    dm: bool,
 }
 
 #[derive(Debug, Default)]
 struct Shared {
+    dm: bool,
     deps: Vec<Declared>,
     platforms: Vec<Coordinate>,
     constraints: Vec<Coordinate>,
@@ -1264,6 +1273,7 @@ fn classpath_plugin(line: &str, vars: &BTreeMap<String, String>) -> Option<(&'st
     Some((id, c.version?))
 }
 const KOTLIN_JVM: &str = "org.jetbrains.kotlin.jvm";
+const SPRING_DM: &str = "io.spring.dependency-management";
 
 /// The plugin a line applies, with its version when the line gives one: `id 'x' version '1'`,
 /// `id("x") version "1"`, `kotlin("jvm") version "1"` or `alias(libs.plugins.x)`.
@@ -1281,6 +1291,9 @@ fn plugin_line(
         .strip_prefix("apply plugin:")
         .or_else(|| line.strip_prefix("apply(plugin ="))
         .or_else(|| line.strip_prefix("apply(plugin:"))
+        // `apply { plugin("x") }` (dgs) and `pluginManager.apply("x")`.
+        .or_else(|| line.strip_prefix("plugin("))
+        .or_else(|| line.strip_prefix("pluginManager.apply("))
     {
         let (id, _) = quoted(rest.trim())?;
         let id = if id == "kotlin" { KOTLIN_JVM } else { id };
@@ -1689,9 +1702,15 @@ fn read_script(text: &str, context: &mut Context) -> Module {
             module.project_platforms.len(),
         );
         let projects_before = module.project_deps.len();
+        // Whether this line applies the dependency-management plugin, for a shared block.
+        let dm_before = std::mem::take(&mut module.dm);
         if decided.is_none() {
             read_line(trimmed, current, &blocks, context, &mut module);
         }
+        if shared && module.dm {
+            module.shared.dm = true;
+        }
+        module.dm |= dm_before;
         // caffeine's `testing.suites { named<JvmTestSuite>("test") { dependencies {
         // implementation(libs.jazzer) } } }` is its test classpath.
         if blocks.contains(&Block::Suites) {
@@ -2088,6 +2107,9 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
     let Some((id, _)) = plugin_line(line, &context.catalog, &context.vars) else {
         return;
     };
+    if id == SPRING_DM && !line.trim_end().ends_with("apply false") {
+        module.dm = true;
+    }
     let Some(version) = context.plugins.get(&id) else {
         return;
     };
@@ -2333,6 +2355,17 @@ fn read_declaration(
             rest = inner.trim();
             break;
         }
+    }
+    // `platform(dependencyStrings.JACKSON_BOM)`: a map entry or variable holding the
+    // coordinate (jib's `ext.dependencyStrings`).
+    let named = rest.trim_end_matches(')').trim();
+    let held = (platform && !named.starts_with(['"', '\'']) && !named.starts_with("libs."))
+        .then(|| map_reference(named).unwrap_or_else(|| named.to_string()))
+        .and_then(|key| context.vars.get(&key))
+        .filter(|v| v.contains(':'))
+        .map(|v| format!("\"{v}\")"));
+    if let Some(held) = &held {
+        rest = held;
     }
     if platform {
         if let Some(path) = project_path(rest) {
@@ -3584,6 +3617,65 @@ set = ["a-b", "e"]
                 .chain(r.packages.iter().map(|p| &p.name))
                 .any(|m| m.contains("kotlin-stdlib"));
             assert_eq!(stdlib, listed, "{flag}: {:?}", r.missing);
+        }
+    }
+
+    #[test]
+    fn spring_property_overrides_need_the_dependency_management_plugin() {
+        // halo's `thymeleaf.version` in gradle.properties moves the BOM's version in
+        // `:application`, which applies the plugin, and not in `:api`, which imports the BOM
+        // with Gradle's own `platform(...)`. dgs applies the plugin as `apply { plugin(...) }`;
+        // jib names its BOM through an `ext` map.
+        let bom = (
+            "g:bom:1".to_string(),
+            "<project><groupId>g</groupId><artifactId>bom</artifactId><version>1</version>\
+             <packaging>pom</packaging><properties><a.version>2</a.version></properties>\
+             <dependencyManagement><dependencies>\
+             <dependency><groupId>g</groupId><artifactId>a</artifactId><version>${a.version}</version></dependency>\
+             </dependencies></dependencyManagement></project>"
+                .to_string(),
+        );
+        let repo = Mem(BTreeMap::from([
+            bom,
+            pom("a", "2", &[]),
+            pom("a", "3", &[]),
+        ]));
+        let dm = "dependencyManagement {\n    imports {\n        mavenBom 'g:bom:1'\n    }\n}\n\
+                  dependencies {\n    implementation 'g:a'\n}\n";
+        let native = "dependencies {\n    implementation(platform(dependencyStrings.BOM))\n\
+                      \x20   implementation 'g:a'\n}\n";
+        for (file, text, expected) in [
+            (
+                "build.gradle",
+                format!("plugins {{\n    id 'io.spring.dependency-management'\n}}\n{dm}"),
+                "3",
+            ),
+            (
+                "build.gradle",
+                format!("apply {{\n    plugin(\"io.spring.dependency-management\")\n}}\n{dm}"),
+                "3",
+            ),
+            ("build.gradle", native.to_string(), "2"),
+        ] {
+            let dir = tree(
+                &format!("dm-overrides-{expected}-{}", text.len()),
+                &[
+                    ("gradle.properties", "a.version=3\n"),
+                    ("settings.gradle", "include 'app', 'other'\n"),
+                    (
+                        "build.gradle",
+                        "plugins {\n    id 'io.spring.dependency-management' version '1' apply false\n}\n\
+                         project.ext.dependencyStrings = [\n  BOM: 'g:bom:1',\n]\n",
+                    ),
+                    (
+                        "other/build.gradle",
+                        "plugins {\n    id 'io.spring.dependency-management'\n}\n",
+                    ),
+                    (&format!("app/{file}"), &text),
+                ],
+            );
+            let r = resolve_gradle(&dir, &repo);
+            assert_eq!(versions(&r, "g:a"), [expected], "{text}: {:?}", r.missing);
         }
     }
 

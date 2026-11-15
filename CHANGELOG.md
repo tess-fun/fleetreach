@@ -46,8 +46,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 86.3% of the 9,550 modules at Gradle's version and 90.6% by name, up from 59.7% and
-  70.0% on the same POMs; 95.9% and 98.5% on the 51 builds whose dependencies no build plugin
+  now lists 86.4% of the 9,550 modules at Gradle's version and 90.7% by name, up from 59.7% and
+  70.0% on the same POMs; 96.1% and 98.5% on the 51 builds whose dependencies no build plugin
   adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
@@ -64,7 +64,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   on an annotation processor's path (`kapt`, `ksp`, `annotationProcessor`) manages none of
   the classpaths read, `compileOnly(project(':p'))` brings only p's `api` dependencies, and
   `kotlin.stdlib.default.dependency=false` drops the standard library the Kotlin plugin adds
-  (reposilite 95.0% to 97.7%). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  (reposilite 95.0% to 97.7%). A project property overrides a BOM's property only in the
+  build files that apply the Spring dependency-management plugin (also written
+  `apply { plugin(...) }`), never through Gradle's own `platform(...)`: halo's
+  `thymeleaf.version` moves `:application` and not `:api`, as Gradle shows (97.1% to
+  99.6%). A `platform(...)` naming its BOM through an `ext` map is read (jib 93.5% to 99.2%). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over
