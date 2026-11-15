@@ -121,11 +121,17 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             plugins.insert(KOTLIN_JVM.to_string(), version.clone());
         }
     }
+    // Some script applies the Spring dependency-management plugin, by id or through a catalog
+    // alias (interview-guide's `alias(libs.plugins.spring.dependency.management)`).
+    let mut spring_dm = scripts.iter().any(|(_, t)| t.contains(SPRING_DM));
     for (_, text) in &scripts {
         for line in text.lines() {
             let line = line.trim();
-            if let Some((id, Some(version))) = plugin_line(line, &catalog, &vars) {
-                plugins.entry(id).or_insert(version);
+            if let Some((id, version)) = plugin_line(line, &catalog, &vars) {
+                spring_dm |= id == SPRING_DM;
+                if let Some(version) = version {
+                    plugins.entry(id).or_insert(version);
+                }
             }
             // `buildscript { dependencies { classpath "g:a:v" } }` puts a plugin on the
             // build's classpath at that version; `apply plugin:` then applies it.
@@ -147,9 +153,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         used: BTreeSet::new(),
         exported: true,
         extended_by,
-        spring_dm: scripts
-            .iter()
-            .any(|(_, t)| t.contains("io.spring.dependency-management")),
+        spring_dm,
 
         processor: false,
     };
@@ -2104,6 +2108,10 @@ fn read_line(
 
 /// The dependencies a plugin brings: Spring Boot's BOM and Kotlin's standard library.
 fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
+    if line == "`kotlin-dsl`" || line.starts_with("id(\"org.gradle.kotlin.kotlin-dsl\")") {
+        kotlin_dsl(context, module);
+        return;
+    }
     let Some((id, _)) = plugin_line(line, &context.catalog, &context.vars) else {
         return;
     };
@@ -2114,6 +2122,28 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
         return;
     };
     if id == SPRING_BOOT {
+        // From 3.5 the plugin adds the JUnit Platform launcher to `testRuntimeOnly` (komga,
+        // petclinic, Timefold's spring-boot-integration list it without declaring it).
+        let launcher = {
+            let mut parts = version.split('.').map(|p| p.parse::<u32>().unwrap_or(0));
+            (parts.next().unwrap_or(0), parts.next().unwrap_or(0)) >= (3, 5)
+        };
+        if launcher && !line.trim_end().ends_with("apply false") {
+            module.deps.push(Declared {
+                coordinate: Coordinate {
+                    group: "org.junit.platform".to_string(),
+                    artifact: "junit-platform-launcher".to_string(),
+                    version: None,
+                    enforced: false,
+                    strict: false,
+                    test: false,
+                },
+                scope: "test",
+                exclusions: Vec::new(),
+                pom: false,
+                exported: false,
+            });
+        }
         // Spring Boot applies its BOM through the dependency-management plugin.
         module.platforms.push(Coordinate {
             group: "org.springframework.boot".to_string(),
@@ -2141,6 +2171,106 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
             pom: false,
             // The Kotlin plugin adds the standard library to `api`.
             exported: true,
+        });
+    }
+}
+
+/// The Kotlin each Gradle release embeds, from its minimum Gradle version (Gradle's
+/// compatibility page, read at 9.9.1).
+const EMBEDDED_KOTLIN: &[(&str, &str)] = &[
+    ("5.0", "1.3.10"),
+    ("5.1", "1.3.11"),
+    ("5.2", "1.3.20"),
+    ("5.3", "1.3.21"),
+    ("5.5", "1.3.31"),
+    ("5.6", "1.3.41"),
+    ("6.0", "1.3.50"),
+    ("6.1", "1.3.61"),
+    ("6.3", "1.3.70"),
+    ("6.4", "1.3.71"),
+    ("6.5", "1.3.72"),
+    ("6.8", "1.4.20"),
+    ("7.0", "1.4.31"),
+    ("7.2", "1.5.21"),
+    ("7.3", "1.5.31"),
+    ("7.5", "1.6.21"),
+    ("7.6", "1.7.10"),
+    ("8.0", "1.8.10"),
+    ("8.2", "1.8.20"),
+    ("8.3", "1.9.0"),
+    ("8.4", "1.9.10"),
+    ("8.5", "1.9.20"),
+    ("8.7", "1.9.22"),
+    ("8.9", "1.9.23"),
+    ("8.10", "1.9.24"),
+    ("8.11", "2.0.20"),
+    ("8.12", "2.0.21"),
+    ("9.0", "2.2.0"),
+    ("9.2", "2.2.20"),
+    ("9.3", "2.2.21"),
+    ("9.4", "2.3.0"),
+    ("9.5", "2.3.20"),
+    ("9.6", "2.3.21"),
+    ("9.7", "2.4.0"),
+    ("9.8", "2.4.10"),
+    ("9.9", "2.4.21"),
+];
+
+/// `9.8.2` as numbers, to compare release lines.
+fn gradle_release(version: &str) -> Vec<u32> {
+    version
+        .split(['.', '-'])
+        .map_while(|p| p.parse().ok())
+        .collect()
+}
+
+/// The `kotlin-dsl` plugin compiles against the Kotlin the running Gradle embeds: its
+/// standard library and reflection, on the compile and test classpaths but not the runtime
+/// one (axion on Gradle 9.8, Kotlin 2.4.10). Before Gradle 8 the library is
+/// `kotlin-stdlib-jdk8` (node-gradle on 7.6); in 8.x, unconfirmed, only the parts both forms
+/// bring. No wrapper, or a Gradle newer than the table, adds nothing.
+fn kotlin_dsl(context: &Context, module: &mut Module) {
+    let Some(running) = context.vars.get(GRADLE_VERSION).map(|v| gradle_release(v)) else {
+        return;
+    };
+    let Some(last) = EMBEDDED_KOTLIN.last() else {
+        return;
+    };
+    // A release past the table's last line may embed a newer Kotlin.
+    if running[..running.len().min(2)] > gradle_release(last.0)[..] {
+        return;
+    }
+    let Some((_, kotlin)) = EMBEDDED_KOTLIN
+        .iter()
+        .rev()
+        .find(|(min, _)| gradle_release(min) <= running)
+    else {
+        return;
+    };
+    let stdlib = if running < vec![8] {
+        "kotlin-stdlib-jdk8"
+    } else {
+        "kotlin-stdlib"
+    };
+    for (artifact, scope) in [
+        (stdlib, "provided"),
+        ("kotlin-reflect", "provided"),
+        (stdlib, "test"),
+        ("kotlin-reflect", "test"),
+    ] {
+        module.deps.push(Declared {
+            coordinate: Coordinate {
+                group: "org.jetbrains.kotlin".to_string(),
+                artifact: artifact.to_string(),
+                version: Some((*kotlin).to_string()),
+                enforced: false,
+                strict: false,
+                test: false,
+            },
+            scope,
+            exclusions: Vec::new(),
+            pom: false,
+            exported: false,
         });
     }
 }
@@ -3676,6 +3806,108 @@ set = ["a-b", "e"]
             );
             let r = resolve_gradle(&dir, &repo);
             assert_eq!(versions(&r, "g:a"), [expected], "{text}: {:?}", r.missing);
+        }
+    }
+
+    fn raw(g: &str, a: &str, v: &str, managed: &str) -> (String, String) {
+        (
+            format!("{g}:{a}:{v}"),
+            format!(
+                "<project><groupId>{g}</groupId><artifactId>{a}</artifactId><version>{v}</version>\
+                 <dependencyManagement><dependencies>{managed}</dependencies></dependencyManagement>\
+                 </project>"
+            ),
+        )
+    }
+
+    #[test]
+    fn a_catalog_aliased_dependency_management_plugin_and_boots_launcher() {
+        // interview-guide applies the plugin as `alias(libs.plugins...)`, so the build's own
+        // jakarta.annotation-api 2.1.1 wins over Boot's 3.0.0; Boot 3.5+ adds the JUnit
+        // Platform launcher to the tests (komga, petclinic).
+        let managed = "<dependency><groupId>g</groupId><artifactId>a</artifactId><version>3</version></dependency>\
+                       <dependency><groupId>org.junit.platform</groupId><artifactId>junit-platform-launcher</artifactId><version>1.12.0</version></dependency>";
+        let repo = Mem(BTreeMap::from([
+            raw(
+                "org.springframework.boot",
+                "spring-boot-dependencies",
+                "3.5.0",
+                managed,
+            ),
+            raw(
+                "org.junit.platform",
+                "junit-platform-launcher",
+                "1.12.0",
+                "",
+            ),
+            pom("a", "2", &[]),
+            pom("a", "3", &[]),
+        ]));
+        let dir = tree(
+            "dm-alias",
+            &[
+                (
+                    "gradle/libs.versions.toml",
+                    "[plugins]\nboot = { id = \"org.springframework.boot\", version = \"3.5.0\" }\n\
+                     dm = { id = \"io.spring.dependency-management\", version = \"1.1.7\" }\n",
+                ),
+                (
+                    "build.gradle",
+                    "plugins {\n    alias(libs.plugins.boot)\n    alias(libs.plugins.dm)\n}\n\
+                     dependencies {\n    implementation 'g:a:2'\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:a"), ["2"], "{:?}", r.missing);
+        assert_eq!(
+            versions(&r, "org.junit.platform:junit-platform-launcher"),
+            ["1.12.0"]
+        );
+    }
+
+    #[test]
+    fn kotlin_dsl_brings_the_running_gradles_kotlin() {
+        let repo = Mem(BTreeMap::from([
+            raw("org.jetbrains.kotlin", "kotlin-stdlib", "2.4.10", ""),
+            raw("org.jetbrains.kotlin", "kotlin-reflect", "2.4.10", ""),
+            raw("org.jetbrains.kotlin", "kotlin-stdlib-jdk8", "1.7.10", ""),
+            raw("org.jetbrains.kotlin", "kotlin-reflect", "1.7.10", ""),
+        ]));
+        for (gradle, expected) in [
+            (
+                "9.8.2",
+                vec![
+                    "org.jetbrains.kotlin:kotlin-reflect@2.4.10",
+                    "org.jetbrains.kotlin:kotlin-stdlib@2.4.10",
+                ],
+            ),
+            (
+                "7.6.3",
+                vec![
+                    "org.jetbrains.kotlin:kotlin-reflect@1.7.10",
+                    "org.jetbrains.kotlin:kotlin-stdlib-jdk8@1.7.10",
+                ],
+            ),
+            ("10.1", vec![]),
+        ] {
+            let dir = tree(
+                &format!("kotlin-dsl-{gradle}"),
+                &[
+                    (
+                        "gradle/wrapper/gradle-wrapper.properties",
+                        &format!("distributionUrl=https\\://services.gradle.org/distributions/gradle-{gradle}-bin.zip\n"),
+                    ),
+                    ("build.gradle.kts", "plugins {\n    `kotlin-dsl`\n}\n"),
+                ],
+            );
+            let r = resolve_gradle(&dir, &repo);
+            let got: Vec<String> = r
+                .packages
+                .iter()
+                .map(|p| format!("{}@{}", p.name, p.version))
+                .collect();
+            assert_eq!(got, expected, "{gradle}: {:?}", r.missing);
         }
     }
 
