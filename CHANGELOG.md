@@ -235,6 +235,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checker-qual: 4.4.0 to compile, worldedit's 3.48.3 to run the tests). Under the Spring
   plugin a compile-only version still versions an unversioned test declaration of the same
   module. 143 packages Gradle does not list dropped out, none it does.
+- **A `projectsEvaluated` hook over the subprojects is read.** A project's
+  `gradle.projectsEvaluated { rootProject.subprojects.findAll { }...each { p -> } }` declares
+  its body for each subproject the filters keep (`it != project`, `hasPlugin(C)` through the
+  ids that give C, build logic's included, path and name tests); any other filter or use of
+  p is reported. With it: `project(path: p, configuration: 'optional')` hands over p's
+  optional declarations, also when p is a dependency already; a platform met again as an
+  enforced one forces what it sets; and a version an `eachDependency` rule moves asks for
+  nothing (opensaml 5.2.3 moved to 4.0.1 no longer raises xmlsec). spring-boot: 98.3% to 100%
+  of 1,032 modules, 3 fewer packages Gradle does not list.
 - **LINE's flagged-project blocks, literal loops and risen platforms are read.** In a build on
   LINE's gradle-scripts, a root `configure(projectsWithFlags('java')) { }` block is read in
   each project `includeWithFlags` gives those flags (`java17` and `kotlin` imply `java`), with

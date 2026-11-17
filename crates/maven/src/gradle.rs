@@ -41,6 +41,9 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     project_blocks(dir, &mut scripts);
     project_accessors(dir, &mut scripts);
     spring_boot_boms(dir, &mut scripts);
+    // spring-boot's docs project depends on every published Java project, through a
+    // `gradle.projectsEvaluated { rootProject.subprojects.findAll { } .each { } }` hook.
+    projects_evaluated(dir, &mut scripts, &mut missing);
     let named = named_catalogs(dir);
     for (name, _) in &named {
         for (_, text) in &mut scripts {
@@ -499,11 +502,15 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             // dependencies"))`); an enforced one forces everything it reaches.
             let mut stack: Vec<(String, bool)> =
                 m.project_platforms.iter().rev().cloned().collect();
-            let mut seen = BTreeSet::new();
+            // A platform met again as an enforced one is read again, enforced: spring-boot's
+            // docs project names spring-boot-dependencies as a plain platform before the
+            // internal enforced one that nests it.
+            let mut seen: BTreeMap<String, bool> = BTreeMap::new();
             while let Some((path, strict)) = stack.pop() {
-                if !seen.insert(path.clone()) {
+                if seen.get(&path).is_some_and(|&was| was || !strict) {
                     continue;
                 }
+                seen.insert(path.clone(), strict);
                 if let Some(&i) = by_path.get(&path) {
                     // `enforcedPlatform(project(...))` forces what the platform project sets.
                     let mark = |c: &Coordinate| Coordinate {
@@ -536,22 +543,26 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     let via: Vec<(Vec<Declared>, Vec<Coordinate>, Vec<Coordinate>)> = (0..modules.len())
         .map(|start| {
             let (mut deps, mut platforms, mut constraints) = (Vec::new(), Vec::new(), Vec::new());
-            let mut seen = BTreeSet::from([start]);
+            // A project met again through another of its configurations is read again for
+            // it (spring-boot's docs: `implementation(project(p))`, then p's `optional`).
+            let mut seen = BTreeSet::new();
             let mut queue: VecDeque<QueuedProject> = modules[start]
                 .project_deps
                 .iter()
-                .filter_map(|(path, scope, _, cut, whole)| match by_path.get(path) {
-                    Some(&i) => Some((i, *scope, cut.clone(), false, *whole)),
+                .filter_map(|(path, scope, _, cut, named)| match by_path.get(path) {
+                    Some(&i) => Some((i, *scope, cut.clone(), false, *named)),
                     None => {
                         missing.insert(format!("project `{path}` is not a build file here"));
                         None
                     }
                 })
                 .collect();
-            while let Some((i, scope, cut, behind, whole)) = queue.pop_front() {
-                if !seen.insert(i) {
+            while let Some((i, scope, cut, behind, named)) = queue.pop_front() {
+                if i == start || !seen.insert((i, named)) {
                     continue;
                 }
+                let whole = named == Named::Whole;
+                let local = named == Named::Local;
                 let m = &modules[i];
                 // What p declares in `implementation` is on this file's runtime classpath
                 // only; its `api` reaches the compile classpath too.
@@ -573,9 +584,9 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                 for d in m
                     .deps
                     .iter()
-                    .filter(|d| !d.local && !excluded(&d.coordinate))
+                    .filter(|d| d.local == local && !excluded(&d.coordinate))
                 {
-                    if let Some(scope) = through(d.scope, d.exported) {
+                    if let Some(scope) = through(d.scope, d.exported || local) {
                         let mut exclusions = d.exclusions.clone();
                         exclusions.extend(cut.iter().cloned());
                         // On a test path, what p does not export (or what lies behind a
@@ -606,13 +617,16 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                         .filter(|c| !c.enforced && !c.test)
                         .cloned(),
                 );
-                for (path, own, exported, more, named) in &m.project_deps {
+                for (path, own, exported, more, next_named) in &m.project_deps {
+                    if local {
+                        break;
+                    }
                     if let (Some(&j), Some(next)) = (by_path.get(path), through(own, *exported)) {
                         let mut cut = cut.clone();
                         cut.extend(more.iter().cloned());
                         let hidden =
                             next == "test" && !whole && (behind || !*exported || *own == "runtime");
-                        queue.push_back((j, next, cut, hidden, *named));
+                        queue.push_back((j, next, cut, hidden, *next_named));
                     }
                 }
             }
@@ -851,6 +865,333 @@ fn catalog_file(dir: &Path, scripts: &[(String, String)]) -> String {
 /// common-dependencies.gradle` applying `dependenciesTomlBoms`), as `g:a:v`: its own section,
 /// beside `[libraries]`, each entry a BOM every project's classpaths take. A BOM whose version
 /// is not literal or a `version.ref` is left out, as the scripts skip it.
+/// The build-logic plugins buildSrc registers: (id, the class's simple name, its source).
+fn plugin_classes(dir: &Path, scripts: &[(String, String)]) -> Vec<(String, String, String)> {
+    let mut out = Vec::new();
+    for (file, text) in scripts {
+        if !file.starts_with("buildSrc/") || !text.contains("implementationClass") {
+            continue;
+        }
+        let base = Path::new(file).parent().unwrap_or(Path::new(""));
+        let mut id = None;
+        for line in text.lines().map(str::trim) {
+            let value = |key: &str| {
+                let rest = line.strip_prefix(key)?.trim_start();
+                let rest = rest.strip_prefix('=').unwrap_or(rest).trim_start();
+                quoted(rest).map(|(v, _)| v.to_string())
+            };
+            if let Some(v) = value("id") {
+                id = Some(v);
+            } else if let Some(class) = value("implementationClass") {
+                let (Some(id), Some((_, source))) = (id.take(), plugin_class(dir, base, &class))
+                else {
+                    continue;
+                };
+                let simple = class.rsplit('.').next().unwrap_or(&class).to_string();
+                out.push((id, simple, source));
+            }
+        }
+    }
+    out
+}
+
+/// The plugin ids that give a project plugin class `class` (`JavaPlugin`, or a build-logic
+/// class such as `OptionalDependenciesPlugin`): Gradle's own ids for it, and each build-logic
+/// id whose class is it or applies it (`project.getPlugins().apply(MavenPublishPlugin.class)`),
+/// in turn. `None` for a class neither Gradle's table here nor build logic knows.
+fn ids_giving(class: &str, classes: &[(String, String, String)]) -> Option<BTreeSet<String>> {
+    let (gradle_ids, mut wanted): (&[&str], BTreeSet<&str>) = match class {
+        "JavaPlugin" => (
+            &[
+                "java",
+                "java-library",
+                "war",
+                "groovy",
+                "java-gradle-plugin",
+                "org.jetbrains.kotlin.jvm",
+            ],
+            BTreeSet::from([
+                "JavaPlugin",
+                "JavaLibraryPlugin",
+                "WarPlugin",
+                "GroovyPlugin",
+            ]),
+        ),
+        "JavaLibraryPlugin" => (&["java-library"], BTreeSet::from(["JavaLibraryPlugin"])),
+        "MavenPublishPlugin" => (&["maven-publish"], BTreeSet::from(["MavenPublishPlugin"])),
+        _ if classes.iter().any(|(_, name, _)| name == class) => (&[], BTreeSet::from([class])),
+        _ => return None,
+    };
+    let mut ids: BTreeSet<String> = gradle_ids.iter().map(|id| (*id).to_string()).collect();
+    loop {
+        let before = ids.len();
+        for (id, name, source) in classes {
+            let applies = wanted.contains(name.as_str())
+                || wanted
+                    .iter()
+                    .any(|w| source.contains(&format!(".apply({w}.class)")));
+            if applies {
+                ids.insert(id.clone());
+                wanted.insert(name.as_str());
+            }
+        }
+        if ids.len() == before {
+            return Some(ids);
+        }
+    }
+}
+
+/// The plugin ids a build script applies by id: `id "x"` / `id("x")` in `plugins { }`,
+/// `` `java-library` `` and `apply plugin: 'x'`.
+fn applied_ids(text: &str) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for line in text.lines().map(str::trim) {
+        let id = if let Some(rest) = line.strip_prefix("id") {
+            let rest = rest.trim_start();
+            quoted(rest.strip_prefix('(').unwrap_or(rest)).map(|(v, _)| v)
+        } else if let Some(rest) = line.strip_prefix("apply plugin:") {
+            quoted(rest.trim_start()).map(|(v, _)| v)
+        } else {
+            line.strip_prefix('`').and_then(|r| r.strip_suffix('`'))
+        };
+        if let Some(id) = id {
+            out.insert(id.to_string());
+        }
+    }
+    out
+}
+
+/// A subproject as a `projectsEvaluated` filter sees it.
+struct Candidate<'a> {
+    path: &'a str,
+    name: &'a str,
+    ids: &'a BTreeSet<String>,
+}
+
+/// Whether `it` passes `.findAll { cond }`: `it != project`, `it.plugins.hasPlugin(C)`,
+/// `[!]it.path.contains("s")`, `[!]it.name.startsWith("s")`, joined by `&&`. `None` for
+/// anything else.
+fn hook_filter(
+    cond: &str,
+    it: &Candidate<'_>,
+    own: &str,
+    classes: &[(String, String, String)],
+) -> Option<bool> {
+    let mut all = true;
+    for atom in cond.split("&&").map(str::trim) {
+        let (negated, atom) = match atom.strip_prefix('!') {
+            Some(rest) => (true, rest.trim_start()),
+            None => (false, atom),
+        };
+        let call = |prefix: &str| atom.strip_prefix(prefix).and_then(|r| r.strip_suffix(')'));
+        let text_arg = |prefix: &str| match quoted(call(prefix)?.trim()) {
+            Some((s, "")) => Some(s),
+            _ => None,
+        };
+        let holds = if atom == "it != project" && !negated {
+            it.path != own
+        } else if let Some(class) = call("it.plugins.hasPlugin(") {
+            !ids_giving(class.trim(), classes)?.is_disjoint(it.ids)
+        } else if atom.starts_with("it.path.contains(") {
+            it.path.contains(text_arg("it.path.contains(")?)
+        } else {
+            it.name.starts_with(text_arg("it.name.startsWith(")?)
+        };
+        all &= holds != negated;
+    }
+    Some(all)
+}
+
+/// The body of a hook's `.each { p -> body }` for one project: `project(p.path)` and
+/// `path: p.path` as its path, and `if (p.plugins.hasPlugin(C)) { }` decided. `None` when `p`
+/// is used any other way.
+fn hook_body(
+    body: &[&str],
+    var: &str,
+    it: &Candidate<'_>,
+    classes: &[(String, String, String)],
+) -> Option<String> {
+    let mut out = String::new();
+    let mut skip: Vec<(bool, i32)> = Vec::new();
+    let has = format!("if ({var}.plugins.hasPlugin(");
+    let mut depth = 0i32;
+    for line in body {
+        let trimmed = line.trim();
+        if let Some(class) = trimmed
+            .strip_prefix(&has)
+            .and_then(|r| r.strip_suffix(")) {"))
+        {
+            let holds = !ids_giving(class.trim(), classes)?.is_disjoint(it.ids);
+            skip.push((!holds, depth));
+            depth += 1;
+            continue;
+        }
+        let opens = code_only(line).matches('{').count() as i32;
+        let closes = code_only(line).matches('}').count() as i32;
+        if trimmed == "}" && skip.last().is_some_and(|(_, d)| *d == depth - 1) {
+            skip.pop();
+            depth -= 1;
+            continue;
+        }
+        depth += opens - closes;
+        if skip.iter().any(|(s, _)| *s) {
+            continue;
+        }
+        let quoted_path = format!("\"{}\"", it.path);
+        let line = line
+            .replace(
+                &format!("project({var}.path)"),
+                &format!("project({quoted_path})"),
+            )
+            .replace(
+                &format!("path: {var}.path"),
+                &format!("path: {quoted_path}"),
+            );
+        let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
+        let left = line.match_indices(var).any(|(at, _)| {
+            !line[..at].ends_with(word) && !line[at + var.len()..].starts_with(word)
+        });
+        if left {
+            return None;
+        }
+        out.push_str(&line);
+        out.push('\n');
+    }
+    skip.is_empty().then_some(out)
+}
+
+/// `gradle.projectsEvaluated { rootProject.subprojects .findAll { } ... .each { p -> } }` in a
+/// project's build file, written out as the body once per subproject the filters keep
+/// (spring-boot's docs project: `implementation(project(p.path))` for every published Java
+/// project, its `optional` configuration too). A hook not read in full is reported.
+fn projects_evaluated(
+    dir: &Path,
+    scripts: &mut [(String, String)],
+    missing: &mut BTreeSet<String>,
+) {
+    if !scripts
+        .iter()
+        .any(|(_, t)| t.contains("gradle.projectsEvaluated {"))
+    {
+        return;
+    }
+    let settings = ["settings.gradle", "settings.gradle.kts"]
+        .iter()
+        .find_map(|f| fleetreach_core::repofile::read_to_string(dir.join(f)).ok())
+        .map(|t| settings_paths(&strip_comments(&t)))
+        .unwrap_or_default();
+    let classes = plugin_classes(dir, scripts);
+    let ids_of = |dir: &str| {
+        scripts
+            .iter()
+            .find(|(f, _)| {
+                *f == format!("{dir}/build.gradle") || *f == format!("{dir}/build.gradle.kts")
+            })
+            .map(|(_, t)| applied_ids(t))
+            .unwrap_or_default()
+    };
+    let projects: Vec<(String, String, BTreeSet<String>)> = settings
+        .iter()
+        .map(|(path, d)| {
+            let name = path.rsplit(':').next().unwrap_or(path).to_string();
+            (path.clone(), name, ids_of(d))
+        })
+        .collect();
+    for (file, text) in scripts.iter_mut() {
+        let Some(own) = settings
+            .iter()
+            .find(|(_, d)| {
+                *file == format!("{d}/build.gradle") || *file == format!("{d}/build.gradle.kts")
+            })
+            .map(|(p, _)| p.clone())
+        else {
+            continue;
+        };
+        if !text.contains("gradle.projectsEvaluated {") {
+            continue;
+        }
+        let lines: Vec<&str> = text.lines().collect();
+        let Some(start) = lines.iter().position(|l| {
+            let t = l.trim();
+            t.ends_with("gradle.projectsEvaluated {")
+                && [
+                    "gradle.",
+                    "rootProject.gradle.",
+                    "project.rootProject.gradle.",
+                ]
+                .iter()
+                .any(|p| t == format!("{p}projectsEvaluated {{"))
+        }) else {
+            continue;
+        };
+        let written = (|| {
+            let mut i = start + 1;
+            if lines.get(i)?.trim() != "rootProject.subprojects" {
+                return None;
+            }
+            i += 1;
+            let mut filters = Vec::new();
+            while let Some(cond) = lines
+                .get(i)?
+                .trim()
+                .strip_prefix(".findAll {")
+                .and_then(|r| r.strip_suffix('}'))
+            {
+                filters.push(cond.trim());
+                i += 1;
+            }
+            let var = lines
+                .get(i)?
+                .trim()
+                .strip_prefix(".each {")?
+                .strip_suffix("->")?
+                .trim();
+            if var.is_empty() || !var.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                return None;
+            }
+            let mut depth = 1i32;
+            let mut end = None;
+            for (j, line) in lines.iter().enumerate().skip(i + 1) {
+                let code = code_only(line);
+                depth += code.matches('{').count() as i32 - code.matches('}').count() as i32;
+                if depth == 0 {
+                    end = Some(j);
+                    break;
+                }
+            }
+            let end = end.filter(|&e| lines[e].trim() == "}")?;
+            if lines.get(end + 1)?.trim() != "}" {
+                return None;
+            }
+            let mut body = String::new();
+            for (path, name, ids) in &projects {
+                let it = Candidate { path, name, ids };
+                let mut keep = true;
+                for cond in &filters {
+                    keep &= hook_filter(cond, &it, &own, &classes)?;
+                }
+                if keep {
+                    body.push_str(&hook_body(&lines[i + 1..end], var, &it, &classes)?);
+                }
+            }
+            Some((body, end + 1))
+        })();
+        let Some((body, last)) = written else {
+            missing.insert(format!(
+                "{file}: a gradle.projectsEvaluated hook is not read in full"
+            ));
+            continue;
+        };
+        let mut rewritten: String = lines[..start].iter().map(|l| format!("{l}\n")).collect();
+        rewritten.push_str(&body);
+        for l in &lines[last + 1..] {
+            rewritten.push_str(l);
+            rewritten.push('\n');
+        }
+        *text = rewritten;
+    }
+}
+
 /// The flags LINE's gradle-scripts give each project: what `includeWithFlags ':p', 'a', ...`
 /// names, with the implications its `settings-flags.gradle` adds (`javaNN` and `kotlin` imply
 /// `java`, `kotlinN.N` implies `kotlin`, `shade` implies `relocate`, `bom` and
@@ -3775,8 +4116,30 @@ fn is_configuration(name: &str) -> bool {
 }
 
 /// `implementation(project(":p")) { exclude ... }`: p's path, the scope, whether exported, the
-/// block's exclusions, and whether it names a configuration of p (all of it is handed over).
-type ProjectDep = (String, &'static str, bool, Exclusions, bool);
+/// block's exclusions, and which of p's configurations it names.
+type ProjectDep = (String, &'static str, bool, Exclusions, Named);
+
+/// The configuration of p a project dependency names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Named {
+    /// None: what p exports.
+    Exported,
+    /// One of p's own (`configuration: 'tests'`): all p holds is handed over.
+    Whole,
+    /// A configuration build logic keeps to p (`configuration: 'optional'`, see
+    /// `local_configurations`): what it holds, on both classpaths.
+    Local,
+}
+
+/// `configuration: 'x'` (or `configuration = "x"`) in a project dependency: x.
+fn configuration_named(text: &str) -> Option<&str> {
+    let at = text.find("configuration")? + "configuration".len();
+    let rest = text[at..]
+        .trim_start()
+        .strip_prefix([':', '='])?
+        .trim_start();
+    quoted(rest).map(|(v, _)| v)
+}
 
 /// Exclusions by (group, module), `*` for either part left out.
 type Exclusions = Vec<(String, String)>;
@@ -3784,7 +4147,7 @@ type Exclusions = Vec<(String, String)>;
 /// A project reached through project dependencies: its index, the scope, the exclusions on the
 /// way, whether it lies behind a project that does not export it (on a test path), and whether
 /// a named configuration of it was asked for.
-type QueuedProject = (usize, &'static str, Exclusions, bool, bool);
+type QueuedProject = (usize, &'static str, Exclusions, bool, Named);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Block {
@@ -6029,13 +6392,18 @@ fn read_declaration(
                 // A named configuration (`project(path: ':core', configuration: 'tests')`,
                 // `project(':core').configurations.implementation.dependencies`) hands over all
                 // it holds, not only what the project exports.
-                let whole = rest.contains("configuration");
+                let named = match configuration_named(rest) {
+                    Some(c) if context.local_configurations.contains(c) => Named::Local,
+                    Some(_) => Named::Whole,
+                    None if rest.contains("configuration") => Named::Whole,
+                    None => Named::Exported,
+                };
                 module.project_deps.push((
                     path.to_string(),
                     scope,
-                    exported || whole,
+                    exported || named != Named::Exported,
                     Vec::new(),
-                    whole,
+                    named,
                 ));
             }
         }
@@ -7000,6 +7368,169 @@ set = ["a-b", "e"]
         assert!(r.missing.is_empty(), "{:?}", r.missing);
         assert_eq!(versions(&r, "g:inner"), ["2"], "{:?}", r.packages);
         assert_eq!(versions(&r, "g:lib"), ["1"]);
+    }
+
+    #[test]
+    fn a_projects_evaluated_hook_depends_on_the_projects_it_keeps() {
+        // spring-boot's docs: every subproject with the Java and Maven Publish plugins (here
+        // through a buildSrc plugin that applies it), but no starter, and each one's
+        // `optional` configuration. lib's optional x 2 beats the x 1 its y brings on docs
+        // too; starter and tool are left out, so docs keeps its own v 1 and u 1.
+        let optional = "public class OptionalDependenciesPlugin {\n\
+             \tpublic void apply(Project project) {\n\
+             \t\tConfiguration optional = project.getConfigurations().create(\"optional\");\n\
+             \t\tsourceSets.all((s) -> {\n\
+             \t\t\tproject.getConfigurations().getByName(s.getCompileClasspathConfigurationName()).extendsFrom(optional);\n\
+             \t\t\tproject.getConfigurations().getByName(s.getRuntimeClasspathConfigurationName()).extendsFrom(optional);\n\
+             \t\t});\n\t}\n}\n";
+        let deployed = "public class DeployedPlugin implements Plugin<Project> {\n\
+             \tpublic void apply(Project project) {\n\
+             \t\tproject.getPlugins().apply(MavenPublishPlugin.class);\n\t}\n}\n";
+        let repo = Mem(BTreeMap::from([
+            pom("y", "1", &[("x", "1")]),
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+            pom("v", "1", &[]),
+            pom("v", "2", &[]),
+            pom("u", "1", &[]),
+            pom("u", "2", &[]),
+        ]));
+        let published = "plugins {\n\tid \"java-library\"\n\tid \"org.example.deployed\"\n\
+                         \tid \"org.example.optional-dependencies\"\n}\n";
+        let lib =
+            format!("{published}dependencies {{\n\tapi(\"g:y:1\")\n\toptional(\"g:x:2\")\n}}\n");
+        let starter = format!("{published}dependencies {{\n\tapi(\"g:v:2\")\n}}\n");
+        let docs = "plugins {\n\tid \"java\"\n}\ndependencies {\n\timplementation(\"g:v:1\")\n\
+                    \timplementation(\"g:u:1\")\n}\n\
+                    project.rootProject.gradle.projectsEvaluated {\n\trootProject.subprojects\n\
+                    \t\t.findAll { it != project }\n\
+                    \t\t.findAll { it.plugins.hasPlugin(JavaPlugin) && it.plugins.hasPlugin(MavenPublishPlugin) }\n\
+                    \t\t.findAll { !it.name.startsWith('starter') }\n\
+                    \t\t.findAll { !it.path.contains(\":cli:\") }\n\
+                    \t\t.each { javadocProject ->\n\t\t\tdependencies {\n\
+                    \t\t\t\timplementation(project(javadocProject.path))\n\
+                    \t\t\t\tif (javadocProject.plugins.hasPlugin(OptionalDependenciesPlugin)) {\n\
+                    \t\t\t\t\timplementation(project(path: javadocProject.path, configuration: 'optional'))\n\
+                    \t\t\t\t}\n\t\t\t}\n\t\t}\n}\n";
+        let dir = tree(
+            "projects-evaluated",
+            &[
+                ("settings.gradle", "include \"lib\"\ninclude \"starter-x\"\ninclude \"tool\"\ninclude \"docs\"\n"),
+                (
+                    "buildSrc/build.gradle",
+                    "gradlePlugin {\n\tplugins {\n\t\tdeployed {\n\t\t\tid = \"org.example.deployed\"\n\
+                     \t\t\timplementationClass = \"org.example.build.DeployedPlugin\"\n\t\t}\n\
+                     \t\toptional {\n\t\t\tid = \"org.example.optional-dependencies\"\n\
+                     \t\t\timplementationClass = \"org.example.build.optional.OptionalDependenciesPlugin\"\n\
+                     \t\t}\n\t}\n}\n",
+                ),
+                ("buildSrc/src/main/java/org/example/build/DeployedPlugin.java", deployed),
+                (
+                    "buildSrc/src/main/java/org/example/build/optional/OptionalDependenciesPlugin.java",
+                    optional,
+                ),
+                ("lib/build.gradle", &lib),
+                ("starter-x/build.gradle", &starter),
+                (
+                    "tool/build.gradle",
+                    "plugins {\n\tid \"java-library\"\n}\ndependencies {\n\tapi(\"g:u:2\")\n}\n",
+                ),
+                ("docs/build.gradle", docs),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:x"), ["2"], "{:?}", r.packages);
+        assert_eq!(versions(&r, "g:y"), ["1"]);
+        assert_eq!(versions(&r, "g:v"), ["1", "2"]);
+        assert_eq!(versions(&r, "g:u"), ["1", "2"]);
+        // A filter not read here leaves the hook reported.
+        let unread = docs.replace("!it.path.contains(\":cli:\")", "it.version != null");
+        let dir = tree(
+            "projects-evaluated-unread",
+            &[
+                ("settings.gradle", "include \"lib\"\ninclude \"docs\"\n"),
+                ("lib/build.gradle", &lib),
+                ("docs/build.gradle", &unread),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(
+            r.missing.iter().any(|m| m.contains("projectsEvaluated")),
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn a_platform_met_again_as_an_enforced_one_forces() {
+        // spring-boot's docs: `platform(project(":deps"))`, then the internal enforced
+        // platform that nests :deps. Everything :deps sets is forced (x stays 1 under y's 2).
+        let repo = Mem(BTreeMap::from([
+            pom("y", "1", &[("x", "2")]),
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+        ]));
+        let dir = tree(
+            "enforced-again",
+            &[
+                ("settings.gradle", "include 'deps', 'internal', 'app'\n"),
+                (
+                    "deps/build.gradle",
+                    "plugins {\n    id 'java-platform'\n}\ndependencies {\n    constraints {\n\
+                     \x20       api 'g:x:1'\n    }\n}\n",
+                ),
+                (
+                    "internal/build.gradle",
+                    "plugins {\n    id 'java-platform'\n}\ndependencies {\n\
+                     \x20   api enforcedPlatform(project(':deps'))\n}\n",
+                ),
+                (
+                    "app/build.gradle",
+                    "plugins {\n    id 'java'\n}\ndependencies {\n    implementation platform(project(':deps'))\n\
+                     \x20   implementation enforcedPlatform(project(':internal'))\n    implementation 'g:y:1'\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:x"), ["1"], "{:?}", r.packages);
+    }
+
+    #[test]
+    fn a_version_a_rule_moves_asks_for_nothing() {
+        // spring-boot's docs: an eachDependency rule moves opensaml 5.2.3 to 4.0.1, and
+        // Gradle follows only 4.0.1's edges: its xmlsec 2.1.4, not 5.2.3's 3.0.6.
+        let h = |v: &str, x: &str| {
+            (
+                format!("h:a:{v}"),
+                format!(
+                    "<project><groupId>h</groupId><artifactId>a</artifactId><version>{v}</version>\
+                     <dependencies><dependency><groupId>g</groupId><artifactId>x</artifactId>\
+                     <version>{x}</version></dependency></dependencies></project>"
+                ),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            h("1", "1"),
+            h("2", "2"),
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+        ]));
+        let dir = tree(
+            "rule-moves",
+            &[(
+                "build.gradle",
+                "plugins {\n\tid \"java\"\n}\ndependencies {\n\timplementation(\"h:a:2\")\n}\n\
+                 configurations {\n\tconfigureEach {\n\t\tresolutionStrategy {\n\t\t\teachDependency {\n\
+                 \t\t\t\tif (it.requested.group == 'h') {\n\t\t\t\t\tit.useVersion '1'\n\t\t\t\t}\n\
+                 \t\t\t}\n\t\t}\n\t}\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "h:a"), ["1"], "{:?}", r.packages);
+        assert_eq!(versions(&r, "g:x"), ["1"]);
     }
 
     #[test]

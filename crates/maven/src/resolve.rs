@@ -1990,6 +1990,7 @@ pub(crate) fn resolve_gradle_module(
             }
         }
         // A rule sets the version of each request it matches; the walk shows which are met.
+        let mut ruled = false;
         for p in &packages {
             let Some((group, artifact)) = p.name.split_once(':') else {
                 continue;
@@ -2011,11 +2012,17 @@ pub(crate) fn resolve_gradle_module(
                     String::new(),
                 );
                 if forced.get(&key) != Some(&rule.version) {
-                    forced.insert(key.clone(), rule.version.clone());
-                    pins.insert(key, rule.version.clone());
-                    raised = true;
+                    forced.insert(key, rule.version.clone());
+                    ruled = true;
                 }
             }
+        }
+        // What the walk asked for at a version a rule now moves no longer counts: Gradle
+        // follows only the chosen version's edges (spring-boot's docs: opensaml 5.2.3, moved
+        // to 4.0.1, asks for xmlsec 3.0.6; 4.0.1 asks for 2.1.4), so the requests start over.
+        if ruled {
+            pins = forced.clone();
+            continue;
         }
         if !raised && before == pins.len() {
             return Ok(Resolution {

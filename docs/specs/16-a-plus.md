@@ -924,17 +924,17 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   Gradle 3.5, bnd is a Bnd workspace, cortinico's main build has no dependencies of its own,
   elasticsearch's build plugins need its whole build-tools tree, beyond the 3.5 GB harness) for reasons of their own (dead plugin repositories, toolchains Gradle
   cannot fetch on arm64, files the sparse clone lacks, plugins that need a full checkout,
-  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **90.8% of
-  14,878 modules at Gradle's version, 92.8% by name** (spring-boot 98.3% of 1,032 once its own
-  `bom { library(...) }` buildSrc DSL is read, from 8.3%; the 56 first builds: 88.1% and 91.4%,
-  from 59.7% and 70.0%); median repo 100% exact, 69 of 76 at 90% or more. **98.8% and 99.6%
+  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **90.9% of
+  14,878 modules at Gradle's version, 92.8% by name** (spring-boot 100% of 1,032 once its own
+  `bom { library(...) }` buildSrc DSL and its docs project's `projectsEvaluated` hook are read, from 8.3%; the 56 first builds: 88.1% and 91.4%,
+  from 59.7% and 70.0%); median repo 100% exact, 69 of 76 at 90% or more. **99.0% and 99.6%
   on the 69 builds whose dependencies no build plugin adds**: the seven others (ideavim,
   MinecraftDev and gradle-profiler's IDE plugin projects on the IntelliJ Platform plugin, Paper and WorldEdit on paperweight's dev
   bundle, minecolonies on ForgeGradle, MCCustomSkinLoader on its own buildSrc plugin that
   reads Minecraft's library manifest) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 102 misses. 155 misses remain in
-  the 69 builds, ihub-pub's included (spring-boot 18, from its docs project's `projectsEvaluated` hook that adds every published Java project, armeria 3: a `strictly`
+  (its own settings plugin supplies the catalog and BOMs), 102 misses. 137 misses remain in
+  the 69 builds, ihub-pub's included (komga 10, from compose-desktop's host-dependent `currentOs`, armeria 3: a `strictly`
   ecj, one benchmark project's kotlin-stdlib-common, scala 3's scala-library). Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
   that Gradle never builds as part of the project. Later rules: the main classpath resolved
