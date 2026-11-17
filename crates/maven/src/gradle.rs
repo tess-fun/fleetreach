@@ -260,6 +260,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         local: false,
         local_configurations,
         custom: false,
+        dependency_set: None,
     };
     // The kordamp enforcer's `ForceDependencies` rule in the settings forces its versions on
     // every configuration of every project (jreleaser).
@@ -268,12 +269,20 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         .filter_map(|f| fleetreach_core::repofile::read_to_string(dir.join(f)).ok())
         .flat_map(|t| forced_versions(&t, &context.vars, &mut missing))
         .collect();
-    // Precompiled script plugins (convention plugins) by plugin id.
-    let conventions: BTreeMap<String, usize> = scripts
+    // Precompiled script plugins (convention plugins) by plugin id, and the build logic's
+    // own plugin classes, as the declarations they add.
+    let binary = binary_plugins(dir, &scripts);
+    let mut conventions: BTreeMap<String, usize> = scripts
         .iter()
         .enumerate()
         .filter_map(|(i, (file, text))| convention_id(file, text).map(|id| (id, i)))
         .collect();
+    for (id, file, text) in binary {
+        if let std::collections::btree_map::Entry::Vacant(slot) = conventions.entry(id) {
+            slot.insert(scripts.len());
+            scripts.push((file, text));
+        }
+    }
     let mut modules: Vec<Module> = Vec::new();
     for (i, (file, text)) in scripts.iter().enumerate() {
         let mut module = read_script(text, &mut context);
@@ -2966,6 +2975,9 @@ struct Context {
     /// `name = [ libs.a, "g:b:1", ... ]`: lists a declaration names whole
     /// (kafka's `testRuntimeOnly runtimeTestLibs`).
     lists: BTreeMap<String, Vec<String>>,
+    /// The Spring plugin's open `dependencySet(group: g, version: v) {`: its group, version
+    /// and the block depth its `entry` lines sit at.
+    dependency_set: Option<(String, String, usize)>,
 }
 
 impl Context {
@@ -3611,6 +3623,34 @@ fn exclusion(line: &str) -> Option<(String, String)> {
     ))
 }
 
+/// The group and version of a `dependencySet(...)` (its arguments, `rest`): a version that
+/// is an expression is kept as `${...}` for the entries to expand.
+fn dependency_set(rest: &str) -> Option<(String, String)> {
+    let args = rest.trim().strip_prefix('(')?;
+    let args = &args[..args.rfind(')')?];
+    let named = |key: &str| -> Option<String> {
+        let at = args.find(key)?;
+        let value = args[at + key.len()..]
+            .trim_start()
+            .strip_prefix([':', '='])?
+            .trim_start();
+        if let Some((q, _)) = quoted(value) {
+            return Some(q.to_string());
+        }
+        let end = value.find(',').unwrap_or(value.len());
+        let expr = value[..end].trim();
+        (!expr.is_empty() && !expr.contains(['(', ' ', '"', '\''])).then(|| format!("${{{expr}}}"))
+    };
+    if args.contains("group") {
+        let group = named("group")?;
+        let version = named("version")?;
+        return (!group.contains('$')).then_some((group, version));
+    }
+    let (text, _) = quoted(args.trim())?;
+    let (group, version) = text.split_once(':')?;
+    Some((group.to_string(), version.to_string()))
+}
+
 /// One line of a build script, read by the block it sits in.
 fn read_line(
     trimmed: &str,
@@ -3619,6 +3659,25 @@ fn read_line(
     context: &mut Context,
     module: &mut Module,
 ) {
+    if let Some((group, version, depth)) = context.dependency_set.clone() {
+        if blocks.len() < depth {
+            context.dependency_set = None;
+        } else {
+            if blocks.len() == depth {
+                if let Some(rest) = trimmed.strip_prefix("entry") {
+                    if let Some((artifact, _)) = quoted(rest.trim().trim_start_matches('(')) {
+                        let before = module.constraints.len();
+                        let line = format!("\"{group}:{artifact}:{version}\"");
+                        read_values(&line, "compile", Block::Constraints, context, module);
+                        for c in &mut module.constraints[before..] {
+                            c.enforced = true;
+                        }
+                    }
+                }
+            }
+            return;
+        }
+    }
     match current {
         Some(block @ (Block::Dependencies | Block::Constraints)) => {
             // `constraints {` opens a block; only what follows its brace is an entry.
@@ -3636,7 +3695,15 @@ fn read_line(
             return;
         }
         Some(Block::ManagedVersions) => {
-            // `dependency 'g:a:1'` or `dependency("g:a:1")`; `dependencySet` is not read.
+            // `dependency 'g:a:1'` or `dependency("g:a:1")`, and `dependencySet(group: 'g',
+            // version: v) { entry 'a' }` (mmorpg's jforgame) or `dependencySet("g:v") { ... }`.
+            if let Some(rest) = trimmed.strip_prefix("dependencySet") {
+                if trimmed.contains('{') && !trimmed.contains('}') {
+                    context.dependency_set =
+                        dependency_set(rest).map(|(g, v)| (g, v, blocks.len() + 1));
+                }
+                return;
+            }
             if let Some(rest) = trimmed.strip_prefix("dependency") {
                 if rest.starts_with([' ', '(']) {
                     let before = module.constraints.len();
@@ -3945,6 +4012,173 @@ fn convention_id(file: &str, text: &str) -> Option<String> {
         Some(p) if !p.is_empty() => format!("{p}.{stem}"),
         _ => stem.to_string(),
     })
+}
+
+/// The plugins build logic registers as classes (`gradlePlugin { plugins { register("x") {
+/// id = "kotlinLib"; implementationClass = "a.b.LibPlugin" } } }` in buildSrc or
+/// build-logic), each as (id, the class's file, a script of what its `apply` adds for sure):
+/// the literal `add("testImplementation", "g:a:1")` calls in a `dependencies { }` block and
+/// `plugins.apply("kotlin")`, outside any `if`, `when`, loop or callback (Talaiot's `kotlinLib`
+/// adds kotlintest and mockito-kotlin to every library's tests).
+fn binary_plugins(dir: &Path, scripts: &[(String, String)]) -> Vec<(String, String, String)> {
+    let mut out = Vec::new();
+    for (file, text) in scripts {
+        if !(file.starts_with("buildSrc/") || file.starts_with("build-logic/"))
+            || !text.contains("implementationClass")
+        {
+            continue;
+        }
+        let base = Path::new(file).parent().unwrap_or(Path::new(""));
+        let mut id = None;
+        for line in text.lines().map(str::trim) {
+            let value = |key: &str| {
+                let rest = line.strip_prefix(key)?.trim_start();
+                let rest = rest.strip_prefix('=').unwrap_or(rest).trim_start();
+                let rest = rest.strip_prefix('(').unwrap_or(rest);
+                quoted(rest).map(|(v, _)| v.to_string())
+            };
+            if let Some(v) = value("id") {
+                id = Some(v);
+            } else if let Some(class) = value("implementationClass") {
+                let Some(id) = id.take() else {
+                    continue;
+                };
+                let Some((shown, source)) = plugin_class(dir, base, &class) else {
+                    continue;
+                };
+                if let Some(script) = plugin_script(&source) {
+                    out.push((id, shown, script));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The source of build-logic class `class` (`a.b.C`): `src/main/{kotlin,java,groovy}/a/b/C.*`
+/// under the build-logic project `base`.
+fn plugin_class(dir: &Path, base: &Path, class: &str) -> Option<(String, String)> {
+    let path = class.replace('.', "/");
+    for lang in ["kotlin", "java", "groovy"] {
+        for ext in ["kt", "java", "groovy"] {
+            let shown = base.join(format!("src/main/{lang}/{path}.{ext}"));
+            if let Ok(text) = fleetreach_core::repofile::read_to_string(dir.join(&shown)) {
+                return Some((shown.display().to_string(), strip_comments(&text)));
+            }
+        }
+    }
+    None
+}
+
+/// What a plugin class's `apply` adds for sure, as a build script (see `binary_plugins`).
+fn plugin_script(source: &str) -> Option<String> {
+    #[derive(PartialEq)]
+    enum Kind {
+        Apply,
+        Deps,
+        Cond,
+        Plain,
+    }
+    let mut stack: Vec<Kind> = Vec::new();
+    let (mut deps, mut plugins) = (Vec::new(), Vec::new());
+    for line in source.lines().map(str::trim) {
+        let sure = stack.contains(&Kind::Apply) && !stack.contains(&Kind::Cond);
+        if sure {
+            let call = line
+                .strip_prefix("target.")
+                .or_else(|| line.strip_prefix("project."))
+                .unwrap_or(line);
+            if let Some(rest) = call
+                .strip_prefix("plugins.apply(")
+                .or_else(|| call.strip_prefix("pluginManager.apply("))
+            {
+                if let Some((id, tail)) = quoted(rest.trim()) {
+                    if tail.trim() == ")" {
+                        plugins.push(id.to_string());
+                    }
+                }
+            }
+            if stack.last() == Some(&Kind::Deps) {
+                if let Some(rest) = line.strip_prefix("add(") {
+                    if let Some((conf, tail)) = quoted(rest.trim()) {
+                        let tail = tail.trim().strip_prefix(',').unwrap_or("").trim();
+                        if let Some((coord, end)) = quoted(tail) {
+                            let literal = !coord.contains('$') && coord.split(':').count() >= 3;
+                            if end.trim() == ")" && literal && !conf.contains('$') {
+                                deps.push(format!("    {conf}(\"{coord}\")"));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let code = code_only(line);
+        let opens = code.matches('{').count();
+        let closes = code.matches('}').count();
+        for _ in 0..closes.saturating_sub(opens) {
+            stack.pop();
+        }
+        if opens > closes {
+            let word = |w: &str| {
+                code.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                    .any(|t| t == w)
+            };
+            let kind = if code.contains("fun apply(") || code.contains("void apply(") {
+                Kind::Apply
+            } else if [
+                "if",
+                "when",
+                "for",
+                "while",
+                "else",
+                "forEach",
+                "let",
+                "also",
+                "run",
+                "afterEvaluate",
+                "withPlugin",
+                "all",
+                "configureEach",
+                "matching",
+                "whenPluginAdded",
+                "withType",
+                "catch",
+                "try",
+            ]
+            .iter()
+            .any(|w| word(w))
+            {
+                Kind::Cond
+            } else if code
+                .trim_end()
+                .trim_end_matches('{')
+                .trim_end()
+                .ends_with("dependencies")
+            {
+                Kind::Deps
+            } else {
+                Kind::Plain
+            };
+            stack.push(kind);
+            for _ in 1..opens - closes {
+                stack.push(Kind::Plain);
+            }
+        }
+    }
+    if deps.is_empty() && plugins.is_empty() {
+        return None;
+    }
+    let mut script = String::new();
+    for id in plugins {
+        script.push_str(&format!("apply plugin: '{id}'\n"));
+    }
+    script.push_str("dependencies {\n");
+    for d in deps {
+        script.push_str(&d);
+        script.push('\n');
+    }
+    script.push_str("}\n");
+    Some(script)
 }
 
 /// A project that applies one of the build's convention plugins (`id("cosid.library")`) takes
@@ -4636,6 +4870,7 @@ mod tests {
             local_configurations: BTreeSet::new(),
             custom: false,
             lists: BTreeMap::new(),
+            dependency_set: None,
         }
     }
 
@@ -5452,6 +5687,66 @@ set = ["a-b", "e"]
             catalog_accessors("x(myPinnedLibs.a, pinnedLibs.plugins.p)", "pinnedLibs"),
             "x(myPinnedLibs.a, libs.plugins.pinnedLibs.p)"
         );
+    }
+
+    #[test]
+    fn a_dependency_set_manages_each_entry() {
+        // mmorpg: `dependencySet(group: 'io.github.jforgame', version:
+        // rootProject.ext.versions.jforgameVersion) { entry 'jforgame-commons' ... }`.
+        let repo = Mem(BTreeMap::from([pom("a", "3", &[]), pom("b", "2", &[])]));
+        let dir = tree(
+            "dependency-set",
+            &[(
+                "build.gradle",
+                "ext {\n    versions = [\n        aVersion: \"3\",\n    ]\n}\n\
+                 apply plugin: 'java'\napply plugin: 'io.spring.dependency-management'\n\
+                 dependencyManagement {\n    dependencies {\n\
+                 \x20       dependencySet(group: 'g', version: rootProject.ext.versions.aVersion) {\n\
+                 \x20           entry 'a'\n        }\n        dependencySet('g:2') {\n            entry 'b'\n        }\n\
+                 \x20   }\n}\ndependencies {\n    implementation 'g:a'\n    implementation 'g:b'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:a"), ["3"], "{:?}", r.packages);
+        assert_eq!(versions(&r, "g:b"), ["2"]);
+    }
+
+    #[test]
+    fn a_build_logic_plugin_class_adds_what_its_apply_adds_for_sure() {
+        // Talaiot: buildSrc registers `kotlinLib` as a class whose `apply` adds kotlintest to
+        // every library's tests; an add inside an `if` is not sure, and stays unread.
+        let repo = Mem(BTreeMap::from([pom("t", "1", &[]), pom("c", "1", &[])]));
+        let dir = tree(
+            "binary-plugin",
+            &[
+                ("settings.gradle.kts", "include(\":lib\")\n"),
+                (
+                    "buildSrc/build.gradle.kts",
+                    "plugins {\n    `kotlin-dsl`\n}\ngradlePlugin {\n    plugins {\n        register(\"Lib\") {\n\
+                     \x20           id = \"kotlinLib\"\n            implementationClass = \"a.b.LibPlugin\"\n\
+                     \x20       }\n    }\n}\n",
+                ),
+                (
+                    "buildSrc/src/main/kotlin/a/b/LibPlugin.kt",
+                    "package a.b\n\nclass LibPlugin : Plugin<Project> {\n    override fun apply(target: Project) {\n\
+                     \x20       target.plugins.apply(\"java-library\")\n        target.dependencies {\n\
+                     \x20           add(\"testImplementation\", \"g:t:1\")\n        }\n\
+                     \x20       if (target.hasProperty(\"x\")) {\n            target.dependencies {\n\
+                     \x20               add(\"implementation\", \"g:c:1\")\n            }\n        }\n    }\n}\n",
+                ),
+                ("lib/build.gradle.kts", "plugins {\n    id(\"kotlinLib\")\n}\n"),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:t"), ["1"], "{:?}", r.packages);
+        assert!(r
+            .packages
+            .iter()
+            .find(|p| p.name == "g:t")
+            .is_some_and(|p| p.dev));
+        assert!(versions(&r, "g:c").is_empty(), "{:?}", r.packages);
     }
 
     #[test]
