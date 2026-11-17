@@ -3117,7 +3117,11 @@ fn coordinate(text: &str, vars: &BTreeMap<String, String>) -> Result<Coordinate,
     if group.is_empty() || artifact.is_empty() {
         return Err(format!("`{text}` is not group:name:version"));
     }
-    let version = parts.next().filter(|v| !v.is_empty());
+    // `1.0!!` is Gradle's shorthand for `strictly("1.0")`, read as a `strictly` block is.
+    let version = parts
+        .next()
+        .map(|v| v.strip_suffix("!!").unwrap_or(v))
+        .filter(|v| !v.is_empty());
     Ok(Coordinate {
         group: group.to_string(),
         artifact: artifact.to_string(),
@@ -6123,6 +6127,22 @@ set = ["a-b", "e"]
         assert_eq!(versions(&r, "g:bom"), ["4"]);
         let r = read("line-boms-unused", "");
         assert!(versions(&r, "g:bom").is_empty(), "{:?}", r.packages);
+    }
+
+    #[test]
+    fn a_strict_shorthand_version_is_its_version() {
+        // kestra's platform: `api 'io.kestra:kotlp:0.1.6!!'`, Gradle's `strictly` shorthand.
+        let repo = Mem(BTreeMap::from([pom("a", "1", &[])]));
+        let dir = tree(
+            "strict-shorthand",
+            &[(
+                "build.gradle",
+                "plugins { id 'java' }\ndependencies {\n    implementation 'g:a:1!!'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:a"), ["1"], "{:?}", r.packages);
     }
 
     #[test]

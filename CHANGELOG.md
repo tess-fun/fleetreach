@@ -223,6 +223,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   profile switched on by a property's absence (`<name>!x</name>`) counts in Gradle mode as in
   Gradle, before the default ones (resteasy's parent imports its BOM so). armeria 97.7% to
   99.0% of 1,324 modules.
+- **Gradle's `1.0!!` version shorthand is read** as `strictly("1.0")` (kestra's platform
+  pins kotlp so), no longer reported as a version of its own.
 - **spring-boot's own BOM DSL is read.** Its buildSrc `org.springframework.boot.bom` plugin
   turns `bom { library("Name", "version") { group("g") { modules = [...]; bom("b") } } }` into
   a Java platform, and its Java conventions put the internal platform on every Java project.
