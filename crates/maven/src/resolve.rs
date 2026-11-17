@@ -2040,6 +2040,11 @@ fn raise(pins: &mut Pins, key: MgmtKey, version: &str) -> bool {
     }
 }
 
+/// An exclusion list that leaves out every dependency (`transitive = false`).
+fn excludes_all(exclusions: &[(String, String)]) -> bool {
+    exclusions.iter().any(|(g, a)| g == "*" && a == "*")
+}
+
 /// Gradle constraints count as requests for the artifacts they name: a module's own
 /// `dependencyConstraints`, and for a platform (BOM) also its managed versions.
 /// On a compile classpath, a constraint of the runtime variant alone is left out.
@@ -2284,12 +2289,14 @@ fn walk(
                     .cloned()
                     .unwrap_or_else(|| (depth, exclusions.clone()));
                 if let Some(eff) = r.remote(&dep.group, &dep.artifact, &version, 0) {
-                    request_constraints(
-                        &eff,
-                        dep.platform,
-                        r.compile_only,
-                        requests.as_deref_mut(),
-                    );
+                    if !excludes_all(&exclusions) {
+                        request_constraints(
+                            &eff,
+                            dep.platform,
+                            r.compile_only,
+                            requests.as_deref_mut(),
+                        );
+                    }
                     enqueue_children(
                         &eff,
                         &scope,
@@ -2447,7 +2454,11 @@ fn walk(
         let Some(eff) = r.remote(&dep.group, &dep.artifact, &version, 0) else {
             continue;
         };
-        request_constraints(&eff, dep.platform, r.compile_only, requests.as_deref_mut());
+        // `transitive = false` (or an exclude of everything) leaves out the module's
+        // constraints as well as its dependencies (PlotSquared's FAWE pins Gson otherwise).
+        if !excludes_all(&exclusions) {
+            request_constraints(&eff, dep.platform, r.compile_only, requests.as_deref_mut());
+        }
         enqueue_children(
             &eff,
             &scope,

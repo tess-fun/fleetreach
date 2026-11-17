@@ -38,6 +38,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     let mut missing = BTreeSet::new();
     let mut scripts = build_scripts(dir, &mut missing);
     project_blocks(dir, &mut scripts);
+    project_accessors(dir, &mut scripts);
     let mut vars = properties(&dir.join("gradle.properties"));
     // The wrapper decides which Gradle runs the build: axion picks its Spock by
     // `GradleVersion.current().version.startsWith("9.")`.
@@ -688,6 +689,103 @@ fn catalog_file(dir: &Path, scripts: &[(String, String)]) -> String {
         }
     }
     DEFAULT.to_string()
+}
+
+/// Type-safe project accessors: `projects.plotsquaredCore` is `project(":plotsquared-core")`,
+/// `projects.a.bC` is `project(":a:b-c")`. Each path a settings script gives (after its
+/// renames) or a build file's directory implies is spelled the way Gradle names its accessor;
+/// one that names no known project is left as it is.
+fn project_accessors(dir: &Path, scripts: &mut [(String, String)]) {
+    if !scripts.iter().any(|(_, t)| t.contains("projects.")) {
+        return;
+    }
+    let mut paths: Vec<String> = ["settings.gradle", "settings.gradle.kts"]
+        .iter()
+        .find_map(|f| fleetreach_core::repofile::read_to_string(dir.join(f)).ok())
+        .map(|t| settings_paths(&strip_comments(&t)))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(path, _)| path)
+        .collect();
+    for (file, _) in scripts.iter() {
+        if let Some(d) = Path::new(file)
+            .parent()
+            .and_then(Path::to_str)
+            .filter(|d| !d.is_empty())
+        {
+            paths.push(format!(":{}", d.replace('/', ":")));
+        }
+    }
+    let accessors: BTreeMap<String, String> = paths
+        .into_iter()
+        .filter_map(|path| {
+            let segments: Vec<String> = path
+                .trim_start_matches(':')
+                .split(':')
+                .map(project_accessor)
+                .collect();
+            (!segments.iter().any(String::is_empty)).then(|| (segments.join("."), path))
+        })
+        .collect();
+    for (_, text) in scripts.iter_mut() {
+        if !text.contains("projects.") {
+            continue;
+        }
+        let mut out = String::with_capacity(text.len());
+        let mut rest = text.as_str();
+        while let Some(at) = rest.find("projects.") {
+            let before = rest[..at].chars().next_back();
+            let tail = &rest[at + "projects.".len()..];
+            let chain_len = tail
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '.'))
+                .unwrap_or(tail.len());
+            let chain = tail[..chain_len].trim_end_matches('.');
+            // The longest prefix of the chain that names a project.
+            let found = (before
+                .is_none_or(|c| !(c.is_ascii_alphanumeric() || c == '_' || c == '.')))
+            .then(|| {
+                let mut ends: Vec<usize> = chain.match_indices('.').map(|(i, _)| i).collect();
+                ends.push(chain.len());
+                ends.into_iter()
+                    .rev()
+                    .find_map(|end| accessors.get(&chain[..end]).map(|p| (end, p)))
+            })
+            .flatten();
+            match found {
+                Some((end, path)) => {
+                    out.push_str(&rest[..at]);
+                    out.push_str(&format!("project(\"{path}\")"));
+                    rest = &tail[end..];
+                }
+                None => {
+                    out.push_str(&rest[..at + "projects.".len()]);
+                    rest = tail;
+                }
+            }
+        }
+        out.push_str(rest);
+        *text = out;
+    }
+}
+
+/// Gradle's accessor for one project name: `plotsquared-core`, `plotsquared_core` and
+/// `plotsquared.core` are all `plotsquaredCore`, and `Core` is `core`.
+fn project_accessor(name: &str) -> String {
+    let mut out = String::new();
+    let mut upper = false;
+    for c in name.chars() {
+        if matches!(c, '-' | '_' | '.' | ' ') {
+            upper = !out.is_empty();
+        } else if upper {
+            out.extend(c.to_uppercase());
+            upper = false;
+        } else if out.is_empty() {
+            out.extend(c.to_lowercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 /// The root build's top-level `project(':p') { ... }` blocks configure project `:p`: each
@@ -4785,6 +4883,72 @@ set = ["a-b", "e"]
         let r = resolve_gradle(&dir, &repo);
         assert_eq!(versions(&r, "g:smart"), ["1", "2"]);
         assert_eq!(versions(&r, "g:path"), ["1"]);
+    }
+
+    #[test]
+    fn a_non_transitive_dependency_brings_no_constraints() {
+        // PlotSquared: `compileOnly(libs.faweBukkit) { isTransitive = false }`, whose `.module`
+        // constrains Gson to 2.11.0: Gradle keeps the build's own 2.10.
+        let marker = "<!-- do_not_remove: published-with-gradle-metadata -->";
+        let json = r#"{"formatVersion":"1.1","variants":[
+            {"name":"apiElements","attributes":{"org.gradle.usage":"java-api","org.gradle.category":"library"},
+              "dependencyConstraints":[{"group":"g","module":"gson","version":{"requires":"2"}}]}]}"#;
+        let repo = Mem(BTreeMap::from([
+            (
+                "g:fawe:1".to_string(),
+                format!("<project>{marker}<groupId>g</groupId><artifactId>fawe</artifactId><version>1</version></project>"),
+            ),
+            ("g:fawe:1.module".to_string(), json.to_string()),
+            pom("gson", "1", &[]),
+            pom("gson", "2", &[]),
+        ]));
+        let dir = tree(
+            "non-transitive-constraints",
+            &[(
+                "build.gradle.kts",
+                "dependencies {\n    compileOnly(\"g:gson:1\")\n\
+                 \x20   compileOnly(\"g:fawe:1\") { isTransitive = false }\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:gson"), ["1"], "{:?}", r.missing);
+    }
+
+    #[test]
+    fn a_type_safe_project_accessor_names_its_project() {
+        // PlotSquared: `api(projects.plotsquaredCore)`, the project the settings rename
+        // `plotsquared-core`.
+        let repo = Mem(BTreeMap::from([pom("b", "1", &[]), pom("b", "2", &[])]));
+        let dir = tree(
+            "project-accessors",
+            &[
+                (
+                    "settings.gradle.kts",
+                    "include(\"Core\", \"Bukkit\")\nproject(\":Core\").name = \"plotsquared-core\"\n",
+                ),
+                ("Core/build.gradle.kts", "dependencies {\n    api(\"g:b:2\")\n}\n"),
+                (
+                    "Bukkit/build.gradle.kts",
+                    "dependencies {\n    api(projects.plotsquaredCore)\n    implementation(\"g:b:1\")\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        // Core's 2 wins on Bukkit's classpaths too.
+        assert_eq!(versions(&r, "g:b"), ["2"], "{:?}", r.missing);
+        assert_eq!(project_accessor("plotsquared-core"), "plotsquaredCore");
+        assert_eq!(project_accessor("Core"), "core");
+        assert_eq!(project_accessor("a_b.c"), "aBC");
+        let mut scripts = vec![(
+            "Bukkit/build.gradle.kts".to_string(),
+            "api(projects.plotsquaredCore)\nsubprojects.forEach { }\nprojects.unknown\n"
+                .to_string(),
+        )];
+        project_accessors(&dir, &mut scripts);
+        assert_eq!(
+            scripts[0].1,
+            "api(project(\":plotsquared-core\"))\nsubprojects.forEach { }\nprojects.unknown\n"
+        );
     }
 
     #[test]
