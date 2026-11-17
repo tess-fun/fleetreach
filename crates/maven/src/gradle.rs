@@ -3474,7 +3474,12 @@ fn read_script(text: &str, context: &mut Context) -> Module {
 fn read_project_script(text: &str, context: &mut Context) -> Module {
     let mut module = Module::default();
     let mut blocks: Vec<Block> = Vec::new();
-    let text = catalog_lookups(text, &context.catalog);
+    let mut text = catalog_lookups(text, &context.catalog);
+    match catalog_platform(&text, &context.catalog, &context.vars) {
+        Ok(Some(written)) => text.push_str(&written),
+        Ok(None) => {}
+        Err(e) => module.unread.push(e),
+    }
     let text = expand_lists(&text, &context.lists);
     let text = fold_rich_versions(&text);
     let mut open_deps: Option<OpenDeps> = None;
@@ -4674,6 +4679,148 @@ fn expand_lists(text: &str, lists: &BTreeMap<String, Vec<String>>) -> String {
         out.push('\n');
     }
     out
+}
+
+/// A platform project built from the whole catalog (pulsar's `pulsar-dependencies`):
+/// `catalog.libraryAliases.filterNot { it...startsWith("p") }.forEach { alias -> ... }`, where
+/// a module whose name looks like a BOM is `api(platform(provider))` and every other one
+/// `constraints.api(provider)`. Written out as the declarations it makes, one per alias, or
+/// `Err` with what is not read when any condition is beyond the plain ones read here.
+fn catalog_platform(
+    text: &str,
+    catalog: &Catalog,
+    vars: &BTreeMap<String, String>,
+) -> Result<Option<String>, String> {
+    let shape = [
+        ".libraryAliases",
+        "findLibrary(alias)",
+        "api(platform(provider))",
+        "constraints.api(provider)",
+    ];
+    if !shape.iter().all(|s| text.contains(s)) {
+        return Ok(None);
+    }
+    let unread = |why: &str| Err(format!("the catalog-wide platform: {why}"));
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    let Some(head) = lines.iter().find(|l| l.contains(".libraryAliases")) else {
+        return Ok(None);
+    };
+    // The aliases left out: `filterNot { <accessor of it>.startsWith("tooling.") }`.
+    let mut skipped: Vec<String> = Vec::new();
+    if let Some((_, filter)) = head.split_once(".filterNot") {
+        let normalized =
+            filter.contains(".replace('-', '.')") && filter.contains(".replace('_', '.')");
+        match filter
+            .split_once(".startsWith(")
+            .and_then(|(_, t)| quoted(t))
+        {
+            Some((prefix, tail)) if normalized && tail.trim_start().starts_with(')') => {
+                skipped.push(prefix.to_string());
+            }
+            _ => return unread("its alias filter"),
+        }
+    }
+    if head.contains(".filter {") || head.contains(".filter{") {
+        return unread("its alias filter");
+    }
+    // A branch on a Gradle property that is set (pulsar's `protobufVersion`) is not read.
+    for line in &lines {
+        if let Some((_, inner)) = line.split_once("providers.gradleProperty(") {
+            match quoted(inner) {
+                Some((key, _)) if !vars.contains_key(key) => {}
+                _ => return unread("a Gradle property it branches on is set"),
+            }
+        }
+    }
+    // The BOM test, `if (module.name.endsWith("-bom") || module.name == "bom" || ...) {`,
+    // over as many lines as it takes.
+    // The branch whose body is `api(platform(provider))`: its `if` is the nearest above.
+    let body = lines
+        .iter()
+        .position(|l| l.contains("api(platform(provider))"))
+        .unwrap_or(0);
+    let Some(at) = lines[..body].iter().rposition(|l| l.contains("if (")) else {
+        return unread("its BOM test");
+    };
+    let mut condition = String::new();
+    for line in &lines[at..] {
+        condition.push_str(line);
+        condition.push(' ');
+        if line.ends_with('{') {
+            break;
+        }
+    }
+    let mut rest = condition
+        .split_once("if (")
+        .map_or("", |(_, r)| r)
+        .trim_end()
+        .trim_end_matches('{')
+        .trim_end()
+        .strip_suffix(')')
+        .unwrap_or("");
+    let mut tests: Vec<(&str, String)> = Vec::new();
+    while !rest.trim().is_empty() {
+        let Some(after) = rest.trim_start().strip_prefix("module.name") else {
+            return unread("its BOM test");
+        };
+        let (kind, arg) = if let Some(a) = after.strip_prefix(".endsWith(") {
+            ("ends", a)
+        } else if let Some(a) = after.strip_prefix(".contains(") {
+            ("contains", a)
+        } else if let Some(a) = after.trim_start().strip_prefix("==") {
+            ("eq", a.trim_start())
+        } else {
+            return unread("its BOM test");
+        };
+        let Some((value, tail)) = quoted(arg) else {
+            return unread("its BOM test");
+        };
+        let tail = if kind == "eq" {
+            Some(tail)
+        } else {
+            tail.trim_start().strip_prefix(')')
+        };
+        let Some(tail) = tail.map(str::trim_start) else {
+            return unread("its BOM test");
+        };
+        tests.push((kind, value.to_string()));
+        rest = match tail.strip_prefix("||") {
+            Some(more) => more,
+            None if tail.is_empty() => "",
+            None => return unread("its BOM test"),
+        };
+    }
+    if tests.is_empty() {
+        return unread("its BOM test");
+    }
+    let is_bom = |name: &str| {
+        tests.iter().any(|(kind, v)| match *kind {
+            "ends" => name.ends_with(v.as_str()),
+            "contains" => name.contains(v.as_str()),
+            _ => name == v,
+        })
+    };
+    let (mut platforms, mut constraints) = (String::new(), String::new());
+    for (alias, c) in &catalog.libraries {
+        let name = accessor(alias);
+        if skipped.iter().any(|p| name.starts_with(p.as_str())) {
+            continue;
+        }
+        // Written as coordinates, not `libs.` accessors: an alias only this loop names is
+        // still unused, and listed as unused ones are.
+        let Some(version) = &c.version else {
+            continue;
+        };
+        let coordinate = format!("\"{}:{}:{version}\"", c.group, c.artifact);
+        if is_bom(&c.artifact) {
+            platforms.push_str(&format!("    api(platform({coordinate}))\n"));
+        } else {
+            constraints.push_str(&format!("        api({coordinate})\n"));
+        }
+    }
+    let out =
+        format!("\ndependencies {{\n{platforms}    constraints {{\n{constraints}    }}\n}}\n");
+    Ok(Some(out))
 }
 
 fn catalog_lookups(text: &str, catalog: &Catalog) -> String {
@@ -6046,6 +6193,76 @@ set = ["a-b", "e"]
         assert!(r.missing.is_empty(), "{:?}", r.missing);
         assert_eq!(versions(&r, "g:inner"), ["2"], "{:?}", r.packages);
         assert_eq!(versions(&r, "g:lib"), ["1"]);
+    }
+
+    #[test]
+    fn a_platform_built_from_the_whole_catalog_is_read() {
+        // pulsar's pulsar-dependencies: every catalog alias but the tooling ones, a BOM-named
+        // module as a platform and every other as a constraint.
+        let bom = (
+            "g:x-bom:2".to_string(),
+            "<project><groupId>g</groupId><artifactId>x-bom</artifactId><version>2</version>\
+             <packaging>pom</packaging><dependencyManagement><dependencies><dependency>\
+             <groupId>g</groupId><artifactId>x</artifactId><version>2</version>\
+             </dependency></dependencies></dependencyManagement></project>"
+                .to_string(),
+        );
+        let repo = Mem(BTreeMap::from([
+            bom,
+            pom("a", "1", &[]),
+            pom("a", "2", &[]),
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+            pom("tool", "1", &[]),
+            pom("tool", "3", &[]),
+            pom("lib", "1", &[("a", "1"), ("x", "1"), ("tool", "1")]),
+        ]));
+        let platform = "plugins {\n    `java-platform`\n}\njavaPlatform {\n    allowDependencies()\n}\n\
+            dependencies {\n\
+            \x20   val catalog = project.extensions.getByType<VersionCatalogsExtension>().named(\"libs\")\n\
+            \x20   val protobufVersion = providers.gradleProperty(\"protobufVersion\").orNull\n\
+            \x20   catalog.libraryAliases.filterNot { it.replace('-', '.').replace('_', '.').startsWith(\"tooling.\") }.forEach { alias ->\n\
+            \x20       catalog.findLibrary(alias).ifPresent { provider ->\n\
+            \x20           val module = provider.get().module\n\
+            \x20           if (module.group == \"com.google.protobuf\" && protobufVersion != null) {\n\
+            \x20               if (module.name == \"protobuf-bom\") {\n\
+            \x20                   api(platform(\"$module:$protobufVersion\"))\n\
+            \x20               }\n\
+            \x20           } else if (module.name.endsWith(\"-bom\") || module.name == \"bom\"\n\
+            \x20                   || module.name.contains(\"-bom-\")) {\n\
+            \x20               api(platform(provider))\n\
+            \x20           } else {\n\
+            \x20               constraints.api(provider)\n\
+            \x20           }\n\
+            \x20       }\n\
+            \x20   }\n}\n";
+        let dir = tree(
+            "catalog-platform",
+            &[
+                ("settings.gradle.kts", "include(\"platform\", \"app\")\n"),
+                (
+                    "gradle/libs.versions.toml",
+                    "[libraries]\nx-bom = \"g:x-bom:2\"\na = \"g:a:2\"\ntooling-tool = \"g:tool:3\"\nlib = \"g:lib:1\"\n",
+                ),
+                ("platform/build.gradle.kts", platform),
+                (
+                    "app/build.gradle.kts",
+                    "plugins {\n    java\n}\ndependencies {\n    implementation(enforcedPlatform(project(\":platform\")))\n\
+                     \x20   implementation(libs.lib)\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        // The loop's own lines stay reported; the loop itself is read.
+        assert!(
+            r.missing.iter().all(|m| !m.contains("catalog-wide")),
+            "{:?}",
+            r.missing
+        );
+        assert_eq!(versions(&r, "g:a"), ["2"], "{:?}", r.packages);
+        assert_eq!(versions(&r, "g:x"), ["2"]);
+        // The tooling alias is left out of the platform: only the unused-alias listing has 3.
+        assert_eq!(versions(&r, "g:tool"), ["1", "3"]);
     }
 
     #[test]

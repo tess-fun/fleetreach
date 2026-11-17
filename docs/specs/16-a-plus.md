@@ -933,7 +933,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   bundle, minecolonies on ForgeGradle, MCCustomSkinLoader on its own buildSrc plugin that
   reads Minecraft's library manifest) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 102 misses. 210 misses remain in
+  (its own settings plugin supplies the catalog and BOMs), 102 misses. 201 misses remain in
   the 69 builds, ihub-pub's included (spring-boot 18, from its docs project's `projectsEvaluated` hook that adds every published Java project, armeria 13: OS-specific
   netty transports, one project's JUnit 6.0.2 line, a `strictly` ecj, scala 3's scala-library). Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
@@ -941,8 +941,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   without test dependencies (mybatis-plus's starter-test modules, 117 misses corpus-wide),
   `exclude` and `transitive = false` (CosId 402 to 346 listed, no exact loss), the compile
   classpath resolved apart from the runtime one, a sibling's `implementation` staying off it
-  (mybatis-plus's generator, 20 modules; pulsar's platform built in code from the whole catalog
-  is not read, 2 extras), `testing.suites` dependencies as test ones, forced versions (`resolutionStrategy.force`,
+  (mybatis-plus's generator, 20 modules), `testing.suites` dependencies as test ones, forced versions (`resolutionStrategy.force`,
   test-only in a test `configurations.matching` block, kordamp's `ForceDependencies`;
   jreleaser 92.0% to 100%), the wrapper's Gradle version for `GradleVersion.current()`
   branches and positional Kotlin `exclude(g, m)` (axion 83.6% to 94.0%), test-configuration platforms kept to the tests, processor-path
@@ -953,8 +952,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   alias (interview-guide 100%), Boot 3.5+'s test launcher, `kotlin-dsl`'s embedded Kotlin by
   wrapper version (axion 98.5%, node-gradle 98.5%), the test compile classpath on its own and
   runtime dependencies off every compile classpath at any depth, `.module` runtime-only ones
-  included (komga 96.9%, conductor 99.0%; pulsar +9 dev extras from its code-built catalog
-  platform), convention plugins applied to the projects using them with the catalog API
+  included (komga 96.9%, conductor 99.0%), convention plugins applied to the projects using them with the catalog API
   (`findLibrary`/`findVersion` and helpers) and `findProperty(...) != "x"` read, constraints
   on tool configurations dropped (caffeine 87.4%, 50 fewer extras corpus-wide; CosId's
   `managedVersions(if (p == null) platform(...) else ...)` stays unread), project paths from the

@@ -235,6 +235,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checker-qual: 4.4.0 to compile, worldedit's 3.48.3 to run the tests). Under the Spring
   plugin a compile-only version still versions an unversioned test declaration of the same
   module. 143 packages Gradle does not list dropped out, none it does.
+- **A platform built from the whole catalog is read.** A Java platform project that loops
+  over `libraryAliases` (pulsar's `pulsar-dependencies`), making BOM-named modules platforms
+  and every other alias a constraint, is read as the declarations the loop makes, with its
+  `filterNot { ...startsWith("tooling.") }` filter. A condition beyond the plain name tests,
+  or a Gradle property the loop branches on that the build sets, is reported, not guessed.
+  pulsar: 98.5% to 100% of 610 modules, 213 fewer packages Gradle does not list.
 - **A BOM a library names meets the one a platform nests.** A library's `.module` that
   depends on a BOM (micronaut-validation on micronaut-core-bom 5.2.3) and the BOMs a platform
   project imports (micronaut-platform's micronaut-core-bom 5.2.22) are now one node of the
