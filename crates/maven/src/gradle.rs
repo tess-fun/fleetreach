@@ -4088,6 +4088,42 @@ set = ["a-b", "e"]
     }
 
     #[test]
+    fn a_runtime_variant_constraint_stays_off_the_compile_classpath() {
+        // wiremock-jre8's runtimeElements pins json-smart 2.4.8 by a dependency constraint its
+        // apiElements does not have: the compile classpath keeps json-path's 2.4.7.
+        let marker = "<!-- do_not_remove: published-with-gradle-metadata -->";
+        let dep = r#"{"group":"g","module":"path","version":{"requires":"1"}}"#;
+        let json = format!(
+            r#"{{"formatVersion":"1.1","variants":[
+            {{"name":"apiElements","attributes":{{"org.gradle.usage":"java-api","org.gradle.category":"library"}},
+              "dependencies":[{dep}]}},
+            {{"name":"runtimeElements","attributes":{{"org.gradle.usage":"java-runtime","org.gradle.category":"library"}},
+              "dependencies":[{dep}],
+              "dependencyConstraints":[{{"group":"g","module":"smart","version":{{"requires":"2"}}}}]}}]}}"#
+        );
+        let repo = Mem(BTreeMap::from([
+            (
+                "g:wm:1".to_string(),
+                format!("<project>{marker}<groupId>g</groupId><artifactId>wm</artifactId><version>1</version></project>"),
+            ),
+            ("g:wm:1.module".to_string(), json),
+            pom("path", "1", &[("smart", "1")]),
+            pom("smart", "1", &[]),
+            pom("smart", "2", &[]),
+        ]));
+        let dir = tree(
+            "runtime-constraint",
+            &[(
+                "build.gradle",
+                "dependencies {\n  testImplementation 'g:wm:1'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:smart"), ["1", "2"]);
+        assert_eq!(versions(&r, "g:path"), ["1"]);
+    }
+
+    #[test]
     fn a_root_blocks_boms_and_versions_reach_every_subproject() {
         // A BOM managing g:a, imported in the root's `configure(subprojects...)` through the
         // Spring plugin with its version in `extra`, a managed version for g:b, and Kotlin's

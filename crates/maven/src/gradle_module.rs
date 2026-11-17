@@ -36,6 +36,10 @@ pub(crate) struct Variant {
     /// The dependencies the matching `java-api` variant leaves out (`implementation` ones):
     /// on the runtime classpath only, as group and module.
     pub runtime_only: Vec<(String, String)>,
+    /// The constraints the matching `java-api` variant leaves out: they hold on the runtime
+    /// classpath only (wiremock-jre8 pins json-smart 2.4.8 at runtime, while the compile
+    /// classpath keeps json-path's 2.4.7).
+    pub runtime_only_constraints: Vec<(String, String)>,
 }
 
 /// The runtime variant of a `.module` file. `Err` when the file does not parse or has no
@@ -128,6 +132,7 @@ pub(crate) fn runtime_variant(json: &str) -> Result<Variant, String> {
             constraints: Vec::new(),
             api_only: Vec::new(),
             runtime_only: Vec::new(),
+            runtime_only_constraints: Vec::new(),
         });
     }
     let list = |v: &Value, key: &str| -> Vec<ModuleDep> {
@@ -172,12 +177,29 @@ pub(crate) fn runtime_variant(json: &str) -> Result<Variant, String> {
         }
         _ => Vec::new(),
     };
+    let constraints = list(best, "dependencyConstraints");
+    let runtime_only_constraints = match api {
+        Some(api) if best_rank.is_some_and(|r| r.4 == 2) => {
+            let in_api = list(api, "dependencyConstraints");
+            constraints
+                .iter()
+                .filter(|c| {
+                    !in_api
+                        .iter()
+                        .any(|a| a.group == c.group && a.module == c.module)
+                })
+                .map(|c| (c.group.clone(), c.module.clone()))
+                .collect()
+        }
+        _ => Vec::new(),
+    };
     Ok(Variant {
         name,
         dependencies,
-        constraints: list(best, "dependencyConstraints"),
+        constraints,
         api_only,
         runtime_only,
+        runtime_only_constraints,
     })
 }
 

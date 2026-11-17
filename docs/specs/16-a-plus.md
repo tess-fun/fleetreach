@@ -920,7 +920,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   the five others (ideavim and MinecraftDev on the IntelliJ Platform plugin, Paper and
   WorldEdit on paperweight's dev bundle, minecolonies on ForgeGradle) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 228 misses remain in
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 226 misses remain in
   the 51 builds, ihub-pub's included. Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
   that Gradle never builds as part of the project. Later rules: the main classpath resolved
@@ -961,7 +961,8 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   BOM's fully qualified `SpringBootPlugin.BOM_COORDINATES`, declared versions managed on
   their own classpaths under the dependency-management plugin even with no BOM entry
   (conductor's test jna 5.7.0), ranges with no `maven-metadata.xml` settled from the
-  versions Gradle's cache holds (spring-integration-samples' jxmpp), buildscript
+  versions Gradle's cache holds (spring-integration-samples' jxmpp), runtime-variant-only
+  `.module` constraints kept off compile classpaths (gradle-download-task's json-smart), buildscript
   `classpath` plugin versions with `apply plugin:` (spring-integration-samples 333 to 414),
   `lib."k"` (mybatis-plus 236 to 340), `set('k', v)` properties and POM relocations, which
   Gradle keeps and adds the target of, unlike Maven, which replaces (spring-integration-samples

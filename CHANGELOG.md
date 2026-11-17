@@ -125,7 +125,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Elasticsearch's 5.10.0 on the test classpaths only (conductor 100%). A version range
   with no `maven-metadata.xml` to choose from takes its candidates from the versions Gradle's
   download cache holds a POM or `.module` of, as Gradle settles a range offline
-  (spring-integration-samples' jxmpp and minidns through smack-core's `[1.0.0, 1.0.999]`). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  (spring-integration-samples' jxmpp and minidns through smack-core's `[1.0.0, 1.0.999]`). A dependency
+  constraint that a module's Gradle metadata puts in its runtime variant alone holds on runtime
+  classpaths only (gradle-download-task compiles against json-path's json-smart 2.4.7 and runs
+  with the 2.4.8 wiremock-jre8 pins). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over

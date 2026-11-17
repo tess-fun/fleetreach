@@ -1066,12 +1066,22 @@ impl Resolver<'_> {
             platform: d.platform,
             ..Dep::default()
         };
-        let constraints: Vec<Dep> = variant.constraints.into_iter().map(dep).collect();
+        let mut constraints: Vec<Dep> = variant.constraints.into_iter().map(dep).collect();
         // A platform's constraints are its managed versions, for a BOM imported by the build.
         let mgmt = constraints
             .iter()
             .map(|c| (c.mgmt_key(), c.clone()))
             .collect();
+        // A constraint of the runtime variant alone does not hold on a compile classpath.
+        for c in &mut constraints {
+            if variant
+                .runtime_only_constraints
+                .iter()
+                .any(|(g, m)| *g == c.group && *m == c.artifact)
+            {
+                c.scope = Some("runtime".to_string());
+            }
+        }
         let api_only = variant.api_only.into_iter().map(|d| Dep {
             scope: Some(COMPILE_ONLY_API.to_string()),
             ..dep(d)
@@ -1971,12 +1981,22 @@ fn raise(pins: &mut Pins, key: MgmtKey, version: &str) -> bool {
 
 /// Gradle constraints count as requests for the artifacts they name: a module's own
 /// `dependencyConstraints`, and for a platform (BOM) also its managed versions.
-fn request_constraints(eff: &Effective, platform: bool, requests: Option<&mut Pins>) {
+/// On a compile classpath, a constraint of the runtime variant alone is left out.
+fn request_constraints(
+    eff: &Effective,
+    platform: bool,
+    compile_only: bool,
+    requests: Option<&mut Pins>,
+) {
     let Some(requests) = requests else {
         return;
     };
     let managed = eff.mgmt.values().filter(|_| platform);
-    for c in eff.constraints.iter().chain(managed) {
+    let held = eff
+        .constraints
+        .iter()
+        .filter(|c| !(compile_only && c.scope.as_deref() == Some("runtime")));
+    for c in held.chain(managed) {
         if let Some(v) = c.version.as_ref().filter(|v| !v.starts_with(['[', '('])) {
             raise(requests, c.mgmt_key(), v);
         }
@@ -2198,7 +2218,12 @@ fn walk(
                     .cloned()
                     .unwrap_or_else(|| (depth, exclusions.clone()));
                 if let Some(eff) = r.remote(&dep.group, &dep.artifact, &version, 0) {
-                    request_constraints(&eff, dep.platform, requests.as_deref_mut());
+                    request_constraints(
+                        &eff,
+                        dep.platform,
+                        r.compile_only,
+                        requests.as_deref_mut(),
+                    );
                     enqueue_children(
                         &eff,
                         &scope,
@@ -2356,7 +2381,7 @@ fn walk(
         let Some(eff) = r.remote(&dep.group, &dep.artifact, &version, 0) else {
             continue;
         };
-        request_constraints(&eff, dep.platform, requests.as_deref_mut());
+        request_constraints(&eff, dep.platform, r.compile_only, requests.as_deref_mut());
         enqueue_children(
             &eff,
             &scope,
