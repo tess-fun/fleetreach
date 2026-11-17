@@ -258,6 +258,16 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         {
             continue;
         }
+        // The Kotlin plugin gives a Kotlin library declared with no version its own version
+        // (spring-integration-samples' `org.jetbrains.kotlin:kotlin-reflect`, under the
+        // dependency-management plugin too).
+        if let Some(kotlin) = context.plugins.get(KOTLIN_JVM) {
+            for d in &mut module.deps {
+                if d.coordinate.group == "org.jetbrains.kotlin" && d.coordinate.version.is_none() {
+                    d.coordinate.version = Some(kotlin.clone());
+                }
+            }
+        }
         let variant = framework(text).or(root_framework).unwrap_or("junit");
         let added: Vec<Declared> = module
             .deps
@@ -4917,6 +4927,46 @@ set = ["a-b", "e"]
                 .collect();
             assert_eq!(got, expected, "{gradle}: {:?}", r.missing);
         }
+    }
+
+    #[test]
+    fn the_kotlin_plugin_versions_its_own_unversioned_libraries() {
+        // spring-integration-samples: `api "org.jetbrains.kotlin:kotlin-reflect"` with no
+        // version, under the dependency-management plugin, takes the Kotlin plugin's 2.4.21.
+        let kotlin = |a: &str| {
+            (
+                format!("org.jetbrains.kotlin:{a}:2.4.21"),
+                format!("<project><groupId>org.jetbrains.kotlin</groupId><artifactId>{a}</artifactId><version>2.4.21</version></project>"),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            kotlin("kotlin-stdlib"),
+            kotlin("kotlin-reflect"),
+        ]));
+        let dir = tree(
+            "kotlin-unversioned",
+            &[
+                ("settings.gradle", "include 'app'\n"),
+                (
+                    "build.gradle",
+                    "buildscript {\n  ext {\n    kotlinVersion = '2.4.21'\n  }\n  dependencies {\n\
+                     \x20   classpath \"org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion\"\n  }\n}\n\
+                     subprojects {\n  apply plugin: 'java-library'\n  apply plugin: 'io.spring.dependency-management'\n}\n",
+                ),
+                (
+                    "app/build.gradle",
+                    "apply plugin: 'kotlin'\n\
+                     dependencies {\n  api \"org.jetbrains.kotlin:kotlin-reflect\"\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(
+            versions(&r, "org.jetbrains.kotlin:kotlin-reflect"),
+            ["2.4.21"],
+            "{:?}",
+            r.missing
+        );
     }
 
     #[test]

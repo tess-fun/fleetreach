@@ -128,7 +128,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (spring-integration-samples' jxmpp and minidns through smack-core's `[1.0.0, 1.0.999]`). A dependency
   constraint that a module's Gradle metadata puts in its runtime variant alone holds on runtime
   classpaths only (gradle-download-task compiles against json-path's json-smart 2.4.7 and runs
-  with the 2.4.8 wiremock-jre8 pins). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  with the 2.4.8 wiremock-jre8 pins). A Kotlin library declared with no version takes the Kotlin
+  plugin's version, as the plugin sets it (spring-integration-samples' `kotlin-reflect` 2.4.21). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over
