@@ -924,7 +924,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   Gradle 3.5, bnd is a Bnd workspace, cortinico's main build has no dependencies of its own,
   elasticsearch's build plugins need its whole build-tools tree, beyond the 3.5 GB harness) for reasons of their own (dead plugin repositories, toolchains Gradle
   cannot fetch on arm64, files the sparse clone lacks, plugins that need a full checkout,
-  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **90.6% of
+  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **90.7% of
   14,878 modules at Gradle's version, 92.8% by name** (spring-boot 98.3% of 1,032 once its own
   `bom { library(...) }` buildSrc DSL is read, from 8.3%; the 56 first builds: 88.1% and 91.4%,
   from 59.7% and 70.0%); median repo 100% exact, 69 of 76 at 90% or more. **98.7% and 99.6%
@@ -933,7 +933,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   bundle, minecolonies on ForgeGradle, MCCustomSkinLoader on its own buildSrc plugin that
   reads Minecraft's library manifest) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 102 misses. 177 misses remain in
+  (its own settings plugin supplies the catalog and BOMs), 102 misses. 165 misses remain in
   the 69 builds, ihub-pub's included (spring-boot 18, from its docs project's `projectsEvaluated` hook that adds every published Java project, armeria 13: OS-specific
   netty transports, one project's JUnit 6.0.2 line, a `strictly` ecj, scala 3's scala-library). Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
@@ -958,7 +958,9 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   settings script (`projectDir`, `.name`, `rootProject.children.each` renames; conductor 99.0%
   to 99.6%), `eachDependency { useVersion(...) }` rules on `requested.group`/`name` with
   literal, variable or catalog versions (pulsar's Jackson convention 98.5%, conductor's lz4
-  99.9%; rules on other conditions, such as caffeine's toolchain check, stay unread), the
+  99.9%; caffeine's checks on each project's Java toolchain version, read from
+  `java.toolchain` or a build-logic `gradleProperty(...).orElse(N)` helper, are decided per
+  project: 97.4%, the rest its fray plugin's runtime), the
   compile classpaths resolved on their own whenever there are main or test dependencies, as
   a POM's `runtime` scope down the tree splits them too (JavaPackager's xz 1.4; no time
   cost on the corpus), the freefair Lombok plugin's Lombok (its extension's version, else

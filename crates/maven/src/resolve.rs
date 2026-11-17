@@ -1842,6 +1842,9 @@ pub(crate) struct Enforced {
 pub(crate) struct VersionRule {
     pub conditions: Vec<RuleCondition>,
     pub version: String,
+    /// Only for projects whose Java toolchain version meets this (`("<", 17)`); the Gradle
+    /// reader keeps or drops the rule per project before resolution.
+    pub toolchain: Option<(&'static str, i64)>,
 }
 
 /// `requested.group == "g"`, `requested.name.startsWith("n")`, or the negation of one.
@@ -1999,16 +2002,19 @@ pub(crate) fn resolve_gradle_module(
             else {
                 continue;
             };
-            let key = (
-                group.to_string(),
-                artifact.to_string(),
-                "jar".to_string(),
-                String::new(),
-            );
-            if forced.get(&key) != Some(&rule.version) {
-                forced.insert(key.clone(), rule.version.clone());
-                pins.insert(key, rule.version.clone());
-                raised = true;
+            // A BOM node too (caffeine's junit-bom: its JUnit 5 rule names group org.junit).
+            for kind in ["jar", "pom"] {
+                let key = (
+                    group.to_string(),
+                    artifact.to_string(),
+                    kind.to_string(),
+                    String::new(),
+                );
+                if forced.get(&key) != Some(&rule.version) {
+                    forced.insert(key.clone(), rule.version.clone());
+                    pins.insert(key, rule.version.clone());
+                    raised = true;
+                }
             }
         }
         if !raised && before == pins.len() {

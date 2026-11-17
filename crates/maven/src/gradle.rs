@@ -299,10 +299,25 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             text.push_str("    }\n}\n");
         }
     }
+    // Each file's own Java toolchain (caffeine's `java.toolchain { languageVersion =
+    // javaVersion() }`, 11 by default), the project's toolchain version as `TOOLCHAIN` in
+    // conditions, decided per project once its conventions apply, and `${libs.x.get().module}`
+    // as the module it names.
+    let toolchains: Vec<Option<Option<u32>>> = scripts
+        .iter()
+        .map(|(file, text)| script_toolchain(dir, file, text, &context.vars))
+        .collect();
+    for (_, text) in &mut scripts {
+        *text = text.replace("java.toolchain.languageVersion.get().asInt()", TOOLCHAIN);
+        *text = catalog_modules(text, &context.catalog);
+    }
     let mut modules: Vec<Module> = Vec::new();
     for (i, (file, text)) in scripts.iter().enumerate() {
         let mut module = read_script(text, &mut context);
-        module.forced = forced_versions(text, &context.vars, &mut missing);
+        module.toolchain = toolchains.get(i).copied().flatten();
+        let (forced, forced_when) = forced_versions_when(text, &context.vars, &mut missing);
+        module.forced = forced;
+        module.forced_when = forced_when;
         module.forced.extend(settings_forced.iter().cloned());
         for (rule, test_only, shared) in version_rules(text, &context.vars) {
             if shared {
@@ -355,6 +370,19 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         }
     }
     apply_conventions(&conventions, &mut modules);
+    // What holds only for some toolchain versions, decided for each project's own; a project
+    // whose toolchain is not read takes none of it.
+    for m in &mut modules {
+        let version = m.toolchain.flatten();
+        let holds = |t: &Toolchain| version.is_some_and(|v| toolchain_holds(*t, v));
+        m.rules
+            .retain(|(r, _)| r.toolchain.is_none_or(|t| holds(&t)));
+        for (c, test_only, t) in std::mem::take(&mut m.forced_when) {
+            if holds(&t) {
+                m.forced.push((c, test_only));
+            }
+        }
+    }
     // The Kotlin plugin adds the `kotlin-test` variant for the framework the tests run on
     // next to a `kotlin-test` dependency: JUnit 5 with `useJUnitPlatform()`, TestNG with
     // `useTestNG()`, else JUnit 4 (grpc-spring's kotlin-test-junit5, moshi's kotlin-test-junit).
@@ -2050,6 +2078,11 @@ struct Module {
     /// `resolutionStrategy.force("g:a:v")`: versions forced over conflict resolution, the
     /// flag set when only test configurations are forced.
     forced: Vec<(Coordinate, bool)>,
+    /// Forces inside an `if` on the project's toolchain version.
+    forced_when: Vec<(Coordinate, bool, Toolchain)>,
+    /// The file's Java toolchain version: `None` when it sets none, `Some(None)` when it
+    /// sets one not read here.
+    toolchain: Option<Option<u32>>,
     /// `resolutionStrategy.eachDependency` rules, the flag set when only test
     /// configurations take them.
     rules: Vec<(VersionRule, bool)>,
@@ -2417,10 +2450,26 @@ fn forced_versions(
     vars: &BTreeMap<String, String>,
     missing: &mut BTreeSet<String>,
 ) -> Vec<(Coordinate, bool)> {
+    forced_versions_when(text, vars, missing).0
+}
+
+/// `forced_versions`, with the forces inside an `if` on the project's toolchain version
+/// apart, each with that condition (caffeine's eclipse-collections 12.0.0 below Java 17).
+#[allow(clippy::type_complexity)]
+fn forced_versions_when(
+    text: &str,
+    vars: &BTreeMap<String, String>,
+    missing: &mut BTreeSet<String>,
+) -> (Vec<(Coordinate, bool)>, Vec<(Coordinate, bool, Toolchain)>) {
     let text = strip_comments(text);
     let mut out = Vec::new();
+    let mut when = Vec::new();
+    // Per open brace: the toolchain condition of the `if` that opened it.
+    let mut toolchain_blocks: Vec<Option<Toolchain>> = Vec::new();
     // Per open brace: whether it opened a test-only configurations block.
     let mut test_blocks: Vec<bool> = Vec::new();
+    // Per open brace: whether an `if` the default build decides false opened it.
+    let mut false_blocks: Vec<bool> = Vec::new();
     // Inside `force(` still open, or a kordamp rule at this depth.
     let mut open_call = false;
     let mut kordamp: Option<usize> = None;
@@ -2435,15 +2484,20 @@ fn forced_versions(
         if trimmed.contains("ForceDependencies") {
             kordamp = Some(test_blocks.len());
         }
-        let collect = open_call || force_at.is_some() || kordamp.is_some();
+        let off = false_blocks.iter().any(|f| *f);
+        let collect = !off && (open_call || force_at.is_some() || kordamp.is_some());
         if collect {
             let from = force_at.map_or(trimmed, |i| &trimmed[i..]);
             for value in strings(from) {
                 if value.matches(':').count() < 2 {
                     continue;
                 }
+                let on = toolchain_blocks.iter().rev().find_map(|t| *t);
                 match coordinate(&value, vars) {
-                    Ok(c) if c.version.is_some() => out.push((c, test_only)),
+                    Ok(c) if c.version.is_some() => match on {
+                        Some(t) => when.push((c, test_only, t)),
+                        None => out.push((c, test_only)),
+                    },
                     Ok(_) => {}
                     Err(e) => {
                         missing.insert(format!("forced version: {e}"));
@@ -2458,11 +2512,19 @@ fn forced_versions(
         }
         let opens_test = trimmed.starts_with("configurations")
             && (trimmed.contains("'test") || trimmed.contains("\"test"));
+        let opens_false = if_condition(trimmed).and_then(|c| condition(c, vars)) == Some(false);
+        let opens_toolchain = if_condition(trimmed).and_then(toolchain_test);
         for c in code_only(line).chars() {
             match c {
-                '{' => test_blocks.push(opens_test),
+                '{' => {
+                    test_blocks.push(opens_test);
+                    false_blocks.push(opens_false);
+                    toolchain_blocks.push(opens_toolchain);
+                }
                 '}' => {
                     test_blocks.pop();
+                    false_blocks.pop();
+                    toolchain_blocks.pop();
                     if kordamp.is_some_and(|d| test_blocks.len() <= d) {
                         kordamp = None;
                     }
@@ -2471,7 +2533,7 @@ fn forced_versions(
             }
         }
     }
-    out
+    (out, when)
 }
 
 /// `resolutionStrategy.eachDependency { ... }` rules: each `useVersion(v)` with the
@@ -2482,6 +2544,22 @@ fn forced_versions(
 /// `allprojects { }` / `subprojects { }` gives it to every project.
 fn version_rules(text: &str, vars: &BTreeMap<String, String>) -> Vec<(VersionRule, bool, bool)> {
     let text = strip_comments(text);
+    // `val groups = setOf("a", "b")`, for a `when` branch `in groups -> ...`.
+    let sets: BTreeMap<String, Vec<String>> = text
+        .lines()
+        .filter_map(|l| {
+            let (name, value) = l.trim().strip_prefix("val ")?.split_once('=')?;
+            let items = value.trim().strip_prefix("setOf(")?.strip_suffix(')')?;
+            let items: Option<Vec<String>> = items
+                .split(',')
+                .map(|i| match quoted(i.trim()) {
+                    Some((v, "")) => Some(v.to_string()),
+                    _ => None,
+                })
+                .collect();
+            Some((name.trim().to_string(), items?))
+        })
+        .collect();
     let mut out = Vec::new();
     let mut openers: Vec<String> = Vec::new();
     let mut at = 0;
@@ -2542,7 +2620,7 @@ fn version_rules(text: &str, vars: &BTreeMap<String, String>) -> Vec<(VersionRul
             continue;
         }
         let mut rules = Vec::new();
-        rule_statements(body, &[], vars, &mut rules);
+        rule_statements(body, &[], None, (vars, &sets), &mut rules);
         out.extend(rules.into_iter().map(|r| (r, test_only, shared)));
     }
     out
@@ -2609,12 +2687,19 @@ fn balanced(text: &str, open: char, close: char) -> Option<&str> {
     None
 }
 
+type RuleNames<'a> = (
+    &'a BTreeMap<String, String>,
+    &'a BTreeMap<String, Vec<String>>,
+);
+
 fn rule_statements(
     body: &str,
     conditions: &[RuleCondition],
-    vars: &BTreeMap<String, String>,
+    toolchain: Option<Toolchain>,
+    names: RuleNames<'_>,
     out: &mut Vec<VersionRule>,
 ) {
+    let vars = names.0;
     let mut rest = body;
     loop {
         rest = rest.trim_start_matches(|c: char| c.is_whitespace() || c == ';');
@@ -2631,15 +2716,38 @@ fn rule_statements(
             };
             let (then, tail) = branch(&after[cond.len() + 2..]);
             let parsed = rule_conditions(cond);
+            // A condition the default build decides, or one on the project's toolchain
+            // version (caffeine's JUnit 5 below Java 17), decided per project.
+            let decided = parsed.is_none().then(|| condition(cond, vars)).flatten();
+            let on = if toolchain.is_none() {
+                toolchain_test(cond)
+            } else {
+                None
+            };
             if let Some(parsed) = &parsed {
                 let mut inner = conditions.to_vec();
                 inner.extend(parsed.iter().cloned());
-                rule_statements(then, &inner, vars, out);
+                rule_statements(then, &inner, toolchain, names, out);
+            } else if decided == Some(true) {
+                rule_statements(then, conditions, toolchain, names, out);
+            } else if on.is_some() {
+                rule_statements(then, conditions, on, names, out);
             }
             rest = tail;
             let trimmed = rest.trim_start();
             if let Some(other) = trimmed.strip_prefix("else") {
                 let (otherwise, tail) = branch(other);
+                if decided == Some(false) {
+                    rule_statements(otherwise, conditions, toolchain, names, out);
+                } else if let Some(t) = on {
+                    rule_statements(
+                        otherwise,
+                        conditions,
+                        Some(toolchain_negated(t)),
+                        names,
+                        out,
+                    );
+                }
                 // `else` negates a single condition; of several, it is not read.
                 if let Some([one]) = parsed.as_deref() {
                     let mut inner = conditions.to_vec();
@@ -2647,7 +2755,7 @@ fn rule_statements(
                         negated: !one.negated,
                         ..one.clone()
                     });
-                    rule_statements(otherwise, &inner, vars, out);
+                    rule_statements(otherwise, &inner, toolchain, names, out);
                 }
                 rest = tail;
             }
@@ -2673,14 +2781,50 @@ fn rule_statements(
                     out.push(VersionRule {
                         conditions: conditions.to_vec(),
                         version,
+                        toolchain,
                     });
                 }
             }
             rest = tail;
             continue;
         }
-        // Anything else (`when`, `because`, assignments): to the end of its line, or of the
-        // block it opens.
+        // `when (requested.group) { in groups -> useVersion("v"); "g" -> useVersion("v") }`.
+        let subject = ["when (requested.group)", "when (requested.name)"]
+            .iter()
+            .position(|w| rest.starts_with(w));
+        if let Some(on_name) = subject.map(|i| i == 1) {
+            let open = rest.find('{').unwrap_or(rest.len());
+            let Some(inner) = balanced(&rest[open..], '{', '}') else {
+                return;
+            };
+            for arm in inner.lines().map(str::trim).filter(|l| !l.is_empty()) {
+                let Some((test, action)) = arm.split_once("->") else {
+                    continue;
+                };
+                let test = test.trim();
+                let values: Vec<String> = match test.strip_prefix("in ") {
+                    Some(set) => names.1.get(set.trim()).cloned().unwrap_or_default(),
+                    None => match quoted(test) {
+                        Some((v, tail)) if tail.trim().is_empty() => vec![v.to_string()],
+                        _ => Vec::new(),
+                    },
+                };
+                for value in values {
+                    let mut inner = conditions.to_vec();
+                    inner.push(RuleCondition {
+                        on_name,
+                        prefix: false,
+                        value,
+                        negated: false,
+                    });
+                    rule_statements(action.trim(), &inner, toolchain, names, out);
+                }
+            }
+            rest = &rest[open + inner.len() + 2..];
+            continue;
+        }
+        // Anything else (`because`, assignments): to the end of its line, or of the block it
+        // opens.
         let end = rest.find('\n').unwrap_or(rest.len());
         let line = &rest[..end];
         match line.find('{') {
@@ -2930,6 +3074,64 @@ const GRETTY_APIS: &[GrettyApis] = &[
 ];
 
 /// What Gretty adds to a build file that applies it, from its `gretty { servletContainer }`.
+/// `useJUnitJupiter("v")` or `useJUnitJupiter(libs.versions.x)` in a test suite: Gradle adds
+/// `org.junit.jupiter:junit-jupiter:v` to the suite's implementation and the JUnit Platform
+/// launcher to its runtime only, at the platform release that ships with v (1.x.y for
+/// Jupiter 5.x.y, the same number from JUnit 6). With no version, Gradle's own default is not
+/// known here and it is reported.
+fn jupiter_suite(line: &str, context: &Context, module: &mut Module) {
+    let Some(arg) = line
+        .strip_prefix("useJUnitJupiter(")
+        .and_then(|a| a.trim_end().strip_suffix(')'))
+        .map(str::trim)
+    else {
+        return;
+    };
+    let version = match quoted(arg) {
+        Some((v, tail)) if tail.trim().is_empty() && !v.contains('$') => Some(v.to_string()),
+        _ => arg
+            .strip_prefix("libs.versions.")
+            .and_then(|a| context.catalog.versions.get(a))
+            .cloned(),
+    };
+    let Some(version) = version else {
+        module
+            .unread
+            .push(format!("`{line}`: the JUnit Jupiter version is not read"));
+        return;
+    };
+    let launcher = match version.split_once('.') {
+        Some(("5", rest)) => format!("1.{rest}"),
+        _ => version.clone(),
+    };
+    for (group, artifact, v, runtime_only) in [
+        ("org.junit.jupiter", "junit-jupiter", version, false),
+        (
+            "org.junit.platform",
+            "junit-platform-launcher",
+            launcher,
+            true,
+        ),
+    ] {
+        module.deps.push(Declared {
+            coordinate: Coordinate {
+                group: group.to_string(),
+                artifact: artifact.to_string(),
+                version: Some(v),
+                enforced: false,
+                strict: false,
+                test: false,
+            },
+            scope: "test",
+            exclusions: Vec::new(),
+            pom: false,
+            exported: false,
+            runtime_only,
+            local: false,
+        });
+    }
+}
+
 fn gretty_apis(text: &str, context: &Context, module: &mut Module) {
     if !module.applied.iter().any(|id| id == GRETTY) {
         return;
@@ -3533,6 +3735,11 @@ fn read_project_script(text: &str, context: &mut Context) -> Module {
             module.shared.dm = true;
         }
         module.dm |= dm_before;
+        // A suite's `useJUnitJupiter("v")` adds junit-jupiter v and the JUnit Platform
+        // launcher to run it (caffeine's simulator).
+        if blocks.contains(&Block::Suites) && decided.is_none() && !skipping {
+            jupiter_suite(trimmed, context, &mut module);
+        }
         // caffeine's `testing.suites { named<JvmTestSuite>("test") { dependencies {
         // implementation(libs.jazzer) } } }` is its test classpath.
         if blocks.contains(&Block::Suites) {
@@ -4326,6 +4533,206 @@ fn convention_id(file: &str, text: &str) -> Option<String> {
 /// the literal `add("testImplementation", "g:a:1")` calls in a `dependencies { }` block and
 /// `plugins.apply("kotlin")`, outside any `if`, `when`, loop or callback (Talaiot's `kotlinLib`
 /// adds kotlintest and mockito-kotlin to every library's tests).
+/// The project's toolchain version in a condition, as the scripts are read.
+const TOOLCHAIN: &str = "TOOLCHAIN_VERSION";
+
+/// `TOOLCHAIN op n`: a condition on the project's Java toolchain version.
+type Toolchain = (&'static str, i64);
+
+/// `TOOLCHAIN_VERSION < 17` (`<`, `<=`, `>`, `>=`), as a condition to decide per project.
+fn toolchain_test(cond: &str) -> Option<Toolchain> {
+    let rest = cond.trim().strip_prefix(TOOLCHAIN)?.trim_start();
+    for op in ["<=", ">=", "<", ">"] {
+        if let Some(n) = rest.strip_prefix(op) {
+            return Some((op, n.trim().parse().ok()?));
+        }
+    }
+    None
+}
+
+fn toolchain_negated((op, n): Toolchain) -> Toolchain {
+    let op = match op {
+        "<" => ">=",
+        "<=" => ">",
+        ">" => "<=",
+        _ => "<",
+    };
+    (op, n)
+}
+
+fn toolchain_holds((op, n): Toolchain, version: u32) -> bool {
+    let v = i64::from(version);
+    match op {
+        "<" => v < n,
+        "<=" => v <= n,
+        ">" => v > n,
+        _ => v >= n,
+    }
+}
+
+/// The Java toolchain version a file's `java.toolchain { languageVersion = ... }` (or
+/// `java { toolchain { ... } }`, or `java.toolchain.languageVersion = ...`) sets:
+/// `JavaLanguageVersion.of(N)`, or a build-logic helper `fun Project.f():
+/// Provider<JavaLanguageVersion> = providers.gradleProperty("k")[.orElse(providers
+/// .environmentVariable("E"))].map { it.toIntOrNull() }.orElse(N).map(JavaLanguageVersion::of)`
+/// with k unset (a default build sets no environment variable). `None` when the file sets
+/// none, `Some(None)` when it sets one not read here or two that differ.
+fn script_toolchain(
+    dir: &Path,
+    file: &str,
+    text: &str,
+    vars: &BTreeMap<String, String>,
+) -> Option<Option<u32>> {
+    let mut found: BTreeSet<Option<u32>> = BTreeSet::new();
+    let mut blocks: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        let inside = blocks.last().is_some_and(|b| {
+            b == "java.toolchain {"
+                || (b == "toolchain {" && blocks.iter().rev().nth(1).is_some_and(|p| p == "java {"))
+        });
+        let value = trimmed
+            .strip_prefix("languageVersion")
+            .map(str::trim_start)
+            .and_then(|r| {
+                r.strip_prefix('=').or_else(|| {
+                    r.strip_prefix(".set(")
+                        .and_then(|v| v.trim_end().strip_suffix(')'))
+                })
+            })
+            .map(str::trim);
+        let value = match value {
+            Some(v) if inside => Some(v),
+            _ => trimmed
+                .strip_prefix("java.toolchain.languageVersion")
+                .map(str::trim_start)
+                .and_then(|r| r.strip_prefix('='))
+                .map(str::trim),
+        };
+        if let Some(v) = value {
+            found.insert(toolchain_value(dir, file, v, vars));
+        }
+        for c in code_only(line).chars() {
+            match c {
+                '{' => blocks.push(trimmed.to_string()),
+                '}' => {
+                    blocks.pop();
+                }
+                _ => {}
+            }
+        }
+    }
+    match found.into_iter().collect::<Vec<_>>().as_slice() {
+        [] => None,
+        [one] => Some(*one),
+        _ => Some(None),
+    }
+}
+
+fn toolchain_value(
+    dir: &Path,
+    file: &str,
+    value: &str,
+    vars: &BTreeMap<String, String>,
+) -> Option<u32> {
+    if let Some(n) = value
+        .strip_prefix("JavaLanguageVersion.of(")
+        .and_then(|v| v.strip_suffix(')'))
+    {
+        return n.trim().parse().ok();
+    }
+    let name = value.strip_suffix("()")?;
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return None;
+    }
+    // The helper sits in a Kotlin file of the same build logic: up from the script to the
+    // `kotlin` source root.
+    let mut base = Path::new(file).parent();
+    while let Some(b) = base {
+        if b.file_name().is_some_and(|n| n == "kotlin") {
+            break;
+        }
+        base = b.parent();
+    }
+    let root = dir.join(base?);
+    let header = format!("fun Project.{name}(): Provider<JavaLanguageVersion> =");
+    let mut bodies = Vec::new();
+    for entry in std::fs::read_dir(&root).ok()?.flatten() {
+        let path = entry.path();
+        if path.extension().is_none_or(|e| e != "kt") {
+            continue;
+        }
+        let Ok(text) = fleetreach_core::repofile::read_to_string(&path) else {
+            continue;
+        };
+        if let Some((_, rest)) = text.split_once(&header) {
+            let end = rest.find("\nfun ").unwrap_or(rest.len());
+            bodies.push(
+                rest[..end]
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect::<String>(),
+            );
+        }
+    }
+    let [body] = bodies.as_slice() else {
+        return None;
+    };
+    let rest = body.strip_prefix("providers.gradleProperty(\"")?;
+    let (key, rest) = rest.split_once("\")")?;
+    let rest = match rest.strip_prefix(".orElse(providers.environmentVariable(\"") {
+        Some(r) => r.split_once("\"))")?.1,
+        None => rest,
+    };
+    let rest = rest.strip_prefix(".map{it.toIntOrNull()}.orElse(")?;
+    let (default, rest) = rest.split_once(')')?;
+    if rest != ".map(JavaLanguageVersion::of)" {
+        return None;
+    }
+    match vars.get(key) {
+        Some(v) => v.trim().parse().ok(),
+        None => default.parse().ok(),
+    }
+}
+
+/// `${libs.a.b.get().module}` (and `${libs.a.b.get().module.group}`-free forms only): the
+/// `group:artifact` of that catalog library, as caffeine's forces name it.
+fn catalog_modules(text: &str, catalog: &Catalog) -> String {
+    if !text.contains(".get().module}") {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find("${libs.") {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + "${libs.".len()..];
+        let found = after.split_once(".get().module}").and_then(|(path, tail)| {
+            let ok = path
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_');
+            let c = catalog
+                .libraries
+                .iter()
+                .find(|(a, _)| accessor(a) == path)
+                .map(|(_, c)| c)
+                .filter(|_| ok)?;
+            Some((format!("{}:{}", c.group, c.artifact), tail))
+        });
+        match found {
+            Some((module, tail)) => {
+                out.push_str(&module);
+                rest = tail;
+            }
+            None => {
+                out.push_str("${libs.");
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 fn binary_plugins(dir: &Path, scripts: &[(String, String)]) -> Vec<(String, String, String)> {
     let mut out = Vec::new();
     for (file, text) in scripts {
@@ -4558,6 +4965,8 @@ fn apply_conventions(conventions: &BTreeMap<String, usize>, modules: &mut [Modul
         let mut project_platforms = Vec::new();
         let mut project_deps = Vec::new();
         let mut forced = Vec::new();
+        let mut forced_when = Vec::new();
+        let mut toolchain = None;
         let mut rules = Vec::new();
         let mut dm = false;
         for &c in &order {
@@ -4569,6 +4978,8 @@ fn apply_conventions(conventions: &BTreeMap<String, usize>, modules: &mut [Modul
             project_platforms.extend(from.project_platforms.iter().cloned());
             project_deps.extend(from.project_deps.iter().cloned());
             forced.extend(from.forced.iter().cloned());
+            forced_when.extend(from.forced_when.iter().cloned());
+            toolchain = toolchain.or(from.toolchain);
             rules.extend(from.rules.iter().cloned());
             dm |= from.dm;
         }
@@ -4584,6 +4995,9 @@ fn apply_conventions(conventions: &BTreeMap<String, usize>, modules: &mut [Modul
         module.project_platforms.extend(project_platforms);
         module.project_deps.extend(project_deps);
         module.forced.extend(forced);
+        module.forced_when.extend(forced_when);
+        // A toolchain the file sets itself wins over its conventions'.
+        module.toolchain = module.toolchain.or(toolchain);
         rules.append(&mut module.rules);
         module.rules = rules;
         module.dm |= dm;
@@ -6262,6 +6676,125 @@ set = ["a-b", "e"]
         assert!(r.missing.is_empty(), "{:?}", r.missing);
         assert_eq!(versions(&r, "g:inner"), ["2"], "{:?}", r.packages);
         assert_eq!(versions(&r, "g:lib"), ["1"]);
+    }
+
+    #[test]
+    fn toolchain_conditions_are_decided_per_project() {
+        // caffeine: below Java 17, an eachDependency `when (requested.group)` rule moves JUnit
+        // to 5.x (its BOM too) and a force pins eclipse-collections; a project on 21 keeps
+        // its own versions.
+        let bom = |v: &str| {
+            (
+                format!("g:bom:{v}"),
+                format!(
+                    "<project><groupId>g</groupId><artifactId>bom</artifactId><version>{v}</version>\
+                     <packaging>pom</packaging></project>"
+                ),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            bom("1"),
+            bom("3"),
+            pom("x", "1", &[]),
+            pom("x", "3", &[]),
+            ("h:y:1".to_string(), "<project><groupId>h</groupId><artifactId>y</artifactId><version>1</version></project>".to_string()),
+            ("h:y:3".to_string(), "<project><groupId>h</groupId><artifactId>y</artifactId><version>3</version></project>".to_string()),
+        ]));
+        let script = |jdk: u32| {
+            format!(
+                "plugins {{\n    `java-library`\n}}\njava.toolchain {{\n    languageVersion = JavaLanguageVersion.of({jdk})\n}}\n\
+                 dependencies {{\n    implementation(platform(\"g:bom:3\"))\n    implementation(\"g:x:3\")\n    implementation(libs.y)\n}}\n\
+                 configurations.configureEach {{\n    val groups = setOf(\"g\")\n    resolutionStrategy.eachDependency {{\n\
+                 \x20       if (java.toolchain.languageVersion.get().asInt() < 17) {{\n            when (requested.group) {{\n\
+                 \x20               in groups -> useVersion(\"1\")\n            }}\n        }}\n    }}\n\
+                 \x20   resolutionStrategy {{\n        if (java.toolchain.languageVersion.get().asInt() < 17) {{\n\
+                 \x20           force(\"${{libs.y.get().module}}:1\")\n        }}\n    }}\n}}\n"
+            )
+        };
+        let (old, new) = (script(11), script(21));
+        let dir = tree(
+            "toolchain-conditions",
+            &[
+                ("settings.gradle.kts", "include(\"old\", \"new\")\n"),
+                ("gradle/libs.versions.toml", "[libraries]\ny = \"h:y:3\"\n"),
+                ("old/build.gradle.kts", &old),
+                ("new/build.gradle.kts", &new),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:x"), ["1", "3"], "{:?}", r.packages);
+        assert_eq!(versions(&r, "g:bom"), ["1", "3"]);
+        assert_eq!(versions(&r, "h:y"), ["1", "3"]);
+    }
+
+    #[test]
+    fn a_force_in_a_branch_the_build_skips_forces_nothing() {
+        let text =
+            "configurations.all {\n    resolutionStrategy {\n        if (hasProperty('old')) {\n\
+                    \x20           force 'g:a:1'\n        }\n        force 'g:b:2'\n    }\n}\n";
+        let mut missing = BTreeSet::new();
+        let forced = forced_versions(text, &BTreeMap::new(), &mut missing);
+        let names: Vec<&str> = forced.iter().map(|(c, _)| c.artifact.as_str()).collect();
+        assert_eq!(names, ["b"]);
+    }
+
+    #[test]
+    fn a_toolchain_from_a_build_logic_helper_is_its_default() {
+        let helper = "fun Project.javaVersion(): Provider<JavaLanguageVersion> =\n\
+                      \x20 providers.gradleProperty(\"javaVersion\")\n\
+                      \x20   .orElse(providers.environmentVariable(\"JAVA_VERSION\"))\n\
+                      \x20   .map { it.toIntOrNull() }.orElse(11).map(JavaLanguageVersion::of)\n\
+                      fun Project.other() = 1\n";
+        let dir = tree(
+            "toolchain-helper",
+            &[("logic/src/main/kotlin/ProjectExtensions.kt", helper)],
+        );
+        let file = "logic/src/main/kotlin/lifecycle/java.gradle.kts";
+        let text = "java.toolchain {\n  languageVersion = javaVersion()\n}\n";
+        let mut vars = BTreeMap::new();
+        assert_eq!(script_toolchain(&dir, file, text, &vars), Some(Some(11)));
+        vars.insert("javaVersion".to_string(), "21".to_string());
+        assert_eq!(script_toolchain(&dir, file, text, &vars), Some(Some(21)));
+        assert_eq!(
+            script_toolchain(
+                &dir,
+                file,
+                "java.toolchain {\n  languageVersion = mine()\n}\n",
+                &vars
+            ),
+            Some(None)
+        );
+        assert_eq!(script_toolchain(&dir, file, "plugins {\n}\n", &vars), None);
+    }
+
+    #[test]
+    fn a_suite_using_junit_jupiter_takes_it_and_its_launcher() {
+        let repo = Mem(BTreeMap::from([
+            (
+                "org.junit.jupiter:junit-jupiter:5.10.2".to_string(),
+                "<project><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.10.2</version></project>".to_string(),
+            ),
+            (
+                "org.junit.platform:junit-platform-launcher:1.10.2".to_string(),
+                "<project><groupId>org.junit.platform</groupId><artifactId>junit-platform-launcher</artifactId><version>1.10.2</version></project>".to_string(),
+            ),
+        ]));
+        let dir = tree(
+            "jupiter-suite",
+            &[(
+                "build.gradle.kts",
+                "plugins {\n    java\n}\ntesting.suites {\n    named<JvmTestSuite>(\"test\") {\n\
+                 \x20       useJUnitJupiter(\"5.10.2\")\n    }\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "org.junit.jupiter:junit-jupiter"), ["5.10.2"]);
+        assert_eq!(
+            versions(&r, "org.junit.platform:junit-platform-launcher"),
+            ["1.10.2"]
+        );
     }
 
     #[test]

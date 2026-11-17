@@ -235,6 +235,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checker-qual: 4.4.0 to compile, worldedit's 3.48.3 to run the tests). Under the Spring
   plugin a compile-only version still versions an unversioned test declaration of the same
   module. 143 packages Gradle does not list dropped out, none it does.
+- **Checks on a project's Java toolchain are decided per project.** A project's toolchain
+  version is read from `java.toolchain { languageVersion = JavaLanguageVersion.of(N) }`, or
+  from a build-logic helper `providers.gradleProperty("k")...orElse(N)` with k unset. A
+  `resolutionStrategy` force or `eachDependency` rule inside `if
+  (java.toolchain.languageVersion.get().asInt() < 17)` then holds only for the projects it
+  matches, conventions included (caffeine's JUnit 5 and eclipse-collections 12 below Java
+  17; its simulator on 26 keeps JUnit 6). With it: `when (requested.group) { in set -> ... }`
+  rules, rules moving a BOM too, `${libs.x.get().module}` in a coordinate, a test suite's
+  `useJUnitJupiter("v")` (junit-jupiter v and its platform launcher), and forces in a branch
+  the build skips left out. caffeine: 91.1% to 97.4% of 190 modules.
 - **An inline `if` on an unset property is read.** With `val v = findProperty("k")?.toString()`
   and k set nowhere, a declaration `cfg(if (v == null) A else B)` declares A, as a default
   build does (CosId's convention plugin puts the Spring Boot BOM on every classpath so).
