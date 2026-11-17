@@ -137,7 +137,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Gradle reads one, instead of being reported (Hystrix's javassist 3.19.0-GA, dgs-framework's
   mockk); `latest.release` is still reported. In a POM, an optional dependency no longer
   widens the test-scoped one it inherits under the same name onto the classpath (netty-common
-  4.1.3's javassist, which raised powermock's 3.18.2-GA to 3.20.0-GA). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  4.1.3's javassist, which raised powermock's 3.18.2-GA to 3.20.0-GA). A plugin that buildSrc or
+  build-logic depends on (`implementation "...kotlin-gradle-plugin:${kotlinVersion}"`) sets the
+  version of that plugin where a build file applies it (spring-framework's Kotlin 2.4.21). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over

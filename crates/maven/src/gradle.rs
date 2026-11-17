@@ -136,9 +136,23 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     // Some script applies the Spring dependency-management plugin, by id or through a catalog
     // alias (interview-guide's `alias(libs.plugins.spring.dependency.management)`).
     let mut spring_dm = scripts.iter().any(|(_, t)| t.contains(SPRING_DM));
-    for (_, text) in &scripts {
+    for (file, text) in &scripts {
+        // What buildSrc or build-logic depends on is on the build's classpath too
+        // (spring-framework's buildSrc `implementation` of kotlin-gradle-plugin).
+        let build_logic = file.starts_with("buildSrc/") || file.starts_with("build-logic/");
         for line in text.lines() {
             let line = line.trim();
+            if build_logic {
+                let rest = ["implementation", "api", "compileOnly", "runtimeOnly"]
+                    .iter()
+                    .find_map(|c| line.strip_prefix(c))
+                    .filter(|r| r.starts_with([' ', '(']));
+                if let Some((id, version)) =
+                    rest.and_then(|r| classpath_plugin(&format!("classpath{r}"), &vars))
+                {
+                    plugins.entry(id.to_string()).or_insert(version);
+                }
+            }
             if let Some((id, version)) = plugin_line(line, &catalog, &vars) {
                 spring_dm |= id == SPRING_DM;
                 if let Some(version) = version {
@@ -5052,6 +5066,39 @@ set = ["a-b", "e"]
                     "app/build.gradle",
                     "apply plugin: 'kotlin'\n\
                      dependencies {\n  api \"org.jetbrains.kotlin:kotlin-reflect\"\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(
+            versions(&r, "org.jetbrains.kotlin:kotlin-reflect"),
+            ["2.4.21"],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn build_logics_dependencies_version_the_plugins_it_applies() {
+        // spring-framework: buildSrc's `implementation "...kotlin-gradle-plugin:${kotlinVersion}"`
+        // puts Kotlin 2.4.21 on the build's classpath; `apply plugin: "kotlin"` then gives the
+        // unversioned `kotlin-reflect` that version.
+        let repo = Mem(BTreeMap::from([(
+            "org.jetbrains.kotlin:kotlin-reflect:2.4.21".to_string(),
+            "<project><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-reflect</artifactId><version>2.4.21</version></project>".to_string(),
+        )]));
+        let dir = tree(
+            "build-logic-classpath",
+            &[
+                ("settings.gradle", "include 'core'\n"),
+                ("gradle.properties", "kotlinVersion=2.4.21\nkotlin.stdlib.default.dependency=false\n"),
+                (
+                    "buildSrc/build.gradle",
+                    "dependencies {\n    implementation \"org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlinVersion}\"\n}\n",
+                ),
+                (
+                    "core/build.gradle",
+                    "apply plugin: \"kotlin\"\ndependencies {\n    api(\"org.jetbrains.kotlin:kotlin-reflect\")\n}\n",
                 ),
             ],
         );
