@@ -82,6 +82,56 @@ impl LocalRepositories {
         })
     }
 
+    /// Gradle's cache keeps no `maven-metadata.xml`; the versions it holds a POM or `.module`
+    /// file of stand in for one, as when Gradle settles a range offline (smack-core's
+    /// `[1.0.0, 1.0.999]` jxmpp, 1.0.3 in the cache Gradle filled).
+    fn gradle_listing(&self, group: &str, artifact: &str) -> Option<String> {
+        let plain =
+            |s: &str| !s.is_empty() && !s.starts_with('.') && !s.contains(['/', '\\', '\0']);
+        if !(plain(group) && plain(artifact)) {
+            return None;
+        }
+        let mut versions: Vec<String> = Vec::new();
+        for root in &self.gradle_roots {
+            let Ok(entries) = std::fs::read_dir(root.join(group).join(artifact)) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let version = entry.file_name().to_string_lossy().to_string();
+                // A version name only: nothing that could break the listing's XML.
+                let version_like = version
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+'));
+                if !plain(&version) || !version_like || versions.contains(&version) {
+                    continue;
+                }
+                let held = ["pom", "module"].iter().any(|ext| {
+                    std::fs::read_dir(entry.path()).is_ok_and(|hashes| {
+                        hashes.flatten().any(|h| {
+                            h.path()
+                                .join(format!("{artifact}-{version}.{ext}"))
+                                .is_file()
+                        })
+                    })
+                });
+                if held {
+                    versions.push(version);
+                }
+            }
+        }
+        if versions.is_empty() {
+            return None;
+        }
+        versions.sort();
+        let listed: String = versions
+            .iter()
+            .map(|v| format!("<version>{v}</version>"))
+            .collect();
+        Some(format!(
+            "<metadata><versioning><versions>{listed}</versions></versioning></metadata>"
+        ))
+    }
+
     fn dir(root: &Path, group: &str, artifact: &str) -> PathBuf {
         let mut p = root.to_path_buf();
         for part in group.split('.') {
@@ -106,12 +156,15 @@ impl PomSource for LocalRepositories {
     }
 
     fn metadata(&self, group: &str, artifact: &str) -> Option<String> {
-        self.roots.iter().find_map(|root| {
-            let dir = Self::dir(root, group, artifact);
-            ["maven-metadata.xml", "maven-metadata-central.xml"]
-                .iter()
-                .find_map(|f| fleetreach_core::repofile::read_to_string(dir.join(f)).ok())
-        })
+        self.roots
+            .iter()
+            .find_map(|root| {
+                let dir = Self::dir(root, group, artifact);
+                ["maven-metadata.xml", "maven-metadata-central.xml"]
+                    .iter()
+                    .find_map(|f| fleetreach_core::repofile::read_to_string(dir.join(f)).ok())
+            })
+            .or_else(|| self.gradle_listing(group, artifact))
     }
 
     fn module(&self, group: &str, artifact: &str, version: &str) -> Option<String> {

@@ -4954,6 +4954,45 @@ set = ["a-b", "e"]
     }
 
     #[test]
+    fn a_range_takes_the_versions_gradles_cache_holds() {
+        // spring-integration-samples: smack-core asks for jxmpp `[1.0.0, 1.0.999]`; Gradle's
+        // cache keeps no maven-metadata.xml, only a folder per version it holds.
+        let pom = |a: &str, v: &str, deps: &str| {
+            format!("<project><groupId>g</groupId><artifactId>{a}</artifactId><version>{v}</version><dependencies>{deps}</dependencies></project>")
+        };
+        let cache = tree(
+            "gradle-cache-listing",
+            &[
+                (
+                    "g/smack/1/h1/smack-1.pom",
+                    &pom("smack", "1", "<dependency><groupId>g</groupId><artifactId>jxmpp</artifactId><version>[1.0.0, 1.0.999]</version></dependency>"),
+                ),
+                ("g/jxmpp/1.0.1/h2/jxmpp-1.0.1.pom", &pom("jxmpp", "1.0.1", "")),
+                ("g/jxmpp/1.0.3/h3/jxmpp-1.0.3.pom", &pom("jxmpp", "1.0.3", "")),
+                ("g/jxmpp/2.0.0/h4/jxmpp-2.0.0.pom", &pom("jxmpp", "2.0.0", "")),
+                // A version folder with only a jar is not a version the cache can resolve.
+                ("g/jxmpp/1.0.9/h5/jxmpp-1.0.9.jar", ""),
+            ],
+        );
+        let source = crate::resolve::LocalRepositories {
+            roots: Vec::new(),
+            gradle_roots: vec![cache],
+        };
+        let listing = source.metadata("g", "jxmpp").unwrap_or_default();
+        assert!(listing.contains("<version>1.0.3</version>"), "{listing}");
+        assert!(!listing.contains("1.0.9"), "{listing}");
+        let dir = tree(
+            "gradle-range",
+            &[(
+                "build.gradle",
+                "dependencies {\n    implementation 'g:smack:1'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &source);
+        assert_eq!(versions(&r, "g:jxmpp"), ["1.0.3"], "{:?}", r.missing);
+    }
+
+    #[test]
     fn the_dependency_management_plugin_manages_declared_versions() {
         // conductor: no BOM manages jna, yet `testImplementation jna:5.7.0` wins over
         // Elasticsearch's 5.10.0 on the test classpaths, which hold the declaration; the main
