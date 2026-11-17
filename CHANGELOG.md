@@ -119,7 +119,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   thymeleaf-extras-java8time does not, so ognl and javassist are listed
   (isolating-the-domain 98.8% to 100%; Hystrix, Timefold, grpc-spring and moshi gain too).
   `platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES)`,
-  written out in full, is read like the imported name. Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  written out in full, is read like the imported name. Under the dependency-management plugin, every version a
+  project declares is managed on the classpaths holding the declaration, even for an
+  artifact no BOM manages: conductor's `testImplementation jna:5.7.0` wins over
+  Elasticsearch's 5.10.0 on the test classpaths only (conductor 100%). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over

@@ -1183,6 +1183,7 @@ impl Module {
                 )
                 .filter_map(triple)
                 .collect(),
+            declared_manage: self.dm,
             rules: self
                 .rules
                 .iter()
@@ -4950,6 +4951,44 @@ set = ["a-b", "e"]
             ]),
             "{missing:?}"
         );
+    }
+
+    #[test]
+    fn the_dependency_management_plugin_manages_declared_versions() {
+        // conductor: no BOM manages jna, yet `testImplementation jna:5.7.0` wins over
+        // Elasticsearch's 5.10.0 on the test classpaths, which hold the declaration; the main
+        // classpath keeps 5.10.0. Without the plugin, Gradle takes the higher.
+        let repo = Mem(BTreeMap::from([
+            pom("a", "1", &[("x", "2")]),
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+        ]));
+        let x = |plugins: &str| {
+            let r = resolve_gradle(
+                &tree(
+                    "declared-managed",
+                    &[(
+                        "build.gradle",
+                        format!(
+                            "{plugins}dependencies {{\n    implementation 'g:a:1'\n\
+                             \x20   testImplementation 'g:x:1'\n}}\n"
+                        )
+                        .as_str(),
+                    )],
+                ),
+                &repo,
+            );
+            r.packages
+                .iter()
+                .filter(|p| p.name == "g:x")
+                .map(|p| (p.version.clone(), p.dev))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            x("plugins {\n    id 'io.spring.dependency-management' version '1.1.6'\n}\n"),
+            [("1".to_string(), true), ("2".to_string(), false)]
+        );
+        assert_eq!(x(""), [("2".to_string(), false)]);
     }
 
     #[test]

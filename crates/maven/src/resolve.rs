@@ -1662,6 +1662,10 @@ pub(crate) struct Enforced {
     /// `resolutionStrategy.eachDependency { ... useVersion(v) }`: the version every request
     /// a rule matches takes, a later rule overriding an earlier one.
     pub rules: Vec<VersionRule>,
+    /// The dependency-management plugin applies: every version the project declares itself
+    /// is managed on the classpaths that hold it, BOM-managed or not (conductor's test
+    /// `jna:5.7.0` over Elasticsearch's 5.10.0).
+    pub declared_manage: bool,
 }
 
 /// One `useVersion` branch of an `eachDependency` rule, with the conditions around it.
@@ -1763,6 +1767,20 @@ pub(crate) fn resolve_gradle_module(
     for (key, version) in forced.iter_mut() {
         if let Some(v) = declared.get(&(key.0.clone(), key.1.clone())) {
             version.clone_from(v);
+        }
+    }
+    if enforced.declared_manage {
+        for ((group, artifact), version) in &declared {
+            if !version.starts_with(['[', '(']) && !version.contains(['+', '$']) {
+                forced
+                    .entry((
+                        group.clone(),
+                        artifact.clone(),
+                        "jar".to_string(),
+                        String::new(),
+                    ))
+                    .or_insert_with(|| version.clone());
+            }
         }
     }
     force(
