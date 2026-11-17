@@ -46,10 +46,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 76 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 84.0% of the 14,878 modules at Gradle's version and 86.6% by name, 89.6% exact
-  without spring-boot, whose BOM is its own buildSrc DSL (the 56 first builds alone went from
-  59.7% and 70.0% to 88.1% and 91.4%); 98.2% and 99.4% on the 68 builds whose dependencies no
-  build plugin adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
+  now lists 90.2% of the 14,878 modules at Gradle's version and 92.6% by name (the 56 first
+  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 98.1% and 99.4% on the 69 builds
+  whose dependencies no build plugin adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
   `implementation` dependencies are only on the runtime classpath of a project that depends
@@ -218,6 +217,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `buildscript` `classpath` line with `apply plugin:`, Groovy map entries as `lib."k"`,
   `set('grpc-java.version', ...)` properties, and variables that name other variables. The
   harness is in `docs/differential/gradle`.
+- **spring-boot's own BOM DSL is read.** Its buildSrc `org.springframework.boot.bom` plugin
+  turns `bom { library("Name", "version") { group("g") { modules = [...]; bom("b") } } }` into
+  a Java platform, and its Java conventions put the internal platform on every Java project.
+  fleetreach reads the same blocks (`links { }` only documents) and follows a platform
+  project's own project platforms in turn, an enforced one forcing everything it reaches:
+  spring-boot goes from 8.3% to 97.7% of its 1,032 modules at Gradle's version.
 - **POM relocations are followed.** A POM with `<distributionManagement><relocation>` resolves
   the way each tool does: Maven resolves the artifact as its new coordinate, and Gradle keeps
   the relocation POM and adds the target (Artemis moved from `org.apache.activemq` to

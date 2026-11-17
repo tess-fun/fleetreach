@@ -40,6 +40,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     applied_scripts(&mut scripts);
     project_blocks(dir, &mut scripts);
     project_accessors(dir, &mut scripts);
+    spring_boot_boms(dir, &mut scripts);
     let named = named_catalogs(dir);
     for (name, _) in &named {
         for (_, text) in &mut scripts {
@@ -456,15 +457,27 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         .iter()
         .map(|m| {
             let (mut platforms, mut constraints) = (Vec::new(), Vec::new());
-            for (path, strict) in &m.project_platforms {
-                if let Some(&i) = by_path.get(path) {
+            // A platform project's own project platforms count too, in turn (spring-boot's
+            // internal platform takes `enforcedPlatform(project(":platform:spring-boot-
+            // dependencies"))`); an enforced one forces everything it reaches.
+            let mut stack: Vec<(String, bool)> =
+                m.project_platforms.iter().rev().cloned().collect();
+            let mut seen = BTreeSet::new();
+            while let Some((path, strict)) = stack.pop() {
+                if !seen.insert(path.clone()) {
+                    continue;
+                }
+                if let Some(&i) = by_path.get(&path) {
                     // `enforcedPlatform(project(...))` forces what the platform project sets.
                     let mark = |c: &Coordinate| Coordinate {
-                        strict: c.strict || *strict,
+                        strict: c.strict || strict,
                         ..c.clone()
                     };
                     platforms.extend(modules[i].platforms.iter().map(mark));
                     constraints.extend(modules[i].constraints.iter().map(mark));
+                    for (inner, inner_strict) in modules[i].project_platforms.iter().rev() {
+                        stack.push((inner.clone(), strict || *inner_strict));
+                    }
                 } else {
                     missing.insert(format!(
                         "platform project `{path}` is not a build file here"
@@ -791,6 +804,150 @@ fn line_scripts_boms(dir: &Path, doc: &toml::Table) -> Vec<String> {
             module.contains(':').then(|| format!("{module}:{version}"))
         })
         .collect()
+}
+
+/// Spring Boot's own build (spring-boot itself): its buildSrc `org.springframework.boot.bom`
+/// plugin turns `bom { library("AssertJ", "${assertjVersion}") { group("org.assertj") {
+/// modules = [...]; bom("x") } } }` into a `java-platform` whose `api` constraints are the
+/// modules at the library's version and whose `api platform(...)` dependencies are the BOMs,
+/// and its JavaConventions put `enforcedPlatform(project(":platform:spring-boot-internal-
+/// dependencies"))` on every classpath of every Java project. Read only where buildSrc holds
+/// that plugin and those conventions.
+fn spring_boot_boms(dir: &Path, scripts: &mut [(String, String)]) {
+    const BUILD: &str = "buildSrc/src/main/java/org/springframework/boot/build/";
+    const INTERNAL: &str = ":platform:spring-boot-internal-dependencies";
+    let read = |f: &str| fleetreach_core::repofile::read_to_string(dir.join(BUILD).join(f));
+    let bom_plugin = read("bom/BomExtension.java").is_ok_and(|t| t.contains("getConstraints()"));
+    let conventions = read("JavaConventions.java")
+        .is_ok_and(|t| t.contains("enforcedPlatform") && t.contains(INTERNAL));
+    if !bom_plugin {
+        return;
+    }
+    let mut platform_files = Vec::new();
+    for (file, text) in scripts.iter_mut() {
+        if !text.contains("id \"org.springframework.boot.bom\"") {
+            continue;
+        }
+        if let Some(rewritten) = spring_boot_bom(text) {
+            *text = rewritten;
+            platform_files.push(file.clone());
+        }
+    }
+    let internal = format!(
+        "{}/build.gradle",
+        INTERNAL.trim_start_matches(':').replace(':', "/")
+    );
+    if !conventions || !platform_files.contains(&internal) {
+        return;
+    }
+    for (file, text) in scripts.iter_mut() {
+        let project = file.ends_with("build.gradle") || file.ends_with("build.gradle.kts");
+        let java = [
+            "\"java\"",
+            "\"java-library\"",
+            "\"org.jetbrains.kotlin.jvm\"",
+            "'java'",
+            "'java-library'",
+        ]
+        .iter()
+        .any(|id| text.contains(&format!("id {id}")));
+        if project && java && !platform_files.contains(file) && !file.starts_with("buildSrc/") {
+            text.push_str(&format!(
+                "\ndependencies {{\n    implementation enforcedPlatform(project(\"{INTERNAL}\"))\n}}\n"
+            ));
+        }
+    }
+}
+
+/// One `org.springframework.boot.bom` script with its `bom { }` block as the `java-platform`
+/// dependencies it stands for (see `spring_boot_boms`); `None` when it has no such block.
+fn spring_boot_bom(text: &str) -> Option<String> {
+    let mut out = String::from("apply plugin: 'java-platform'\n");
+    let (mut constraints, mut boms) = (Vec::new(), Vec::new());
+    let mut depth = 0usize;
+    let mut bom_depth = None;
+    let mut library: Option<(String, usize)> = None;
+    let mut group: Option<(String, usize)> = None;
+    let mut in_modules = false;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        let code = code_only(line);
+        let before = depth;
+        let opens = code.matches('{').count();
+        let closes = code.matches('}').count();
+        if bom_depth != Some(0) {
+            if bom_depth.is_none() && before == 0 && trimmed.starts_with("bom {") {
+                bom_depth = Some(0);
+            } else {
+                out.push_str(line);
+                out.push('\n');
+            }
+            depth = (depth + opens).saturating_sub(closes);
+            continue;
+        }
+        let version = library.as_ref().map(|(v, _)| v.clone());
+        let group_id = group
+            .as_ref()
+            .filter(|(_, d)| *d + 1 == before)
+            .map(|(g, _)| g.clone());
+        if in_modules {
+            if let (Some((name, _)), Some(g), Some(v)) = (quoted(trimmed), &group_id, &version) {
+                constraints.push(format!("{g}:{name}:{v}"));
+            }
+            if trimmed.starts_with(']') {
+                in_modules = false;
+            }
+        } else if let Some(rest) = trimmed.strip_prefix("library(") {
+            let (_, tail) = quoted(rest.trim())?;
+            let tail = tail.trim_start().strip_prefix(',')?.trim_start();
+            let (v, _) = quoted(tail)?;
+            library = Some((v.to_string(), before));
+            group = None;
+        } else if let Some(rest) = trimmed.strip_prefix("group(") {
+            if library.as_ref().is_some_and(|(_, d)| *d + 1 == before) {
+                group = quoted(rest.trim()).map(|(g, _)| (g.to_string(), before));
+            }
+        } else if let (Some(g), Some(v)) = (&group_id, &version) {
+            if trimmed.starts_with("modules") && trimmed.contains('[') {
+                in_modules = !trimmed.contains(']');
+                for name in strings(trimmed.split_once('[').map_or("", |(_, r)| r)) {
+                    constraints.push(format!("{g}:{name}:{v}"));
+                }
+            } else if let Some(rest) = trimmed.strip_prefix("module(") {
+                if let Some((name, _)) = quoted(rest.trim()) {
+                    constraints.push(format!("{g}:{name}:{v}"));
+                }
+            } else if let Some(rest) = trimmed.strip_prefix("bom(") {
+                if let Some((name, _)) = quoted(rest.trim()) {
+                    boms.push(format!("{g}:{name}:{v}"));
+                }
+            }
+        }
+        depth = (depth + opens).saturating_sub(closes);
+        if library.as_ref().is_some_and(|(_, d)| depth <= *d) {
+            library = None;
+        }
+        if group.as_ref().is_some_and(|(_, d)| depth <= *d) {
+            group = None;
+        }
+        if depth == 0 {
+            // Past the block: what follows is read as written.
+            bom_depth = Some(usize::MAX);
+        }
+    }
+    if constraints.is_empty() && boms.is_empty() {
+        return None;
+    }
+    out.push_str("dependencies {\n    constraints {\n");
+    for c in &constraints {
+        out.push_str(&format!("        api \"{c}\"\n"));
+    }
+    out.push_str("    }\n");
+    for b in &boms {
+        out.push_str(&format!("    api platform(\"{b}\")\n"));
+    }
+    out.push_str("}\n");
+    Some(out)
 }
 
 /// The catalogs other than `libs` a settings script creates from one TOML file:
@@ -5891,6 +6048,68 @@ set = ["a-b", "e"]
         assert_eq!(versions(&r, "g:bom"), ["4"]);
         let r = read("line-boms-unused", "");
         assert!(versions(&r, "g:bom").is_empty(), "{:?}", r.packages);
+    }
+
+    #[test]
+    fn spring_boot_own_bom_dsl_manages_its_projects() {
+        // spring-boot: buildSrc's `org.springframework.boot.bom` plugin reads `bom { library(...)
+        // { group(...) { modules = [...]; module(...) { }; bom(...) } } }` into a java-platform,
+        // and JavaConventions put the internal platform, which enforces the public one, on
+        // every Java project. `links { module(...) }` only documents.
+        let bom = "<project><groupId>g</groupId><artifactId>b-bom</artifactId><version>5</version>\
+                   <packaging>pom</packaging><dependencyManagement><dependencies><dependency>\
+                   <groupId>g</groupId><artifactId>b</artifactId><version>5</version></dependency>\
+                   </dependencies></dependencyManagement></project>";
+        let repo = Mem(BTreeMap::from([
+            ("g:b-bom:5".to_string(), bom.to_string()),
+            pom("a", "2", &[]),
+            pom("m", "2", &[]),
+            pom("b", "5", &[]),
+            pom("i", "7", &[]),
+            pom("c", "1", &[]),
+        ]));
+        let public = "plugins {\n\tid \"org.springframework.boot.bom\"\n}\n\nbom {\n\
+                      \tlibrary(\"A\", \"${aVersion}\") {\n\t\tgroup(\"g\") {\n\t\t\tmodules = [\n\
+                      \t\t\t\t\"a\",\n\t\t\t\t\"c-ignored\" {\n\t\t\t\t\tclassifier = \"test\"\n\t\t\t\t}\n\t\t\t]\n\
+                      \t\t\tmodule(\"m\") {\n\t\t\t\tjavadoc(\"x\")\n\t\t\t}\n\t\t}\n\
+                      \t\tlinks {\n\t\t\tmodule(\"c\") {\n\t\t\t\tjavadoc(\"y\")\n\t\t\t}\n\t\t}\n\t}\n\
+                      \tlibrary(\"B\", \"5\") {\n\t\tgroup(\"g\") {\n\t\t\tbom(\"b-bom\")\n\t\t}\n\t}\n}\n";
+        let internal = "plugins {\n\tid \"org.springframework.boot.bom\"\n}\n\nbom {\n\
+                        \tlibrary(\"I\", \"7\") {\n\t\tgroup(\"g\") {\n\t\t\tmodules = [\"i\"]\n\t\t}\n\t}\n}\n\n\
+                        dependencies {\n\tapi(enforcedPlatform(project(\":platform:spring-boot-dependencies\")))\n}\n";
+        let dir = tree(
+            "spring-boot-bom",
+            &[
+                (
+                    "settings.gradle",
+                    "include \"platform:spring-boot-dependencies\"\ninclude \"platform:spring-boot-internal-dependencies\"\ninclude \"core\"\n",
+                ),
+                ("gradle.properties", "aVersion=2\n"),
+                (
+                    "buildSrc/src/main/java/org/springframework/boot/build/bom/BomExtension.java",
+                    "dependencies.getConstraints().add(JavaPlatformPlugin.API_CONFIGURATION_NAME, constraint);\n",
+                ),
+                (
+                    "buildSrc/src/main/java/org/springframework/boot/build/JavaConventions.java",
+                    "project.getDependencies().enforcedPlatform(project.getDependencies()\n\
+                     \t.project(Collections.singletonMap(\"path\", \":platform:spring-boot-internal-dependencies\")));\n",
+                ),
+                ("platform/spring-boot-dependencies/build.gradle", public),
+                ("platform/spring-boot-internal-dependencies/build.gradle", internal),
+                (
+                    "core/build.gradle",
+                    "plugins {\n\tid \"java-library\"\n}\n\ndependencies {\n\tapi(\"g:a\")\n\tapi(\"g:m\")\n\
+                     \tapi(\"g:b\")\n\ttestImplementation(\"g:i\")\n\tapi(\"g:c:1\")\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:a"), ["2"], "{:?}", r.packages);
+        assert_eq!(versions(&r, "g:m"), ["2"]);
+        assert_eq!(versions(&r, "g:b"), ["5"]);
+        assert_eq!(versions(&r, "g:i"), ["7"]);
+        assert_eq!(versions(&r, "g:c"), ["1"]);
     }
 
     #[test]
