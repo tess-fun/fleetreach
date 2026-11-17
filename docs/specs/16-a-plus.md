@@ -924,19 +924,19 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   Gradle 3.5, bnd is a Bnd workspace, cortinico's main build has no dependencies of its own,
   elasticsearch's build plugins need its whole build-tools tree, beyond the 3.5 GB harness) for reasons of their own (dead plugin repositories, toolchains Gradle
   cannot fetch on arm64, files the sparse clone lacks, plugins that need a full checkout,
-  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **82.9% of
-  14,878 modules at Gradle's version, 86.2% by name** (88.4% exact without spring-boot, whose
+  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **84.0% of
+  14,878 modules at Gradle's version, 86.6% by name** (89.6% exact without spring-boot, whose
   1,032 modules come almost all from its own `bom { library(...) }` buildSrc DSL; the 56 first
-  builds: 88.1% and 91.4%, from 59.7% and 70.0%); median repo 100% exact, 67 of 76 at 90% or
-  more. **96.8% and 98.9% on the 68 builds whose dependencies no build plugin adds**: the eight
+  builds: 88.1% and 91.4%, from 59.7% and 70.0%); median repo 100% exact, 68 of 76 at 90% or
+  more. **98.2% and 99.4% on the 68 builds whose dependencies no build plugin adds**: the eight
   others (spring-boot, ideavim,
   MinecraftDev and gradle-profiler's IDE plugin projects on the IntelliJ Platform plugin, Paper and WorldEdit on paperweight's dev
   bundle, minecolonies on ForgeGradle, MCCustomSkinLoader on its own buildSrc plugin that
   reads Minecraft's library manifest) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 384 misses remain in
-  the 68 builds, ihub-pub's included (armeria 195: its `[boms]` and flag scripts are its own
-  code). Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 220 misses remain in
+  the 68 builds, ihub-pub's included (armeria 31: per-project version splits and OS-specific
+  netty transports). Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
   that Gradle never builds as part of the project. Later rules: the main classpath resolved
   without test dependencies (mybatis-plus's starter-test modules, 117 misses corpus-wide),
@@ -1009,7 +1009,9 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   1.7.22 under both the Spring and Kotlin plugins stays unexplained), build-logic plugin
   classes registered by id adding their unconditional literal `add(conf, "g:a:v")` and
   `plugins.apply(...)` calls (Talaiot 118 to 157 of 158), the franzbecker Lombok plugin (LogNet; its Kotlin stdlib under
-  Boot's BOM, like mmorpg's, stays unexplained).
+  Boot's BOM, like mmorpg's, stays unexplained), LINE gradle-scripts `[boms]` as every project's platform, only where
+  `gradle/scripts/lib/common-dependencies.gradle` applies `dependenciesTomlBoms` (armeria
+  1,129 to 1,293 of 1,324).
   spring-boot (86 of 1,032) declares its BOM in its own buildSrc `bom { library(...) }` DSL,
   out of reach like the other plugin-built builds. Known limit: a sibling's `implementation` dependencies reach a consumer's
   runtime classpath but not its compile classpath, so one graph cannot give both versions

@@ -144,6 +144,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             }
         }
     }
+    let line_boms = line_scripts_boms(dir, &doc);
     let catalog = Catalog::from_doc(&toml::Value::Table(doc));
     for (alias, version) in &catalog.versions {
         vars.entry(format!("libs.versions.{alias}"))
@@ -281,6 +282,20 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         if let std::collections::btree_map::Entry::Vacant(slot) = conventions.entry(id) {
             slot.insert(scripts.len());
             scripts.push((file, text));
+        }
+    }
+    // LINE's gradle-scripts put every `[boms]` entry of the catalog in the platform project
+    // all configurations of every project extend (armeria).
+    if !line_boms.is_empty() {
+        if let Some((_, text)) = scripts
+            .iter_mut()
+            .find(|(f, _)| f == "build.gradle" || f == "build.gradle.kts")
+        {
+            text.push_str("\nallprojects {\n    dependencies {\n");
+            for bom in &line_boms {
+                text.push_str(&format!("        implementation platform('{bom}')\n"));
+            }
+            text.push_str("    }\n}\n");
         }
     }
     let mut modules: Vec<Module> = Vec::new();
@@ -750,6 +765,32 @@ fn catalog_file(dir: &Path, scripts: &[(String, String)]) -> String {
         }
     }
     DEFAULT.to_string()
+}
+
+/// The `[boms]` of a catalog read by LINE's gradle-scripts (`gradle/scripts/lib/
+/// common-dependencies.gradle` applying `dependenciesTomlBoms`), as `g:a:v`: its own section,
+/// beside `[libraries]`, each entry a BOM every project's classpaths take. A BOM whose version
+/// is not literal or a `version.ref` is left out, as the scripts skip it.
+fn line_scripts_boms(dir: &Path, doc: &toml::Table) -> Vec<String> {
+    let marker = fleetreach_core::repofile::read_to_string(
+        dir.join("gradle/scripts/lib/common-dependencies.gradle"),
+    )
+    .is_ok_and(|t| t.contains("dependenciesTomlBoms") && t.contains("platform(library)"));
+    let Some(boms) = doc
+        .get("boms")
+        .and_then(toml::Value::as_table)
+        .filter(|_| marker)
+    else {
+        return Vec::new();
+    };
+    let versions = doc.get("versions");
+    boms.values()
+        .filter_map(|entry| {
+            let module = entry.get("module").and_then(toml::Value::as_str)?;
+            let version = catalog_version(entry.get("version")?, versions).ok()?;
+            module.contains(':').then(|| format!("{module}:{version}"))
+        })
+        .collect()
 }
 
 /// The catalogs other than `libs` a settings script creates from one TOML file:
@@ -5792,6 +5833,64 @@ set = ["a-b", "e"]
             r.missing,
             ["build.gradle: io.franzbecker.gradle-lombok 4.0.0: the Lombok version it adds is not known"]
         );
+    }
+
+    #[test]
+    fn line_gradle_scripts_boms_manage_every_project() {
+        // armeria: LINE's gradle-scripts turn each `[boms]` entry of `dependencies.toml` into
+        // `api platform(...)` of the platform project every configuration extends. Without
+        // that script, a `[boms]` section is nothing Gradle reads.
+        let bom = "<project><groupId>g</groupId><artifactId>bom</artifactId><version>4</version>\
+                   <packaging>pom</packaging><dependencyManagement><dependencies><dependency>\
+                   <groupId>g</groupId><artifactId>a</artifactId><version>4</version></dependency>\
+                   </dependencies></dependencyManagement></project>";
+        let repo = Mem(BTreeMap::from([
+            ("g:bom:4".to_string(), bom.to_string()),
+            pom("a", "4", &[]),
+        ]));
+        let files = |marker: &str| {
+            vec![
+                ("settings.gradle".to_string(), "include 'core'\n".to_string()),
+                (
+                    "dependencies.toml".to_string(),
+                    "[versions]\nb = \"4\"\n[boms]\nb = { module = \"g:bom\", version.ref = \"b\" }\n\
+                     [libraries.a]\nmodule = \"g:a\"\n"
+                        .to_string(),
+                ),
+                (
+                    "settings.gradle".to_string(),
+                    "dependencyResolutionManagement {\n  versionCatalogs {\n    create(\"libs\") {\n\
+                     \x20     from(files(\"dependencies.toml\"))\n    }\n  }\n}\ninclude 'core'\n"
+                        .to_string(),
+                ),
+                (
+                    "gradle/scripts/lib/common-dependencies.gradle".to_string(),
+                    format!("dependencies {{\n    rootProject.ext.dependenciesTomlBoms.each {{ alias ->\n\
+                             \x20       def library = rootProject.ext.findLibrary(alias)\n{marker}\n    }}\n}}\n"),
+                ),
+                ("build.gradle".to_string(), "allprojects {\n    apply plugin: 'java'\n}\n".to_string()),
+                ("core/build.gradle".to_string(), "dependencies {\n    implementation libs.a\n}\n".to_string()),
+            ]
+        };
+        let read = |name: &str, marker: &str| {
+            let owned = files(marker);
+            let refs: Vec<(&str, &str)> = owned
+                .iter()
+                .map(|(a, b)| (a.as_str(), b.as_str()))
+                .collect();
+            resolve_gradle(&tree(name, &refs), &repo)
+        };
+        let r = read("line-boms", "        api platform(library)");
+        let own: Vec<&String> = r
+            .missing
+            .iter()
+            .filter(|m| !m.starts_with("gradle/scripts/"))
+            .collect();
+        assert!(own.is_empty(), "{own:?}");
+        assert_eq!(versions(&r, "g:a"), ["4"], "{:?}", r.packages);
+        assert_eq!(versions(&r, "g:bom"), ["4"]);
+        let r = read("line-boms-unused", "");
+        assert!(versions(&r, "g:bom").is_empty(), "{:?}", r.packages);
     }
 
     #[test]
