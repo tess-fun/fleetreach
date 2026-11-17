@@ -44,10 +44,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a shadowed jar or a test-framework feature variant), its dependencies, and constraints that
   raise versions or manage an imported BOM. On three Kotlin builds this adds 27 to 36 packages
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
-- **The Gradle reader is measured against real Gradle, and reads much more.** On 59 real
+- **The Gradle reader is measured against real Gradle, and reads much more.** On 62 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 87.0% of the 11,446 modules at Gradle's version and 90.9% by name (the 56 first
-  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 96.2% and 98.7% on the 53 builds
+  now lists 87.2% of the 11,816 modules at Gradle's version and 91.2% by name (the 56 first
+  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 96.1% and 98.7% on the 56 builds
   whose dependencies no build plugin adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
@@ -92,7 +92,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dependents now take Spring Boot's bson 5.8.1 while `:conductor-ai` keeps the 4.11.0 it
   declares; 99.0% to 99.6% and 27 fewer packages Gradle does not list). `resolutionStrategy.eachDependency` rules
   are read where their conditions are on `requested.group` and `requested.name` (`==`, `!=`,
-  `startsWith`, `&&`, nested `if` and `else`) and the version is a literal, a variable or the
+  `startsWith`, `&&`, nested `if` and `else`) and the version is a literal, a variable, a catalog library's own version (`libs.paper.orNull?.version`) or the
   catalog's: every request a rule matches takes its version, in the root's `allprojects` or
   `subprojects` for every project, in a convention plugin for the projects that apply it, and
   in a test `configurations.matching` block for the tests only (pulsar's Jackson rule 97.4% to

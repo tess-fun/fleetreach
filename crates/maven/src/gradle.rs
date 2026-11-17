@@ -117,6 +117,14 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         vars.entry(format!("libs.versions.{alias}"))
             .or_insert_with(|| version.clone());
     }
+    // A library's own version, for `eachDependency` rules that name it (PlotSquared's
+    // `useVersion(checkNotNull(libs.paper.orNull?.version))`).
+    for (alias, c) in &catalog.libraries {
+        if let Some(version) = &c.version {
+            vars.entry(format!("{LIBRARY_VERSION}{}", accessor(alias)))
+                .or_insert_with(|| version.clone());
+        }
+    }
     // `val kotlinVersion = libs.versions.kotlin.get()`, once the catalog is read.
     for (name, key) in later {
         if let Some(value) = vars.get(&key).cloned() {
@@ -2115,6 +2123,33 @@ fn rule_version(value: &str, vars: &BTreeMap<String, String>) -> Option<String> 
         let (alias, _) = quoted(value[at + "findVersion(".len()..].trim_start())?;
         return catalog(alias);
     }
+    // `libs.paper.get().version` or `checkNotNull(libs.paper.orNull?.version)`.
+    let unwrapped = value
+        .strip_prefix("checkNotNull(")
+        .or_else(|| value.strip_prefix("requireNotNull("))
+        .and_then(|v| v.strip_suffix(')'))
+        .unwrap_or(value)
+        .trim();
+    if let Some(path) = unwrapped
+        .strip_prefix("libs.")
+        .filter(|p| !p.starts_with("versions."))
+    {
+        let path = [
+            ".version",
+            "?.version",
+            ".get()",
+            ".orNull",
+            "?",
+            ".asProvider()",
+        ]
+        .iter()
+        .fold(path, |p, s| p.strip_suffix(s).unwrap_or(p));
+        let path = path.strip_suffix(".orNull").unwrap_or(path);
+        let path = path.strip_suffix(".get()").unwrap_or(path);
+        if unwrapped.ends_with("version") {
+            return vars.get(&format!("{LIBRARY_VERSION}{path}")).cloned();
+        }
+    }
     if let Some(path) = value.strip_prefix("libs.versions.") {
         let path = [".requiredVersion", ".get()", ".asProvider()"]
             .iter()
@@ -2127,6 +2162,9 @@ fn rule_version(value: &str, vars: &BTreeMap<String, String>) -> Option<String> 
 }
 
 const GRADLE_VERSION: &str = "GradleVersion.current().version";
+
+/// The variable prefix a catalog library's own version is kept under, by accessor.
+const LIBRARY_VERSION: &str = "libs.library-version.";
 
 /// The Gradle version the wrapper downloads (`gradle-9.8.2-bin.zip`).
 fn wrapper_version(dir: &Path) -> Option<String> {
@@ -4884,6 +4922,37 @@ set = ["a-b", "e"]
         assert_eq!(versions(&r, "g:a"), ["1"], "{:?}", r.missing);
         assert_eq!(versions(&r, "g:b"), ["2"], "{:?}", r.missing);
         assert!(r.missing.is_empty(), "{:?}", r.missing);
+    }
+
+    #[test]
+    fn an_each_dependency_rule_can_take_a_catalog_library_version() {
+        // PlotSquared: `useVersion(checkNotNull(libs.paper.orNull?.version))` pins paper-api
+        // to the catalog's own version over the 2 a dependency asks for.
+        let repo = Mem(BTreeMap::from([
+            pom("a", "1", &[("paper", "2")]),
+            pom("paper", "1", &[]),
+            pom("paper", "2", &[]),
+        ]));
+        let dir = tree(
+            "catalog-library-version",
+            &[
+                (
+                    "gradle/libs.versions.toml",
+                    "[versions]\npaper = \"1\"\n[libraries]\n\
+                     paper = { group = \"g\", name = \"paper\", version.ref = \"paper\" }\n",
+                ),
+                (
+                    "build.gradle.kts",
+                    "configurations.all {\n    resolutionStrategy.eachDependency {\n\
+                     \x20       if (requested.group == \"g\" && requested.name == \"paper\") {\n\
+                     \x20           useVersion(checkNotNull(libs.paper.orNull?.version))\n\
+                     \x20       }\n    }\n}\n\
+                     dependencies {\n    implementation(\"g:a:1\")\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:paper"), ["1"], "{:?}", r.missing);
     }
 
     #[test]
