@@ -840,17 +840,24 @@ fn spring_boot_boms(dir: &Path, scripts: &mut [(String, String)]) {
     if !conventions || !platform_files.contains(&internal) {
         return;
     }
+    // Java projects: the core plugins that apply Java, and buildSrc's own plugins whose class
+    // applies it (the `org.springframework.boot.starter` every starter uses).
+    let mut java_ids: Vec<String> = [
+        "java",
+        "java-library",
+        "war",
+        "java-gradle-plugin",
+        "org.jetbrains.kotlin.jvm",
+    ]
+    .iter()
+    .map(|id| (*id).to_string())
+    .collect();
+    java_ids.extend(java_plugin_ids(dir, scripts));
     for (file, text) in scripts.iter_mut() {
         let project = file.ends_with("build.gradle") || file.ends_with("build.gradle.kts");
-        let java = [
-            "\"java\"",
-            "\"java-library\"",
-            "\"org.jetbrains.kotlin.jvm\"",
-            "'java'",
-            "'java-library'",
-        ]
-        .iter()
-        .any(|id| text.contains(&format!("id {id}")));
+        let java = java_ids.iter().any(|id| {
+            text.contains(&format!("id \"{id}\"")) || text.contains(&format!("id '{id}'"))
+        });
         if project && java && !platform_files.contains(file) && !file.starts_with("buildSrc/") {
             text.push_str(&format!(
                 "\ndependencies {{\n    implementation enforcedPlatform(project(\"{INTERNAL}\"))\n}}\n"
@@ -4260,6 +4267,41 @@ fn binary_plugins(dir: &Path, scripts: &[(String, String)]) -> Vec<(String, Stri
     out
 }
 
+/// The ids of the plugins buildSrc registers whose class applies the Java or Java Library
+/// plugin itself (`plugins.apply(JavaLibraryPlugin.class)`).
+fn java_plugin_ids(dir: &Path, scripts: &[(String, String)]) -> Vec<String> {
+    let mut out = Vec::new();
+    for (file, text) in scripts {
+        if !file.starts_with("buildSrc/") || !text.contains("implementationClass") {
+            continue;
+        }
+        let base = Path::new(file).parent().unwrap_or(Path::new(""));
+        let mut id = None;
+        for line in text.lines().map(str::trim) {
+            let value = |key: &str| {
+                let rest = line.strip_prefix(key)?.trim_start();
+                let rest = rest.strip_prefix('=').unwrap_or(rest).trim_start();
+                quoted(rest).map(|(v, _)| v.to_string())
+            };
+            if let Some(v) = value("id") {
+                id = Some(v);
+            } else if let Some(class) = value("implementationClass") {
+                let (Some(id), Some((_, source))) = (id.take(), plugin_class(dir, base, &class))
+                else {
+                    continue;
+                };
+                let applies = ["JavaPlugin", "JavaLibraryPlugin", "WarPlugin"]
+                    .iter()
+                    .any(|p| source.contains(&format!(".apply({p}.class)")));
+                if applies {
+                    out.push(id);
+                }
+            }
+        }
+    }
+    out
+}
+
 /// The source of build-logic class `class` (`a.b.C`): `src/main/{kotlin,java,groovy}/a/b/C.*`
 /// under the build-logic project `base`.
 fn plugin_class(dir: &Path, base: &Path, class: &str) -> Option<(String, String)> {
@@ -6067,6 +6109,8 @@ set = ["a-b", "e"]
             pom("b", "5", &[]),
             pom("i", "7", &[]),
             pom("c", "1", &[]),
+            pom("s", "7", &[]),
+            pom("w", "7", &[]),
         ]));
         let public = "plugins {\n\tid \"org.springframework.boot.bom\"\n}\n\nbom {\n\
                       \tlibrary(\"A\", \"${aVersion}\") {\n\t\tgroup(\"g\") {\n\t\t\tmodules = [\n\
@@ -6075,14 +6119,14 @@ set = ["a-b", "e"]
                       \t\tlinks {\n\t\t\tmodule(\"c\") {\n\t\t\t\tjavadoc(\"y\")\n\t\t\t}\n\t\t}\n\t}\n\
                       \tlibrary(\"B\", \"5\") {\n\t\tgroup(\"g\") {\n\t\t\tbom(\"b-bom\")\n\t\t}\n\t}\n}\n";
         let internal = "plugins {\n\tid \"org.springframework.boot.bom\"\n}\n\nbom {\n\
-                        \tlibrary(\"I\", \"7\") {\n\t\tgroup(\"g\") {\n\t\t\tmodules = [\"i\"]\n\t\t}\n\t}\n}\n\n\
+                        \tlibrary(\"I\", \"7\") {\n\t\tgroup(\"g\") {\n\t\t\tmodules = [\"i\", \"s\", \"w\"]\n\t\t}\n\t}\n}\n\n\
                         dependencies {\n\tapi(enforcedPlatform(project(\":platform:spring-boot-dependencies\")))\n}\n";
         let dir = tree(
             "spring-boot-bom",
             &[
                 (
                     "settings.gradle",
-                    "include \"platform:spring-boot-dependencies\"\ninclude \"platform:spring-boot-internal-dependencies\"\ninclude \"core\"\n",
+                    "include \"platform:spring-boot-dependencies\"\ninclude \"platform:spring-boot-internal-dependencies\"\ninclude \"core\"\ninclude \"starter\"\ninclude \"web\"\n",
                 ),
                 ("gradle.properties", "aVersion=2\n"),
                 (
@@ -6093,6 +6137,24 @@ set = ["a-b", "e"]
                     "buildSrc/src/main/java/org/springframework/boot/build/JavaConventions.java",
                     "project.getDependencies().enforcedPlatform(project.getDependencies()\n\
                      \t.project(Collections.singletonMap(\"path\", \":platform:spring-boot-internal-dependencies\")));\n",
+                ),
+                (
+                    "buildSrc/build.gradle",
+                    "gradlePlugin {\n\tplugins {\n\t\tstarterPlugin {\n\t\t\tid = \"org.springframework.boot.starter\"\n\
+                     \t\t\timplementationClass = \"org.springframework.boot.build.starters.StarterPlugin\"\n\t\t}\n\t}\n}\n",
+                ),
+                (
+                    "buildSrc/src/main/java/org/springframework/boot/build/starters/StarterPlugin.java",
+                    "public void apply(Project project) {\n\tPluginContainer plugins = project.getPlugins();\n\
+                     \tplugins.apply(JavaLibraryPlugin.class);\n}\n",
+                ),
+                (
+                    "starter/build.gradle",
+                    "plugins {\n\tid \"org.springframework.boot.starter\"\n}\n\ndependencies {\n\tapi(\"g:s\")\n}\n",
+                ),
+                (
+                    "web/build.gradle",
+                    "plugins {\n\tid \"war\"\n}\n\ndependencies {\n\tprovidedRuntime(\"g:w\")\n}\n",
                 ),
                 ("platform/spring-boot-dependencies/build.gradle", public),
                 ("platform/spring-boot-internal-dependencies/build.gradle", internal),
@@ -6110,6 +6172,9 @@ set = ["a-b", "e"]
         assert_eq!(versions(&r, "g:b"), ["5"]);
         assert_eq!(versions(&r, "g:i"), ["7"]);
         assert_eq!(versions(&r, "g:c"), ["1"]);
+        // A starter (buildSrc's plugin applies java-library) and a war project are Java ones.
+        assert_eq!(versions(&r, "g:s"), ["7"]);
+        assert_eq!(versions(&r, "g:w"), ["7"]);
     }
 
     #[test]

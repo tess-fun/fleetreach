@@ -47,7 +47,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 76 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
   now lists 90.2% of the 14,878 modules at Gradle's version and 92.6% by name (the 56 first
-  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 98.1% and 99.4% on the 69 builds
+  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 98.2% and 99.4% on the 69 builds
   whose dependencies no build plugin adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
@@ -221,8 +221,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   turns `bom { library("Name", "version") { group("g") { modules = [...]; bom("b") } } }` into
   a Java platform, and its Java conventions put the internal platform on every Java project.
   fleetreach reads the same blocks (`links { }` only documents) and follows a platform
-  project's own project platforms in turn, an enforced one forcing everything it reaches:
-  spring-boot goes from 8.3% to 97.7% of its 1,032 modules at Gradle's version.
+  project's own project platforms in turn, an enforced one forcing everything it reaches.
+  A project counts as Java through `war`, `java-gradle-plugin` or a buildSrc plugin whose
+  class applies Java (every starter's `org.springframework.boot.starter`): spring-boot goes
+  from 8.3% to 98.3% of its 1,032 modules at Gradle's version.
 - **POM relocations are followed.** A POM with `<distributionManagement><relocation>` resolves
   the way each tool does: Maven resolves the artifact as its new coordinate, and Gradle keeps
   the relocation POM and adds the target (Artemis moved from `org.apache.activemq` to
