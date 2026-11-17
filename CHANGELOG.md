@@ -46,8 +46,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 87.6% of the 9,550 modules at Gradle's version and 91.0% by name, up from 59.7% and
-  70.0% on the same POMs; 97.3% and 98.9% on the 51 builds whose dependencies no build plugin
+  now lists 87.7% of the 9,550 modules at Gradle's version and 91.1% by name, up from 59.7% and
+  70.0% on the same POMs; 97.5% and 99.1% on the 51 builds whose dependencies no build plugin
   adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
@@ -132,7 +132,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   plugin's version, as the plugin sets it (spring-integration-samples' `kotlin-reflect` 2.4.21). Gretty
   adds its container's servlet and websocket APIs to every classpath of a project that applies
   it, for the pairings real Gradle showed (3.x with `jetty9`, 4.x's default); another is
-  reported, never guessed (Hystrix's webapp, spring-integration-samples' web samples). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  reported, never guessed (Hystrix's webapp, spring-integration-samples' web samples). A
+  prefix version (`3.19+`) now settles to the highest listed version that starts with it, as
+  Gradle reads one, instead of being reported (Hystrix's javassist 3.19.0-GA, dgs-framework's
+  mockk); `latest.release` is still reported. In a POM, an optional dependency no longer
+  widens the test-scoped one it inherits under the same name onto the classpath (netty-common
+  4.1.3's javassist, which raised powermock's 3.18.2-GA to 3.20.0-GA). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over

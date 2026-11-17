@@ -1,9 +1,10 @@
 //! Read a Gradle build without running it: `gradle/libs.versions.toml` and the literal
 //! declarations in `*.gradle` and `*.gradle.kts`, resolved through the POM resolver with
 //! Gradle's rule that the highest requested version wins. Build scripts are programs, so
-//! anything that is not a literal (a helper call, an undefined variable, a dynamic version) is
-//! named in [`Resolution::missing`], and each build file is resolved alone, since two
-//! subprojects can pin different versions.
+//! anything that is not a literal (a helper call, an undefined variable, `latest.release`) is
+//! named in [`Resolution::missing`]; a range or a prefix version (`3.19+`) is settled from the
+//! version listing. Each build file is resolved alone, since two subprojects can pin
+//! different versions.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -2067,11 +2068,12 @@ fn catalog_version(value: &toml::Value, versions: Option<&toml::Value>) -> Resul
         .ok_or_else(|| "has no usable version".to_string())
 }
 
-/// A version as the resolver spells it. `1.+` and `latest.release` depend on what is published
-/// on the day, so they are reported rather than picked.
+/// A version as the resolver spells it. A prefix version (`3.19+`) is settled from the
+/// listing like a range; `latest.release` depends on each version's status, which a Maven
+/// repository does not record, so it is reported rather than picked.
 fn version_text(version: &str) -> Result<String, String> {
     let v = version.trim();
-    if v.ends_with('+') || v.starts_with("latest.") {
+    if v.starts_with("latest.") {
         return Err(format!("dynamic version `{v}`"));
     }
     // Gradle writes an excluded bound with the bracket reversed: `[1.0,2.0[`.
@@ -3730,12 +3732,13 @@ dependencies {
                 ("g:f:6.0".to_string(), "compile"),
                 ("g:h:7.0".to_string(), "provided"),
                 ("g:i:8.0".to_string(), "provided"),
+                ("g:k:1.+".to_string(), "compile"),
                 ("g:tool:1.0".to_string(), "test"),
             ]
         );
         assert_eq!(m.platforms.len(), 1);
         assert_eq!(m.constraints[0].artifact, "pinned");
-        assert_eq!(m.unread.len(), 4, "{:?}", m.unread);
+        assert_eq!(m.unread.len(), 3, "{:?}", m.unread);
     }
 
     #[test]
@@ -3910,7 +3913,7 @@ set = ["a-b", "e"]
     fn gradle_ranges_become_maven_ranges() {
         assert_eq!(version_text("[1.0,2.0[").unwrap(), "[1.0,2.0)");
         assert_eq!(version_text("]1.0,2.0]").unwrap(), "(1.0,2.0]");
-        assert!(version_text("1.+").is_err());
+        assert_eq!(version_text("1.+").unwrap(), "1.+");
         assert!(version_text("latest.release").is_err());
     }
 
@@ -5168,6 +5171,95 @@ set = ["a-b", "e"]
         );
         let r = resolve_gradle(&dir, &source);
         assert_eq!(versions(&r, "g:jxmpp"), ["1.0.3"], "{:?}", r.missing);
+    }
+
+    #[test]
+    fn a_prefix_version_takes_the_highest_listed_match() {
+        // Hystrix's `javassist:3.19+` is 3.19.0-GA: the highest listed version that starts
+        // with `3.19`, not 3.20.0-GA.
+        let pom = |v: &str| {
+            format!("<project><groupId>g</groupId><artifactId>j</artifactId><version>{v}</version></project>")
+        };
+        let cache = tree(
+            "gradle-cache-prefix",
+            &[
+                ("g/j/3.18.2-GA/h1/j-3.18.2-GA.pom", &pom("3.18.2-GA")),
+                ("g/j/3.19.0-GA/h2/j-3.19.0-GA.pom", &pom("3.19.0-GA")),
+                ("g/j/3.20.0-GA/h3/j-3.20.0-GA.pom", &pom("3.20.0-GA")),
+            ],
+        );
+        let source = crate::resolve::LocalRepositories {
+            roots: Vec::new(),
+            gradle_roots: vec![cache],
+        };
+        for (declared, want) in [
+            ("3.19+", "3.19.0-GA"),
+            ("3.+", "3.20.0-GA"),
+            ("+", "3.20.0-GA"),
+        ] {
+            let dir = tree(
+                &format!("gradle-prefix-{}", declared.replace('+', "p")),
+                &[(
+                    "build.gradle",
+                    &format!("dependencies {{\n    api 'g:j:{declared}'\n}}\n"),
+                )],
+            );
+            let r = resolve_gradle(&dir, &source);
+            assert_eq!(versions(&r, "g:j"), [want], "{declared}: {:?}", r.missing);
+        }
+        let dir = tree(
+            "gradle-prefix-none",
+            &[("build.gradle", "dependencies {\n    api 'g:j:4.+'\n}\n")],
+        );
+        let r = resolve_gradle(&dir, &source);
+        assert!(versions(&r, "g:j").is_empty());
+        assert!(
+            r.missing
+                .iter()
+                .any(|m| m.contains("g:j: no published version matches 4.+")),
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn an_optional_dependency_leaves_an_inherited_one_alone() {
+        // netty-common 4.1.3 lists javassist 3.20.0-GA as optional and inherits it from
+        // netty-parent at test scope: neither is on a classpath, so powermock's 3.18.2-GA holds.
+        let parent = (
+            "g:parent:1".to_string(),
+            "<project><groupId>g</groupId><artifactId>parent</artifactId><version>1</version>\
+             <packaging>pom</packaging><dependencies><dependency><groupId>g</groupId>\
+             <artifactId>j</artifactId><version>3.20.0-GA</version><scope>test</scope>\
+             </dependency></dependencies></project>"
+                .to_string(),
+        );
+        let common = (
+            "g:common:1".to_string(),
+            "<project><parent><groupId>g</groupId><artifactId>parent</artifactId>\
+             <version>1</version></parent><artifactId>common</artifactId><dependencies>\
+             <dependency><groupId>g</groupId><artifactId>j</artifactId>\
+             <version>3.20.0-GA</version><optional>true</optional></dependency>\
+             </dependencies></project>"
+                .to_string(),
+        );
+        let repo = Mem(BTreeMap::from([
+            parent,
+            common,
+            pom("powermock", "1", &[("j", "3.18.2-GA")]),
+            pom("j", "3.18.2-GA", &[]),
+            pom("j", "3.20.0-GA", &[]),
+        ]));
+        let dir = tree(
+            "optional-inherited",
+            &[(
+                "build.gradle",
+                "dependencies {\n    implementation 'g:common:1'\n\
+                 \x20   testImplementation 'g:powermock:1'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:j"), ["3.18.2-GA"], "{:?}", r.missing);
     }
 
     #[test]

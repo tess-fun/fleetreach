@@ -853,11 +853,21 @@ impl Resolver<'_> {
             }
             // Gradle: every declaration requests its version (a sibling project's too), the
             // highest wins, and the broadest scope.
+            // An optional declaration adds nothing in Gradle and changes no other one:
+            // netty-common 4.1.3's optional javassist leaves the test-scoped one it inherits
+            // from netty-parent off every classpath (Hystrix keeps powermock's 3.18.2-GA).
             if self.gradle {
                 if let Some(x) = deps.iter_mut().find(|x| x.mgmt_key() == d.mgmt_key()) {
+                    if d.optional {
+                        continue;
+                    }
+                    if x.optional {
+                        *x = d;
+                        continue;
+                    }
                     let plain = |v: &Option<String>| {
                         v.as_deref()
-                            .filter(|v| !v.starts_with(['[', '(']))
+                            .filter(|v| !v.starts_with(['[', '(']) && !v.ends_with('+'))
                             .and_then(parse_maven_version)
                     };
                     if let (Some(new), Some(old)) = (plain(&d.version), plain(&x.version)) {
@@ -1203,6 +1213,27 @@ impl Resolver<'_> {
         let declared = declared.trim();
         if !self.gradle && matches!(declared, "RELEASE" | "LATEST") {
             return self.meta_version(g, a, declared);
+        }
+        // Gradle's prefix version: the highest listed version that starts with what comes
+        // before the `+` (Hystrix's `javassist:3.19+` is 3.19.0-GA), `+` alone any version.
+        if let Some(prefix) = declared.strip_suffix('+').filter(|_| self.gradle) {
+            let Some(listed) = self.listed_versions(g, a) else {
+                self.missing.insert(format!(
+                    "{g}:{a}: version {declared} needs a version listing"
+                ));
+                return None;
+            };
+            let best = listed
+                .into_iter()
+                .filter(|v| v.starts_with(prefix))
+                .filter_map(|v| parse_maven_version(&v).map(|p| (p, v)))
+                .max_by(|x, y| x.0.cmp(&y.0))
+                .map(|(_, v)| v);
+            if best.is_none() {
+                self.missing
+                    .insert(format!("{g}:{a}: no published version matches {declared}"));
+            }
+            return best;
         }
         if !declared.starts_with(['[', '(']) {
             return Some(declared.to_string());
@@ -1797,7 +1828,11 @@ pub(crate) fn resolve_gradle_module(
             let bom = r.remote(g, a, v, 1);
             r.importing = false;
             for d in bom.iter().flat_map(|b| b.mgmt.values()) {
-                if let Some(version) = d.version.as_ref().filter(|v| !v.starts_with(['[', '('])) {
+                if let Some(version) = d
+                    .version
+                    .as_ref()
+                    .filter(|v| !v.starts_with(['[', '(']) && !v.ends_with('+'))
+                {
                     forced.insert(d.mgmt_key(), version.clone());
                 }
             }
@@ -1997,7 +2032,11 @@ fn request_constraints(
         .iter()
         .filter(|c| !(compile_only && c.scope.as_deref() == Some("runtime")));
     for c in held.chain(managed) {
-        if let Some(v) = c.version.as_ref().filter(|v| !v.starts_with(['[', '('])) {
+        if let Some(v) = c
+            .version
+            .as_ref()
+            .filter(|v| !v.starts_with(['[', '(']) && !v.ends_with('+'))
+        {
             raise(requests, c.mgmt_key(), v);
         }
     }
@@ -2193,7 +2232,8 @@ fn walk(
                 dep.version.as_ref(),
                 managed.and_then(|m| m.version.as_ref()),
             ] {
-                if let Some(v) = version.filter(|v| !v.starts_with(['[', '('])) {
+                if let Some(v) = version.filter(|v| !v.starts_with(['[', '(']) && !v.ends_with('+'))
+                {
                     raise(requests, key.clone(), v);
                 }
             }
