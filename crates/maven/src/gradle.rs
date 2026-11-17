@@ -203,6 +203,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         if (file.starts_with("buildSrc/") || file.starts_with("build-logic/")) && !convention {
             module.deps.iter_mut().for_each(|d| d.scope = "test");
         }
+        gretty_apis(text, &context, &mut module);
         for line in std::mem::take(&mut module.unread) {
             missing.insert(format!("{file}: {line}"));
         }
@@ -1832,12 +1833,96 @@ fn classpath_plugin(line: &str, vars: &BTreeMap<String, String>) -> Option<(&'st
         ("org.springframework.boot", "spring-boot-gradle-plugin") => SPRING_BOOT,
         ("org.jetbrains.kotlin", "kotlin-gradle-plugin") => KOTLIN_JVM,
         ("io.freefair.gradle", "lombok-plugin") => FREEFAIR_LOMBOK,
+        ("org.gretty", "gretty") => GRETTY,
         _ => return None,
     };
     Some((id, c.version?))
 }
 const KOTLIN_JVM: &str = "org.jetbrains.kotlin.jvm";
 const FREEFAIR_LOMBOK: &str = "io.freefair.lombok";
+const GRETTY: &str = "org.gretty";
+
+/// Plugin major version, container, and the two APIs as group, artifact and version.
+type GrettyApis = (
+    &'static str,
+    Option<&'static str>,
+    [(&'static str, &'static str, &'static str); 2],
+);
+
+/// The servlet and websocket APIs Gretty adds to every classpath of a project that applies it,
+/// by plugin major version and `servletContainer` (`None`: the default): only what real
+/// Gradle showed (Hystrix on 3.0.5 with `jetty9`, spring-integration-samples on 4.1.10).
+/// Another pairing is reported, never guessed.
+const GRETTY_APIS: &[GrettyApis] = &[
+    (
+        "3",
+        Some("jetty9"),
+        [
+            ("javax.servlet", "javax.servlet-api", "3.1.0"),
+            ("javax.websocket", "javax.websocket-api", "1.0"),
+        ],
+    ),
+    (
+        "4",
+        None,
+        [
+            ("jakarta.servlet", "jakarta.servlet-api", "5.0.0"),
+            ("jakarta.websocket", "jakarta.websocket-api", "2.0.0"),
+        ],
+    ),
+];
+
+/// What Gretty adds to a build file that applies it, from its `gretty { servletContainer }`.
+fn gretty_apis(text: &str, context: &Context, module: &mut Module) {
+    if !module.applied.iter().any(|id| id == GRETTY) {
+        return;
+    }
+    let Some(version) = context.plugins.get(GRETTY) else {
+        module
+            .unread
+            .push("org.gretty: the plugin version is not known".to_string());
+        return;
+    };
+    let container = text.lines().find_map(|l| {
+        let rest = l
+            .trim()
+            .strip_prefix("gretty.")
+            .unwrap_or(l.trim())
+            .strip_prefix("servletContainer")?;
+        let rest = rest.trim_start().strip_prefix('=')?.trim_start();
+        quoted(rest).map(|(v, _)| v.to_string())
+    });
+    let major = version.split('.').next().unwrap_or_default();
+    let Some((_, _, apis)) = GRETTY_APIS
+        .iter()
+        .find(|(m, c, _)| *m == major && c.map(str::to_string) == container)
+    else {
+        module.unread.push(format!(
+            "org.gretty {version} ({}): the servlet APIs it adds are not known",
+            container.as_deref().unwrap_or("default container")
+        ));
+        return;
+    };
+    for (group, artifact, v) in apis {
+        module.deps.push(Declared {
+            coordinate: Coordinate {
+                group: (*group).to_string(),
+                artifact: (*artifact).to_string(),
+                version: Some((*v).to_string()),
+                enforced: false,
+                strict: false,
+                test: false,
+            },
+            // `grettyProvidedCompile`, through the war plugin's `providedCompile`: on the
+            // compile and runtime classpaths and the test ones, not passed to consumers.
+            scope: "compile",
+            exclusions: Vec::new(),
+            pom: false,
+            exported: false,
+            runtime_only: false,
+        });
+    }
+}
 
 /// The Lombok version the freefair plugin adds when the build sets none, by plugin version:
 /// only what real Gradle showed (grpc-spring on 8.6, halo on 9.8.0). Another release's is
@@ -3706,6 +3791,13 @@ set = ["a-b", "e"]
         );
         assert_eq!(
             classpath_plugin("classpath 'org.gretty:gretty:4.1.10'", &vars),
+            Some((GRETTY, "4.1.10".to_string()))
+        );
+        assert_eq!(
+            classpath_plugin(
+                "classpath 'com.diffplug.spotless:spotless-plugin-gradle:6.0.0'",
+                &vars
+            ),
             None
         );
         let catalog = Catalog::default();
@@ -5193,6 +5285,68 @@ set = ["a-b", "e"]
         );
         let r = resolve_gradle(&dir, &repo);
         assert_eq!(versions(&r, "g:a"), ["1"], "{:?}", r.missing);
+    }
+
+    #[test]
+    fn gretty_adds_its_containers_servlet_apis() {
+        // Hystrix: Gretty 3.0.5 with `servletContainer = 'jetty9'`; spring-integration-samples:
+        // Gretty 4.1.10 on its default container. Another pairing is reported.
+        let jar = |g: &str, a: &str, v: &str| {
+            (
+                format!("{g}:{a}:{v}"),
+                format!("<project><groupId>{g}</groupId><artifactId>{a}</artifactId><version>{v}</version></project>"),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            jar("javax.servlet", "javax.servlet-api", "3.1.0"),
+            jar("javax.websocket", "javax.websocket-api", "1.0"),
+            jar("jakarta.servlet", "jakarta.servlet-api", "5.0.0"),
+            jar("jakarta.websocket", "jakarta.websocket-api", "2.0.0"),
+        ]));
+        let gretty = |version: &str, block: &str| {
+            let script = format!(
+                "buildscript {{\n  dependencies {{\n    classpath 'org.gretty:gretty:{version}'\n  }}\n}}\n\
+                 apply plugin: 'war'\napply plugin: 'org.gretty'\n{block}"
+            );
+            let r = resolve_gradle(
+                &tree(
+                    &format!("gretty-{version}"),
+                    &[("build.gradle", script.as_str())],
+                ),
+                &repo,
+            );
+            let found: Vec<String> = r
+                .packages
+                .iter()
+                .map(|p| format!("{}:{}", p.name, p.version))
+                .collect();
+            (found, r.missing)
+        };
+        let (found, missing) = gretty("3.0.5", "gretty {\n  servletContainer = 'jetty9'\n}\n");
+        assert_eq!(
+            found,
+            [
+                "javax.servlet:javax.servlet-api:3.1.0",
+                "javax.websocket:javax.websocket-api:1.0"
+            ],
+            "{missing:?}"
+        );
+        let (found, missing) = gretty("4.1.10", "");
+        assert_eq!(
+            found,
+            [
+                "jakarta.servlet:jakarta.servlet-api:5.0.0",
+                "jakarta.websocket:jakarta.websocket-api:2.0.0"
+            ],
+            "{missing:?}"
+        );
+        let (found, missing) = gretty("4.1.10", "gretty {\n  servletContainer = 'tomcat10'\n}\n");
+        assert!(found.is_empty(), "{found:?}");
+        assert!(
+            missing.iter().any(|m| m
+                .contains("org.gretty 4.1.10 (tomcat10): the servlet APIs it adds are not known")),
+            "{missing:?}"
+        );
     }
 
     #[test]

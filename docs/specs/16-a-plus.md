@@ -914,13 +914,13 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   ~/fa-testbed/gradle (208 Android/KMP skipped, they need the Android SDK). **56 resolved**;
   47 fail for reasons of their own (dead plugin repositories, toolchains Gradle cannot fetch
   on arm64, files the sparse clone lacks, plugins that need a full checkout). On the same POMs
-  (Gradle's own download cache), **87.5% of 9,550 modules at Gradle's version, 91.0% by name**,
+  (Gradle's own download cache), **87.6% of 9,550 modules at Gradle's version, 91.0% by name**,
   from 59.7% and 70.0% for the reader before this round; median repo 98.1% exact, 48 of 56 at
-  90% or more. **97.2% and 98.9% on the 51 builds whose dependencies no build plugin adds**:
+  90% or more. **97.3% and 98.9% on the 51 builds whose dependencies no build plugin adds**:
   the five others (ideavim and MinecraftDev on the IntelliJ Platform plugin, Paper and
   WorldEdit on paperweight's dev bundle, minecolonies on ForgeGradle) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 225 misses remain in
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 221 misses remain in
   the 51 builds, ihub-pub's included. Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
   that Gradle never builds as part of the project. Later rules: the main classpath resolved
@@ -963,7 +963,8 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   (conductor's test jna 5.7.0), ranges with no `maven-metadata.xml` settled from the
   versions Gradle's cache holds (spring-integration-samples' jxmpp), runtime-variant-only
   `.module` constraints kept off compile classpaths (gradle-download-task's json-smart),
-  the Kotlin plugin's version for its unversioned libraries (`kotlin-reflect`), buildscript
+  the Kotlin plugin's version for its unversioned libraries (`kotlin-reflect`), Gretty's
+  servlet and websocket APIs for the oracle-shown containers (Hystrix, spring-integration-samples), buildscript
   `classpath` plugin versions with `apply plugin:` (spring-integration-samples 333 to 414),
   `lib."k"` (mybatis-plus 236 to 340), `set('k', v)` properties and POM relocations, which
   Gradle keeps and adds the target of, unlike Maven, which replaces (spring-integration-samples
