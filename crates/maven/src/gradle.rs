@@ -56,50 +56,19 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     if let Some(version) = wrapper_version(dir) {
         vars.insert(GRADLE_VERSION.to_string(), version);
     }
-    let mut seen_twice = BTreeSet::new();
-    let mut aliases = Vec::new();
-    for (_, text) in &build_constants(dir) {
-        kotlin_constants(text, &mut vars, &mut seen_twice);
-    }
-    let mut entries = Vec::new();
-    for (_, text) in &scripts {
-        script_variables(text, &mut vars, &mut seen_twice, &mut aliases);
-        map_entries(text, &mut entries);
-        set_calls(text, &mut entries);
-    }
-    // `val v = extra["k"] as String` and `extra["k"] = Versions.K` name another variable,
-    // known once every literal is read.
-    let mut later = Vec::new();
-    for (name, key) in aliases {
-        if key.starts_with("libs.versions.") {
-            later.push((name, key));
-        } else if let Some(value) = vars.get(&key).cloned() {
-            match vars.get(&name) {
-                Some(known) if *known != value => {
-                    seen_twice.insert(name);
-                }
-                _ => {
-                    vars.insert(name, value);
-                }
-            }
+    // Read once branch-blind, then again with each `if` decided from what the last read
+    // settled, until nothing changes: kafka's `versions["scala"]` is set in an `if` on
+    // gradle.properties, and `versions["baseScala"]` in an `if` on `versions.scala`.
+    let base = vars.clone();
+    let constants = build_constants(dir);
+    let (mut vars, mut later) = script_vars(&scripts, &constants, base.clone(), None);
+    for _ in 0..4 {
+        let (next, next_later) = script_vars(&scripts, &constants, base.clone(), Some(&vars));
+        let settled = next == vars;
+        (vars, later) = (next, next_later);
+        if settled {
+            break;
         }
-    }
-    // `lib = [ "k": "g:a:${v}" ]` entries, as `lib.k`, once the versions they name are known.
-    for (name, template) in entries {
-        let Ok(value) = expand(&template, &vars) else {
-            continue;
-        };
-        match vars.get(&name) {
-            Some(known) if *known != value => {
-                seen_twice.insert(name);
-            }
-            _ => {
-                vars.insert(name, value);
-            }
-        }
-    }
-    for name in seen_twice {
-        vars.remove(&name);
     }
     let catalog_file = catalog_file(dir, &scripts);
     let mut doc = match fleetreach_core::repofile::read_to_string(dir.join(&catalog_file)) {
@@ -1958,6 +1927,206 @@ fn strip_comments(text: &str) -> String {
     out
 }
 
+/// The variables the build scripts set, from `vars` (gradle.properties and the wrapper): see
+/// `script_variables`. With `decided`, each script's `if` chains are first settled from those
+/// variables. Also the aliases of catalog versions, known once the catalog is read.
+type Later = Vec<(String, String)>;
+
+fn script_vars(
+    scripts: &[(String, String)],
+    constants: &[(PathBuf, String)],
+    mut vars: BTreeMap<String, String>,
+    decided: Option<&BTreeMap<String, String>>,
+) -> (BTreeMap<String, String>, Later) {
+    let mut seen_twice = BTreeSet::new();
+    let mut aliases = Vec::new();
+    for (_, text) in constants {
+        kotlin_constants(text, &mut vars, &mut seen_twice);
+    }
+    let mut entries = Vec::new();
+    for (_, text) in scripts {
+        let settled = decided.map(|known| settle_ifs(text, known));
+        let text = settled.as_deref().unwrap_or(text);
+        script_variables(text, &mut vars, &mut seen_twice, &mut aliases);
+        map_entries(text, &mut entries);
+        set_calls(text, &mut entries);
+    }
+    // A name given two values is unknown before anything is built from it: an alias or a
+    // `lib = [ ... ]` entry naming it is not read either.
+    for name in &seen_twice {
+        vars.remove(name);
+    }
+    // `val v = extra["k"] as String` and `extra["k"] = Versions.K` name another variable,
+    // known once every literal is read.
+    let mut later = Vec::new();
+    for (name, key) in aliases {
+        if key.starts_with("libs.versions.") {
+            later.push((name, key));
+        } else if seen_twice.contains(&name) {
+            continue;
+        } else if let Some(value) = alias_value(&key, &vars) {
+            match vars.get(&name) {
+                Some(known) if *known != value => {
+                    vars.remove(&name);
+                    seen_twice.insert(name);
+                }
+                _ => {
+                    vars.insert(name, value);
+                }
+            }
+        }
+    }
+    // `lib = [ "k": "g:a:${v}" ]` entries, as `lib.k`, once the versions they name are known.
+    for (name, template) in entries {
+        if seen_twice.contains(&name) {
+            continue;
+        }
+        let Ok(value) = expand(&template, &vars) else {
+            continue;
+        };
+        match vars.get(&name) {
+            Some(known) if *known != value => {
+                vars.remove(&name);
+                seen_twice.insert(name);
+            }
+            _ => {
+                vars.insert(name, value);
+            }
+        }
+    }
+    for name in seen_twice {
+        vars.remove(&name);
+    }
+    (vars, later)
+}
+
+/// An alias's value: the variable it names, or `a.substring(0, a.lastIndexOf("."))` (and
+/// `indexOf`) of one.
+fn alias_value(key: &str, vars: &BTreeMap<String, String>) -> Option<String> {
+    if let Some(v) = vars.get(key) {
+        return Some(v.clone());
+    }
+    let (base, rest) = key.split_once(".substring(0,")?;
+    let rest = rest.trim().strip_suffix(')')?.trim();
+    let (last, arg) = if let Some(a) = rest.strip_prefix(&format!("{base}.lastIndexOf(")) {
+        (true, a)
+    } else {
+        (false, rest.strip_prefix(&format!("{base}.indexOf("))?)
+    };
+    let (sep, tail) = quoted(arg.trim())?;
+    if tail.trim() != ")" || sep.is_empty() {
+        return None;
+    }
+    let v = vars.get(base)?;
+    let at = if last { v.rfind(sep)? } else { v.find(sep)? };
+    Some(v[..at].to_string())
+}
+
+/// `if (c) { a } else if (d) { b } else { e }` chains whose conditions `condition` decides
+/// (`.contains("x")` too), as the branch a default build takes; an undecided chain is kept.
+fn settle_ifs(text: &str, vars: &BTreeMap<String, String>) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < lines.len() {
+        match settle_chain(&lines, i, vars) {
+            Some((kept, next)) => {
+                out.push_str(&settle_ifs(&kept, vars));
+                i = next;
+            }
+            None => {
+                out.push_str(lines[i]);
+                out.push('\n');
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+/// The chain starting at `lines[start]`: the lines of the branch taken, and the index after it.
+fn settle_chain(
+    lines: &[&str],
+    start: usize,
+    vars: &BTreeMap<String, String>,
+) -> Option<(String, usize)> {
+    let mut cond = Some(if_condition(lines[start].trim())?);
+    let mut at = start;
+    let mut taken: Option<String> = None;
+    loop {
+        // The branch body runs to the line that closes its brace.
+        let mut depth = 1i32;
+        let mut end = None;
+        for (j, line) in lines.iter().enumerate().skip(at + 1) {
+            for c in code_only(line).chars() {
+                match c {
+                    '{' => depth += 1,
+                    '}' => depth -= 1,
+                    _ => {}
+                }
+                if depth == 0 {
+                    break;
+                }
+            }
+            if depth == 0 {
+                end = Some(j);
+                break;
+            }
+        }
+        let end = end?;
+        let holds = match cond {
+            Some(c) => variable_condition(c, vars)?,
+            None => true,
+        };
+        if holds && taken.is_none() {
+            let body: String = lines[at + 1..end]
+                .iter()
+                .map(|l| format!("{l}\n"))
+                .collect();
+            taken = Some(body);
+        }
+        let closing = lines[end].trim();
+        if closing == "}" {
+            return Some((taken.unwrap_or_default(), end + 1));
+        }
+        let rest = closing
+            .strip_prefix('}')?
+            .trim_start()
+            .strip_prefix("else")?
+            .trim_start();
+        if rest == "{" {
+            cond = None;
+        } else {
+            cond = Some(if_condition(rest)?);
+        }
+        at = end;
+        // Once a branch is taken, a later condition need not be decided; its body is skipped.
+        if taken.is_some() {
+            cond = cond.map(|_| "false");
+        }
+    }
+}
+
+/// `condition`, and `NAME.contains("x")`.
+fn variable_condition(cond: &str, vars: &BTreeMap<String, String>) -> Option<bool> {
+    let c = cond.trim();
+    if c == "false" {
+        return Some(false);
+    }
+    let (negated, inner) = match c.strip_prefix('!') {
+        Some(rest) if !rest.starts_with('=') => (true, rest.trim()),
+        _ => (false, c),
+    };
+    if let Some((left, right)) = inner.split_once(".contains(") {
+        let (needle, tail) = quoted(right.trim())?;
+        if tail.trim() != ")" {
+            return None;
+        }
+        return Some(vars.get(left.trim())?.contains(needle) != negated);
+    }
+    condition(c, vars)
+}
+
 /// `val x = "1"`, `def x = '1'`, `ext.x = '1'`, `x = '1'` and `extra["x"] = "1"`. A name given
 /// two values is dropped, so a declaration using it is reported instead of guessed. A value
 /// naming another variable (`extra["k"] as String`, `property("k")`, `Versions.K`) goes to
@@ -1978,6 +2147,37 @@ fn script_variables(
         let Some((name, value)) = l.split_once('=') else {
             continue;
         };
+        // `versions["scala"] = ...` (kafka): the map entry `versions.scala`. A value not read
+        // here leaves the entry unknown rather than whatever another line gives it.
+        let indexed = indexed_name(name.trim());
+        if let Some(name) = &indexed {
+            if value.trim_start().starts_with('=') {
+                continue;
+            }
+            let value = value.trim();
+            match quoted(value) {
+                Some((v, tail)) if tail.trim().is_empty() && !v.contains('$') => {
+                    match vars.get(name) {
+                        Some(known) if known != v => {
+                            twice.insert(name.clone());
+                        }
+                        _ => {
+                            vars.insert(name.clone(), v.to_string());
+                        }
+                    }
+                }
+                _ => match variable_reference(value) {
+                    Some(key) => aliases.push((name.clone(), key)),
+                    None if value.contains(".substring(0,") => {
+                        aliases.push((name.clone(), value.to_string()));
+                    }
+                    None => {
+                        twice.insert(name.clone());
+                    }
+                },
+            }
+            continue;
+        }
         let name = name
             .trim()
             .trim_start_matches("extra[")
@@ -2027,6 +2227,19 @@ fn script_variables(
             }
         }
     }
+}
+
+/// `map["k"]` (or `map['k']`) as `map.k`, for a plain map name other than `extra` and `ext`.
+fn indexed_name(name: &str) -> Option<String> {
+    let (map, rest) = name.split_once('[')?;
+    let (key, tail) = quoted(rest)?;
+    let plain = |t: &str| {
+        !t.is_empty()
+            && t.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
+    };
+    (tail == "]" && plain(map) && plain(key) && !matches!(map, "extra" | "ext"))
+        .then(|| format!("{map}.{key}"))
 }
 
 /// `set('k', "v")`, `ext.set("k", "v")` or `extra.set("k", "v")` in an `ext` block: the
@@ -7368,6 +7581,64 @@ set = ["a-b", "e"]
         assert!(r.missing.is_empty(), "{:?}", r.missing);
         assert_eq!(versions(&r, "g:inner"), ["2"], "{:?}", r.packages);
         assert_eq!(versions(&r, "g:lib"), ["1"]);
+    }
+
+    #[test]
+    fn a_map_entry_set_in_a_decided_branch_is_read() {
+        // kafka: `versions["scala"]` takes `scalaVersion` from gradle.properties (not the
+        // default, the property is set and is not "2.13"), and `versions["baseScala"]` is its
+        // `substring(0, lastIndexOf("."))` in the branch `!versions.scala.contains('-')` takes.
+        let repo = Mem(BTreeMap::from([pom("lib_2.12", "2.12.20", &[])]));
+        let script = "ext {\n  versions = [:]\n  libs = [:]\n}\n\
+             def defaultScala213Version = '2.13.18'\n\
+             if (hasProperty('scalaVersion')) {\n  if (scalaVersion == '2.13') {\n\
+             \x20   versions[\"scala\"] = defaultScala213Version\n  }  else {\n\
+             \x20   versions[\"scala\"] = scalaVersion\n  }\n} else {\n\
+             \x20 versions[\"scala\"] = defaultScala213Version\n}\n\
+             if ( !versions.scala.contains('-') ) {\n\
+             \x20 versions[\"baseScala\"] = versions.scala.substring(0, versions.scala.lastIndexOf(\".\"))\n\
+             } else {\n  versions[\"baseScala\"] = versions.scala\n}\n\
+             libs += [\n  lib: \"g:lib_$versions.baseScala:$versions.scala\",\n]\n\
+             apply plugin: 'java'\ndependencies {\n  implementation libs.lib\n}\n";
+        let dir = tree(
+            "map-entry-branches",
+            &[
+                ("gradle.properties", "scalaVersion=2.12.20\n"),
+                ("build.gradle", script),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:lib_2.12"), ["2.12.20"], "{:?}", r.packages);
+        // An entry set again to something not read is unknown, so its declaration is reported
+        // (Gradle takes the later value).
+        let unread = script.replace(
+            "if ( !versions.scala",
+            "versions[\"scala\"] = pickScala()\nif ( !versions.scala",
+        );
+        let dir = tree(
+            "map-entry-unread",
+            &[
+                ("gradle.properties", "scalaVersion=2.12.20\n"),
+                ("build.gradle", &unread),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(versions(&r, "g:lib_2.12").is_empty(), "{:?}", r.packages);
+        assert!(!r.missing.is_empty());
+        // Nor does a library entry take the first of a variable's two values.
+        let repo = Mem(BTreeMap::from([pom("o", "1", &[]), pom("o", "2", &[])]));
+        let dir = tree(
+            "map-entry-twice",
+            &[(
+                "build.gradle",
+                "def v = '1'\nv = '2'\next {\n  libs = [:]\n}\nlibs += [\n  o: \"g:o:$v\",\n]\n\
+                 apply plugin: 'java'\ndependencies {\n  implementation libs.o\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(versions(&r, "g:o").is_empty(), "{:?}", r.packages);
+        assert!(!r.missing.is_empty());
     }
 
     #[test]

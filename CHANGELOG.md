@@ -235,6 +235,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checker-qual: 4.4.0 to compile, worldedit's 3.48.3 to run the tests). Under the Spring
   plugin a compile-only version still versions an unversioned test declaration of the same
   module. 143 packages Gradle does not list dropped out, none it does.
+- **Build variables set inside an `if` are read.** Script variables are read again with each
+  `if` chain decided from what the last read settled, until nothing changes, so a value set
+  in the branch a default build takes is known (kafka's `versions["scala"]`, set from
+  gradle.properties' `scalaVersion`, and `versions["baseScala"]`, its
+  `substring(0, lastIndexOf("."))` under `!versions.scala.contains('-')`). A `map["k"] = v`
+  assignment is the entry `map.k`, and one set to a value not read leaves the entry unknown.
+  A variable given two values no longer reaches a library entry with its first one. kafka:
+  99.3% to 100% of 421 modules.
 - **A `projectsEvaluated` hook over the subprojects is read.** A project's
   `gradle.projectsEvaluated { rootProject.subprojects.findAll { }...each { p -> } }` declares
   its body for each subproject the filters keep (`it != project`, `hasPlugin(C)` through the
