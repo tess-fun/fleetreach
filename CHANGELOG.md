@@ -100,7 +100,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   compile classpaths are now resolved on their own for every project with main or test
   dependencies, not only for one that declares a runtime dependency: a POM's `runtime` scope
   down the tree splits them too (JavaPackager compiles against redline's xz 1.4, while
-  plexus-archiver's runtime xz 1.9 is on the runtime classpath only). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  plexus-archiver's runtime xz 1.9 is on the runtime classpath only). The freefair Lombok
+  plugin's Lombok is added to the compile and test-compile classpaths: the version its
+  `lombok { version = ... }` extension sets, else the plugin's default where real Gradle
+  showed it (8.6 adds 1.18.30, 9.8.0 adds 1.18.48); another release's default is reported,
+  not guessed (grpc-spring, halo, mybatis-plus). A plugin version written as a variable of
+  `buildscript { ext { } }` is expanded. Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over

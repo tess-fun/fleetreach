@@ -148,9 +148,11 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             extends_from(line.trim(), &mut extended_by);
         }
     }
+    let lombok = scripts.iter().find_map(|(_, t)| lombok_extension(t, &vars));
     let mut context = Context {
         vars,
         catalog,
+        lombok,
         plugins,
         used: BTreeSet::new(),
         exported: true,
@@ -1741,11 +1743,54 @@ fn classpath_plugin(line: &str, vars: &BTreeMap<String, String>) -> Option<(&'st
     let id = match (c.group.as_str(), c.artifact.as_str()) {
         ("org.springframework.boot", "spring-boot-gradle-plugin") => SPRING_BOOT,
         ("org.jetbrains.kotlin", "kotlin-gradle-plugin") => KOTLIN_JVM,
+        ("io.freefair.gradle", "lombok-plugin") => FREEFAIR_LOMBOK,
         _ => return None,
     };
     Some((id, c.version?))
 }
 const KOTLIN_JVM: &str = "org.jetbrains.kotlin.jvm";
+const FREEFAIR_LOMBOK: &str = "io.freefair.lombok";
+
+/// The Lombok version the freefair plugin adds when the build sets none, by plugin version:
+/// only what real Gradle showed (grpc-spring on 8.6, halo on 9.8.0). Another release's is
+/// not known here and is reported, never guessed.
+const FREEFAIR_LOMBOK_DEFAULTS: &[(&str, &str)] = &[("8.6", "1.18.30"), ("9.8.0", "1.18.48")];
+
+/// `lombok { version = "1.18.48" }` (or `version.set(...)`, or `lombok.version = ...`): the
+/// freefair plugin's extension, setting the Lombok it adds.
+fn lombok_extension(text: &str, vars: &BTreeMap<String, String>) -> Option<String> {
+    let mut inside = false;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        let setting = if let Some(rest) = trimmed.strip_prefix("lombok.version") {
+            Some(rest)
+        } else if inside {
+            trimmed.strip_prefix("version")
+        } else {
+            None
+        };
+        if let Some(rest) = setting {
+            let rest = rest.trim_start();
+            let value = rest
+                .strip_prefix('=')
+                .or_else(|| {
+                    rest.strip_prefix(".set(")
+                        .and_then(|r| r.trim_end().strip_suffix(')'))
+                })
+                .map(str::trim);
+            if let Some(version) = value.and_then(|v| rule_version(v, vars)) {
+                return Some(version);
+            }
+        }
+        let word = trimmed.trim_end_matches(['{', ' ']);
+        if word == "lombok" && trimmed.ends_with('{') {
+            inside = true;
+        } else if inside && trimmed.starts_with('}') {
+            inside = false;
+        }
+    }
+    None
+}
 const SPRING_DM: &str = "io.spring.dependency-management";
 
 /// The plugin a line applies, with its version when the line gives one: `id 'x' version '1'`,
@@ -1933,6 +1978,8 @@ fn expand(text: &str, vars: &BTreeMap<String, String>) -> Result<String, String>
 struct Context {
     vars: BTreeMap<String, String>,
     catalog: Catalog,
+    /// The Lombok version a freefair `lombok { }` extension sets.
+    lombok: Option<String>,
     /// Plugin id to the version any script or the catalog gives it.
     plugins: BTreeMap<String, String>,
     /// Catalog aliases some build file names.
@@ -2623,6 +2670,8 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
     let Some(version) = context.plugins.get(&id) else {
         return;
     };
+    // `id 'x' version "${xVersion}"` with the variable set in `buildscript { ext { } }`.
+    let version = &expand(version, &context.vars).unwrap_or_else(|_| version.clone());
     if id == SPRING_BOOT {
         // From 3.5 the plugin adds the JUnit Platform launcher to `testRuntimeOnly` (komga,
         // petclinic, Timefold's spring-boot-integration list it without declaring it).
@@ -2656,6 +2705,36 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
             strict: false,
             test: false,
         });
+    } else if id == FREEFAIR_LOMBOK && !line.trim_end().ends_with("apply false") {
+        // The plugin adds Lombok to `compileOnly` and `annotationProcessor`, and to their test
+        // counterparts.
+        let default = FREEFAIR_LOMBOK_DEFAULTS
+            .iter()
+            .find(|(plugin, _)| plugin == version)
+            .map(|(_, lombok)| (*lombok).to_string());
+        let Some(lombok) = context.lombok.clone().or(default) else {
+            module.unread.push(format!(
+                "io.freefair.lombok {version}: the Lombok version it adds is not known"
+            ));
+            return;
+        };
+        for scope in ["provided", "test"] {
+            module.deps.push(Declared {
+                coordinate: Coordinate {
+                    group: "org.projectlombok".to_string(),
+                    artifact: "lombok".to_string(),
+                    version: Some(lombok.clone()),
+                    enforced: false,
+                    strict: false,
+                    test: false,
+                },
+                scope,
+                exclusions: Vec::new(),
+                pom: false,
+                exported: false,
+                runtime_only: false,
+            });
+        }
     } else if id == KOTLIN_JVM
         // `kotlin.stdlib.default.dependency=false` turns the added library off (reposilite).
         && context.vars.get("kotlin.stdlib.default.dependency").map(String::as_str) != Some("false")
@@ -3389,6 +3468,7 @@ mod tests {
                 .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
                 .collect(),
             catalog: Catalog::parse(toml).unwrap(),
+            lombok: None,
             plugins: BTreeMap::new(),
             used: BTreeSet::new(),
             exported: true,
@@ -4701,6 +4781,78 @@ set = ["a-b", "e"]
                 .collect();
             assert_eq!(got, expected, "{gradle}: {:?}", r.missing);
         }
+    }
+
+    #[test]
+    fn the_freefair_plugin_adds_its_lombok() {
+        // grpc-spring: plugin 8.6 through a buildscript `ext` variable, applied in
+        // `allprojects`; mybatis-plus sets the version in the extension; a release whose
+        // default is not known is reported, not guessed.
+        let repo = Mem(BTreeMap::from([
+            (
+                "org.projectlombok:lombok:1.18.30".to_string(),
+                "<project><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.30</version></project>".to_string(),
+            ),
+            (
+                "org.projectlombok:lombok:1.18.48".to_string(),
+                "<project><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.48</version></project>".to_string(),
+            ),
+            pom("a", "1", &[]),
+        ]));
+        let lombok = |files: &[(&str, &str)]| {
+            let r = resolve_gradle(&tree("freefair", files), &repo);
+            let versions: BTreeSet<(String, bool)> = r
+                .packages
+                .iter()
+                .filter(|p| p.name == "org.projectlombok:lombok")
+                .map(|p| (p.version.clone(), p.dev))
+                .collect();
+            (versions, r.missing)
+        };
+        let (found, missing) = lombok(&[
+            ("settings.gradle", "include 'app'\n"),
+            (
+                "build.gradle",
+                "buildscript {\n    ext {\n        lombokPluginVersion = '8.6'\n    }\n}\n\
+                 plugins {\n    id 'io.freefair.lombok' version \"${lombokPluginVersion}\" apply false\n}\n\
+                 allprojects {\n    apply plugin: 'io.freefair.lombok'\n}\n",
+            ),
+            ("app/build.gradle", "dependencies {\n    implementation 'g:a:1'\n}\n"),
+        ]);
+        assert_eq!(
+            found,
+            BTreeSet::from([("1.18.30".to_string(), true)]),
+            "{missing:?}"
+        );
+        let (found, missing) = lombok(&[
+            ("settings.gradle", ""),
+            (
+                "build.gradle",
+                "buildscript {\n    dependencies {\n        classpath \"io.freefair.gradle:lombok-plugin:9.8.3\"\n    }\n}\n\
+                 apply plugin: 'io.freefair.lombok'\nlombok {\n    version = \"1.18.48\"\n}\n\
+                 dependencies {\n    implementation 'g:a:1'\n}\n",
+            ),
+        ]);
+        assert_eq!(
+            found,
+            BTreeSet::from([("1.18.48".to_string(), true)]),
+            "{missing:?}"
+        );
+        let (found, missing) = lombok(&[
+            ("settings.gradle", ""),
+            (
+                "build.gradle",
+                "plugins {\n    id 'io.freefair.lombok' version '6.6.1'\n}\n\
+                 dependencies {\n    implementation 'g:a:1'\n}\n",
+            ),
+        ]);
+        assert!(found.is_empty(), "{found:?}");
+        assert!(
+            missing
+                .iter()
+                .any(|m| m.contains("io.freefair.lombok 6.6.1")),
+            "{missing:?}"
+        );
     }
 
     #[test]
