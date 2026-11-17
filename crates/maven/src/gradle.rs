@@ -453,10 +453,15 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             }
         }
     }
-    let managed: Vec<(Vec<Coordinate>, Vec<Coordinate>)> = modules
+    let managed: Vec<(Vec<Coordinate>, Vec<Coordinate>, Vec<Declared>)> = modules
         .iter()
         .map(|m| {
             let (mut platforms, mut constraints) = (Vec::new(), Vec::new());
+            // The platform project's own platforms are nodes of this graph too, so a BOM a
+            // library's `.module` names meets the version they nest (kestra's
+            // micronaut-core-bom: 5.2.3 from micronaut-validation, 5.2.22 from
+            // micronaut-platform) and only the winner is listed.
+            let mut nodes = Vec::new();
             // A platform project's own project platforms count too, in turn (spring-boot's
             // internal platform takes `enforcedPlatform(project(":platform:spring-boot-
             // dependencies"))`); an enforced one forces everything it reaches.
@@ -475,6 +480,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                     };
                     platforms.extend(modules[i].platforms.iter().map(mark));
                     constraints.extend(modules[i].constraints.iter().map(mark));
+                    nodes.extend(modules[i].deps.iter().filter(|d| d.pom).cloned());
                     for (inner, inner_strict) in modules[i].project_platforms.iter().rev() {
                         stack.push((inner.clone(), strict || *inner_strict));
                     }
@@ -484,12 +490,13 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                     ));
                 }
             }
-            (platforms, constraints)
+            (platforms, constraints, nodes)
         })
         .collect();
-    for (module, (platforms, constraints)) in modules.iter_mut().zip(managed) {
+    for (module, (platforms, constraints, nodes)) in modules.iter_mut().zip(managed) {
         module.platforms.extend(platforms);
         module.constraints.extend(constraints);
+        module.deps.extend(nodes);
     }
     // `implementation project(":p")` puts p's own dependencies on this file's classpaths, with
     // p's platforms and constraints (Gradle publishes them with the project), through p's own
@@ -5984,6 +5991,61 @@ set = ["a-b", "e"]
         assert_eq!(versions(&r, "g:b"), ["2"]);
         assert_eq!(versions(&r, "g:x"), ["1"]);
         assert_eq!(versions(&r, "g:pin"), ["1"]);
+    }
+
+    #[test]
+    fn a_libraries_lower_bom_takes_the_platforms_nested_one() {
+        // kestra: micronaut-validation's `.module` names micronaut-core-bom 5.2.3, which the
+        // micronaut-platform the build's platform imports nests at 5.2.22. Gradle has one
+        // micronaut-core-bom node, at 5.2.22; it is never listed at both.
+        let marker = "<!-- do_not_remove: published-with-gradle-metadata -->";
+        let gradle_pom = |a: &str, v: &str| {
+            (
+                format!("g:{a}:{v}"),
+                format!("<project>{marker}<groupId>g</groupId><artifactId>{a}</artifactId><version>{v}</version></project>"),
+            )
+        };
+        let module = |a: &str, v: &str, category: &str, body: &str| {
+            (
+                format!("g:{a}:{v}.module"),
+                format!(
+                    r#"{{"formatVersion":"1.1","variants":[{{"name":"apiElements","attributes":{{"org.gradle.usage":"java-api","org.gradle.category":"{category}"}},{body}}},{{"name":"runtimeElements","attributes":{{"org.gradle.usage":"java-runtime","org.gradle.category":"{category}"}},{body}}}]}}"#
+                ),
+            )
+        };
+        let inner = |v: &str| {
+            r#""dependencies":[{"group":"g","module":"inner","version":{"requires":"V"},"attributes":{"org.gradle.category":"platform"}}]"#.replace('V', v)
+        };
+        let repo = Mem(BTreeMap::from([
+            gradle_pom("outer", "1"),
+            module("outer", "1", "platform", &inner("2")),
+            gradle_pom("inner", "1"),
+            module("inner", "1", "platform", r#""dependencies":[]"#),
+            gradle_pom("inner", "2"),
+            module("inner", "2", "platform", r#""dependencies":[]"#),
+            gradle_pom("lib", "1"),
+            module("lib", "1", "library", &inner("1")),
+        ]));
+        let dir = tree(
+            "library-lower-bom",
+            &[
+                ("settings.gradle", "include 'platform', 'app'\n"),
+                (
+                    "platform/build.gradle",
+                    "plugins {\n    id 'java-platform'\n}\njavaPlatform {\n    allowDependencies()\n}\n\
+                     dependencies {\n    api platform(\"g:outer:1\")\n}\n",
+                ),
+                (
+                    "app/build.gradle",
+                    "plugins {\n    id 'java'\n}\ndependencies {\n    implementation enforcedPlatform(project(\":platform\"))\n\
+                     \x20   implementation \"g:lib:1\"\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:inner"), ["2"], "{:?}", r.packages);
+        assert_eq!(versions(&r, "g:lib"), ["1"]);
     }
 
     #[test]

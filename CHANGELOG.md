@@ -235,6 +235,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checker-qual: 4.4.0 to compile, worldedit's 3.48.3 to run the tests). Under the Spring
   plugin a compile-only version still versions an unversioned test declaration of the same
   module. 143 packages Gradle does not list dropped out, none it does.
+- **A BOM a library names meets the one a platform nests.** A library's `.module` that
+  depends on a BOM (micronaut-validation on micronaut-core-bom 5.2.3) and the BOMs a platform
+  project imports (micronaut-platform's micronaut-core-bom 5.2.22) are now one node of the
+  consumer's graph, as in Gradle, so only the winner is listed: kestra's lower grpc, netty,
+  micronaut, OpenTelemetry, Jetty and AWS SDK BOM versions are gone, with armeria's and
+  komga's. 12 packages Gradle does not list dropped out, none it does.
 - **Gradle's `1.0!!` version shorthand is read** as `strictly("1.0")` (kestra's platform
   pins kotlp so), no longer reported as a version of its own.
 - **spring-boot's own BOM DSL is read.** Its buildSrc `org.springframework.boot.bom` plugin

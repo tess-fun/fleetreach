@@ -1671,7 +1671,10 @@ fn enqueue_children(
         let mut ex = exclusions.to_vec();
         ex.extend(child.exclusions.iter().cloned());
         let mut child = child.clone();
-        if nested_platform {
+        // Any platform edge, a library's `.module` naming a BOM too, is the BOM's one node:
+        // micronaut-validation's micronaut-core-bom 5.2.3 meets the 5.2.22 micronaut-platform
+        // nests, and only the winner is listed.
+        if nested_platform || child.platform {
             child.kind = Some("pom".to_string());
         }
         queue.push_back((child, depth + 1, name.to_string(), next_scope, ex, root_ix));
