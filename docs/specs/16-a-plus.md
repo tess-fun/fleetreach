@@ -924,7 +924,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   bundle, minecolonies on ForgeGradle, MCCustomSkinLoader on its own buildSrc plugin that
   reads Minecraft's library manifest) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 377 misses remain in
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 372 misses remain in
   the 53 builds, ihub-pub's included (armeria 195: its `[boms]` and flag scripts are its own
   code). Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
@@ -980,7 +980,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   `compileOnly`, processor or API-variant-only dependencies (gradle-versions-plugin 100%),
   branches a default build skips outside `dependencies { }` (logstash's FIPS libraries),
   configuration-wide excludes (conductor's Logback), root `project(':p') { }` blocks and
-  `libs += [...]` maps (kafka 409 of 421), the `libs` catalog from the TOML its script names
+  `libs += [...]` maps and list variables declared whole (kafka 414 of 421), the `libs` catalog from the TOML its script names
   (armeria 1,129 of 1,324), buildscript
   `classpath` plugin versions with `apply plugin:` (spring-integration-samples 333 to 414),
   `lib."k"` (mybatis-plus 236 to 340), `set('k', v)` properties and POM relocations, which

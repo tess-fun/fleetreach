@@ -187,7 +187,25 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     }
     let lombok = scripts.iter().find_map(|(_, t)| lombok_extension(t, &vars));
     let local_configurations = local_configurations(dir);
+    let mut lists: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut lists_twice = BTreeSet::new();
+    for (_, text) in &scripts {
+        for (name, items) in list_variables(text) {
+            match lists.get(&name) {
+                Some(known) if *known != items => {
+                    lists_twice.insert(name);
+                }
+                _ => {
+                    lists.insert(name, items);
+                }
+            }
+        }
+    }
+    for name in lists_twice {
+        lists.remove(&name);
+    }
     let mut context = Context {
+        lists,
         vars,
         catalog,
         lombok,
@@ -2522,6 +2540,9 @@ struct Context {
     /// The declaration being read is on an annotation processor's path (`kapt`, `ksp`,
     /// `annotationProcessor`), which no classpath read here extends.
     processor: bool,
+    /// `name = [ libs.a, "g:b:1", ... ]`: lists a declaration names whole
+    /// (kafka's `testRuntimeOnly runtimeTestLibs`).
+    lists: BTreeMap<String, Vec<String>>,
 }
 
 impl Context {
@@ -2712,6 +2733,7 @@ fn read_script(text: &str, context: &mut Context) -> Module {
     let mut module = Module::default();
     let mut blocks: Vec<Block> = Vec::new();
     let text = catalog_lookups(text, &context.catalog);
+    let text = expand_lists(&text, &context.lists);
     let text = fold_rich_versions(&text);
     let mut open_deps: Option<OpenDeps> = None;
     // Open branches the default build decides: (block depth inside, taken), and the last
@@ -3566,6 +3588,83 @@ fn apply_conventions(conventions: &BTreeMap<String, usize>, modules: &mut [Modul
 /// `.requiredVersion` or `.toString()`) to the version, inside a string or as one. A one-line
 /// helper over either (CosId's `fun library(name: String) = libs.findLibrary(name).get()`) is
 /// read the same way.
+/// Multi-line list literals, `name = [` then one item a line and `]`, as in kafka's
+/// `runtimeTestLibs = [ libs.slf4jLog4j2, ... ]`. A line `key: value` makes it a map, left out.
+fn list_variables(text: &str) -> Vec<(String, Vec<String>)> {
+    let mut out = Vec::new();
+    let mut current: Option<(String, Vec<String>)> = None;
+    for line in text.lines() {
+        let l = line.trim();
+        if let Some((_, items)) = current.as_mut() {
+            if l.starts_with(']') {
+                if let Some(done) = current.take().filter(|(_, items)| !items.is_empty()) {
+                    out.push(done);
+                }
+                continue;
+            }
+            let item = l.trim_end_matches(',').trim();
+            let map_key = item.split_once(':').is_some_and(|(k, _)| {
+                !k.is_empty()
+                    && k.trim()
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            });
+            if item.is_empty() || item.contains('[') || map_key {
+                current = None;
+                continue;
+            }
+            items.push(item.to_string());
+            continue;
+        }
+        let mut l = l;
+        for prefix in ["project.ext.", "ext.", "def "] {
+            l = l.strip_prefix(prefix).unwrap_or(l).trim_start();
+        }
+        if let Some((name, open)) = l.split_once('=') {
+            let name = name.trim();
+            if open.trim() == "["
+                && !name.is_empty()
+                && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            {
+                current = Some((name.to_string(), Vec::new()));
+            }
+        }
+    }
+    out
+}
+
+/// `testImplementation testLog4j2Libs` or `testImplementation(testLog4j2Libs)` with a known
+/// list: one declaration line per item.
+fn expand_lists(text: &str, lists: &BTreeMap<String, Vec<String>>) -> String {
+    if lists.is_empty() {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    for line in text.lines() {
+        let trimmed = line.trim();
+        let indent = &line[..line.len() - line.trim_start().len()];
+        let split = trimmed
+            .split_once(' ')
+            .map(|(c, n)| (c, n.trim()))
+            .or_else(|| {
+                let (c, rest) = trimmed.split_once('(')?;
+                Some((c, rest.strip_suffix(')')?.trim()))
+            });
+        if let Some((config, name)) = split {
+            let config = config.trim_matches(['"', '\'']);
+            if let Some(items) = lists.get(name).filter(|_| is_configuration(config)) {
+                for item in items {
+                    out.push_str(&format!("{indent}{config} {item}\n"));
+                }
+                continue;
+            }
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
 fn catalog_lookups(text: &str, catalog: &Catalog) -> String {
     if !text.contains(".findLibrary(") && !text.contains(".findVersion(") {
         return text.to_string();
@@ -4095,6 +4194,7 @@ mod tests {
             local: false,
             local_configurations: BTreeSet::new(),
             custom: false,
+            lists: BTreeMap::new(),
         }
     }
 
@@ -4765,6 +4865,25 @@ set = ["a-b", "e"]
         );
         let r = resolve_gradle(&dir, &repo);
         assert_eq!(versions(&r, "g:a"), ["1"], "{:?}", r.missing);
+    }
+
+    #[test]
+    fn a_list_variable_declares_each_of_its_items() {
+        // kafka: `testLog4j2Libs = [ libs.a, ... ]` in the root's `ext { }`, declared whole as
+        // `testImplementation testLog4j2Libs`.
+        let repo = Mem(BTreeMap::from([pom("a", "1", &[]), pom("b", "2", &[])]));
+        let dir = tree(
+            "list-variable",
+            &[(
+                "build.gradle",
+                "ext {\n  testLibs = [\n    'g:a:1',\n    \"g:b:2\"\n  ]\n}\n\
+                 dependencies {\n    testImplementation testLibs\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:a"), ["1"], "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:b"), ["2"], "{:?}", r.missing);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
     }
 
     #[test]

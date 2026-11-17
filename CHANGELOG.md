@@ -165,7 +165,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (conductor's Logback). A root build's top-level `project(':p') { ... }` blocks configure
   those projects, a `libs += [ k: "g:a:$versions.k" ]` map names coordinates when there is no
   version catalog, and the `libs` catalog is read from the TOML file the script creating it
-  names (armeria's `dependencies.toml`): kafka 1 to 409 of 421, armeria 5 to 1,129 of 1,324. Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  names (armeria's `dependencies.toml`): kafka 1 to 409 of 421, armeria 5 to 1,129 of 1,324. A multi-line list variable
+  (`testLog4j2Libs = [ libs.a, ... ]`) declared whole (`testImplementation testLog4j2Libs`)
+  declares each item (kafka 414). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over
