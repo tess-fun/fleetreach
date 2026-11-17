@@ -377,6 +377,27 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             by_path.insert(path.clone(), i);
         }
     }
+    // A settings script that sets `buildFileName` names projects after their build files
+    // (spring-security includes `:spring-security-core` for core/spring-security-core.gradle).
+    let named_files = ["settings.gradle", "settings.gradle.kts"]
+        .iter()
+        .filter_map(|f| fleetreach_core::repofile::read_to_string(dir.join(f)).ok())
+        .any(|t| strip_comments(&t).contains("buildFileName"));
+    if named_files {
+        for (i, (file, _)) in scripts.iter().enumerate() {
+            let name = Path::new(file)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default();
+            let stem = name
+                .strip_suffix(".gradle.kts")
+                .or_else(|| name.strip_suffix(".gradle"))
+                .filter(|s| *s != "build" && !s.is_empty());
+            if let Some(stem) = stem {
+                by_path.entry(format!(":{stem}")).or_insert(i);
+            }
+        }
+    }
     let managed: Vec<(Vec<Coordinate>, Vec<Coordinate>)> = modules
         .iter()
         .map(|m| {
@@ -5146,6 +5167,31 @@ set = ["a-b", "e"]
     }
 
     #[test]
+    fn a_settings_build_file_name_names_projects_after_their_files() {
+        // spring-security: the settings make every `x.gradle` project `:x`, its directory the
+        // file's (`project.buildFileName = buildFile.name`).
+        let repo = Mem(BTreeMap::from([pom("b", "1", &[]), pom("b", "2", &[])]));
+        let dir = tree(
+            "build-file-name",
+            &[
+                (
+                    "settings.gradle",
+                    "buildFiles.each { File buildFile ->\n    configureProject(buildFile)\n}\n\
+                     def configureProject(File buildFile) {\n    project.buildFileName = buildFile.name\n}\n",
+                ),
+                ("core/spring-security-core.gradle", "dependencies {\n    api 'g:b:2'\n}\n"),
+                (
+                    "web/spring-security-web.gradle",
+                    "dependencies {\n    api project(':spring-security-core')\n    implementation 'g:b:1'\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:b"), ["2"], "{:?}", r.packages);
+    }
+
+    #[test]
     fn a_branch_the_default_build_skips_adds_nothing() {
         // logstash: `if (rootProject.fedrampHighMode) { dependencies { runtimeOnly ... } }`,
         // with the flag `Objects.requireNonNullElse(project.findProperty(...), false)`.
@@ -6518,6 +6564,25 @@ set = ["a-b", "e"]
             let r = resolve_gradle(&dir, &source);
             assert_eq!(versions(&r, "g:j"), [want], "{declared}: {:?}", r.missing);
         }
+        // pygradle: `junit:4.+` is settled before conflict resolution, so it beats the 3.18.2-GA a
+        // dependency asks for.
+        let spock = "<project><groupId>g</groupId><artifactId>s</artifactId><version>1</version>\
+                     <dependencies><dependency><groupId>g</groupId><artifactId>j</artifactId>\
+                     <version>3.18.2-GA</version></dependency></dependencies></project>";
+        let with_spock = tree("gradle-cache-prefix-spock", &[("g/s/1/h4/s-1.pom", spock)]);
+        let both = crate::resolve::LocalRepositories {
+            roots: Vec::new(),
+            gradle_roots: vec![source.gradle_roots[0].clone(), with_spock],
+        };
+        let dir = tree(
+            "gradle-prefix-conflict",
+            &[(
+                "build.gradle",
+                "dependencies {\n    api 'g:j:3.+'\n    api 'g:s:1'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &both);
+        assert_eq!(versions(&r, "g:j"), ["3.20.0-GA"], "{:?}", r.missing);
         let dir = tree(
             "gradle-prefix-none",
             &[("build.gradle", "dependencies {\n    api 'g:j:4.+'\n}\n")],

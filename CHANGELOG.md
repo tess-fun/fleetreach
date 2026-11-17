@@ -44,10 +44,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a shadowed jar or a test-framework feature variant), its dependencies, and constraints that
   raise versions or manage an imported BOM. On three Kotlin builds this adds 27 to 36 packages
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
-- **The Gradle reader is measured against real Gradle, and reads much more.** On 62 real
+- **The Gradle reader is measured against real Gradle, and reads much more.** On 68 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 87.4% of the 11,816 modules at Gradle's version and 91.2% by name (the 56 first
-  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 96.4% and 98.8% on the 56 builds
+  now lists 87.4% of the 12,674 modules at Gradle's version and 91.0% by name (the 56 first
+  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 96.6% and 98.9% on the 61 builds
   whose dependencies no build plugin adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
@@ -135,7 +135,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reported, never guessed (Hystrix's webapp, spring-integration-samples' web samples). A
   prefix version (`3.19+`) now settles to the highest listed version that starts with it, as
   Gradle reads one, instead of being reported (Hystrix's javassist 3.19.0-GA, dgs-framework's
-  mockk); `latest.release` is still reported. In a POM, an optional dependency no longer
+  mockk), before conflict resolution, so it beats a lower version a dependency asks for
+  (pygradle's `junit:4.+` is 4.13.2 over spock's 4.12); `latest.release` is still reported. In a POM, an optional dependency no longer
   widens the test-scoped one it inherits under the same name onto the classpath (netty-common
   4.1.3's javassist, which raised powermock's 3.18.2-GA to 3.20.0-GA). A plugin that buildSrc or
   build-logic depends on (`implementation "...kotlin-gradle-plugin:${kotlinVersion}"`) sets the
@@ -171,7 +172,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   their project, by the settings' renames. A script a project applies (`apply from:
   "$rootDir/gradle/x.gradle"`) declares in that project, with the project's own `extendsFrom`
   lines, and a classifier computed from the host (`:${platform}`) no longer leaves the
-  coordinate unread (xpipe 66 to 72 of 72). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  coordinate unread (xpipe 66 to 72 of 72). A settings script that sets `buildFileName` names
+  each project after its build file (spring-security's `core/spring-security-core.gradle` is
+  `:spring-security-core`: 98 to 310 of 310). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath; a dependency declared `transitive = false` brings none of
   its `.module` constraints either (PlotSquared's FAWE no longer raises Gson and Guava;

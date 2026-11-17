@@ -2266,6 +2266,12 @@ fn walk(
                 if let Some(v) = version.filter(|v| !v.starts_with(['[', '(']) && !v.ends_with('+'))
                 {
                     raise(requests, key.clone(), v);
+                } else if let Some(v) = version.filter(|v| r.gradle && v.ends_with('+')) {
+                    // A prefix version is settled before conflict resolution: pygradle's
+                    // `junit:4.+` is 4.13.2, which beats spock's 4.12.
+                    if let Some(settled) = r.pick_version(&dep.group, &dep.artifact, v) {
+                        raise(requests, key.clone(), &settled);
+                    }
                 }
             }
         }
