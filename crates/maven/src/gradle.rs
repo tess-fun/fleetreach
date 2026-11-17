@@ -40,6 +40,12 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     applied_scripts(&mut scripts);
     project_blocks(dir, &mut scripts);
     project_accessors(dir, &mut scripts);
+    let named = named_catalogs(dir);
+    for (name, _) in &named {
+        for (_, text) in &mut scripts {
+            *text = catalog_accessors(text, name);
+        }
+    }
     let mut vars = properties(&dir.join("gradle.properties"));
     // The wrapper decides which Gradle runs the build: axion picks its Spock by
     // `GradleVersion.current().version.startsWith("9.")`.
@@ -111,6 +117,30 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                         table.entry(key).or_insert(entry);
                     }
                 }
+            }
+        }
+    }
+    // Another named catalog (spotless's `pinnedLibs`) joins `libs` with its name before
+    // each alias, as `catalog_accessors` spells its accessors.
+    for (name, file) in &named {
+        match fleetreach_core::repofile::read_to_string(dir.join(file))
+            .map_err(|e| e.to_string())
+            .and_then(|t| toml::from_str::<toml::Table>(&t).map_err(|e| e.to_string()))
+        {
+            Ok(other) => {
+                for (section, entries) in prefixed_catalog(other, name) {
+                    let slot = doc
+                        .entry(section)
+                        .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+                    if let Some(table) = slot.as_table_mut() {
+                        for (key, entry) in entries {
+                            table.entry(key).or_insert(entry);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                missing.insert(format!("{file}: {e}"));
             }
         }
     }
@@ -711,6 +741,122 @@ fn catalog_file(dir: &Path, scripts: &[(String, String)]) -> String {
         }
     }
     DEFAULT.to_string()
+}
+
+/// The catalogs other than `libs` a settings script creates from one TOML file:
+/// `versionCatalogs { create("pinnedLibs") { from(files("gradle/pinned-libs.versions.toml")) } }`,
+/// as (name, file). One built any other way is not read.
+fn named_catalogs(dir: &Path) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for f in ["settings.gradle", "settings.gradle.kts"] {
+        let Ok(text) = fleetreach_core::repofile::read_to_string(dir.join(f)) else {
+            continue;
+        };
+        let text = strip_comments(&text);
+        let mut rest = text.as_str();
+        while let Some(at) = ["create(", "register("]
+            .iter()
+            .filter_map(|c| rest.find(c).map(|i| (i, c.len())))
+            .min()
+        {
+            let after = &rest[at.0 + at.1..];
+            rest = after;
+            let Some((name, tail)) = quoted(after) else {
+                continue;
+            };
+            let valid = !name.is_empty()
+                && name != "libs"
+                && name.chars().all(|c| c.is_ascii_alphanumeric())
+                && name.starts_with(|c: char| c.is_ascii_lowercase());
+            // Its block, up to the next catalog it creates.
+            let block = tail
+                .find("create(")
+                .into_iter()
+                .chain(tail.find("register("))
+                .min()
+                .map_or(tail, |end| &tail[..end]);
+            let files: Vec<String> = strings(block)
+                .into_iter()
+                .filter(|s| s.ends_with(".toml"))
+                .collect();
+            if let ([file], true) = (files.as_slice(), valid) {
+                if block.contains("from(") && !file.contains('$') && dir.join(file).is_file() {
+                    out.push((name.to_string(), file.clone()));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// `pinnedLibs.maven.core` as `libs.pinnedLibs.maven.core`, `pinnedLibs.versions.x` as
+/// `libs.versions.pinnedLibs.x` (and so on for `bundles` and `plugins`): the accessors of a
+/// named catalog's entries once they join `libs` under the catalog's name.
+fn catalog_accessors(text: &str, name: &str) -> String {
+    let lead = format!("{name}.");
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find(&lead) {
+        let before = rest[..at].chars().last().or_else(|| out.chars().last());
+        out.push_str(&rest[..at]);
+        let after = &rest[at + lead.len()..];
+        if before.is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.' || c == '$') {
+            out.push_str(&lead);
+        } else if let Some(section) = ["versions.", "bundles.", "plugins."]
+            .iter()
+            .find(|s| after.starts_with(**s))
+        {
+            out.push_str(&format!("libs.{section}{lead}"));
+            rest = &after[section.len()..];
+            continue;
+        } else {
+            out.push_str(&format!("libs.{lead}"));
+        }
+        rest = after;
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A named catalog's TOML with every alias (and each `version.ref` and bundle member, which
+/// name aliases of the same catalog) led by `name-`.
+fn prefixed_catalog(doc: toml::Table, name: &str) -> Vec<(String, toml::Table)> {
+    let lead = |alias: &str| format!("{name}-{alias}");
+    let fix_ref = |entry: &mut toml::Value| {
+        if let Some(version) = entry.get_mut("version") {
+            if let Some(r) = version.get_mut("ref") {
+                if let Some(text) = r.as_str() {
+                    *r = toml::Value::String(lead(text));
+                }
+            }
+        }
+    };
+    let mut out = Vec::new();
+    for (section, value) in doc {
+        let Some(table) = value.as_table() else {
+            continue;
+        };
+        let mut entries = toml::Table::new();
+        for (alias, entry) in table {
+            let mut entry = entry.clone();
+            match section.as_str() {
+                "libraries" | "plugins" => fix_ref(&mut entry),
+                "bundles" => {
+                    if let Some(members) = entry.as_array_mut() {
+                        for m in members {
+                            if let Some(text) = m.as_str() {
+                                *m = toml::Value::String(lead(text));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+            entries.insert(lead(alias), entry);
+        }
+        out.push((section, entries));
+    }
+    out
 }
 
 /// `apply from: "$rootDir/gradle/x.gradle"` (or `apply(from = ...)`, `rootProject.file(...)`,
@@ -5189,6 +5335,123 @@ set = ["a-b", "e"]
         let r = resolve_gradle(&dir, &repo);
         assert!(r.missing.is_empty(), "{:?}", r.missing);
         assert_eq!(versions(&r, "g:b"), ["2"], "{:?}", r.packages);
+    }
+
+    #[test]
+    fn a_platform_lists_and_applies_the_platforms_it_depends_on() {
+        // kestra: an `enforcedPlatform(project(":platform"))` whose platform project imports
+        // micronaut-platform, a `.module` platform that depends on 73 nested BOMs, and pins
+        // jetty-bom with `enforcedPlatform`. Gradle lists each nested BOM, applies what they
+        // manage, and still holds jetty at the enforced BOM's version, the BOM itself too.
+        let marker = "<!-- do_not_remove: published-with-gradle-metadata -->";
+        let gradle_pom = |a: &str, v: &str| {
+            (
+                format!("g:{a}:{v}"),
+                format!("<project>{marker}<groupId>g</groupId><artifactId>{a}</artifactId><version>{v}</version><packaging>pom</packaging></project>"),
+            )
+        };
+        let module = |a: &str, body: &str| {
+            (
+                format!("g:{a}:1.module"),
+                format!(
+                    r#"{{"formatVersion":"1.1","variants":[{{"name":"apiElements","attributes":{{"org.gradle.usage":"java-api","org.gradle.category":"platform"}},{body}}},{{"name":"runtimeElements","attributes":{{"org.gradle.usage":"java-runtime","org.gradle.category":"platform"}},{body}}}]}}"#
+                ),
+            )
+        };
+        let bom = |v: &str, managed: &str| {
+            (
+                format!("g:pin:{v}"),
+                format!(
+                    "<project><groupId>g</groupId><artifactId>pin</artifactId><version>{v}</version>\
+                     <packaging>pom</packaging><dependencyManagement><dependencies><dependency>\
+                     <groupId>g</groupId><artifactId>x</artifactId><version>{managed}</version>\
+                     </dependency></dependencies></dependencyManagement></project>"
+                ),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            gradle_pom("outer", "1"),
+            module(
+                "outer",
+                r#""dependencyConstraints":[{"group":"g","module":"a","version":{"requires":"2"}}],
+                "dependencies":[{"group":"g","module":"inner","version":{"requires":"1"},"attributes":{"org.gradle.category":"platform"}}]"#,
+            ),
+            gradle_pom("inner", "1"),
+            module(
+                "inner",
+                r#""dependencyConstraints":[{"group":"g","module":"b","version":{"requires":"2"}},{"group":"g","module":"x","version":{"requires":"2"}}],
+                "dependencies":[{"group":"g","module":"pin","version":{"requires":"2"},"attributes":{"org.gradle.category":"platform"}}]"#,
+            ),
+            bom("1", "1"),
+            bom("2", "2"),
+            pom("a", "2", &[]),
+            pom("b", "2", &[]),
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+        ]));
+        let dir = tree(
+            "nested-platforms",
+            &[
+                ("settings.gradle", "include 'platform', 'app'\n"),
+                (
+                    "platform/build.gradle",
+                    "plugins {\n    id 'java-platform'\n}\njavaPlatform {\n    allowDependencies()\n}\n\
+                     dependencies {\n    api enforcedPlatform(\"g:pin:1\")\n    api platform(\"g:outer:1\")\n}\n",
+                ),
+                (
+                    "app/build.gradle",
+                    "plugins {\n    id 'java'\n}\ndependencies {\n    implementation enforcedPlatform(project(\":platform\"))\n\
+                     \x20   implementation \"g:a\"\n    implementation \"g:b\"\n    implementation \"g:x\"\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:inner"), ["1"], "{:?}", r.packages);
+        assert_eq!(versions(&r, "g:a"), ["2"]);
+        assert_eq!(versions(&r, "g:b"), ["2"]);
+        assert_eq!(versions(&r, "g:x"), ["1"]);
+        assert_eq!(versions(&r, "g:pin"), ["1"]);
+    }
+
+    #[test]
+    fn a_named_catalog_from_a_file_joins_libs() {
+        // spotless: `create("pinnedLibs") { from(files("gradle/pinned-libs.versions.toml")) }`,
+        // used as `pinnedLibs.maven.core`; its version refs and bundles name its own entries.
+        let repo = Mem(BTreeMap::from([
+            pom("a", "1", &[]),
+            pom("b", "2", &[]),
+            pom("d", "2", &[]),
+        ]));
+        let dir = tree(
+            "named-catalog",
+            &[
+                (
+                    "settings.gradle.kts",
+                    "dependencyResolutionManagement {\n  versionCatalogs {\n    create(\"pinnedLibs\") {\n\
+                     \x20     from(files(\"gradle/pinned-libs.versions.toml\"))\n    }\n  }\n}\n",
+                ),
+                (
+                    "gradle/pinned-libs.versions.toml",
+                    "[versions]\nb = \"2\"\n[libraries]\nmaven-core = \"g:a:1\"\nb = { module = \"g:b\", version.ref = \"b\" }\n\
+                     [bundles]\nboth = [\"maven-core\", \"b\"]\n",
+                ),
+                (
+                    "build.gradle.kts",
+                    "plugins {\n  java\n}\ndependencies {\n  compileOnly(pinnedLibs.maven.core)\n\
+                     \x20 implementation(pinnedLibs.bundles.both)\n  implementation(\"g:d:${pinnedLibs.versions.b.get()}\")\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:a"), ["1"], "{:?}", r.packages);
+        assert_eq!(versions(&r, "g:b"), ["2"]);
+        assert_eq!(versions(&r, "g:d"), ["2"]);
+        assert_eq!(
+            catalog_accessors("x(myPinnedLibs.a, pinnedLibs.plugins.p)", "pinnedLibs"),
+            "x(myPinnedLibs.a, libs.plugins.pinnedLibs.p)"
+        );
     }
 
     #[test]

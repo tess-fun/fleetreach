@@ -44,11 +44,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a shadowed jar or a test-framework feature variant), its dependencies, and constraints that
   raise versions or manage an imported BOM. On three Kotlin builds this adds 27 to 36 packages
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
-- **The Gradle reader is measured against real Gradle, and reads much more.** On 68 real
+- **The Gradle reader is measured against real Gradle, and reads much more.** On 75 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 87.4% of the 12,674 modules at Gradle's version and 91.0% by name (the 56 first
-  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 96.6% and 98.9% on the 61 builds
-  whose dependencies no build plugin adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
+  now lists 82.4% of the 14,869 modules at Gradle's version and 85.9% by name, 88.0% exact
+  without spring-boot, whose BOM is its own buildSrc DSL (the 56 first builds alone went from
+  59.7% and 70.0% to 88.1% and 91.4%); 96.3% and 98.5% on the 67 builds whose dependencies no
+  build plugin adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
   `implementation` dependencies are only on the runtime classpath of a project that depends
@@ -172,7 +173,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   their project, by the settings' renames. A script a project applies (`apply from:
   "$rootDir/gradle/x.gradle"`) declares in that project, with the project's own `extendsFrom`
   lines, and a classifier computed from the host (`:${platform}`) no longer leaves the
-  coordinate unread (xpipe 66 to 72 of 72). A settings script that sets `buildFileName` names
+  coordinate unread (xpipe 66 to 72 of 72). A platform's own platform dependencies are listed and manage
+  versions, as Gradle shows them: micronaut-platform's 73 nested BOMs (micronaut-logging-bom,
+  ...) are listed, and what they manage applies, while an `enforcedPlatform(...)` forces only
+  its own constraints and its own version (kestra's jetty-bom 12.0.40 holds against a nested
+  BOM's 12.1.10; kestra 234 to 477 of 478). A catalog other than `libs` that settings creates
+  from a TOML file (spotless's `pinnedLibs`) is read (spotless 60 to 86 of 87). A settings script that sets `buildFileName` names
   each project after its build file (spring-security's `core/spring-security-core.gradle` is
   `:spring-security-core`: 98 to 310 of 310). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages

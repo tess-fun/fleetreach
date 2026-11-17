@@ -911,24 +911,28 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   containers (`docs/differential/gradle`: `run.sh` copies a repo, runs `faDeps` from
   `init.gradle` over the compile, runtime, test-compile and test-runtime classpaths, 3.5 GB,
   20-minute kill; `compare.py` scores). Corpus: the 103 JVM builds of 311 sparse clones in
-  ~/fa-testbed/gradle (208 Android/KMP skipped, they need the Android SDK). **68 resolved**
+  ~/fa-testbed/gradle (208 Android/KMP skipped, they need the Android SDK). **75 resolved**
   (kafka, armeria, MCCustomSkinLoader, PlotSquared, spring-kafka, xpipe, spring-security,
-  radarsh's test logger and pygradle recovered on scratch copies: every declared project
+  radarsh's test logger, pygradle, Talaiot, kestra, Grasscutter, LogNet's gRPC starter,
+  spotless and spring-boot recovered on scratch copies: every declared project
   directory and the upstream directory tree created empty, empty test sources, one fetched
   file each, pygradle's untracked `version.properties` as `version=0.0.0`; spring-cloud-flycloud,
   gradle-jooq-plugin and gradle-profiler once `run.sh` left out `--no-configuration-cache` for
-  wrappers older than Gradle 6.6 and turned isolated projects off); 35 fail for reasons of their own (dead plugin repositories, toolchains Gradle
+  wrappers older than Gradle 6.6 and turned isolated projects off, mmorpg once it pointed
+  `org.gradle.java.home` at the container's JDK); 28 fail for reasons of their own (dead plugin repositories, toolchains Gradle
   cannot fetch on arm64, files the sparse clone lacks, plugins that need a full checkout,
-  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **87.4% of
-  12,674 modules at Gradle's version, 91.0% by name** (the 56 first builds: 88.1% and 91.4%,
-  from 59.7% and 70.0%); median repo 100% exact, 60 of 68 at 90% or more. **96.6% and 98.9%
-  on the 61 builds whose dependencies no build plugin adds**: the seven others (ideavim,
+  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **82.4% of
+  14,869 modules at Gradle's version, 85.9% by name** (88.0% exact without spring-boot, whose
+  1,032 modules come almost all from its own `bom { library(...) }` buildSrc DSL; the 56 first
+  builds: 88.1% and 91.4%, from 59.7% and 70.0%); median repo 100% exact, 64 of 75 at 90% or
+  more. **96.3% and 98.5% on the 67 builds whose dependencies no build plugin adds**: the eight
+  others (spring-boot, ideavim,
   MinecraftDev and gradle-profiler's IDE plugin projects on the IntelliJ Platform plugin, Paper and WorldEdit on paperweight's dev
   bundle, minecolonies on ForgeGradle, MCCustomSkinLoader on its own buildSrc plugin that
   reads Minecraft's library manifest) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 373 misses remain in
-  the 61 builds, ihub-pub's included (armeria 195: its `[boms]` and flag scripts are its own
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 444 misses remain in
+  the 67 builds, ihub-pub's included (armeria 195: its `[boms]` and flag scripts are its own
   code). Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
   that Gradle never builds as part of the project. Later rules: the main classpath resolved
@@ -995,7 +999,11 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   spring-framework 456 to 469), a Spring-declared version managed for every path (conductor
   780 to 801), `project(':p')` dependencies followed with the highest declaration winning
   (mybatis-plus 340 to 352, CosId 220 to 227), own source sets (`jmh`, `benchmark`) off the
-  main classpath. Known limit: a sibling's `implementation` dependencies reach a consumer's
+  main classpath, a platform's nested platforms listed and managing with an
+  `enforcedPlatform` forcing only its own constraints and version (kestra 234 to 477 of 478),
+  named catalogs created from a TOML file (spotless's `pinnedLibs`, 60 to 86 of 87).
+  spring-boot (86 of 1,032) declares its BOM in its own buildSrc `bom { library(...) }` DSL,
+  out of reach like the other plugin-built builds. Known limit: a sibling's `implementation` dependencies reach a consumer's
   runtime classpath but not its compile classpath, so one graph cannot give both versions
   (jib-cli's test compile asm 9.5, 1 package). The
   Maven resolver was checked against real Maven too (user approved the

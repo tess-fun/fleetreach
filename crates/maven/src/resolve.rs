@@ -651,6 +651,9 @@ struct Effective {
     raw_deps: Vec<Dep>,
     /// Built from a POM, so `raw_mgmt` and `raw_deps` are complete.
     raw_inherited: bool,
+    /// The `mgmt` entries a `.module` platform takes from the platforms it depends on, not
+    /// its own constraints: an `enforcedPlatform` forces only its own.
+    nested_mgmt: BTreeSet<(String, String, String, String)>,
 }
 
 const MAX_DEPTH: usize = 24;
@@ -939,6 +942,7 @@ impl Resolver<'_> {
             raw_mgmt,
             raw_deps,
             raw_inherited: true,
+            nested_mgmt: BTreeSet::new(),
         })
     }
 
@@ -1077,10 +1081,41 @@ impl Resolver<'_> {
         };
         let mut constraints: Vec<Dep> = variant.constraints.into_iter().map(dep).collect();
         // A platform's constraints are its managed versions, for a BOM imported by the build.
-        let mgmt = constraints
+        let mut mgmt: BTreeMap<MgmtKey, Dep> = constraints
             .iter()
             .map(|c| (c.mgmt_key(), c.clone()))
             .collect();
+        // And so are those of the platforms it depends on, in turn: micronaut-platform's own
+        // constraints are 7, its 73 platform dependencies (micronaut-logging-bom, ...) manage
+        // the rest. Where two set one artifact, the higher version holds, as conflict
+        // resolution would settle it.
+        let nested: Vec<(String, String, String)> = variant
+            .dependencies
+            .iter()
+            .filter(|d| d.platform)
+            .filter_map(|d| Some((d.group.clone(), d.module.clone(), d.version.clone()?)))
+            .collect();
+        let own_keys: BTreeSet<MgmtKey> = mgmt.keys().cloned().collect();
+        let mut nested_mgmt = BTreeSet::new();
+        for (pg, pa, pv) in nested {
+            let Some(inner) = self.remote(&pg, &pa, &pv, 1) else {
+                continue;
+            };
+            for (key, m) in inner.mgmt {
+                match mgmt.get(&key) {
+                    Some(own)
+                        if own.version.as_deref().zip(m.version.as_deref()).is_none_or(
+                            |(a, b)| crate::version::gradle_cmp(a, b) != std::cmp::Ordering::Less,
+                        ) => {}
+                    _ => {
+                        if !own_keys.contains(&key) {
+                            nested_mgmt.insert(key.clone());
+                        }
+                        mgmt.insert(key, m);
+                    }
+                }
+            }
+        }
         // A constraint of the runtime variant alone does not hold on a compile classpath.
         for c in &mut constraints {
             if variant
@@ -1115,6 +1150,7 @@ impl Resolver<'_> {
                 .collect(),
             mgmt,
             constraints,
+            nested_mgmt,
             ..Effective::default()
         })
     }
@@ -1591,7 +1627,7 @@ fn enqueue_children(
     (depth, root_ix): (usize, usize),
     name: &str,
     queue: &mut Queue,
-    compile_only: bool,
+    (compile_only, platform_node): (bool, bool),
 ) {
     for child in &eff.deps {
         if child.optional {
@@ -1612,22 +1648,23 @@ fn enqueue_children(
         let Some(next_scope) = propagate(scope, &child_scope) else {
             continue;
         };
+        // A declared platform's own dependencies are never followed, but the platforms it
+        // depends on are nodes of the graph: Gradle lists micronaut-platform's 73 nested BOMs
+        // (micronaut-logging-bom, ...), each again a platform whose nested BOMs are listed.
+        let nested_platform = platform_node && child.platform;
         let excluded = exclusions
             .iter()
             .any(|(g, a)| (g == "*" || *g == child.group) && (a == "*" || *a == child.artifact));
-        if excluded {
+        if excluded && !nested_platform {
             continue;
         }
         let mut ex = exclusions.to_vec();
         ex.extend(child.exclusions.iter().cloned());
-        queue.push_back((
-            child.clone(),
-            depth + 1,
-            name.to_string(),
-            next_scope,
-            ex,
-            root_ix,
-        ));
+        let mut child = child.clone();
+        if nested_platform {
+            child.kind = Some("pom".to_string());
+        }
+        queue.push_back((child, depth + 1, name.to_string(), next_scope, ex, root_ix));
     }
 }
 
@@ -1852,7 +1889,12 @@ pub(crate) fn resolve_gradle_module(
             r.importing = !r.bom_overrides.is_empty();
             let bom = r.remote(g, a, v, 1);
             r.importing = false;
-            for d in bom.iter().flat_map(|b| b.mgmt.values()) {
+            let nested = bom.as_ref().map(|b| &b.nested_mgmt);
+            for d in bom
+                .iter()
+                .flat_map(|b| b.mgmt.values())
+                .filter(|d| nested.is_none_or(|n| !n.contains(&d.mgmt_key())))
+            {
                 if let Some(version) = d
                     .version
                     .as_ref()
@@ -1912,6 +1954,14 @@ pub(crate) fn resolve_gradle_module(
         &enforced.strict_boms,
         &enforced.strict_versions,
     );
+    // An `enforcedPlatform(...)` forces the platform itself too: kestra's jetty-bom 12.0.40
+    // holds against the 12.1.10 a nested micronaut BOM asks for.
+    for (g, a, v) in &enforced.strict_boms {
+        forced.insert(
+            (g.clone(), a.clone(), "pom".to_string(), String::new()),
+            v.clone(),
+        );
+    }
     let mut pins = forced.clone();
     for _ in 0..MAX_PASSES {
         let mut requests = Pins::new();
@@ -2225,7 +2275,7 @@ fn walk(
                     (depth, root_ix),
                     &name,
                     &mut queue,
-                    r.compile_only,
+                    (r.compile_only, false),
                 );
             }
             continue;
@@ -2310,7 +2360,10 @@ fn walk(
                         (depth, root_ix),
                         &name,
                         &mut queue,
-                        r.compile_only,
+                        (
+                            r.compile_only,
+                            r.gradle && dep.kind.as_deref() == Some("pom"),
+                        ),
                     );
                 }
             }
@@ -2344,7 +2397,10 @@ fn walk(
                             (depth, root_ix),
                             &name,
                             &mut queue,
-                            r.compile_only,
+                            (
+                                r.compile_only,
+                                r.gradle && dep.kind.as_deref() == Some("pom"),
+                            ),
                         );
                     }
                 }
@@ -2472,7 +2528,10 @@ fn walk(
             (depth, root_ix),
             &name,
             &mut queue,
-            r.compile_only,
+            (
+                r.compile_only,
+                r.gradle && dep.kind.as_deref() == Some("pom"),
+            ),
         );
     }
     let packages = order

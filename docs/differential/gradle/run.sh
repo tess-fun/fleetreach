@@ -13,7 +13,8 @@ here=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d)
 # `--no-configuration-cache` exists from Gradle 6.6; an older wrapper rejects it. A build that
 # turns on isolated projects refuses it unless that is turned off too (gradle-profiler); neither
-# changes what resolves.
+# changes what resolves. `org.gradle.java.home` is the container's JDK, whatever a
+# gradle.properties names (mmorpg's Windows path).
 flags="--no-configuration-cache -Dorg.gradle.isolated-projects=false"
 wrapper=$(sed -n 's/.*gradle-\([0-9][0-9.]*\)-.*/\1/p' "$repo/gradle/wrapper/gradle-wrapper.properties" 2>/dev/null | head -1)
 if [ -n "$wrapper" ]; then
@@ -29,7 +30,7 @@ for jdk in 21 17 11; do
   docker run --rm --name "$cname" -m 3500m \
     -v fa-gradle-home:/home/gradle/.gradle -v "$work/src":/src -v "$here/init.gradle":/fa/init.gradle:ro \
     -w /src -e GRADLE_USER_HOME=/home/gradle/.gradle -e GRADLE_OPTS=-Xmx1536m "gradle:8.14.3-jdk$jdk" \
-    sh -c "$cmd -q --no-daemon $flags --continue --init-script /fa/init.gradle faDeps" \
+    sh -c "$cmd -q --no-daemon $flags -Dorg.gradle.java.home=\$JAVA_HOME --continue --init-script /fa/init.gradle faDeps" \
     > "$out/$name.jdk$jdk.log" 2>&1
   kill "$killer" 2>/dev/null; wait "$killer" 2>/dev/null
   grep -E '^FA(UNRESOLVED)? ' "$out/$name.jdk$jdk.log" > "$out/$name.out"
