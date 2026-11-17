@@ -972,7 +972,9 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   (306,536 pairs identical to Gradle 8.14.3; spring-framework 100%), settings'
   `pluginManagement` plugin versions and Kotlin 1.8.0's `kotlin-stdlib-jdk8` default, other
   unseen Kotlin versions reported (Charlatano 100%), a runtime classpath without
-  `compileOnly`, processor or API-variant-only dependencies (gradle-versions-plugin 100%), buildscript
+  `compileOnly`, processor or API-variant-only dependencies (gradle-versions-plugin 100%),
+  branches a default build skips outside `dependencies { }` (logstash's FIPS libraries),
+  configuration-wide excludes (conductor's Logback), buildscript
   `classpath` plugin versions with `apply plugin:` (spring-integration-samples 333 to 414),
   `lib."k"` (mybatis-plus 236 to 340), `set('k', v)` properties and POM relocations, which
   Gradle keeps and adds the target of, unlike Maven, which replaces (spring-integration-samples

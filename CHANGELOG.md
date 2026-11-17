@@ -157,7 +157,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dependencies, and what a `.module` lists in its API variant alone, as Gradle's
   `runtimeClasspath` does: a compile-only version no longer raises what ships
   (gradle-versions-plugin's kotlin-stdlib stays at okio's 1.9.21 at runtime, 100%), and 17
-  fewer packages Gradle never lists across the corpus (zaproxy's log4j bnd annotations). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  fewer packages Gradle never lists across the corpus (zaproxy's log4j bnd annotations). An `if`
+  around a `dependencies { }` block that a default build leaves false is skipped, nested
+  blocks included (logstash's FIPS libraries need `-PfedrampHighMode=true`), and
+  `configurations.all { exclude ... }`, `configurations { all { exclude ... } }` and
+  `configureEach` excludes drop a module on every classpath, direct declarations too
+  (conductor's Logback). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over

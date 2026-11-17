@@ -227,6 +227,13 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                 module.rules.push((rule, test_only));
             }
         }
+        for (ex, test_only, shared) in configuration_exclusions(text) {
+            // As with shared declarations, the root file keeps its own copy.
+            if shared {
+                module.shared.excluded.push((ex.clone(), test_only));
+            }
+            module.excluded.push((ex, test_only));
+        }
         // Build logic runs at build time and never ships; a convention plugin's own
         // declarations belong to the projects that apply it.
         let convention = conventions.values().any(|&c| c == i);
@@ -257,6 +264,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             module.deps.extend_from_slice(&shared.deps);
             module.dm |= shared.dm;
             module.rules.extend_from_slice(&shared.rules);
+            module.excluded.extend_from_slice(&shared.excluded);
             module
                 .project_platforms
                 .extend_from_slice(&shared.project_platforms);
@@ -1271,6 +1279,9 @@ struct Module {
     /// The file applies the Spring dependency-management plugin, whose `mavenBom` imports
     /// read project properties (halo's `thymeleaf.version` in `:application`, not in `:api`).
     dm: bool,
+    /// `configurations.all { exclude ... }`: excluded on every configuration, direct
+    /// declarations too, the flag set when only test configurations exclude it.
+    excluded: Vec<((String, String), bool)>,
 }
 
 #[derive(Debug, Default)]
@@ -1278,6 +1289,7 @@ struct Shared {
     dm: bool,
     /// `eachDependency` rules in the root's `allprojects { }` or `subprojects { }`.
     rules: Vec<(VersionRule, bool)>,
+    excluded: Vec<((String, String), bool)>,
     deps: Vec<Declared>,
     platforms: Vec<Coordinate>,
     constraints: Vec<Coordinate>,
@@ -1387,6 +1399,21 @@ impl Module {
                 Pass::Full => true,
             })
             .collect();
+        let excluded: Vec<&(String, String)> = self
+            .excluded
+            .iter()
+            .filter(|(_, test_only)| !test_only || matches!(pass, Pass::TestCompile | Pass::Full))
+            .map(|(ex, _)| ex)
+            .collect();
+        let matches = |c: &Coordinate| {
+            excluded
+                .iter()
+                .any(|(g, a)| (g == "*" || *g == c.group) && (a == "*" || *a == c.artifact))
+        };
+        let kept: Vec<&Declared> = kept
+            .into_iter()
+            .filter(|d| !matches(&d.coordinate))
+            .collect();
         // Gradle drops a module's dependency only when every edge to it excludes it, so an
         // artifact declared twice keeps just the exclusions all its declarations share.
         let mut shared_exclusions: BTreeMap<(&str, &str), Vec<(String, String)>> = BTreeMap::new();
@@ -1406,12 +1433,14 @@ impl Module {
                      <artifactId>*</artifactId></exclusion></exclusions>",
                 );
             }
-            let exclusions = shared_exclusions
+            let mut exclusions = shared_exclusions
                 .get(&(d.coordinate.group.as_str(), d.coordinate.artifact.as_str()))
-                .map_or(&d.exclusions, |e| e);
+                .map_or(&d.exclusions, |e| e)
+                .clone();
+            exclusions.extend(excluded.iter().map(|&e| e.clone()));
             if !exclusions.is_empty() {
                 extra.push_str("<exclusions>");
-                for (g, a) in exclusions {
+                for (g, a) in &exclusions {
                     extra.push_str(&format!(
                         "<exclusion><groupId>{}</groupId><artifactId>{}</artifactId></exclusion>",
                         xml(g),
@@ -1708,6 +1737,51 @@ fn version_rules(text: &str, vars: &BTreeMap<String, String>) -> Vec<(VersionRul
         let mut rules = Vec::new();
         rule_statements(body, &[], vars, &mut rules);
         out.extend(rules.into_iter().map(|r| (r, test_only, shared)));
+    }
+    out
+}
+
+/// `exclude group: 'g', module: 'a'` set on every configuration: in `configurations.all { }`,
+/// `configurations { all { } }` or `configurations.configureEach { }`, or on the test ones
+/// only (`matching { it.name.startsWith('test') }`), with whether a root's
+/// `allprojects { }` or `subprojects { }` shares it (conductor drops Logback everywhere).
+fn configuration_exclusions(text: &str) -> Vec<((String, String), bool, bool)> {
+    let text = strip_comments(text);
+    let mut out = Vec::new();
+    let mut openers: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("exclude") {
+            if let (Some(ex), Some(inner)) = (exclusion(trimmed), openers.last()) {
+                let in_configurations = inner == "all {"
+                    && openers
+                        .iter()
+                        .rev()
+                        .nth(1)
+                        .is_some_and(|o| o == "configurations {");
+                let every = in_configurations
+                    || inner.starts_with("configurations.all")
+                    || inner.starts_with("configurations.configureEach");
+                let test_only = inner.starts_with("configurations.matching")
+                    && (inner.contains("\"test") || inner.contains("'test"))
+                    && inner.contains("configureEach");
+                if (every || test_only) && !openers.iter().any(|o| o.starts_with("buildscript")) {
+                    let shared = openers
+                        .iter()
+                        .any(|o| o.starts_with("allprojects") || o.starts_with("subprojects"));
+                    out.push((ex, test_only, shared));
+                }
+            }
+        }
+        for c in code_only(line).chars() {
+            match c {
+                '{' => openers.push(trimmed.to_string()),
+                '}' => {
+                    openers.pop();
+                }
+                _ => {}
+            }
+        }
     }
     out
 }
@@ -2536,12 +2610,16 @@ fn read_script(text: &str, context: &mut Context) -> Module {
                 closed_branch
             };
             closing.map(|taken| !taken)
-        } else if in_deps {
-            if_condition(trimmed).and_then(|c| condition(c, &context.vars))
         } else {
-            None
+            // Outside a `dependencies { }` block only a branch the default build skips is
+            // decided (logstash's `if (rootProject.fedrampHighMode) { dependencies { } }`).
+            if_condition(trimmed)
+                .and_then(|c| condition(c, &context.vars))
+                .filter(|taken| in_deps || !taken)
         };
         closed_branch = None;
+        // Inside a branch the default build skips, nothing is read, nested blocks included.
+        let skipping = branches.iter().any(|&(_, taken)| !taken);
         let shared = blocks.contains(&Block::Shared);
         let before = (
             module.deps.len(),
@@ -2552,7 +2630,7 @@ fn read_script(text: &str, context: &mut Context) -> Module {
         let projects_before = module.project_deps.len();
         // Whether this line applies the dependency-management plugin, for a shared block.
         let dm_before = std::mem::take(&mut module.dm);
-        if decided.is_none() {
+        if decided.is_none() && !skipping {
             read_line(trimmed, current, &blocks, context, &mut module);
         }
         if shared && module.dm {
@@ -2624,7 +2702,7 @@ fn read_script(text: &str, context: &mut Context) -> Module {
         } else {
             None
         };
-        if let Some(block) = new_block {
+        if let Some(block) = new_block.filter(|_| !skipping) {
             // A one-liner: `dependencies { implementation 'g:a:1' }`.
             let inner = after_word[1..].trim();
             if inner.strip_suffix('}').is_some() {
@@ -2754,7 +2832,11 @@ fn condition(cond: &str, vars: &BTreeMap<String, String>) -> Option<bool> {
         let right = right.strip_suffix(')')?;
         return Some(value(left)?.starts_with(&value(right)?));
     }
-    if let Some(v) = vars.get(c) {
+    let name = c
+        .strip_prefix("rootProject.")
+        .or_else(|| c.strip_prefix("project."))
+        .unwrap_or(c);
+    if let Some(v) = vars.get(name) {
         return match v.as_str() {
             "true" => Some(true),
             "false" => Some(false),
@@ -2827,6 +2909,28 @@ fn property_default(value: &str, vars: &BTreeMap<String, String>) -> Option<Stri
         let tail = tail.trim_start().strip_prefix(',')?;
         let (default, end) = quoted(tail.trim_start())?;
         return (end.trim() == ")").then(|| default.to_string());
+    }
+    // `Objects.requireNonNullElse(project.findProperty('k'), false).toBoolean()` (logstash's
+    // `fedrampHighMode`): the property when read, else the default.
+    if let Some(inner) = v.strip_prefix("Objects.requireNonNullElse(") {
+        let inner = inner
+            .strip_suffix(".toBoolean()")
+            .unwrap_or(inner)
+            .strip_suffix(')')?;
+        let (call, default) = inner.rsplit_once(',')?;
+        let call = call.trim();
+        let call = call.strip_prefix("project.").unwrap_or(call);
+        let (key, tail) = quoted(call.strip_prefix("findProperty(")?)?;
+        if tail.trim() != ")" {
+            return None;
+        }
+        let default = default.trim();
+        let default = match quoted(default) {
+            Some((d, tail)) if tail.trim().is_empty() => d,
+            _ if matches!(default, "true" | "false") => default,
+            _ => return None,
+        };
+        return Some(vars.get(key).map_or(default, String::as_str).to_string());
     }
     // `providers.gradleProperty("k").map { ... }.getOrElse(false)`: the default when unset.
     for (prefix, settable) in [
@@ -4408,6 +4512,53 @@ set = ["a-b", "e"]
         let r = resolve_gradle(&dir, &repo);
         assert_eq!(versions(&r, "g:smart"), ["1", "2"]);
         assert_eq!(versions(&r, "g:path"), ["1"]);
+    }
+
+    #[test]
+    fn a_branch_the_default_build_skips_adds_nothing() {
+        // logstash: `if (rootProject.fedrampHighMode) { dependencies { runtimeOnly ... } }`,
+        // with the flag `Objects.requireNonNullElse(project.findProperty(...), false)`.
+        let repo = Mem(BTreeMap::from([pom("a", "1", &[]), pom("fips", "1", &[])]));
+        let dir = tree(
+            "skipped-branch",
+            &[(
+                "build.gradle",
+                "ext {\n    fips = Objects.requireNonNullElse(project.findProperty('fips'), false).toBoolean()\n}\n\
+                 dependencies {\n    implementation 'g:a:1'\n}\n\
+                 afterEvaluate {\n    if (rootProject.fips) {\n        dependencies {\n            runtimeOnly 'g:fips:1'\n        }\n    }\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:a"), ["1"]);
+        assert!(versions(&r, "g:fips").is_empty(), "{:?}", r.packages);
+    }
+
+    #[test]
+    fn a_configuration_wide_exclude_drops_direct_declarations_too() {
+        // conductor: the root's `subprojects { configurations { all { exclude group:
+        // 'ch.qos.logback', ... } } }` drops Logback a module declares itself.
+        let repo = Mem(BTreeMap::from([
+            pom("a", "1", &[("log", "1")]),
+            pom("log", "1", &[]),
+        ]));
+        let dir = tree(
+            "configuration-exclude",
+            &[
+                ("settings.gradle", "include 'app'\n"),
+                (
+                    "build.gradle",
+                    "subprojects {\n    configurations {\n        all {\n\
+                     \x20           exclude group: 'g', module: 'log'\n        }\n    }\n}\n",
+                ),
+                (
+                    "app/build.gradle",
+                    "dependencies {\n    implementation 'g:a:1'\n    runtimeOnly 'g:log:1'\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:a"), ["1"]);
+        assert!(versions(&r, "g:log").is_empty(), "{:?}", r.packages);
     }
 
     #[test]
