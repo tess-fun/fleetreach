@@ -46,7 +46,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 87.1% of the 9,550 modules at Gradle's version and 90.8% by name, up from 59.7% and
+  now lists 87.2% of the 9,550 modules at Gradle's version and 90.8% by name, up from 59.7% and
   70.0% on the same POMs; 96.9% and 98.7% on the 51 builds whose dependencies no build plugin
   adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
@@ -96,7 +96,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   catalog's: every request a rule matches takes its version, in the root's `allprojects` or
   `subprojects` for every project, in a convention plugin for the projects that apply it, and
   in a test `configurations.matching` block for the tests only (pulsar's Jackson rule 97.4% to
-  98.5% and 33 fewer packages Gradle does not list; conductor's lz4 floors, 99.9%). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  98.5% and 33 fewer packages Gradle does not list; conductor's lz4 floors, 99.9%). The
+  compile classpaths are now resolved on their own for every project with main or test
+  dependencies, not only for one that declares a runtime dependency: a POM's `runtime` scope
+  down the tree splits them too (JavaPackager compiles against redline's xz 1.4, while
+  plexus-archiver's runtime xz 1.9 is on the runtime classpath only). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over

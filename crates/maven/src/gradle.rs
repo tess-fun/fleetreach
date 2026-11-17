@@ -384,30 +384,31 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         // dependencies) or the full (test) resolution adds is off the runtime classpath.
         let has_test = module.deps.iter().any(|d| d.scope == "test");
         let has_main = module.deps.iter().any(|d| d.scope != "test");
-        let has_runtime = module
-            .deps
-            .iter()
-            .chain(&module.via_projects)
-            .any(|d| d.scope == "runtime");
         let mut main = BTreeSet::new();
         let mut passes: Vec<Pass> = Vec::new();
         // A force on test configurations only leaves the main classpath to itself.
         let test_force = module.forced.iter().any(|(_, test_only)| *test_only)
             || module.rules.iter().any(|(_, test_only)| *test_only);
-        if has_main && (has_test || has_runtime || test_force) {
+        // The compile classpaths differ from the runtime ones whenever a path to an artifact
+        // is runtime-scoped, which a POM down the tree can decide (JavaPackager's redline
+        // compiles against xz 1.4, plexus-archiver's runtime xz 1.9 is on the runtime
+        // classpath only), so each is resolved on its own. With no test dependencies, the
+        // test classpaths are the main ones.
+        let test_managed = module
+            .platforms
+            .iter()
+            .chain(&module.constraints)
+            .any(|c| c.test);
+        if has_main {
             passes.push(Pass::Main);
-        }
-        if has_main && has_runtime {
             passes.push(Pass::Compile);
         }
-        let test_runtime_only = module
-            .deps
-            .iter()
-            .any(|d| d.scope == "test" && d.runtime_only);
-        if has_test && (has_runtime || test_runtime_only) {
+        if has_test {
             passes.push(Pass::TestCompile);
         }
-        passes.push(Pass::Full);
+        if has_test || test_force || test_managed || !has_main {
+            passes.push(Pass::Full);
+        }
         let split = passes.len() > 1;
         for &pass in &passes {
             match resolve_gradle_module(
@@ -4700,6 +4701,45 @@ set = ["a-b", "e"]
                 .collect();
             assert_eq!(got, expected, "{gradle}: {:?}", r.missing);
         }
+    }
+
+    #[test]
+    fn a_runtime_path_down_the_tree_splits_the_compile_classpath() {
+        // JavaPackager declares no runtime dependency: redline compiles against xz 1.4 and
+        // plexus-archiver's `runtime` xz 1.9 raises it on the runtime classpath only.
+        let runtime_child = (
+            "g:a:1".to_string(),
+            "<project><groupId>g</groupId><artifactId>a</artifactId><version>1</version><dependencies>\
+             <dependency><groupId>g</groupId><artifactId>x</artifactId><version>2</version><scope>runtime</scope></dependency>\
+             </dependencies></project>"
+                .to_string(),
+        );
+        let repo = Mem(BTreeMap::from([
+            runtime_child,
+            pom("c", "1", &[("x", "1")]),
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+        ]));
+        let dir = tree(
+            "runtime-down-the-tree",
+            &[(
+                "build.gradle",
+                "dependencies {\n    implementation 'g:a:1'\n    implementation 'g:c:1'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        let of: Vec<(String, bool)> = r
+            .packages
+            .iter()
+            .filter(|p| p.name == "g:x")
+            .map(|p| (p.version.clone(), p.dev))
+            .collect();
+        assert_eq!(
+            of,
+            [("1".to_string(), true), ("2".to_string(), false)],
+            "{:?}",
+            r.missing
+        );
     }
 
     #[test]
