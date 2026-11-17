@@ -1,0 +1,16 @@
+// Gradle's own version order on each `a<TAB>b` line of /w/pairs.txt, as -1, 0 or 1 in
+// /w/out.txt (run by run.sh in the gradle:8.14.3-jdk17 image, offline).
+import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.DefaultVersionComparator
+import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionParser
+tasks.register('cmp') {
+    doLast {
+        def p = new VersionParser()
+        def c = new DefaultVersionComparator().asVersionComparator()
+        def w = new File('/w/out.txt').newWriter()
+        new File('/w/pairs.txt').eachLine { l ->
+            def t = l.split('\t', -1)
+            w.println(Integer.signum(c.compare(p.transform(t[0]), p.transform(t[1]))))
+        }
+        w.close()
+    }
+}

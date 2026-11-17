@@ -64,4 +64,4 @@ pub use lockfile::{
 pub use resolve::resolve_each_module;
 pub use resolve::{resolve, Chain, LocalRepositories, PomSource, Resolution, ResolvedDep};
 pub use scan::{scan_located, scan_offline, scan_resolution};
-pub use version::{parse_maven_version, to_semver, Version};
+pub use version::{gradle_cmp, parse_maven_version, to_semver, Version};

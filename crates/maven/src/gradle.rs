@@ -5492,6 +5492,49 @@ set = ["a-b", "e"]
     }
 
     #[test]
+    fn a_range_is_settled_in_gradles_version_order() {
+        // ehcache 3.10.8 asks for jaxb-runtime `[2.2,3)`: Gradle orders 3.0.0-M5 above 3, so
+        // it takes 2.4.0-b180830.0438, where Maven's order would let 3.0.0-M5 in.
+        let pom = |v: &str| {
+            format!("<project><groupId>g</groupId><artifactId>jaxb</artifactId><version>{v}</version></project>")
+        };
+        let cache = tree(
+            "gradle-cache-order",
+            &[
+                (
+                    "g/eh/1/h0/eh-1.pom",
+                    "<project><groupId>g</groupId><artifactId>eh</artifactId><version>1</version><dependencies><dependency><groupId>g</groupId><artifactId>jaxb</artifactId><version>[2.2,3)</version></dependency></dependencies></project>",
+                ),
+                ("g/jaxb/2.3.9/h1/jaxb-2.3.9.pom", &pom("2.3.9")),
+                (
+                    "g/jaxb/2.4.0-b180830.0438/h2/jaxb-2.4.0-b180830.0438.pom",
+                    &pom("2.4.0-b180830.0438"),
+                ),
+                ("g/jaxb/3.0.0-M5/h3/jaxb-3.0.0-M5.pom", &pom("3.0.0-M5")),
+                ("g/jaxb/3.0.2/h4/jaxb-3.0.2.pom", &pom("3.0.2")),
+            ],
+        );
+        let source = crate::resolve::LocalRepositories {
+            roots: Vec::new(),
+            gradle_roots: vec![cache],
+        };
+        let dir = tree(
+            "gradle-order-range",
+            &[(
+                "build.gradle",
+                "dependencies {\n    implementation 'g:eh:1'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &source);
+        assert_eq!(
+            versions(&r, "g:jaxb"),
+            ["2.4.0-b180830.0438"],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
     fn an_optional_dependency_leaves_an_inherited_one_alone() {
         // netty-common 4.1.3 lists javassist 3.20.0-GA as optional and inherits it from
         // netty-parent at test scope: neither is on a classpath, so powermock's 3.18.2-GA holds.

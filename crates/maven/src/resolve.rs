@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use fleetreach_core::DepGraph;
 use roxmltree::{Document, Node};
 
-use crate::version::parse_maven_version;
+use crate::version::{gradle_cmp, parse_maven_version};
 
 /// Where POMs and version listings come from.
 pub trait PomSource {
@@ -866,12 +866,11 @@ impl Resolver<'_> {
                         continue;
                     }
                     let plain = |v: &Option<String>| {
-                        v.as_deref()
+                        v.clone()
                             .filter(|v| !v.starts_with(['[', '(']) && !v.ends_with('+'))
-                            .and_then(parse_maven_version)
                     };
                     if let (Some(new), Some(old)) = (plain(&d.version), plain(&x.version)) {
-                        if new > old {
+                        if gradle_cmp(&new, &old) == std::cmp::Ordering::Greater {
                             x.version.clone_from(&d.version);
                         }
                     }
@@ -1226,9 +1225,7 @@ impl Resolver<'_> {
             let best = listed
                 .into_iter()
                 .filter(|v| v.starts_with(prefix))
-                .filter_map(|v| parse_maven_version(&v).map(|p| (p, v)))
-                .max_by(|x, y| x.0.cmp(&y.0))
-                .map(|(_, v)| v);
+                .max_by(|x, y| gradle_cmp(x, y));
             if best.is_none() {
                 self.missing
                     .insert(format!("{g}:{a}: no published version matches {declared}"));
@@ -1259,12 +1256,21 @@ impl Resolver<'_> {
             ));
             return None;
         };
-        let best = listed
-            .into_iter()
-            .filter(|v| ranges.iter().any(|r| r.contains(v)))
-            .filter_map(|v| parse_maven_version(&v).map(|p| (p, v)))
-            .max_by(|x, y| x.0.cmp(&y.0))
-            .map(|(_, v)| v);
+        // Gradle orders versions its own way: `[2.2,3)` leaves out 3.0.0-M5, which Maven
+        // puts below 3 (ehcache 3.10.8's jaxb-runtime is 2.4.0-b180830.0438).
+        let best = if self.gradle {
+            listed
+                .into_iter()
+                .filter(|v| ranges.iter().any(|r| r.contains_gradle(v)))
+                .max_by(|x, y| gradle_cmp(x, y))
+        } else {
+            listed
+                .into_iter()
+                .filter(|v| ranges.iter().any(|r| r.contains(v)))
+                .filter_map(|v| parse_maven_version(&v).map(|p| (p, v)))
+                .max_by(|x, y| x.0.cmp(&y.0))
+                .map(|(_, v)| v)
+        };
         if best.is_none() {
             self.missing
                 .insert(format!("{g}:{a}: no published version matches {declared}"));
@@ -1466,6 +1472,20 @@ impl Interval {
         });
         let ok_high = self.high.as_ref().is_none_or(|(b, incl)| {
             parse_maven_version(b).is_some_and(|bv| if *incl { pv <= bv } else { pv < bv })
+        });
+        ok_low && ok_high
+    }
+
+    /// `contains` in Gradle's version order.
+    fn contains_gradle(&self, v: &str) -> bool {
+        use std::cmp::Ordering::{Greater, Less};
+        let ok_low = self.low.as_ref().is_none_or(|(b, incl)| {
+            let o = gradle_cmp(v, b);
+            o == Greater || (*incl && o != Less)
+        });
+        let ok_high = self.high.as_ref().is_none_or(|(b, incl)| {
+            let o = gradle_cmp(v, b);
+            o == Less || (*incl && o != Greater)
         });
         ok_low && ok_high
     }
@@ -2000,13 +2020,14 @@ fn walk_within_ranges(
     out
 }
 
-/// Keep the higher of `version` and what `pins` holds for `key`. True if it rose.
+/// Keep the higher of `version` and what `pins` holds for `key`, in Gradle's version order
+/// (only Gradle resolution raises). True if it rose.
 fn raise(pins: &mut Pins, key: MgmtKey, version: &str) -> bool {
-    let Some(new) = parse_maven_version(version) else {
+    if version.trim().is_empty() {
         return false;
-    };
-    match pins.get(&key).and_then(|v| parse_maven_version(v)) {
-        Some(old) if old >= new => false,
+    }
+    match pins.get(&key) {
+        Some(old) if gradle_cmp(old, version) != std::cmp::Ordering::Less => false,
         _ => {
             pins.insert(key, version.to_string());
             true

@@ -2,7 +2,8 @@
 //!
 //! Usage: `cargo run -p fleetreach-maven --example maven_vercmp -- cmp < pairs.txt`
 //! reads `a<TAB>b` per line, prints `a<TAB>b<TAB>{-1,0,1}` for diffing against the real
-//! `org.apache.maven.artifact.versioning.ComparableVersion`.
+//! `org.apache.maven.artifact.versioning.ComparableVersion`. `gradle` prints only the sign of
+//! Gradle's order (`gradle_cmp`), for diffing against Gradle's `DefaultVersionComparator`.
 
 use std::io::{self, BufRead, Write};
 
@@ -34,8 +35,19 @@ fn main() {
                 };
                 let _ = writeln!(out, "{a}\t{b}\t{sign}");
             }
+            "gradle" => {
+                let mut it = line.splitn(2, '\t');
+                let a = it.next().unwrap_or_default();
+                let b = it.next().unwrap_or_default();
+                let sign = match fleetreach_maven::gradle_cmp(a, b) {
+                    std::cmp::Ordering::Less => "-1",
+                    std::cmp::Ordering::Equal => "0",
+                    std::cmp::Ordering::Greater => "1",
+                };
+                let _ = writeln!(out, "{sign}");
+            }
             _ => {
-                eprintln!("usage: vercmp [parse|cmp]");
+                eprintln!("usage: vercmp [parse|cmp|gradle]");
                 std::process::exit(2);
             }
         }
