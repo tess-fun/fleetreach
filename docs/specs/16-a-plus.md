@@ -924,16 +924,16 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   Gradle 3.5, bnd is a Bnd workspace, cortinico's main build has no dependencies of its own,
   elasticsearch's build plugins need its whole build-tools tree, beyond the 3.5 GB harness) for reasons of their own (dead plugin repositories, toolchains Gradle
   cannot fetch on arm64, files the sparse clone lacks, plugins that need a full checkout,
-  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **90.3% of
+  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **90.4% of
   14,878 modules at Gradle's version, 92.7% by name** (spring-boot 98.3% of 1,032 once its own
   `bom { library(...) }` buildSrc DSL is read, from 8.3%; the 56 first builds: 88.1% and 91.4%,
-  from 59.7% and 70.0%); median repo 100% exact, 69 of 76 at 90% or more. **98.3% and 99.5%
+  from 59.7% and 70.0%); median repo 100% exact, 69 of 76 at 90% or more. **98.4% and 99.5%
   on the 69 builds whose dependencies no build plugin adds**: the seven others (ideavim,
   MinecraftDev and gradle-profiler's IDE plugin projects on the IntelliJ Platform plugin, Paper and WorldEdit on paperweight's dev
   bundle, minecolonies on ForgeGradle, MCCustomSkinLoader on its own buildSrc plugin that
   reads Minecraft's library manifest) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 219 misses remain in
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 212 misses remain in
   the 69 builds, ihub-pub's included (spring-boot 18, from its docs project's `projectsEvaluated` hook that adds every published Java project, armeria 13: OS-specific
   netty transports, one project's JUnit 6.0.2 line, a `strictly` ecj, scala 3's scala-library). Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos

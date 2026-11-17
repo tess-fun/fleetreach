@@ -46,8 +46,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 76 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 90.3% of the 14,878 modules at Gradle's version and 92.7% by name (the 56 first
-  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 98.3% and 99.5% on the 69 builds
+  now lists 90.4% of the 14,878 modules at Gradle's version and 92.7% by name (the 56 first
+  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 98.4% and 99.5% on the 69 builds
   whose dependencies no build plugin adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
@@ -223,6 +223,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   profile switched on by a property's absence (`<name>!x</name>`) counts in Gradle mode as in
   Gradle, before the default ones (resteasy's parent imports its BOM so). armeria 97.7% to
   99.0% of 1,324 modules.
+- **A test compile classpath sees only what a project exports.** Through
+  `testImplementation(project(":p"))`, p's `implementation` dependencies are on the test
+  runtime classpath only, as Gradle resolves them, so the test compile classpath takes what
+  p's `api` brings (Talaiot's JNA 5.13, kafka's upgrade tests' slf4j 1.7.25 to 1.7.30, two
+  logstash annotations). A named configuration (`project(path: ':p', configuration: 'tests')`)
+  still hands over all it holds.
 - **Gradle's `1.0!!` version shorthand is read** as `strictly("1.0")` (kestra's platform
   pins kotlp so), no longer reported as a version of its own.
 - **spring-boot's own BOM DSL is read.** Its buildSrc `org.springframework.boot.bom` plugin

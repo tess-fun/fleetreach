@@ -498,18 +498,18 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         .map(|start| {
             let (mut deps, mut platforms, mut constraints) = (Vec::new(), Vec::new(), Vec::new());
             let mut seen = BTreeSet::from([start]);
-            let mut queue: VecDeque<(usize, &'static str, Exclusions)> = modules[start]
+            let mut queue: VecDeque<QueuedProject> = modules[start]
                 .project_deps
                 .iter()
-                .filter_map(|(path, scope, _, cut)| match by_path.get(path) {
-                    Some(&i) => Some((i, *scope, cut.clone())),
+                .filter_map(|(path, scope, _, cut, whole)| match by_path.get(path) {
+                    Some(&i) => Some((i, *scope, cut.clone(), false, *whole)),
                     None => {
                         missing.insert(format!("project `{path}` is not a build file here"));
                         None
                     }
                 })
                 .collect();
-            while let Some((i, scope, cut)) = queue.pop_front() {
+            while let Some((i, scope, cut, behind, whole)) = queue.pop_front() {
                 if !seen.insert(i) {
                     continue;
                 }
@@ -539,9 +539,17 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                     if let Some(scope) = through(d.scope, d.exported) {
                         let mut exclusions = d.exclusions.clone();
                         exclusions.extend(cut.iter().cloned());
+                        // On a test path, what p does not export (or what lies behind a
+                        // project p does not export) is on the test runtime classpath only:
+                        // Talaiot's tests compile against testcontainers' JNA 5.13, not the
+                        // 5.19 their test-utils project puts in `implementation`.
+                        let hidden = scope == "test"
+                            && !whole
+                            && (behind || !d.exported || d.scope == "runtime");
                         deps.push(Declared {
                             scope,
                             exclusions,
+                            runtime_only: d.runtime_only || hidden,
                             ..d.clone()
                         });
                     }
@@ -559,11 +567,13 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                         .filter(|c| !c.enforced && !c.test)
                         .cloned(),
                 );
-                for (path, own, exported, more) in &m.project_deps {
+                for (path, own, exported, more, named) in &m.project_deps {
                     if let (Some(&j), Some(next)) = (by_path.get(path), through(own, *exported)) {
                         let mut cut = cut.clone();
                         cut.extend(more.iter().cloned());
-                        queue.push_back((j, next, cut));
+                        let hidden =
+                            next == "test" && !whole && (behind || !*exported || *own == "runtime");
+                        queue.push_back((j, next, cut, hidden, *named));
                     }
                 }
             }
@@ -613,15 +623,17 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     let mut graph = fleetreach_core::DepGraph::new("(root)");
     let mut packages: BTreeMap<(String, String), ResolvedDep> = BTreeMap::new();
     for module in &modules {
-        if module.deps.is_empty() {
+        if module.deps.is_empty() && module.via_projects.is_empty() {
             continue;
         }
         // Gradle resolves each configuration on its own, so a test dependency cannot raise a
         // version on the main classpath, nor a runtime one on the compile classpath. Resolve
         // the main classpath first; what only the compile classpath (without runtime
         // dependencies) or the full (test) resolution adds is off the runtime classpath.
-        let has_test = module.deps.iter().any(|d| d.scope == "test");
-        let has_main = module.deps.iter().any(|d| d.scope != "test");
+        // What projects bring counts too (a project of only `testImplementation project(...)`).
+        let every = || module.deps.iter().chain(&module.via_projects);
+        let has_test = every().any(|d| d.scope == "test");
+        let has_main = every().any(|d| d.scope != "test");
         let mut main = BTreeSet::new();
         let mut passes: Vec<Pass> = Vec::new();
         // A force on test configurations only leaves the main classpath to itself.
@@ -3375,12 +3387,17 @@ fn is_configuration(name: &str) -> bool {
         || ENDINGS.iter().any(|e| name.ends_with(e))
 }
 
-/// `implementation(project(":p")) { exclude ... }`: p's path, the scope, whether exported, and
-/// the block's exclusions.
-type ProjectDep = (String, &'static str, bool, Exclusions);
+/// `implementation(project(":p")) { exclude ... }`: p's path, the scope, whether exported, the
+/// block's exclusions, and whether it names a configuration of p (all of it is handed over).
+type ProjectDep = (String, &'static str, bool, Exclusions, bool);
 
 /// Exclusions by (group, module), `*` for either part left out.
 type Exclusions = Vec<(String, String)>;
+
+/// A project reached through project dependencies: its index, the scope, the exclusions on the
+/// way, whether it lies behind a project that does not export it (on a test path), and whether
+/// a named configuration of it was asked for.
+type QueuedProject = (usize, &'static str, Exclusions, bool, bool);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Block {
@@ -5025,9 +5042,17 @@ fn read_declaration(
     if local.iter().any(|p| rest.starts_with(p)) {
         if block == Block::Dependencies {
             if let Some(path) = project_path(rest) {
-                module
-                    .project_deps
-                    .push((path.to_string(), scope, exported, Vec::new()));
+                // A named configuration (`project(path: ':core', configuration: 'tests')`,
+                // `project(':core').configurations.implementation.dependencies`) hands over all
+                // it holds, not only what the project exports.
+                let whole = rest.contains("configuration");
+                module.project_deps.push((
+                    path.to_string(),
+                    scope,
+                    exported || whole,
+                    Vec::new(),
+                    whole,
+                ));
             }
         }
         return;
@@ -6127,6 +6152,41 @@ set = ["a-b", "e"]
         assert_eq!(versions(&r, "g:bom"), ["4"]);
         let r = read("line-boms-unused", "");
         assert!(versions(&r, "g:bom").is_empty(), "{:?}", r.packages);
+    }
+
+    #[test]
+    fn a_test_compile_classpath_skips_what_a_project_does_not_export() {
+        // Talaiot: `testImplementation(project(":test-utils"))`, whose `api` testcontainers
+        // brings JNA 1 and whose `implementation` JNA is 2. The test compile classpath takes 1,
+        // the test runtime one 2. A named configuration (jib's `configuration: 'tests'`)
+        // hands over all it holds.
+        let repo = Mem(BTreeMap::from([
+            pom("tc", "1", &[("jna", "1")]),
+            pom("jna", "1", &[]),
+            pom("jna", "2", &[]),
+        ]));
+        let utils = "plugins { id 'java-library' }\ndependencies {\n    api 'g:tc:1'\n    implementation 'g:jna:2'\n}\n";
+        let run = |consumer: &str| {
+            let dir = tree(
+                &format!("test-compile-exports-{}", consumer.len()),
+                &[
+                    ("settings.gradle", "include ':utils'\ninclude ':core'\n"),
+                    ("utils/build.gradle", utils),
+                    (
+                        "core/build.gradle",
+                        &format!("plugins {{ id 'java' }}\ndependencies {{\n    {consumer}\n}}\n"),
+                    ),
+                ],
+            );
+            let r = resolve_gradle(&dir, &repo);
+            assert!(r.missing.is_empty(), "{:?}", r.missing);
+            versions(&r, "g:jna")
+        };
+        assert_eq!(run("testImplementation project(':utils')"), ["1", "2"]);
+        assert_eq!(
+            run("testImplementation project(path: ':utils', configuration: 'tests')"),
+            ["2"]
+        );
     }
 
     #[test]
