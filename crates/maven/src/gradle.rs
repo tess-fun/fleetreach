@@ -173,6 +173,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         }
     }
     let lombok = scripts.iter().find_map(|(_, t)| lombok_extension(t, &vars));
+    let local_configurations = local_configurations(dir);
     let mut context = Context {
         vars,
         catalog,
@@ -185,6 +186,8 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
 
         processor: false,
         runtime_only: false,
+        local: false,
+        local_configurations,
         custom: false,
     };
     // The kordamp enforcer's `ForceDependencies` rule in the settings forces its versions on
@@ -387,7 +390,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                     _ if !exported => Some("runtime"),
                     _ => Some("compile"),
                 };
-                for d in &m.deps {
+                for d in m.deps.iter().filter(|d| !d.local) {
                     if let Some(scope) = through(d.scope, d.exported) {
                         deps.push(Declared { scope, ..d.clone() });
                     }
@@ -431,6 +434,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             pom: false,
             exported: false,
             runtime_only: false,
+            local: false,
         })
         .collect();
     if !unused.is_empty() {
@@ -863,6 +867,113 @@ fn build_constants(dir: &Path) -> Vec<(PathBuf, String)> {
     out
 }
 
+/// The configurations build logic adds to every source set's compile and runtime classpaths
+/// and hands no consumer: a plugin under `buildSrc` or `build-logic` that creates one by name
+/// (`Configuration optional = project.getConfigurations().create("optional")`, or through a
+/// string constant) and has `getCompileClasspathConfigurationName()` and
+/// `getRuntimeClasspathConfigurationName()` extend it (Spring Framework's and Spring Boot's
+/// `OptionalDependenciesPlugin`). A plugin that also adds it to what consumers see
+/// (`apiElements`, `runtimeElements`) is left out.
+fn local_configurations(dir: &Path) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    let mut stack: Vec<PathBuf> = ["buildSrc", "build-logic"]
+        .iter()
+        .map(|d| dir.join(d))
+        .collect();
+    let mut read = 0usize;
+    while let Some(current) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&current) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            let name = entry.file_name().to_string_lossy().to_string();
+            if kind.is_dir() {
+                // Under `src/`, `build` is a package (`org.springframework.build`), not output.
+                let in_src = current.components().any(|c| c.as_os_str() == "src");
+                if in_src || !SKIPPED_DIRS.contains(&name.as_str()) {
+                    stack.push(entry.path());
+                }
+                continue;
+            }
+            let source = [".java", ".kt", ".groovy"]
+                .iter()
+                .any(|e| name.ends_with(e));
+            if !kind.is_file()
+                || !source
+                || read >= MAX_FILES
+                || entry.metadata().map_or(true, |m| m.len() > MAX_FILE_BYTES)
+            {
+                continue;
+            }
+            read += 1;
+            let Ok(text) = fleetreach_core::repofile::read_to_string(entry.path()) else {
+                continue;
+            };
+            out.extend(local_configuration(&strip_comments(&text)));
+        }
+    }
+    out
+}
+
+/// The configuration one build-logic source creates and puts on every source set's compile
+/// and runtime classpaths only (see `local_configurations`).
+fn local_configuration(text: &str) -> Option<String> {
+    let classpaths = [
+        "CompileClasspathConfigurationName",
+        "RuntimeClasspathConfigurationName",
+    ];
+    if !classpaths.iter().all(|c| text.contains(c))
+        || text.contains("apiElements")
+        || text.contains("runtimeElements")
+        || text.contains("ApiElements")
+        || text.contains("RuntimeElements")
+    {
+        return None;
+    }
+    for (at, _) in text.match_indices(".create(") {
+        // `Configuration optional = ...create(` (Java) or `val optional = ...create(`.
+        let line_start = text[..at].rfind('\n').map_or(0, |i| i + 1);
+        let head = text[line_start..at].trim();
+        let Some((left, _)) = head.split_once('=') else {
+            continue;
+        };
+        let variable = left.split_whitespace().last()?.trim_end_matches(':');
+        if variable.is_empty()
+            || !variable
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            continue;
+        }
+        let arg = text[at + ".create(".len()..].split(')').next()?.trim();
+        let name = match quoted(arg) {
+            Some((n, _)) => n.to_string(),
+            None => string_constant(text, arg)?,
+        };
+        let extends = format!(".extendsFrom({variable})");
+        if text.matches(extends.as_str()).count() >= 2 && !name.is_empty() {
+            return Some(name);
+        }
+    }
+    None
+}
+
+/// The value of `NAME = "value"` in a source (a Java `static final String` or Kotlin `const`).
+fn string_constant(text: &str, name: &str) -> Option<String> {
+    if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return None;
+    }
+    text.lines().find_map(|l| {
+        let (left, right) = l.split_once('=')?;
+        (left.split_whitespace().last() == Some(name))
+            .then(|| quoted(right.trim()).map(|(v, _)| v.to_string()))
+            .flatten()
+    })
+}
+
 /// `const val K = "1"` inside `object Versions { }`, as `Versions.K`.
 fn kotlin_constants(text: &str, vars: &mut BTreeMap<String, String>, twice: &mut BTreeSet<String>) {
     let mut objects: Vec<(String, usize)> = Vec::new();
@@ -1095,6 +1206,8 @@ struct Declared {
     exported: bool,
     /// `testRuntimeOnly`: on the test runtime classpath, not the test compile one.
     runtime_only: bool,
+    /// On this project's own classpaths only, never on a consumer's (Spring's `optional`).
+    local: bool,
 }
 
 /// One of the classpaths a build file is resolved for.
@@ -1935,6 +2048,7 @@ fn gretty_apis(text: &str, context: &Context, module: &mut Module) {
             pom: false,
             exported: false,
             runtime_only: false,
+            local: true,
         });
     }
 }
@@ -2177,6 +2291,11 @@ struct Context {
     exported: bool,
     /// Whether it is runtime-only (see `Declared::runtime_only`).
     runtime_only: bool,
+    /// Whether it is on this project's classpaths only (see `Declared::local`).
+    local: bool,
+    /// Configurations build logic puts on every source set's compile and runtime classpaths
+    /// and on no consumer's (see `local_configurations`).
+    local_configurations: BTreeSet<String>,
     /// Whether its configuration is a tool's own (`checkstyle`), which no classpath read here
     /// extends: its constraints manage nothing read.
     custom: bool,
@@ -2901,6 +3020,7 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
                 pom: false,
                 exported: false,
                 runtime_only: true,
+                local: false,
             });
         }
         // Spring Boot applies its BOM through the dependency-management plugin.
@@ -2940,6 +3060,7 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
                 pom: false,
                 exported: false,
                 runtime_only: false,
+                local: false,
             });
         }
     } else if id == KOTLIN_JVM
@@ -2961,6 +3082,7 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
             // The Kotlin plugin adds the standard library to `api`.
             exported: true,
             runtime_only: false,
+            local: false,
         });
     }
 }
@@ -3062,6 +3184,7 @@ fn kotlin_dsl(context: &Context, module: &mut Module) {
             pom: false,
             exported: false,
             runtime_only: false,
+            local: false,
         });
     }
 }
@@ -3339,7 +3462,10 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
     // A platform manages versions whichever configuration carries it (Spring Framework's
     // `dependencyManagement(enforcedPlatform(...))`).
     let a_platform = declared.starts_with("platform(") || declared.starts_with("enforcedPlatform(");
-    let scope = if is_configuration(&name) {
+    let local = context.local_configurations.contains(&name);
+    let scope = if local {
+        "compile"
+    } else if is_configuration(&name) {
         scope_of(&name)
     } else if let Some(target) = context.extended_by.get(&name) {
         scope_of(target)
@@ -3363,7 +3489,11 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
     context.exported = exported_by(configuration);
     context.processor = is_processor(configuration);
     context.runtime_only = configuration.to_ascii_lowercase().contains("runtimeonly");
-    context.custom = !is_configuration(&name) && !context.extended_by.contains_key(&name);
+    context.custom = !local && !is_configuration(&name) && !context.extended_by.contains_key(&name);
+    if local {
+        context.exported = false;
+        context.local = true;
+    }
     let before = (module.platforms.len(), module.constraints.len());
     read_values(rest, scope, block, context, module);
     // Only a named test configuration keeps its platform to the tests: Spring Framework's
@@ -3379,6 +3509,7 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
     context.exported = true;
     context.processor = false;
     context.runtime_only = false;
+    context.local = false;
     context.custom = false;
 }
 
@@ -3462,6 +3593,7 @@ fn read_declaration(
     let exported = context.exported;
     let processor = context.processor;
     let runtime_only = context.runtime_only;
+    let local = context.local;
     let custom = context.custom;
     let add = |module: &mut Module, c: Coordinate, platform: bool| {
         if platform && processor {
@@ -3475,6 +3607,7 @@ fn read_declaration(
                     pom: true,
                     exported,
                     runtime_only,
+                    local,
                 });
             }
             module.platforms.push(c);
@@ -3491,6 +3624,7 @@ fn read_declaration(
                 pom: false,
                 exported,
                 runtime_only,
+                local,
             });
         }
     };
@@ -3548,6 +3682,7 @@ fn read_declaration(
                         pom: true,
                         exported,
                         runtime_only,
+                        local,
                     });
                 }
                 module.platforms.push(c);
@@ -3687,6 +3822,8 @@ mod tests {
             spring_dm: false,
             processor: false,
             runtime_only: false,
+            local: false,
+            local_configurations: BTreeSet::new(),
             custom: false,
         }
     }
@@ -5108,6 +5245,91 @@ set = ["a-b", "e"]
             ["2.4.21"],
             "{:?}",
             r.missing
+        );
+    }
+
+    #[test]
+    fn build_logic_names_its_local_configurations() {
+        // Spring Framework's OptionalDependenciesPlugin, through a constant; Spring Boot's
+        // creates "optional" by its literal name.
+        let framework = r#"public class OptionalDependenciesPlugin implements Plugin<Project> {
+	public static final String OPTIONAL_CONFIGURATION_NAME = "optional";
+	public void apply(Project project) {
+		Configuration optional = project.getConfigurations().create(OPTIONAL_CONFIGURATION_NAME);
+		optional.setCanBeConsumed(false);
+		sourceSets.all((sourceSet) -> {
+			project.getConfigurations().getByName(sourceSet.getCompileClasspathConfigurationName()).extendsFrom(optional);
+			project.getConfigurations().getByName(sourceSet.getRuntimeClasspathConfigurationName()).extendsFrom(optional);
+		});
+	}
+}"#;
+        assert_eq!(local_configuration(framework).as_deref(), Some("optional"));
+        let boot = framework.replace(
+            ".create(OPTIONAL_CONFIGURATION_NAME)",
+            ".create(\"optional\")",
+        );
+        assert_eq!(local_configuration(&boot).as_deref(), Some("optional"));
+        // Handed to consumers too, or on one classpath only: not local.
+        let consumed = format!("{framework}\nconfigurations.apiElements.extendsFrom(optional)");
+        assert_eq!(local_configuration(&consumed), None);
+        let compile_only = framework.replace("getRuntimeClasspathConfigurationName", "x");
+        assert_eq!(local_configuration(&compile_only), None);
+    }
+
+    #[test]
+    fn a_local_configuration_stays_off_consumers() {
+        // Spring Framework: `optional("g:x:2")` in :lib is on lib's main compile and runtime
+        // classpaths (x 2 over the 1 lib's own dependency brings), and not on :app's.
+        let plugin = "public class OptionalDependenciesPlugin {\n\
+             \tpublic void apply(Project project) {\n\
+             \t\tConfiguration optional = project.getConfigurations().create(\"optional\");\n\
+             \t\tsourceSets.all((s) -> {\n\
+             \t\t\tproject.getConfigurations().getByName(s.getCompileClasspathConfigurationName()).extendsFrom(optional);\n\
+             \t\t\tproject.getConfigurations().getByName(s.getRuntimeClasspathConfigurationName()).extendsFrom(optional);\n\
+             \t\t});\n\t}\n}\n";
+        let repo = Mem(BTreeMap::from([
+            pom("y", "1", &[("x", "1")]),
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+            pom("w", "1", &[]),
+        ]));
+        let files = |optional: &str| {
+            vec![
+                ("settings.gradle", "include 'lib', 'app'\n".to_string()),
+                (
+                    "buildSrc/src/main/java/org/example/build/optional/OptionalDependenciesPlugin.java",
+                    plugin.to_string(),
+                ),
+                (
+                    "lib/build.gradle",
+                    format!("dependencies {{\n    api 'g:y:1'\n    {optional}('g:x:2')\n}}\n"),
+                ),
+                (
+                    "app/build.gradle",
+                    "dependencies {\n    implementation project(':lib')\n    implementation 'g:w:1'\n}\n"
+                        .to_string(),
+                ),
+            ]
+        };
+        let run = |tag: &str, optional: &str| {
+            let owned = files(optional);
+            let refs: Vec<(&str, &str)> = owned.iter().map(|(f, t)| (*f, t.as_str())).collect();
+            let r = resolve_gradle(&tree(tag, &refs), &repo);
+            let x: Vec<_> = r
+                .packages
+                .iter()
+                .filter(|p| p.name == "g:x")
+                .map(|p| (p.version.clone(), p.dev))
+                .collect();
+            (x, r.missing)
+        };
+        // lib's main classpaths hold x 2 (read as a test configuration, it would be dev only);
+        // app's hold y's x 1.
+        let (x, missing) = run("local-configuration", "optional");
+        assert_eq!(
+            x,
+            [("1".to_string(), false), ("2".to_string(), false)],
+            "{missing:?}"
         );
     }
 

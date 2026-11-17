@@ -920,7 +920,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   the five others (ideavim and MinecraftDev on the IntelliJ Platform plugin, Paper and
   WorldEdit on paperweight's dev bundle, minecolonies on ForgeGradle) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 205 misses remain in
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 201 misses remain in
   the 51 builds, ihub-pub's included. Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
   that Gradle never builds as part of the project. Later rules: the main classpath resolved
@@ -967,7 +967,8 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   servlet and websocket APIs for the oracle-shown containers (Hystrix, spring-integration-samples),
   prefix versions (`3.19+`) settled from the listing (dgs-framework 100%), an optional POM
   dependency no longer widening an inherited test one (Hystrix 100%), plugin versions from
-  buildSrc's own dependencies (spring-framework's Kotlin), buildscript
+  buildSrc's own dependencies (spring-framework's Kotlin), build-logic's own local
+  configurations read from its sources (Spring's `optional`), buildscript
   `classpath` plugin versions with `apply plugin:` (spring-integration-samples 333 to 414),
   `lib."k"` (mybatis-plus 236 to 340), `set('k', v)` properties and POM relocations, which
   Gradle keeps and adds the target of, unlike Maven, which replaces (spring-integration-samples

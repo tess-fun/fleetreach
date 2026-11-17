@@ -139,7 +139,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   widens the test-scoped one it inherits under the same name onto the classpath (netty-common
   4.1.3's javassist, which raised powermock's 3.18.2-GA to 3.20.0-GA). A plugin that buildSrc or
   build-logic depends on (`implementation "...kotlin-gradle-plugin:${kotlinVersion}"`) sets the
-  version of that plugin where a build file applies it (spring-framework's Kotlin 2.4.21). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  version of that plugin where a build file applies it (spring-framework's Kotlin 2.4.21). A
+  configuration a buildSrc or build-logic plugin creates by name and adds to every source
+  set's compile and runtime classpaths, and to nothing consumers see, holds on the project's
+  own main and test classpaths only (Spring's `optional`: spring-framework's spring-messaging
+  keeps kotlinx's kotlin-stdlib 2.3.20 on its main classpath). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over
