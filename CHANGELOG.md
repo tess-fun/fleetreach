@@ -44,11 +44,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a shadowed jar or a test-framework feature variant), its dependencies, and constraints that
   raise versions or manage an imported BOM. On three Kotlin builds this adds 27 to 36 packages
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
-- **The Gradle reader is measured against real Gradle, and reads much more.** On 75 real
+- **The Gradle reader is measured against real Gradle, and reads much more.** On 76 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 82.8% of the 14,869 modules at Gradle's version and 86.2% by name, 88.4% exact
+  now lists 82.9% of the 14,878 modules at Gradle's version and 86.2% by name, 88.4% exact
   without spring-boot, whose BOM is its own buildSrc DSL (the 56 first builds alone went from
-  59.7% and 70.0% to 88.1% and 91.4%); 96.8% and 98.9% on the 67 builds whose dependencies no
+  59.7% and 70.0% to 88.1% and 91.4%); 96.8% and 98.9% on the 68 builds whose dependencies no
   build plugin adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
@@ -183,7 +183,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to 141 of 144). A plugin class that buildSrc or build-logic registers by id adds what its
   `apply` adds for sure, literal `add("testImplementation", "g:a:1")` calls and
   `plugins.apply(...)` outside any condition or callback (Talaiot's `kotlinLib`, 118 to 157 of
-  158). A settings script that sets `buildFileName` names
+  158). The older franzbecker Lombok plugin adds the Lombok its `lombok { version }` sets, as
+  the freefair one does (LogNet's gRPC starter). A settings script that sets `buildFileName` names
   each project after its build file (spring-security's `core/spring-security-core.gradle` is
   `:spring-security-core`: 98 to 310 of 310). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages

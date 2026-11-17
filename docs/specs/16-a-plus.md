@@ -911,28 +911,31 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   containers (`docs/differential/gradle`: `run.sh` copies a repo, runs `faDeps` from
   `init.gradle` over the compile, runtime, test-compile and test-runtime classpaths, 3.5 GB,
   20-minute kill; `compare.py` scores). Corpus: the 103 JVM builds of 311 sparse clones in
-  ~/fa-testbed/gradle (208 Android/KMP skipped, they need the Android SDK). **75 resolved**
+  ~/fa-testbed/gradle (208 Android/KMP skipped, they need the Android SDK). **76 resolved**
   (kafka, armeria, MCCustomSkinLoader, PlotSquared, spring-kafka, xpipe, spring-security,
   radarsh's test logger, pygradle, Talaiot, kestra, Grasscutter, LogNet's gRPC starter,
-  spotless and spring-boot recovered on scratch copies: every declared project
+  spotless, spring-boot and gradle-doctor (its plugin's own sources fetched) recovered on
+  scratch copies: every declared project
   directory and the upstream directory tree created empty, empty test sources, one fetched
   file each, pygradle's untracked `version.properties` as `version=0.0.0`; spring-cloud-flycloud,
   gradle-jooq-plugin and gradle-profiler once `run.sh` left out `--no-configuration-cache` for
   wrappers older than Gradle 6.6 and turned isolated projects off, mmorpg once it pointed
-  `org.gradle.java.home` at the container's JDK); 28 fail for reasons of their own (dead plugin repositories, toolchains Gradle
+  `org.gradle.java.home` at the container's JDK); 27 fail (since: ktlint needs JDK 26, FS-Blog
+  Gradle 3.5, bnd is a Bnd workspace, cortinico's main build has no dependencies of its own,
+  elasticsearch's build plugins need its whole build-tools tree, beyond the 3.5 GB harness) for reasons of their own (dead plugin repositories, toolchains Gradle
   cannot fetch on arm64, files the sparse clone lacks, plugins that need a full checkout,
-  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **82.8% of
-  14,869 modules at Gradle's version, 86.2% by name** (88.4% exact without spring-boot, whose
+  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **82.9% of
+  14,878 modules at Gradle's version, 86.2% by name** (88.4% exact without spring-boot, whose
   1,032 modules come almost all from its own `bom { library(...) }` buildSrc DSL; the 56 first
-  builds: 88.1% and 91.4%, from 59.7% and 70.0%); median repo 100% exact, 66 of 75 at 90% or
-  more. **96.8% and 98.9% on the 67 builds whose dependencies no build plugin adds**: the eight
+  builds: 88.1% and 91.4%, from 59.7% and 70.0%); median repo 100% exact, 67 of 76 at 90% or
+  more. **96.8% and 98.9% on the 68 builds whose dependencies no build plugin adds**: the eight
   others (spring-boot, ideavim,
   MinecraftDev and gradle-profiler's IDE plugin projects on the IntelliJ Platform plugin, Paper and WorldEdit on paperweight's dev
   bundle, minecolonies on ForgeGradle, MCCustomSkinLoader on its own buildSrc plugin that
   reads Minecraft's library manifest) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 385 misses remain in
-  the 67 builds, ihub-pub's included (armeria 195: its `[boms]` and flag scripts are its own
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 384 misses remain in
+  the 68 builds, ihub-pub's included (armeria 195: its `[boms]` and flag scripts are its own
   code). Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
   that Gradle never builds as part of the project. Later rules: the main classpath resolved
@@ -1005,7 +1008,8 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   Spring plugin's `dependencySet` entries (mmorpg 121 to 141 of 144; its root's Kotlin stdlib
   1.7.22 under both the Spring and Kotlin plugins stays unexplained), build-logic plugin
   classes registered by id adding their unconditional literal `add(conf, "g:a:v")` and
-  `plugins.apply(...)` calls (Talaiot 118 to 157 of 158).
+  `plugins.apply(...)` calls (Talaiot 118 to 157 of 158), the franzbecker Lombok plugin (LogNet; its Kotlin stdlib under
+  Boot's BOM, like mmorpg's, stays unexplained).
   spring-boot (86 of 1,032) declares its BOM in its own buildSrc `bom { library(...) }` DSL,
   out of reach like the other plugin-built builds. Known limit: a sibling's `implementation` dependencies reach a consumer's
   runtime classpath but not its compile classpath, so one graph cannot give both versions

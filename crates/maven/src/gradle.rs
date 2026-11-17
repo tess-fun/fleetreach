@@ -2617,6 +2617,7 @@ fn classpath_plugin(line: &str, vars: &BTreeMap<String, String>) -> Option<(&'st
         ("org.springframework.boot", "spring-boot-gradle-plugin") => SPRING_BOOT,
         ("org.jetbrains.kotlin", "kotlin-gradle-plugin") => KOTLIN_JVM,
         ("io.freefair.gradle", "lombok-plugin") => FREEFAIR_LOMBOK,
+        ("io.franzbecker", "gradle-lombok") => FRANZBECKER_LOMBOK,
         ("org.gretty", "gretty") => GRETTY,
         _ => return None,
     };
@@ -2624,6 +2625,9 @@ fn classpath_plugin(line: &str, vars: &BTreeMap<String, String>) -> Option<(&'st
 }
 const KOTLIN_JVM: &str = "org.jetbrains.kotlin.jvm";
 const FREEFAIR_LOMBOK: &str = "io.freefair.lombok";
+/// The older franzbecker Lombok plugin: the same extension, Lombok on `compileOnly` and
+/// `testCompileOnly` (LogNet's gRPC starter).
+const FRANZBECKER_LOMBOK: &str = "io.franzbecker.gradle-lombok";
 const GRETTY: &str = "org.gretty";
 
 /// Plugin major version, container, and the two APIs as group, artifact and version.
@@ -3807,16 +3811,19 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
             strict: false,
             test: false,
         });
-    } else if id == FREEFAIR_LOMBOK && !line.trim_end().ends_with("apply false") {
+    } else if (id == FREEFAIR_LOMBOK || id == FRANZBECKER_LOMBOK)
+        && !line.trim_end().ends_with("apply false")
+    {
         // The plugin adds Lombok to `compileOnly` and `annotationProcessor`, and to their test
         // counterparts.
         let default = FREEFAIR_LOMBOK_DEFAULTS
             .iter()
+            .filter(|_| id == FREEFAIR_LOMBOK)
             .find(|(plugin, _)| plugin == version)
             .map(|(_, lombok)| (*lombok).to_string());
         let Some(lombok) = context.lombok.clone().or(default) else {
             module.unread.push(format!(
-                "io.freefair.lombok {version}: the Lombok version it adds is not known"
+                "{id} {version}: the Lombok version it adds is not known"
             ));
             return;
         };
@@ -5747,6 +5754,44 @@ set = ["a-b", "e"]
             .find(|p| p.name == "g:t")
             .is_some_and(|p| p.dev));
         assert!(versions(&r, "g:c").is_empty(), "{:?}", r.packages);
+    }
+
+    #[test]
+    fn the_franzbecker_plugin_adds_the_lombok_its_extension_sets() {
+        // LogNet's gRPC starter: `classpath "io.franzbecker:gradle-lombok:4.0.0"`,
+        // `apply plugin: 'io.franzbecker.gradle-lombok'`, `lombok { version = "${lombokVersion}" }`.
+        // Without a version set, it is reported: the plugin's own default is not known here.
+        let repo = Mem(BTreeMap::from([(
+            "org.projectlombok:lombok:1.18.24".to_string(),
+            "<project><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.24</version></project>".to_string(),
+        )]));
+        let build = |extension: &str| {
+            format!(
+                "buildscript {{\n    dependencies {{\n        classpath \"io.franzbecker:gradle-lombok:4.0.0\"\n    }}\n}}\n\
+                 apply plugin: 'java'\napply plugin: 'io.franzbecker.gradle-lombok'\n{extension}"
+            )
+        };
+        let set = build("lombok {\n    version = \"${lombokVersion}\"\n}\n");
+        let dir = tree(
+            "franzbecker",
+            &[
+                ("build.gradle", &set),
+                ("gradle.properties", "lombokVersion=1.18.24\n"),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "org.projectlombok:lombok"), ["1.18.24"]);
+        let unset = build("");
+        let r = resolve_gradle(
+            &tree("franzbecker-unset", &[("build.gradle", &unset)]),
+            &repo,
+        );
+        assert!(versions(&r, "org.projectlombok:lombok").is_empty());
+        assert_eq!(
+            r.missing,
+            ["build.gradle: io.franzbecker.gradle-lombok 4.0.0: the Lombok version it adds is not known"]
+        );
     }
 
     #[test]
