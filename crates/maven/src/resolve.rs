@@ -563,15 +563,25 @@ fn parse_pom_in(
                 .as_deref()
                 == Some("true")
         };
-        // Gradle honours only `activeByDefault`. Maven also switches profiles on by the
-        // build's JDK, and then the default ones only when none other in this POM is on. In
-        // the build's own POMs, `-P` ids from `.mvn/maven.config` switch profiles on or off.
+        // Gradle honours `activeByDefault` and a system property's absence (`<name>!x</name>`,
+        // never set in a build; resteasy's parent imports its BOM so), the default ones only
+        // when no absence one is on. Maven also switches profiles on by the build's JDK, and
+        // then the default ones only when none other in this POM is on. In the build's own
+        // POMs, `-P` ids from `.mvn/maven.config` switch profiles on or off.
         let id = |p: &Node<'_, '_>| text(*p, "id").unwrap_or_default();
         let named = |p: &Node<'_, '_>, set: &BTreeSet<String>| {
             !gradle && basedir.is_some() && set.contains(&id(p))
         };
         let triggered: Vec<_> = if gradle {
-            Vec::new()
+            profiles
+                .iter()
+                .filter(|p| {
+                    child(**p, "activation")
+                        .and_then(|a| child(a, "property"))
+                        .and_then(|prop| text(prop, "name"))
+                        .is_some_and(|name| name.trim().starts_with('!'))
+                })
+                .collect()
         } else {
             profiles
                 .iter()

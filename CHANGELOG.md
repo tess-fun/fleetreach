@@ -46,8 +46,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 76 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 90.2% of the 14,878 modules at Gradle's version and 92.6% by name (the 56 first
-  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 98.2% and 99.4% on the 69 builds
+  now lists 90.3% of the 14,878 modules at Gradle's version and 92.7% by name (the 56 first
+  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 98.3% and 99.5% on the 69 builds
   whose dependencies no build plugin adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
@@ -217,6 +217,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `buildscript` `classpath` line with `apply plugin:`, Groovy map entries as `lib."k"`,
   `set('grpc-java.version', ...)` properties, and variables that name other variables. The
   harness is in `docs/differential/gradle`.
+- **A project dependency's exclusions cut only its path, and Gradle's POM profiles are
+  read.** `testImplementation(project(":jetty9")) { exclude module: "jetty-server" }` drops
+  jetty-server from what `:jetty9` brings, no longer the project's own Jetty 9.3 one. A POM
+  profile switched on by a property's absence (`<name>!x</name>`) counts in Gradle mode as in
+  Gradle, before the default ones (resteasy's parent imports its BOM so). armeria 97.7% to
+  99.0% of 1,324 modules.
 - **spring-boot's own BOM DSL is read.** Its buildSrc `org.springframework.boot.bom` plugin
   turns `bom { library("Name", "version") { group("g") { modules = [...]; bom("b") } } }` into
   a Java platform, and its Java conventions put the internal platform on every Java project.

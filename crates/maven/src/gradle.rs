@@ -498,18 +498,18 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         .map(|start| {
             let (mut deps, mut platforms, mut constraints) = (Vec::new(), Vec::new(), Vec::new());
             let mut seen = BTreeSet::from([start]);
-            let mut queue: VecDeque<(usize, &'static str)> = modules[start]
+            let mut queue: VecDeque<(usize, &'static str, Exclusions)> = modules[start]
                 .project_deps
                 .iter()
-                .filter_map(|(path, scope, _)| match by_path.get(path) {
-                    Some(&i) => Some((i, *scope)),
+                .filter_map(|(path, scope, _, cut)| match by_path.get(path) {
+                    Some(&i) => Some((i, *scope, cut.clone())),
                     None => {
                         missing.insert(format!("project `{path}` is not a build file here"));
                         None
                     }
                 })
                 .collect();
-            while let Some((i, scope)) = queue.pop_front() {
+            while let Some((i, scope, cut)) = queue.pop_front() {
                 if !seen.insert(i) {
                     continue;
                 }
@@ -527,9 +527,23 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                     _ if !exported => Some("runtime"),
                     _ => Some("compile"),
                 };
-                for d in m.deps.iter().filter(|d| !d.local) {
+                let excluded = |c: &Coordinate| {
+                    cut.iter()
+                        .any(|(g, a)| (g == "*" || *g == c.group) && (a == "*" || *a == c.artifact))
+                };
+                for d in m
+                    .deps
+                    .iter()
+                    .filter(|d| !d.local && !excluded(&d.coordinate))
+                {
                     if let Some(scope) = through(d.scope, d.exported) {
-                        deps.push(Declared { scope, ..d.clone() });
+                        let mut exclusions = d.exclusions.clone();
+                        exclusions.extend(cut.iter().cloned());
+                        deps.push(Declared {
+                            scope,
+                            exclusions,
+                            ..d.clone()
+                        });
                     }
                 }
                 let own = m.shared_from.unwrap_or(m.platforms.len());
@@ -545,9 +559,11 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                         .filter(|c| !c.enforced && !c.test)
                         .cloned(),
                 );
-                for (path, own, exported) in &m.project_deps {
+                for (path, own, exported, more) in &m.project_deps {
                     if let (Some(&j), Some(next)) = (by_path.get(path), through(own, *exported)) {
-                        queue.push_back((j, next));
+                        let mut cut = cut.clone();
+                        cut.extend(more.iter().cloned());
+                        queue.push_back((j, next, cut));
                     }
                 }
             }
@@ -2006,8 +2022,9 @@ struct Module {
     /// file's own, so a later import here overrides them.
     shared_from: Option<usize>,
     /// `implementation project(":p")`: by Gradle project path, with this file's scope and
-    /// whether it is exported (`api project(":p")`).
-    project_deps: Vec<(String, &'static str, bool)>,
+    /// whether it is exported (`api project(":p")`), and the exclusions its block sets
+    /// (`{ exclude module: "x" }`, cutting only the path through p).
+    project_deps: Vec<ProjectDep>,
     /// What those projects put on this file's classpaths: their own dependencies, never this
     /// file's declarations (the Spring plugin keeps only a file's own declared versions).
     via_projects: Vec<Declared>,
@@ -3354,6 +3371,13 @@ fn is_configuration(name: &str) -> bool {
         || ENDINGS.iter().any(|e| name.ends_with(e))
 }
 
+/// `implementation(project(":p")) { exclude ... }`: p's path, the scope, whether exported, and
+/// the block's exclusions.
+type ProjectDep = (String, &'static str, bool, Exclusions);
+
+/// Exclusions by (group, module), `*` for either part left out.
+type Exclusions = Vec<(String, String)>;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Block {
     Dependencies,
@@ -3466,6 +3490,9 @@ fn read_project_script(text: &str, context: &mut Context) -> Module {
                     for i in open.deps.clone() {
                         module.deps[i].exclusions.push(ex.clone());
                     }
+                    for i in open.projects.clone() {
+                        module.project_deps[i].3.push(ex.clone());
+                    }
                     for i in open.shared.clone() {
                         module.shared.deps[i].exclusions.push(ex.clone());
                     }
@@ -3564,8 +3591,9 @@ fn read_project_script(text: &str, context: &mut Context) -> Module {
             branches.pop();
             closed_branch = Some(taken);
         }
-        if module.deps.len() > before.0 {
+        if module.deps.len() > before.0 || module.project_deps.len() > projects_before {
             let added = before.0..module.deps.len();
+            let projects = projects_before..module.project_deps.len();
             let shared_added = shared_before..module.shared.deps.len();
             // A one-line block: `implementation('g:a:1') { exclude group: 'x' }`.
             if let Some((_, inner)) = trimmed.split_once('{') {
@@ -3573,6 +3601,9 @@ fn read_project_script(text: &str, context: &mut Context) -> Module {
                     if let Some(ex) = exclusion(part.trim()) {
                         for i in added.clone() {
                             module.deps[i].exclusions.push(ex.clone());
+                        }
+                        for i in projects.clone() {
+                            module.project_deps[i].3.push(ex.clone());
                         }
                         for i in shared_added.clone() {
                             module.shared.deps[i].exclusions.push(ex.clone());
@@ -3582,6 +3613,7 @@ fn read_project_script(text: &str, context: &mut Context) -> Module {
             }
             open_deps = (blocks.len() > depth).then_some(OpenDeps {
                 deps: added,
+                projects,
                 shared: shared_added,
                 depth: blocks.len(),
             });
@@ -3791,6 +3823,7 @@ fn property_default(value: &str, vars: &BTreeMap<String, String>) -> Option<Stri
 /// Declarations whose block is still open, and the block depth inside it.
 struct OpenDeps {
     deps: std::ops::Range<usize>,
+    projects: std::ops::Range<usize>,
     shared: std::ops::Range<usize>,
     depth: usize,
 }
@@ -4990,7 +5023,7 @@ fn read_declaration(
             if let Some(path) = project_path(rest) {
                 module
                     .project_deps
-                    .push((path.to_string(), scope, exported));
+                    .push((path.to_string(), scope, exported, Vec::new()));
             }
         }
         return;
@@ -6090,6 +6123,82 @@ set = ["a-b", "e"]
         assert_eq!(versions(&r, "g:bom"), ["4"]);
         let r = read("line-boms-unused", "");
         assert!(versions(&r, "g:bom").is_empty(), "{:?}", r.packages);
+    }
+
+    #[test]
+    fn a_pom_profile_on_by_a_missing_property_counts_for_gradle() {
+        // resteasy-core's parent imports resteasy-dependencies in a profile switched on by
+        // `!resteasy.dependencies.eap`; Gradle reads it, and then not the default profile.
+        let profile = |activation: &str, managed: &str| {
+            format!(
+                "<profile><activation>{activation}</activation><dependencyManagement><dependencies>\
+                 {managed}</dependencies></dependencyManagement></profile>"
+            )
+        };
+        let parent = format!(
+            "<project><groupId>g</groupId><artifactId>par</artifactId><version>1</version>\
+             <packaging>pom</packaging><profiles>{}{}</profiles></project>",
+            profile(
+                "<property><name>!eap</name></property>",
+                "<dependency><groupId>g</groupId><artifactId>deps</artifactId><version>1</version>\
+                 <type>pom</type><scope>import</scope></dependency>"
+            ),
+            profile(
+                "<activeByDefault>true</activeByDefault>",
+                "<dependency><groupId>g</groupId><artifactId>t</artifactId><version>9</version></dependency>"
+            ),
+        );
+        let deps = "<project><groupId>g</groupId><artifactId>deps</artifactId><version>1</version>\
+                    <packaging>pom</packaging><dependencyManagement><dependencies><dependency>\
+                    <groupId>g</groupId><artifactId>t</artifactId><version>3</version></dependency>\
+                    </dependencies></dependencyManagement></project>";
+        let core = "<project><parent><groupId>g</groupId><artifactId>par</artifactId><version>1</version>\
+                    </parent><artifactId>core</artifactId><dependencies><dependency><groupId>g</groupId>\
+                    <artifactId>t</artifactId></dependency></dependencies></project>";
+        let repo = Mem(BTreeMap::from([
+            ("g:par:1".to_string(), parent),
+            ("g:deps:1".to_string(), deps.to_string()),
+            ("g:core:1".to_string(), core.to_string()),
+            pom("t", "3", &[]),
+            pom("t", "9", &[]),
+        ]));
+        let dir = tree(
+            "absent-property-profile",
+            &[(
+                "build.gradle",
+                "plugins { id 'java' }\ndependencies {\n    implementation 'g:core:1'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:t"), ["3"], "{:?}", r.packages);
+    }
+
+    #[test]
+    fn a_project_dependency_exclusion_keeps_the_projects_own_declaration() {
+        // armeria's :jetty9.3 tests against Jetty 9.3 while depending on :jetty9 (Jetty 9.4)
+        // without its jetty-server: the exclusion cuts only the path through :jetty9.
+        let repo = Mem(BTreeMap::from([
+            pom("s", "1", &[("h", "1")]),
+            pom("s", "2", &[("h", "2")]),
+            pom("h", "1", &[]),
+            pom("h", "2", &[]),
+        ]));
+        let dir = tree(
+            "project-exclusion",
+            &[
+                ("settings.gradle", "include ':b'\ninclude ':old'\n"),
+                ("b/build.gradle", "plugins { id 'java-library' }\ndependencies {\n    api 'g:s:2'\n}\n"),
+                (
+                    "old/build.gradle",
+                    "plugins { id 'java' }\ndependencies {\n    testImplementation(project(':b')) {\n        exclude group: 'g', module: 's'\n    }\n    testImplementation 'g:s:1'\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:s"), ["1", "2"], "{:?}", r.packages);
+        assert_eq!(versions(&r, "g:h"), ["1", "2"]);
     }
 
     #[test]
