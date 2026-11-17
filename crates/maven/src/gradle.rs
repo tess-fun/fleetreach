@@ -2522,7 +2522,25 @@ fn condition(cond: &str, vars: &BTreeMap<String, String>) -> Option<bool> {
             return (tail.trim() == ")").then(|| vars.contains_key(key));
         }
     }
-    None
+    java_compatible(c)
+}
+
+/// `JavaVersion.current().isJava9Compatible()` and the like: the JDK that runs Gradle, taken
+/// to be 17 or later (Gradle 9 needs it; grpc-spring's `@Generated` workaround is on under
+/// real Gradle). A check for a later release is not decided.
+fn java_compatible(c: &str) -> Option<bool> {
+    let rest = c.strip_prefix("JavaVersion.current()")?;
+    let release = if let Some(r) = rest.strip_prefix(".isCompatibleWith(JavaVersion.VERSION_") {
+        r.strip_suffix(')')?.trim_start_matches("1_")
+    } else {
+        let r = rest
+            .strip_prefix(".isJava")
+            .or_else(|| rest.strip_prefix(".java"))?;
+        r.strip_suffix("Compatible()")
+            .or_else(|| r.strip_suffix("Compatible"))?
+    };
+    let release: u32 = release.parse().ok()?;
+    (release <= 17).then_some(true)
 }
 
 /// `System.properties['k'] ?: 'd'`, `System.getProperty('k', 'd')` or
@@ -4931,6 +4949,44 @@ set = ["a-b", "e"]
     }
 
     #[test]
+    fn java_version_checks_take_a_modern_jdk() {
+        let vars = BTreeMap::new();
+        for (c, want) in [
+            ("JavaVersion.current().isJava9Compatible()", Some(true)),
+            ("JavaVersion.current().java8Compatible", Some(true)),
+            (
+                "JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_1_9)",
+                Some(true),
+            ),
+            (
+                "JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)",
+                Some(true),
+            ),
+            (
+                "JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21)",
+                None,
+            ),
+            ("!JavaVersion.current().isJava11Compatible()", Some(false)),
+            ("JavaVersion.current().isJava21Compatible()", None),
+        ] {
+            assert_eq!(condition(c, &vars), want, "{c}");
+        }
+        // grpc-spring's `@javax.annotation.Generated` workaround.
+        let repo = Mem(BTreeMap::from([pom("a", "1", &[]), pom("b", "1", &[])]));
+        let dir = tree(
+            "java-version",
+            &[(
+                "build.gradle",
+                "dependencies {\n    implementation 'g:b:1'\n\
+                 \x20   if (JavaVersion.current().isJava9Compatible()) {\n\
+                 \x20       compileOnly 'g:a:1'\n    }\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:a"), ["1"], "{:?}", r.missing);
+    }
+
+    #[test]
     fn the_freefair_plugin_adds_its_lombok() {
         // grpc-spring: plugin 8.6 through a buildscript `ext` variable, applied in
         // `allprojects`; mybatis-plus sets the version in the extension; a release whose
@@ -5474,7 +5530,7 @@ set = ["a-b", "e"]
         assert_eq!(condition("project.hasProperty('nope')", &vars), Some(false));
         assert_eq!(condition("e == 'true' && x", &vars), None);
         assert_eq!(
-            condition("JavaVersion.current().isJava9Compatible()", &vars),
+            condition("JavaVersion.current().isJava21Compatible()", &vars),
             None
         );
 
