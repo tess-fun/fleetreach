@@ -166,6 +166,18 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             }
         }
     }
+    // `pluginManagement { plugins { kotlin("jvm") version "1.8.0" } }` in the settings sets
+    // the version a build file's bare `kotlin("jvm")` applies (Charlatano).
+    for name in ["settings.gradle", "settings.gradle.kts"] {
+        let Ok(text) = fleetreach_core::repofile::read_to_string(dir.join(name)) else {
+            continue;
+        };
+        for line in strip_comments(&text).lines() {
+            if let Some((id, Some(version))) = plugin_line(line.trim(), &catalog, &vars) {
+                plugins.entry(id).or_insert(version);
+            }
+        }
+    }
     let mut extended_by = BTreeMap::new();
     for (_, text) in &scripts {
         for line in text.lines() {
@@ -3067,10 +3079,16 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
         // `kotlin.stdlib.default.dependency=false` turns the added library off (reposilite).
         && context.vars.get("kotlin.stdlib.default.dependency").map(String::as_str) != Some("false")
     {
+        let Some(stdlib) = kotlin_default_stdlib(version) else {
+            module.unread.push(format!(
+                "org.jetbrains.kotlin.jvm {version}: the standard library it adds is not known"
+            ));
+            return;
+        };
         module.deps.push(Declared {
             coordinate: Coordinate {
                 group: "org.jetbrains.kotlin".to_string(),
-                artifact: "kotlin-stdlib".to_string(),
+                artifact: stdlib.to_string(),
                 version: Some(version.clone()),
                 enforced: false,
                 strict: false,
@@ -3085,6 +3103,17 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
             local: false,
         });
     }
+}
+
+/// The standard library the Kotlin plugin adds, by plugin version: `kotlin-stdlib` from 1.9.23
+/// (grpc-spring), `kotlin-stdlib-jdk8` on 1.8.0 (Charlatano), as real Gradle showed. A release
+/// in between, or older, is not known here and is reported, never guessed.
+fn kotlin_default_stdlib(version: &str) -> Option<&'static str> {
+    if version == "1.8.0" {
+        return Some("kotlin-stdlib-jdk8");
+    }
+    (crate::version::gradle_cmp(version, "1.9.23") != std::cmp::Ordering::Less)
+        .then_some("kotlin-stdlib")
 }
 
 /// The Kotlin each Gradle release embeds, from its minimum Gradle version (Gradle's
@@ -5213,6 +5242,65 @@ set = ["a-b", "e"]
             "{:?}",
             r.missing
         );
+    }
+
+    #[test]
+    fn the_settings_plugin_management_versions_a_bare_plugin() {
+        // Charlatano: settings.gradle.kts' `pluginManagement { plugins { kotlin("jvm") version
+        // "1.8.0" } }` versions the bare `kotlin("jvm")` a build applies, and Kotlin 1.8.0 adds
+        // `kotlin-stdlib-jdk8` as its standard library, as real Gradle showed.
+        let kotlin = |a: &str| {
+            (
+                format!("org.jetbrains.kotlin:{a}:1.8.0"),
+                format!("<project><groupId>org.jetbrains.kotlin</groupId><artifactId>{a}</artifactId><version>1.8.0</version></project>"),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            kotlin("kotlin-stdlib-jdk8"),
+            kotlin("kotlin-reflect"),
+        ]));
+        let dir = tree(
+            "kotlin-settings-plugins",
+            &[
+                (
+                    "settings.gradle.kts",
+                    "pluginManagement {\n  plugins {\n    kotlin(\"jvm\") version \"1.8.0\"\n  }\n}\n",
+                ),
+                (
+                    "build.gradle.kts",
+                    "plugins {\n  kotlin(\"jvm\")\n}\n\
+                     dependencies {\n  implementation(kotlin(\"reflect\"))\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        for name in ["kotlin-reflect", "kotlin-stdlib-jdk8"] {
+            assert_eq!(
+                versions(&r, &format!("org.jetbrains.kotlin:{name}")),
+                ["1.8.0"],
+                "{name} {:?}",
+                r.missing
+            );
+        }
+    }
+
+    #[test]
+    fn an_untested_kotlin_plugin_version_reports_its_standard_library() {
+        // Between 1.8.0 and 1.9.23 real Gradle was never seen, so which library the plugin adds
+        // is reported rather than guessed.
+        let mut c = context("", &[]);
+        c.plugins
+            .insert(KOTLIN_JVM.to_string(), "1.8.20".to_string());
+        let m = read_script("plugins {\n  kotlin(\"jvm\")\n}\n", &mut c);
+        assert!(
+            m.unread.iter().any(|u| u.contains("standard library")),
+            "{:?}",
+            m.unread
+        );
+        assert!(m
+            .deps
+            .iter()
+            .all(|d| d.coordinate.artifact != "kotlin-stdlib"));
     }
 
     #[test]
