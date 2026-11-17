@@ -918,13 +918,13 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   cannot fetch on arm64, files the sparse clone lacks, plugins that need a full checkout,
   wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **87.4% of
   11,816 modules at Gradle's version, 91.2% by name** (the 56 first builds: 88.1% and 91.4%,
-  from 59.7% and 70.0%); median repo 100% exact, 55 of 62 at 90% or more. **96.3% and 98.8%
+  from 59.7% and 70.0%); median repo 100% exact, 55 of 62 at 90% or more. **96.4% and 98.8%
   on the 56 builds whose dependencies no build plugin adds**: the six others (ideavim and
   MinecraftDev on the IntelliJ Platform plugin, Paper and WorldEdit on paperweight's dev
   bundle, minecolonies on ForgeGradle, MCCustomSkinLoader on its own buildSrc plugin that
   reads Minecraft's library manifest) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 379 misses remain in
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 373 misses remain in
   the 56 builds, ihub-pub's included (armeria 195: its `[boms]` and flag scripts are its own
   code). Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos

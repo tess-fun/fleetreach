@@ -47,7 +47,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 62 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
   now lists 87.4% of the 11,816 modules at Gradle's version and 91.2% by name (the 56 first
-  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 96.3% and 98.8% on the 56 builds
+  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 96.4% and 98.8% on the 56 builds
   whose dependencies no build plugin adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
@@ -168,7 +168,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   names (armeria's `dependencies.toml`): kafka 1 to 409 of 421, armeria 5 to 1,129 of 1,324. A multi-line list variable
   (`testLog4j2Libs = [ libs.a, ... ]`) declared whole (`testImplementation testLog4j2Libs`)
   declares each item (kafka 414). Type-safe project accessors (`api(projects.plotsquaredCore)`) name
-  their project, by the settings' renames. Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  their project, by the settings' renames. A script a project applies (`apply from:
+  "$rootDir/gradle/x.gradle"`) declares in that project, with the project's own `extendsFrom`
+  lines, and a classifier computed from the host (`:${platform}`) no longer leaves the
+  coordinate unread (xpipe 66 to 72 of 72). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath; a dependency declared `transitive = false` brings none of
   its `.module` constraints either (PlotSquared's FAWE no longer raises Gson and Guava;

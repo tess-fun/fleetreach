@@ -37,6 +37,7 @@ pub fn has_gradle_build(dir: &Path) -> bool {
 pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     let mut missing = BTreeSet::new();
     let mut scripts = build_scripts(dir, &mut missing);
+    applied_scripts(&mut scripts);
     project_blocks(dir, &mut scripts);
     project_accessors(dir, &mut scripts);
     let mut vars = properties(&dir.join("gradle.properties"));
@@ -689,6 +690,116 @@ fn catalog_file(dir: &Path, scripts: &[(String, String)]) -> String {
         }
     }
     DEFAULT.to_string()
+}
+
+/// `apply from: "$rootDir/gradle/x.gradle"` (or `apply(from = ...)`, `rootProject.file(...)`,
+/// a path relative to the project) runs that script in the project that applies it: its text
+/// takes the place of the line, a script applying others in turn, and a script some project
+/// applies is no longer read on its own (xpipe's `gradle_scripts/javafx.gradle`).
+fn applied_scripts(scripts: &mut Vec<(String, String)>) {
+    const DEPTH: usize = 4;
+    let is_project_file = |file: &str| {
+        let name = Path::new(file)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        name == "build.gradle" || name == "build.gradle.kts"
+    };
+    let texts: BTreeMap<String, String> = scripts
+        .iter()
+        .filter(|(f, _)| !is_project_file(f))
+        .cloned()
+        .collect();
+    if texts.is_empty() {
+        return;
+    }
+    fn inline(
+        text: &str,
+        project_dir: &str,
+        texts: &BTreeMap<String, String>,
+        applied: &mut BTreeSet<String>,
+        stack: &mut Vec<String>,
+    ) -> String {
+        let mut out = String::with_capacity(text.len());
+        for line in text.split_inclusive('\n') {
+            let target = applied_path(line.trim(), project_dir)
+                .filter(|t| texts.contains_key(t) && !stack.contains(t) && stack.len() < DEPTH);
+            match target {
+                Some(t) => {
+                    applied.insert(t.clone());
+                    stack.push(t.clone());
+                    let body = inline(&texts[&t], project_dir, texts, applied, stack);
+                    stack.pop();
+                    out.push_str(&body);
+                    if !body.ends_with('\n') {
+                        out.push('\n');
+                    }
+                }
+                None => out.push_str(line),
+            }
+        }
+        out
+    }
+    let mut applied = BTreeSet::new();
+    for (file, text) in scripts.iter_mut() {
+        if !is_project_file(file) || !text.contains("apply") {
+            continue;
+        }
+        let project_dir = Path::new(file.as_str())
+            .parent()
+            .and_then(Path::to_str)
+            .unwrap_or_default()
+            .to_string();
+        *text = inline(text, &project_dir, &texts, &mut applied, &mut Vec::new());
+    }
+    scripts.retain(|(f, _)| !applied.contains(f));
+}
+
+/// The root-relative script an `apply from:` line names, from a project in `project_dir`.
+fn applied_path(line: &str, project_dir: &str) -> Option<String> {
+    let rest = line
+        .strip_prefix("apply from:")
+        .or_else(|| line.strip_prefix("apply(from ="))
+        .or_else(|| line.strip_prefix("apply from ="))?
+        .trim();
+    let (rooted, rest) = match rest.strip_prefix("rootProject.file(") {
+        Some(r) => (true, r),
+        None => (
+            false,
+            rest.strip_prefix("project.file(")
+                .or_else(|| rest.strip_prefix("file("))
+                .unwrap_or(rest),
+        ),
+    };
+    let (path, _) = quoted(rest.trim_start())?;
+    let (rooted, path) = [
+        "$rootDir/",
+        "${rootDir}/",
+        "${rootProject.projectDir}/",
+        "$rootProject.projectDir/",
+        "${project.rootDir}/",
+    ]
+    .iter()
+    .find_map(|p| path.strip_prefix(p))
+    .map_or((rooted, path), |p| (true, p));
+    if path.contains('$') || path.contains("://") || path.starts_with('/') {
+        return None;
+    }
+    let mut parts: Vec<&str> = if rooted || project_dir.is_empty() {
+        Vec::new()
+    } else {
+        project_dir.split('/').collect()
+    };
+    for segment in path.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            s => parts.push(s),
+        }
+    }
+    Some(parts.join("/"))
 }
 
 /// Type-safe project accessors: `projects.plotsquaredCore` is `project(":plotsquared-core")`,
@@ -2586,7 +2697,16 @@ fn version_text(version: &str) -> Result<String, String> {
 }
 
 fn coordinate(text: &str, vars: &BTreeMap<String, String>) -> Result<Coordinate, String> {
-    let expanded = expand(text, vars)?;
+    // A classifier picks one of the artifact's files, never the package or its version: one
+    // computed from the host (xpipe's JavaFX `:${platform}`, `win`, `mac` or `linux`) leaves
+    // `group:name:version` as read.
+    let expanded = expand(text, vars).or_else(|err| {
+        let segments: Vec<&str> = text.split(':').collect();
+        match segments.as_slice() {
+            [g, a, v, _classifier] => expand(&format!("{g}:{a}:{v}"), vars).map_err(|_| err),
+            _ => Err(err),
+        }
+    })?;
     let plain = expanded.split('@').next().unwrap_or_default();
     let mut parts = plain.split(':');
     let (Some(group), Some(artifact)) = (parts.next(), parts.next()) else {
@@ -2865,7 +2985,25 @@ enum Block {
     Other,
 }
 
+/// `read_project_script`, with each `a.extendsFrom(b)` the script itself writes taking
+/// precedence: xpipe's app puts its `javafx` configuration in `implementation`, its
+/// extensions in `compileOnly`.
 fn read_script(text: &str, context: &mut Context) -> Module {
+    let mut own = BTreeMap::new();
+    for line in text.lines() {
+        extends_from(line.trim(), &mut own);
+    }
+    if own.is_empty() {
+        return read_project_script(text, context);
+    }
+    let saved = context.extended_by.clone();
+    context.extended_by.extend(own);
+    let module = read_project_script(text, context);
+    context.extended_by = saved;
+    module
+}
+
+fn read_project_script(text: &str, context: &mut Context) -> Module {
     let mut module = Module::default();
     let mut blocks: Vec<Block> = Vec::new();
     let text = catalog_lookups(text, &context.catalog);
@@ -4949,6 +5087,62 @@ set = ["a-b", "e"]
             scripts[0].1,
             "api(project(\":plotsquared-core\"))\nsubprojects.forEach { }\nprojects.unknown\n"
         );
+    }
+
+    #[test]
+    fn an_applied_script_declares_in_the_project_that_applies_it() {
+        // xpipe: `apply from: "$rootDir/gradle/gradle_scripts/javafx.gradle"` declares JavaFX in
+        // a `javafx` configuration, with a classifier computed from the host OS. The app puts
+        // it in `implementation`, an extension in `compileOnly`; JavaFX 27 then wins on the
+        // app's classpaths over the 22 a library asks for.
+        let repo = Mem(BTreeMap::from([
+            pom("fx", "22", &[]),
+            pom("fx", "27", &[]),
+            pom("lib", "1", &[("fx", "22")]),
+        ]));
+        let dir = tree(
+            "applied-script",
+            &[
+                ("settings.gradle", "include 'app', 'ext'\n"),
+                ("build.gradle", "ext {\n    fxVersion = '27'\n}\n"),
+                (
+                    "gradle/scripts/fx.gradle",
+                    "def platform = null\nif (os) {\n    platform = 'win'\n} else {\n    platform = 'linux'\n}\n\
+                     configurations {\n    javafx\n}\n\
+                     dependencies {\n    javafx \"g:fx:${fxVersion}:${platform}\"\n}\n",
+                ),
+                (
+                    "app/build.gradle",
+                    "apply from: \"$rootDir/gradle/scripts/fx.gradle\"\n\
+                     configurations {\n    implementation.extendsFrom(javafx)\n}\n\
+                     dependencies {\n    implementation 'g:lib:1'\n}\n",
+                ),
+                (
+                    "ext/build.gradle",
+                    "apply from: \"${rootDir}/gradle/scripts/fx.gradle\"\n\
+                     configurations {\n    compileOnly.extendsFrom(javafx)\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        let of = |name: &str| -> Vec<(String, bool)> {
+            r.packages
+                .iter()
+                .filter(|p| p.name == name)
+                .map(|p| (p.version.clone(), p.dev))
+                .collect()
+        };
+        assert_eq!(of("g:fx"), [("27".to_string(), false)], "{:?}", r.packages);
+        assert_eq!(
+            applied_path("apply from: rootProject.file('a/b.gradle')", "x"),
+            Some("a/b.gradle".to_string())
+        );
+        assert_eq!(
+            applied_path("apply(from = \"../common.gradle.kts\")", "x/y"),
+            Some("x/common.gradle.kts".to_string())
+        );
+        assert_eq!(applied_path("apply from: \"https://h/x.gradle\"", ""), None);
     }
 
     #[test]
