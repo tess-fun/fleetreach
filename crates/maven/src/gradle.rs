@@ -299,6 +299,10 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             text.push_str("    }\n}\n");
         }
     }
+    // LINE's gradle-scripts: `configure(projectsWithFlags('java')) { ... }` configures each
+    // project the settings script includes with those flags (`includeWithFlags ':p', 'java'`),
+    // so the root's block is read in each of them (armeria's `:ai:mcp`, flagged `java17`).
+    line_flag_blocks(dir, &mut scripts);
     // Each file's own Java toolchain (caffeine's `java.toolchain { languageVersion =
     // javaVersion() }`, 11 by default), the project's toolchain version as `TOOLCHAIN` in
     // conditions, decided per project once its conventions apply, and `${libs.x.get().module}`
@@ -847,6 +851,152 @@ fn catalog_file(dir: &Path, scripts: &[(String, String)]) -> String {
 /// common-dependencies.gradle` applying `dependenciesTomlBoms`), as `g:a:v`: its own section,
 /// beside `[libraries]`, each entry a BOM every project's classpaths take. A BOM whose version
 /// is not literal or a `version.ref` is left out, as the scripts skip it.
+/// The flags LINE's gradle-scripts give each project: what `includeWithFlags ':p', 'a', ...`
+/// names, with the implications its `settings-flags.gradle` adds (`javaNN` and `kotlin` imply
+/// `java`, `kotlinN.N` implies `kotlin`, `shade` implies `relocate`, `bom` and
+/// `version-catalog` imply `publish`).
+fn line_flags(settings: &str) -> BTreeMap<String, BTreeSet<String>> {
+    let mut out = BTreeMap::new();
+    for line in settings.lines() {
+        let Some(rest) = line.trim().strip_prefix("includeWithFlags") else {
+            continue;
+        };
+        let mut items = strings(rest).into_iter();
+        let Some(path) = items.next().filter(|p| p.starts_with(':')) else {
+            continue;
+        };
+        let mut flags: BTreeSet<String> = items.collect();
+        let numbered = |prefix: &str, flags: &BTreeSet<String>| {
+            flags.iter().any(|f| {
+                f.strip_prefix(prefix).is_some_and(|n| {
+                    !n.is_empty() && n.chars().all(|c| c.is_ascii_digit() || c == '.')
+                })
+            })
+        };
+        if flags.contains("shade") {
+            flags.insert("relocate".to_string());
+        }
+        if flags.contains("bom") || flags.contains("version-catalog") {
+            flags.insert("publish".to_string());
+        }
+        if numbered("java", &flags) {
+            flags.insert("java".to_string());
+        }
+        if numbered("kotlin", &flags) {
+            flags.insert("kotlin".to_string());
+        }
+        if flags.contains("kotlin") {
+            flags.insert("java".to_string());
+        }
+        out.insert(path, flags);
+    }
+    out
+}
+
+/// Moves each `configure(projectsWithFlags('a', ...)) { body }` of the root build script into
+/// the build file of every project flagged with all of those flags, `project.path` there as
+/// that project's path. Only when the build uses LINE's settings flags.
+fn line_flag_blocks(dir: &Path, scripts: &mut [(String, String)]) {
+    let marker =
+        fleetreach_core::repofile::read_to_string(dir.join("gradle/scripts/settings-flags.gradle"))
+            .is_ok_and(|t| t.contains("includeWithFlags") && t.contains("projectsWithFlags"));
+    let settings = fleetreach_core::repofile::read_to_string(dir.join("settings.gradle"));
+    let (true, Ok(settings)) = (marker, settings) else {
+        return;
+    };
+    let settings = strip_comments(&settings);
+    let flags = line_flags(&settings);
+    let moved: BTreeMap<String, String> = settings_paths(&settings).into_iter().collect();
+    let Some(root) = scripts.iter().position(|(f, _)| f == "build.gradle") else {
+        return;
+    };
+    let text = scripts[root].1.clone();
+    let lines: Vec<&str> = text.lines().collect();
+    let mut kept = String::with_capacity(text.len());
+    let mut blocks: Vec<(BTreeSet<String>, String)> = Vec::new();
+    let mut i = 0;
+    while i < lines.len() {
+        let trimmed = lines[i].trim();
+        let head = trimmed
+            .strip_prefix("configure(projectsWithFlags(")
+            .and_then(|r| r.strip_suffix('{'))
+            .and_then(|r| r.trim_end().strip_suffix("))"));
+        let Some(args) = head else {
+            kept.push_str(lines[i]);
+            kept.push('\n');
+            i += 1;
+            continue;
+        };
+        let wanted: BTreeSet<String> = strings(args).into_iter().collect();
+        let mut depth = 1i32;
+        let mut end = None;
+        for (j, line) in lines.iter().enumerate().skip(i + 1) {
+            for c in code_only(line).chars() {
+                match c {
+                    '{' => depth += 1,
+                    '}' => depth -= 1,
+                    _ => {}
+                }
+            }
+            if depth == 0 {
+                end = Some(j);
+                break;
+            }
+        }
+        let Some(end) = end.filter(|&e| lines[e].trim() == "}" && !wanted.is_empty()) else {
+            kept.push_str(lines[i]);
+            kept.push('\n');
+            i += 1;
+            continue;
+        };
+        blocks.push((wanted, lines[i + 1..end].join("\n")));
+        i = end + 1;
+    }
+    if blocks.is_empty() {
+        return;
+    }
+    scripts[root].1 = kept;
+    for (path, own) in &flags {
+        let project_dir = moved
+            .get(path)
+            .cloned()
+            .unwrap_or_else(|| path.trim_start_matches(':').replace(':', "/"));
+        let file = format!("{project_dir}/build.gradle");
+        let Some(at) = scripts.iter().position(|(f, _)| *f == file) else {
+            continue;
+        };
+        for (wanted, body) in &blocks {
+            if wanted.is_subset(own) {
+                let body = project_paths_named(&body.replace("project.path", &format!("'{path}'")));
+                scripts[at].1.push_str(&format!("\n{body}\n"));
+            }
+        }
+    }
+}
+
+/// `project(':x').path` as `':x'`.
+fn project_paths_named(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find("project(") {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + "project(".len()..];
+        let named = quoted(after).and_then(|(p, tail)| Some((p, tail.strip_prefix(").path")?)));
+        match named {
+            Some((p, tail)) if p.starts_with(':') => {
+                out.push_str(&format!("'{p}'"));
+                rest = tail;
+            }
+            _ => {
+                out.push_str("project(");
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 fn line_scripts_boms(dir: &Path, doc: &toml::Table) -> Vec<String> {
     let marker = fleetreach_core::repofile::read_to_string(
         dir.join("gradle/scripts/lib/common-dependencies.gradle"),
@@ -3683,6 +3833,7 @@ fn read_project_script(text: &str, context: &mut Context) -> Module {
         Err(e) => module.unread.push(e),
     }
     let text = expand_lists(&text, &context.lists);
+    let text = expand_loops(&text);
     let text = fold_rich_versions(&text);
     let mut open_deps: Option<OpenDeps> = None;
     // Open branches the default build decides: (block depth inside, taken), and the last
@@ -4308,15 +4459,19 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
                 local: false,
             });
         }
-        // Spring Boot applies its BOM through the dependency-management plugin.
-        module.platforms.push(Coordinate {
-            group: "org.springframework.boot".to_string(),
-            artifact: "spring-boot-dependencies".to_string(),
-            version: Some(version.clone()),
-            enforced: context.spring_dm,
-            strict: false,
-            test: false,
-        });
+        // Spring Boot applies its BOM through the dependency-management plugin, and only
+        // when the build applies that plugin somewhere (armeria applies Boot alone, and
+        // Gradle keeps its caffeine 2.9.3 under Boot 3.5.16's 3.2.4).
+        if context.spring_dm {
+            module.platforms.push(Coordinate {
+                group: "org.springframework.boot".to_string(),
+                artifact: "spring-boot-dependencies".to_string(),
+                version: Some(version.clone()),
+                enforced: true,
+                strict: false,
+                test: false,
+            });
+        }
     } else if (id == FREEFAIR_LOMBOK || id == FRANZBECKER_LOMBOK)
         && !line.trim_end().ends_with("apply false")
     {
@@ -5065,6 +5220,170 @@ fn list_variables(text: &str) -> Vec<(String, Vec<String>)> {
 
 /// `testImplementation testLog4j2Libs` or `testImplementation(testLog4j2Libs)` with a known
 /// list: one declaration line per item.
+/// A loop over a literal list, `['a', 'b'].each { v -> ... }` or `listOf("a", "b").forEach
+/// { v -> ... }`, written out once per item with `v` as that item (armeria's netty native
+/// transports, one per OS and CPU). `variantOf(libs.x) { classifier(...) }` is `libs.x`: the
+/// classifier picks a file of the same module.
+fn expand_loops(text: &str) -> String {
+    let mut text = text.to_string();
+    for _ in 0..4 {
+        let (next, changed) = expand_loops_once(&text);
+        text = next;
+        if !changed {
+            break;
+        }
+    }
+    variants(&text)
+}
+
+fn expand_loops_once(text: &str) -> (String, bool) {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut changed = false;
+    let mut i = 0;
+    while i < lines.len() {
+        let Some((items, name)) = loop_head(lines[i].trim()) else {
+            out.push_str(lines[i]);
+            out.push('\n');
+            i += 1;
+            continue;
+        };
+        // The body runs to the brace that closes the loop's own.
+        let mut depth = 1i32;
+        let mut end = None;
+        for (j, line) in lines.iter().enumerate().skip(i + 1) {
+            for c in code_only(line).chars() {
+                match c {
+                    '{' => depth += 1,
+                    '}' => depth -= 1,
+                    _ => {}
+                }
+            }
+            if depth == 0 {
+                end = Some(j);
+                break;
+            }
+        }
+        let Some(end) = end.filter(|&e| lines[e].trim() == "}") else {
+            out.push_str(lines[i]);
+            out.push('\n');
+            i += 1;
+            continue;
+        };
+        for item in &items {
+            for line in &lines[i + 1..end] {
+                out.push_str(&substitute(line, &name, item));
+                out.push('\n');
+            }
+        }
+        changed = true;
+        i = end + 1;
+    }
+    (out, changed)
+}
+
+/// `['a', 'b'].each { v ->` or `listOf("a", "b").forEach { v ->`: the items and the name.
+fn loop_head(line: &str) -> Option<(Vec<String>, String)> {
+    let (list, rest) = if let Some(r) = line.strip_prefix('[') {
+        r.split_once(']')?
+    } else {
+        let r = line.strip_prefix("listOf(")?;
+        r.split_once(')')?
+    };
+    let rest = rest
+        .strip_prefix(".each")
+        .or_else(|| rest.strip_prefix(".forEach"))?
+        .trim_start()
+        .strip_prefix('{')?;
+    let (name, tail) = rest.split_once("->")?;
+    let name = name.trim();
+    if !tail.trim().is_empty()
+        || name.is_empty()
+        || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return None;
+    }
+    let items: Option<Vec<String>> = list
+        .split(',')
+        .map(|i| match quoted(i.trim()) {
+            Some((v, "")) if !v.contains('$') => Some(v.to_string()),
+            _ => None,
+        })
+        .collect();
+    let items = items.filter(|i| !i.is_empty())?;
+    Some((items, name.to_string()))
+}
+
+/// The loop variable `name` as `item`: `${name}` and `$name` in a string, a bare `name` as a
+/// quoted string.
+fn substitute(line: &str, name: &str, item: &str) -> String {
+    let line = line.replace(&format!("${{{name}}}"), item);
+    let mut out = String::with_capacity(line.len());
+    let bytes = line.as_bytes();
+    let word = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
+    let mut i = 0;
+    while i < line.len() {
+        let at_word = line[i..].starts_with(name)
+            && (i == 0 || !word(bytes[i - 1]))
+            && bytes.get(i + name.len()).is_none_or(|c| !word(*c));
+        if at_word {
+            if i > 0 && bytes[i - 1] == b'$' {
+                out.pop();
+                out.push_str(item);
+            } else {
+                out.push('"');
+                out.push_str(item);
+                out.push('"');
+            }
+            i += name.len();
+        } else {
+            let c = line[i..].chars().next().unwrap_or(' ');
+            out.push(c);
+            i += c.len_utf8();
+        }
+    }
+    out
+}
+
+/// `variantOf(libs.x) { classifier("c") }` (and `variantOf(libs.x) { artifactType(...) }`) as
+/// `libs.x`.
+fn variants(text: &str) -> String {
+    if !text.contains("variantOf(") {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find("variantOf(") {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + "variantOf(".len()..];
+        let parsed = after.split_once(')').and_then(|(inner, tail)| {
+            let inner = inner.trim();
+            let tail = tail.trim_start();
+            let block = tail.strip_prefix('{')?;
+            let (body, tail) = block.split_once('}')?;
+            let body = body.trim();
+            let plain = inner.starts_with("libs.")
+                && inner
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_');
+            let known = body.starts_with("classifier(") || body.starts_with("artifactType(");
+            (plain && known && !body.contains('\n')).then_some((inner, tail))
+        });
+        match parsed {
+            Some((inner, tail)) => {
+                out.push_str(inner);
+                rest = tail;
+            }
+            None => {
+                out.push_str("variantOf(");
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 fn expand_lists(text: &str, lists: &BTreeMap<String, Vec<String>>) -> String {
     if lists.is_empty() {
         return text.to_string();
@@ -5988,6 +6307,10 @@ set = ["a-b", "e"]
         let mut c = context("", &[]);
         c.plugins
             .insert(SPRING_BOOT.to_string(), "4.0.0".to_string());
+        // Boot alone imports no BOM (armeria); the dependency-management plugin does.
+        let m = read_script("apply plugin: 'org.springframework.boot'\n", &mut c);
+        assert!(m.platforms.is_empty(), "{:?}", m.platforms);
+        c.spring_dm = true;
         let m = read_script("apply plugin: 'org.springframework.boot'\n", &mut c);
         assert_eq!(m.platforms[0].artifact, "spring-boot-dependencies");
         assert_eq!(m.platforms[0].version.as_deref(), Some("4.0.0"));
@@ -6031,6 +6354,7 @@ set = ["a-b", "e"]
         );
 
         let mut c = context(toml, &[]);
+        c.spring_dm = true;
         c.plugins = c.catalog.plugins.clone();
         c.plugins
             .insert(KOTLIN_JVM.to_string(), "2.0.0".to_string());
@@ -6676,6 +7000,136 @@ set = ["a-b", "e"]
         assert!(r.missing.is_empty(), "{:?}", r.missing);
         assert_eq!(versions(&r, "g:inner"), ["2"], "{:?}", r.packages);
         assert_eq!(versions(&r, "g:lib"), ["1"]);
+    }
+
+    #[test]
+    fn a_declared_platform_that_rises_manages_at_its_new_version() {
+        // armeria: the build's junit-bom 5.14.4 rises to 6.0.2 through mcp-test's `.module`,
+        // and Gradle takes the engine the build declares at 5.14.4 to 6.0.2 with it.
+        let marker = "<!-- do_not_remove: published-with-gradle-metadata -->";
+        let bom = |v: &str| {
+            (
+                format!("g:bom:{v}"),
+                format!(
+                    "<project><groupId>g</groupId><artifactId>bom</artifactId><version>{v}</version>\
+                     <packaging>pom</packaging><dependencyManagement><dependencies><dependency>\
+                     <groupId>g</groupId><artifactId>x</artifactId><version>{v}</version>\
+                     </dependency></dependencies></dependencyManagement></project>"
+                ),
+            )
+        };
+        let body = r#""dependencies":[{"group":"g","module":"bom","version":{"requires":"2"},"attributes":{"org.gradle.category":"platform"}}]"#;
+        let repo = Mem(BTreeMap::from([
+            bom("1"),
+            bom("2"),
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+            (
+                "g:lib:1".to_string(),
+                format!("<project>{marker}<groupId>g</groupId><artifactId>lib</artifactId><version>1</version></project>"),
+            ),
+            (
+                "g:lib:1.module".to_string(),
+                format!(
+                    r#"{{"formatVersion":"1.1","variants":[{{"name":"apiElements","attributes":{{"org.gradle.usage":"java-api","org.gradle.category":"library"}},{body}}},{{"name":"runtimeElements","attributes":{{"org.gradle.usage":"java-runtime","org.gradle.category":"library"}},{body}}}]}}"#
+                ),
+            ),
+        ]));
+        let dir = tree(
+            "declared-platform-rises",
+            &[(
+                "build.gradle",
+                "plugins {\n    id 'java'\n}\ndependencies {\n    implementation platform('g:bom:1')\n\
+                 \x20   implementation 'g:x:1'\n    implementation 'g:lib:1'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:bom"), ["2"], "{:?}", r.packages);
+        assert_eq!(versions(&r, "g:x"), ["2"]);
+    }
+
+    #[test]
+    fn a_loop_over_a_literal_list_declares_each_item() {
+        // armeria: netty's native transports, one declaration per OS in a `.each` loop, and
+        // `variantOf(libs.x) { classifier(...) }` naming a file of libs.x.
+        let repo = Mem(BTreeMap::from([
+            pom("native-linux", "1", &[]),
+            pom("native-osx", "1", &[]),
+            pom("io-linux", "1", &[]),
+            pom("io-osx", "1", &[]),
+            pom("x", "1", &[]),
+        ]));
+        let dir = tree(
+            "literal-loops",
+            &[
+                ("settings.gradle", "include 'groovy', 'kts'\n"),
+                ("gradle/libs.versions.toml", "[libraries]\nx = \"g:x:1\"\n"),
+                (
+                    "groovy/build.gradle",
+                    "plugins {\n    id 'java'\n}\ndependencies {\n    ['linux', 'osx'].each { os ->\n\
+                     \x20       runtimeOnly \"g:native-${os}:1\"\n    }\n}\n",
+                ),
+                (
+                    "kts/build.gradle.kts",
+                    "plugins {\n    java\n}\ndependencies {\n    listOf(\"linux\", \"osx\").forEach { os ->\n\
+                     \x20       runtimeOnly(\"g:io-$os:1\")\n    }\n\
+                     \x20   implementation(variantOf(libs.x) { classifier(\"linux-x86_64\") })\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        for name in [
+            "g:native-linux",
+            "g:native-osx",
+            "g:io-linux",
+            "g:io-osx",
+            "g:x",
+        ] {
+            assert_eq!(versions(&r, name), ["1"], "{name}: {:?}", r.packages);
+        }
+    }
+
+    #[test]
+    fn a_root_block_for_flagged_projects_reaches_each_one() {
+        // armeria: LINE's gradle-scripts read `configure(projectsWithFlags('java')) { }` in
+        // every project `includeWithFlags` flags with java (`java17` implies it), with
+        // `project.path` as that project's path; an unflagged project takes none of it.
+        let repo = Mem(BTreeMap::from([
+            pom("x", "1", &[]),
+            pom("y", "1", &[]),
+            pom("z", "1", &[]),
+        ]));
+        let dir = tree(
+            "line-flags",
+            &[
+                (
+                    "gradle/scripts/settings-flags.gradle",
+                    "// includeWithFlags and projectsWithFlags are defined here.\n",
+                ),
+                (
+                    "settings.gradle",
+                    "apply from: \"${rootDir}/gradle/scripts/settings-flags.gradle\"\n\
+                     includeWithFlags ':app', 'java17'\nincludeWithFlags ':docs'\n",
+                ),
+                (
+                    "build.gradle",
+                    "configure(projectsWithFlags('java')) {\n    dependencies {\n\
+                     \x20       if (project.path != project(':app').path) {\n            implementation 'g:x:1'\n        }\n\
+                     \x20       implementation 'g:y:1'\n    }\n}\n\
+                     configure(projectsWithFlags('java', 'publish')) {\n    dependencies {\n\
+                     \x20       implementation 'g:z:1'\n    }\n}\n",
+                ),
+                ("app/build.gradle", "dependencies {\n}\n"),
+                ("docs/build.gradle", "dependencies {\n}\n"),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:y"), ["1"], "{:?}", r.packages);
+        assert!(versions(&r, "g:x").is_empty(), "{:?}", r.packages);
+        assert!(versions(&r, "g:z").is_empty(), "{:?}", r.packages);
     }
 
     #[test]

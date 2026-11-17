@@ -2537,8 +2537,18 @@ fn walk(
         };
         // `transitive = false` (or an exclude of everything) leaves out the module's
         // constraints as well as its dependencies (PlotSquared's FAWE pins Gson otherwise).
-        if !excludes_all(&exclusions) {
-            request_constraints(&eff, dep.platform, r.compile_only, requests.as_deref_mut());
+        // A platform the build declares is a `pom` node that excludes everything only so its
+        // own dependencies stay unfollowed: at the version it settles on, its managed versions
+        // are requests (armeria's junit-bom 5.14.4 rises to 6.0.2 through mcp-test, and the
+        // engine it manages with it).
+        let declared_platform = r.gradle && depth == 0 && dep.kind.as_deref() == Some("pom");
+        if declared_platform || !excludes_all(&exclusions) {
+            request_constraints(
+                &eff,
+                dep.platform || declared_platform,
+                r.compile_only,
+                requests.as_deref_mut(),
+            );
         }
         enqueue_children(
             &eff,

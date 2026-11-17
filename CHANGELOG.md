@@ -235,6 +235,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checker-qual: 4.4.0 to compile, worldedit's 3.48.3 to run the tests). Under the Spring
   plugin a compile-only version still versions an unversioned test declaration of the same
   module. 143 packages Gradle does not list dropped out, none it does.
+- **LINE's flagged-project blocks, literal loops and risen platforms are read.** In a build on
+  LINE's gradle-scripts, a root `configure(projectsWithFlags('java')) { }` block is read in
+  each project `includeWithFlags` gives those flags (`java17` and `kotlin` imply `java`), with
+  `project.path` as that project's path. A loop over a literal list (`['a', 'b'].each { v ->`,
+  `listOf(...).forEach`) declares once per item, and `variantOf(libs.x) { classifier(...) }`
+  is libs.x. A platform the build declares that a dependency raises (armeria's junit-bom
+  5.14.4 to 6.0.2 through mcp-test) manages at its new version, as in Gradle. The Spring Boot
+  plugin alone no longer imports its BOM: only with the dependency-management plugin applied
+  (armeria's caffeine stays 2.9.3 under Boot 3.5.16). armeria: 99.0% to 99.8% of 1,324
+  modules, 61 fewer packages Gradle does not list.
 - **Checks on a project's Java toolchain are decided per project.** A project's toolchain
   version is read from `java.toolchain { languageVersion = JavaLanguageVersion.of(N) }`, or
   from a build-logic helper `providers.gradleProperty("k")...orElse(N)` with k unset. A
