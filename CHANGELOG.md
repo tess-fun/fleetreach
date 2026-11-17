@@ -47,7 +47,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
   now lists 87.0% of the 9,550 modules at Gradle's version and 90.8% by name, up from 59.7% and
-  70.0% on the same POMs; 96.7% and 98.6% on the 51 builds whose dependencies no build plugin
+  70.0% on the same POMs; 96.7% and 98.7% on the 51 builds whose dependencies no build plugin
   adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
@@ -77,7 +77,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   without `testRuntimeOnly` and main `compileOnly` dependencies, and no compile classpath
   takes a runtime dependency at any depth: a POM's `runtime` scope and what a `.module`
   file's runtime variant adds over its API variant (komga's JUnit 5.12.2, raised to 5.14.4 at
-  test runtime only; komga 95.4% to 96.9%, conductor 98.2% to 99.0%). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  test runtime only; komga 95.4% to 96.9%, conductor 98.2% to 99.0%). The build's own
+  convention plugins (precompiled scripts under `src/main/kotlin` or `src/main/groovy` of
+  `build-logic`, `buildSrc` or an included build) now declare for the projects that apply
+  them, through the conventions they apply in turn; one nothing applies stays build logic.
+  Inside them the catalog API is read (`libs.findLibrary("x").get()`,
+  `libs.findVersion("x").get()`, and one-line helpers over either), as is
+  `findProperty("k")?.toString() != "false"` with the property unset. A constraint on a
+  tool's own configuration (`checkstyle`) manages none of the classpaths (caffeine 86.3% to
+  87.4% and 23 fewer packages Gradle does not list, gradle-versions-plugin 27 fewer). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over

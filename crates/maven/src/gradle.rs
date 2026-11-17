@@ -157,6 +157,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
 
         processor: false,
         runtime_only: false,
+        custom: false,
     };
     // The kordamp enforcer's `ForceDependencies` rule in the settings forces its versions on
     // every configuration of every project (jreleaser).
@@ -165,13 +166,21 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         .filter_map(|f| fleetreach_core::repofile::read_to_string(dir.join(f)).ok())
         .flat_map(|t| forced_versions(&t, &context.vars, &mut missing))
         .collect();
+    // Precompiled script plugins (convention plugins) by plugin id.
+    let conventions: BTreeMap<String, usize> = scripts
+        .iter()
+        .enumerate()
+        .filter_map(|(i, (file, text))| convention_id(file, text).map(|id| (id, i)))
+        .collect();
     let mut modules: Vec<Module> = Vec::new();
-    for (file, text) in &scripts {
+    for (i, (file, text)) in scripts.iter().enumerate() {
         let mut module = read_script(text, &mut context);
         module.forced = forced_versions(text, &context.vars, &mut missing);
         module.forced.extend(settings_forced.iter().cloned());
-        // Build logic runs at build time and never ships.
-        if file.starts_with("buildSrc/") || file.starts_with("build-logic/") {
+        // Build logic runs at build time and never ships; a convention plugin's own
+        // declarations belong to the projects that apply it.
+        let convention = conventions.values().any(|&c| c == i);
+        if (file.starts_with("buildSrc/") || file.starts_with("build-logic/")) && !convention {
             module.deps.iter_mut().for_each(|d| d.scope = "test");
         }
         for line in std::mem::take(&mut module.unread) {
@@ -201,6 +210,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
                 .extend_from_slice(&shared.project_platforms);
         }
     }
+    apply_conventions(&conventions, &mut modules);
     // `platform(project(":p"))` takes the platform project's versions, by its default path.
     let by_path: BTreeMap<String, usize> = scripts
         .iter()
@@ -883,6 +893,8 @@ struct Module {
     /// `resolutionStrategy.force("g:a:v")`: versions forced over conflict resolution, the
     /// flag set when only test configurations are forced.
     forced: Vec<(Coordinate, bool)>,
+    /// The plugin ids the file applies, for convention plugins of the build's own.
+    applied: Vec<String>,
     /// The file applies the Spring dependency-management plugin, whose `mavenBom` imports
     /// read project properties (halo's `thymeleaf.version` in `:application`, not in `:api`).
     dm: bool,
@@ -1490,6 +1502,9 @@ struct Context {
     exported: bool,
     /// Whether it is runtime-only (see `Declared::runtime_only`).
     runtime_only: bool,
+    /// Whether its configuration is a tool's own (`checkstyle`), which no classpath read here
+    /// extends: its constraints manage nothing read.
+    custom: bool,
     /// `testImplementation.extendsFrom testShadow`: a custom configuration to the standard one
     /// that takes it in, so it gets that one's scope.
     extended_by: BTreeMap<String, String>,
@@ -1687,7 +1702,8 @@ enum Block {
 fn read_script(text: &str, context: &mut Context) -> Module {
     let mut module = Module::default();
     let mut blocks: Vec<Block> = Vec::new();
-    let text = fold_rich_versions(text);
+    let text = catalog_lookups(text, &context.catalog);
+    let text = fold_rich_versions(&text);
     let mut open_deps: Option<OpenDeps> = None;
     // Open branches the default build decides: (block depth inside, taken), and the last
     // one closed, for an `else` on the next line.
@@ -1956,6 +1972,30 @@ fn property_default(value: &str, vars: &BTreeMap<String, String>) -> Option<Stri
         .and_then(|i| i.strip_suffix(')'))
         .unwrap_or(v)
         .trim();
+    // `findProperty("k")?.toString() != "false"`: with k unset, a default build compares null.
+    for (op, equal) in [(" != ", false), (" == ", true)] {
+        if let Some((left, right)) = v.split_once(op) {
+            let (literal, tail) = quoted(right.trim())?;
+            if !tail.trim().is_empty() {
+                return None;
+            }
+            let left = left.trim();
+            let left = left
+                .strip_suffix("?.toString()")
+                .or_else(|| left.strip_suffix(".toString()"))
+                .unwrap_or(left);
+            let left = left
+                .strip_prefix("project.")
+                .or_else(|| left.strip_prefix("rootProject."))
+                .unwrap_or(left);
+            let (key, end) = quoted(left.strip_prefix("findProperty(")?)?;
+            if end.trim() != ")" {
+                return None;
+            }
+            let same = vars.get(key).map(String::as_str) == Some(literal);
+            return Some((same == equal).to_string());
+        }
+    }
     if let Some(inner) = v.strip_prefix("System.getProperty(") {
         let (_, tail) = quoted(inner.trim_start())?;
         let tail = tail.trim_start().strip_prefix(',')?;
@@ -2135,6 +2175,9 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
     let Some((id, _)) = plugin_line(line, &context.catalog, &context.vars) else {
         return;
     };
+    if !line.trim_end().ends_with("apply false") {
+        module.applied.push(id.clone());
+    }
     if id == SPRING_DM && !line.trim_end().ends_with("apply false") {
         module.dm = true;
     }
@@ -2298,6 +2341,225 @@ fn kotlin_dsl(context: &Context, module: &mut Module) {
     }
 }
 
+/// The plugin id of a precompiled script plugin: `cosid.java` for
+/// `build-logic/src/main/kotlin/cosid.java.gradle.kts`, under its `package` when it has one.
+/// Scripts under `src/main/kotlin` or `src/main/groovy` only.
+fn convention_id(file: &str, text: &str) -> Option<String> {
+    let at = file
+        .find("src/main/kotlin/")
+        .or_else(|| file.find("src/main/groovy/"))?;
+    if at > 0 && !file[..at].ends_with('/') {
+        return None;
+    }
+    let name = file.rsplit('/').next()?;
+    let stem = name
+        .strip_suffix(".gradle.kts")
+        .or_else(|| name.strip_suffix(".gradle"))?;
+    if stem.is_empty() || stem == "build" {
+        return None;
+    }
+    let package = name
+        .ends_with(".kts")
+        .then(|| {
+            text.lines()
+                .map(str::trim)
+                .find(|l| !l.is_empty())
+                .and_then(|l| l.strip_prefix("package "))
+                .map(|p| p.trim().trim_end_matches(';').to_string())
+        })
+        .flatten();
+    Some(match package {
+        Some(p) if !p.is_empty() => format!("{p}.{stem}"),
+        _ => stem.to_string(),
+    })
+}
+
+/// A project that applies one of the build's convention plugins (`id("cosid.library")`) takes
+/// its declarations, and those of the conventions it applies in turn, as if written in the
+/// project's own file, before the file's own. A convention no project applies stays build
+/// logic: development only.
+fn apply_conventions(conventions: &BTreeMap<String, usize>, modules: &mut [Module]) {
+    if conventions.is_empty() {
+        return;
+    }
+    let is_convention: BTreeSet<usize> = conventions.values().copied().collect();
+    let mut used = BTreeSet::new();
+    for i in 0..modules.len() {
+        if is_convention.contains(&i) {
+            continue;
+        }
+        // The conventions reached, depth first, each once.
+        let mut order = Vec::new();
+        let mut stack: Vec<String> = modules[i].applied.iter().rev().cloned().collect();
+        while let Some(id) = stack.pop() {
+            let Some(&c) = conventions.get(&id) else {
+                continue;
+            };
+            if order.contains(&c) {
+                continue;
+            }
+            order.push(c);
+            stack.extend(modules[c].applied.iter().rev().cloned());
+        }
+        if order.is_empty() {
+            continue;
+        }
+        let mut deps = Vec::new();
+        let mut platforms = Vec::new();
+        let mut constraints = Vec::new();
+        let mut project_platforms = Vec::new();
+        let mut project_deps = Vec::new();
+        let mut forced = Vec::new();
+        let mut dm = false;
+        for &c in &order {
+            used.insert(c);
+            let from = &modules[c];
+            deps.extend(from.deps.iter().cloned());
+            platforms.extend(from.platforms.iter().cloned());
+            constraints.extend(from.constraints.iter().cloned());
+            project_platforms.extend(from.project_platforms.iter().cloned());
+            project_deps.extend(from.project_deps.iter().cloned());
+            forced.extend(from.forced.iter().cloned());
+            dm |= from.dm;
+        }
+        let module = &mut modules[i];
+        let added = platforms.len();
+        platforms.append(&mut module.platforms);
+        module.platforms = platforms;
+        module.shared_from = module.shared_from.map(|at| at + added);
+        deps.append(&mut module.deps);
+        module.deps = deps;
+        constraints.append(&mut module.constraints);
+        module.constraints = constraints;
+        module.project_platforms.extend(project_platforms);
+        module.project_deps.extend(project_deps);
+        module.forced.extend(forced);
+        module.dm |= dm;
+    }
+    for &c in conventions.values() {
+        let module = &mut modules[c];
+        if used.contains(&c) {
+            // Resolved where it is applied, not on its own.
+            module.deps.clear();
+        } else {
+            module.deps.iter_mut().for_each(|d| d.scope = "test");
+        }
+    }
+}
+
+/// The catalog's API as a convention plugin calls it, rewritten to what the reader reads:
+/// `libs.findLibrary("a-b").get()` to `libs.a.b`, and `libs.findVersion("v").get()` (with
+/// `.requiredVersion` or `.toString()`) to the version, inside a string or as one. A one-line
+/// helper over either (CosId's `fun library(name: String) = libs.findLibrary(name).get()`) is
+/// read the same way.
+fn catalog_lookups(text: &str, catalog: &Catalog) -> String {
+    if !text.contains(".findLibrary(") && !text.contains(".findVersion(") {
+        return text.to_string();
+    }
+    // Helpers: name to whether it finds a library (else a version).
+    let mut helpers: Vec<(String, bool)> = Vec::new();
+    for line in text.lines() {
+        let Some(rest) = line.trim().strip_prefix("fun ") else {
+            continue;
+        };
+        let Some((name, body)) = rest.split_once('(') else {
+            continue;
+        };
+        let Some((_, value)) = body.split_once(" = ") else {
+            continue;
+        };
+        let value = value.trim();
+        let lookup = value
+            .strip_prefix("libs.")
+            .or_else(|| value.strip_prefix("versionCatalogs.named(\"libs\")."));
+        if let Some(lookup) = lookup {
+            if lookup.starts_with("findLibrary(") {
+                helpers.push((name.trim().to_string(), true));
+            } else if lookup.starts_with("findVersion(") {
+                helpers.push((name.trim().to_string(), false));
+            }
+        }
+    }
+    let mut calls: Vec<(String, bool)> = vec![
+        (
+            "versionCatalogs.named(\"libs\").findLibrary".to_string(),
+            true,
+        ),
+        (
+            "versionCatalogs.named(\"libs\").findVersion".to_string(),
+            false,
+        ),
+        ("libs.findLibrary".to_string(), true),
+        ("libs.findVersion".to_string(), false),
+    ];
+    calls.extend(helpers);
+    let mut out = String::with_capacity(text.len());
+    for line in text.lines() {
+        if line.trim().starts_with("fun ") {
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        }
+        let mut line = line.to_string();
+        for (call, library) in &calls {
+            let open = format!("{call}(\"");
+            let mut from = 0;
+            while let Some(at) = line[from..].find(&open).map(|i| i + from) {
+                // A helper's name must not be the tail of a longer name (`libs.findLibrary`).
+                let before = line[..at].chars().next_back();
+                if before.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
+                    && !call.contains('.')
+                {
+                    from = at + open.len();
+                    continue;
+                }
+                let name_at = at + open.len();
+                let Some(len) = line[name_at..].find("\")") else {
+                    break;
+                };
+                let name = line[name_at..name_at + len].to_string();
+                let mut end = name_at + len + 2;
+                for tail in [".get()", ".requiredVersion", ".toString()"] {
+                    if line[end..].starts_with(tail) {
+                        end += tail.len();
+                    }
+                }
+                let replacement = if *library {
+                    catalog
+                        .libraries
+                        .contains_key(&name)
+                        .then(|| format!("libs.{}", accessor(&name)))
+                } else {
+                    catalog.versions.get(&accessor(&name)).map(|v| {
+                        // Inside `${...}` the version stands alone; elsewhere it is a string.
+                        let wrapped = line[..at].ends_with("${") && line[end..].starts_with('}');
+                        if wrapped {
+                            v.clone()
+                        } else {
+                            format!("\"{v}\"")
+                        }
+                    })
+                };
+                let Some(replacement) = replacement else {
+                    from = end;
+                    continue;
+                };
+                let (start, stop) =
+                    if !*library && line[..at].ends_with("${") && line[end..].starts_with('}') {
+                        (at - 2, end + 1)
+                    } else {
+                        (at, end)
+                    };
+                line.replace_range(start..stop, &replacement);
+                from = start + replacement.len();
+            }
+        }
+        out.push_str(&line);
+        out.push('\n');
+    }
+    out
+}
+
 /// `line` without its strings, so a brace in one does not count.
 fn code_only(line: &str) -> String {
     let mut out = String::new();
@@ -2372,6 +2634,7 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
     context.exported = exported_by(configuration);
     context.processor = is_processor(configuration);
     context.runtime_only = configuration.to_ascii_lowercase().contains("runtimeonly");
+    context.custom = !is_configuration(&name) && !context.extended_by.contains_key(&name);
     let before = (module.platforms.len(), module.constraints.len());
     read_values(rest, scope, block, context, module);
     // Only a named test configuration keeps its platform to the tests: Spring Framework's
@@ -2387,6 +2650,7 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
     context.exported = true;
     context.processor = false;
     context.runtime_only = false;
+    context.custom = false;
 }
 
 /// Whether a configuration's dependencies reach the compile classpath of a project that
@@ -2469,6 +2733,7 @@ fn read_declaration(
     let exported = context.exported;
     let processor = context.processor;
     let runtime_only = context.runtime_only;
+    let custom = context.custom;
     let add = |module: &mut Module, c: Coordinate, platform: bool| {
         if platform && processor {
             // A processor's platform manages that path only; it lists nothing either.
@@ -2486,7 +2751,7 @@ fn read_declaration(
             module.platforms.push(c);
         } else if block == Block::Constraints {
             // A constraint without a version (a `because` only) manages nothing.
-            if c.version.is_some() {
+            if c.version.is_some() && !custom {
                 module.constraints.push(c);
             }
         } else {
@@ -2688,6 +2953,7 @@ mod tests {
             spring_dm: false,
             processor: false,
             runtime_only: false,
+            custom: false,
         }
     }
 
@@ -3997,6 +4263,64 @@ set = ["a-b", "e"]
             r.missing
         );
         assert_eq!(of("g:t"), want(&[("1", true), ("2", true)]));
+    }
+
+    #[test]
+    fn convention_plugins_declare_for_the_projects_that_apply_them() {
+        // CosId's `id("cosid.library")` applies `cosid.java`, whose dependencies come
+        // from the catalog through a helper, inside `if (bootBom)` with the property unset; a
+        // constraint on `checkstyle` manages nothing read. A convention nothing applies stays
+        // build logic.
+        let repo = Mem(BTreeMap::from([
+            pom("j", "1", &[]),
+            pom("h", "2", &[("a", "1")]),
+            pom("a", "1", &[]),
+            pom("a", "9", &[]),
+            pom("u", "1", &[]),
+        ]));
+        let dir = tree(
+            "conventions",
+            &[
+                (
+                    "gradle/libs.versions.toml",
+                    "[versions]\nh = \"2\"\n[libraries]\nj = { module = \"g:j\", version = \"1\" }\n",
+                ),
+                ("settings.gradle.kts", "include(\"core\")\n"),
+                (
+                    "build-logic/src/main/kotlin/my.library.gradle.kts",
+                    "plugins {\n    id(\"my.java\")\n}\n",
+                ),
+                (
+                    "build-logic/src/main/kotlin/my.java.gradle.kts",
+                    "fun library(name: String) = libs.findLibrary(name).get()\n\
+                     fun version(name: String) = libs.findVersion(name).get().requiredVersion\n\
+                     val bootBom = findProperty(\"my.bootBom\")?.toString() != \"false\"\n\
+                     dependencies {\n    if (bootBom) {\n        implementation(library(\"j\"))\n\
+                     \x20       implementation(\"g:h:${version(\"h\")}\")\n    }\n\
+                     \x20   constraints {\n        \"checkstyle\"(\"g:a:9\")\n    }\n}\n",
+                ),
+                (
+                    "build-logic/src/main/kotlin/my.unused.gradle.kts",
+                    "dependencies {\n    implementation(\"g:u:1\")\n}\n",
+                ),
+                (
+                    "core/build.gradle.kts",
+                    "plugins {\n    id(\"my.library\")\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        let of = |name: &str| -> Vec<(String, bool)> {
+            r.packages
+                .iter()
+                .filter(|p| p.name == name)
+                .map(|p| (p.version.clone(), p.dev))
+                .collect()
+        };
+        assert_eq!(of("g:j"), [("1".to_string(), false)], "{:?}", r.missing);
+        assert_eq!(of("g:h"), [("2".to_string(), false)]);
+        assert_eq!(of("g:a"), [("1".to_string(), false)]);
+        assert_eq!(of("g:u"), [("1".to_string(), true)]);
     }
 
     #[test]
