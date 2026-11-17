@@ -44,11 +44,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a shadowed jar or a test-framework feature variant), its dependencies, and constraints that
   raise versions or manage an imported BOM. On three Kotlin builds this adds 27 to 36 packages
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
-- **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
+- **The Gradle reader is measured against real Gradle, and reads much more.** On 59 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 88.1% of the 9,550 modules at Gradle's version and 91.4% by name, up from 59.7% and
-  70.0% on the same POMs; 97.9% and 99.3% on the 51 builds whose dependencies no build plugin
-  adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
+  now lists 87.0% of the 11,446 modules at Gradle's version and 90.9% by name (the 56 first
+  builds alone went from 59.7% and 70.0% to 88.1% and 91.4%); 96.2% and 98.7% on the 53 builds
+  whose dependencies no build plugin adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
   `implementation` dependencies are only on the runtime classpath of a project that depends
@@ -162,7 +162,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   blocks included (logstash's FIPS libraries need `-PfedrampHighMode=true`), and
   `configurations.all { exclude ... }`, `configurations { all { exclude ... } }` and
   `configureEach` excludes drop a module on every classpath, direct declarations too
-  (conductor's Logback). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  (conductor's Logback). A root build's top-level `project(':p') { ... }` blocks configure
+  those projects, a `libs += [ k: "g:a:$versions.k" ]` map names coordinates when there is no
+  version catalog, and the `libs` catalog is read from the TOML file the script creating it
+  names (armeria's `dependencies.toml`): kafka 1 to 409 of 421, armeria 5 to 1,129 of 1,324. Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over

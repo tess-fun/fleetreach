@@ -36,7 +36,8 @@ pub fn has_gradle_build(dir: &Path) -> bool {
 #[must_use]
 pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     let mut missing = BTreeSet::new();
-    let scripts = build_scripts(dir, &mut missing);
+    let mut scripts = build_scripts(dir, &mut missing);
+    project_blocks(dir, &mut scripts);
     let mut vars = properties(&dir.join("gradle.properties"));
     // The wrapper decides which Gradle runs the build: axion picks its Spock by
     // `GradleVersion.current().version.startsWith("9.")`.
@@ -88,14 +89,14 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     for name in seen_twice {
         vars.remove(&name);
     }
-    let mut doc =
-        match fleetreach_core::repofile::read_to_string(dir.join("gradle/libs.versions.toml")) {
-            Ok(text) => toml::from_str::<toml::Table>(&text).unwrap_or_else(|e| {
-                missing.insert(format!("gradle/libs.versions.toml: {e}"));
-                toml::Table::new()
-            }),
-            Err(_) => toml::Table::new(),
-        };
+    let catalog_file = catalog_file(dir, &scripts);
+    let mut doc = match fleetreach_core::repofile::read_to_string(dir.join(&catalog_file)) {
+        Ok(text) => toml::from_str::<toml::Table>(&text).unwrap_or_else(|e| {
+            missing.insert(format!("{catalog_file}: {e}"));
+            toml::Table::new()
+        }),
+        Err(_) => toml::Table::new(),
+    };
     // A catalog can also be declared in the settings script; its entries join the file's.
     for name in ["settings.gradle", "settings.gradle.kts"] {
         if let Ok(text) = fleetreach_core::repofile::read_to_string(dir.join(name)) {
@@ -609,6 +610,131 @@ fn build_scripts(dir: &Path, missing: &mut BTreeSet<String>) -> Vec<(String, Str
     out
 }
 
+/// The TOML file of the `libs` catalog: `gradle/libs.versions.toml`, Gradle's default, or
+/// the one a script creating `libs` names, by `from(files("x.toml"))` or as the file its own
+/// code reads (armeria's `dependencies.toml`).
+fn catalog_file(dir: &Path, scripts: &[(String, String)]) -> String {
+    const DEFAULT: &str = "gradle/libs.versions.toml";
+    if dir.join(DEFAULT).is_file() {
+        return DEFAULT.to_string();
+    }
+    let settings = ["settings.gradle", "settings.gradle.kts"]
+        .iter()
+        .filter_map(|f| fleetreach_core::repofile::read_to_string(dir.join(f)).ok())
+        .map(|t| strip_comments(&t))
+        .collect::<Vec<_>>();
+    let texts = settings
+        .iter()
+        .map(String::as_str)
+        .chain(scripts.iter().map(|(_, t)| t.as_str()));
+    for text in texts {
+        let creates = [
+            "create(\"libs\")",
+            "create('libs')",
+            "register(\"libs\")",
+            "register('libs')",
+        ]
+        .iter()
+        .any(|c| text.contains(c));
+        if !creates {
+            continue;
+        }
+        let named: Vec<String> = strings(text)
+            .into_iter()
+            .filter(|s| s.ends_with(".toml"))
+            .map(|s| {
+                let mut s = s.as_str();
+                for p in [
+                    "${rootProject.projectDir}/",
+                    "${rootDir}/",
+                    "$rootDir/",
+                    "${projectDir}/",
+                ] {
+                    s = s.strip_prefix(p).unwrap_or(s);
+                }
+                s.to_string()
+            })
+            .collect();
+        if let [one] = named.as_slice() {
+            if !one.contains('$') && dir.join(one).is_file() {
+                return one.clone();
+            }
+        }
+    }
+    DEFAULT.to_string()
+}
+
+/// The root build's top-level `project(':p') { ... }` blocks configure project `:p`: each
+/// body moves to that project's build file, or stands as one at the project's directory when
+/// it has none (kafka declares every project's dependencies in its root build.gradle).
+fn project_blocks(dir: &Path, scripts: &mut Vec<(String, String)>) {
+    let Some(root) = scripts
+        .iter()
+        .position(|(f, _)| f == "build.gradle" || f == "build.gradle.kts")
+    else {
+        return;
+    };
+    let settings = ["settings.gradle", "settings.gradle.kts"]
+        .iter()
+        .find_map(|f| fleetreach_core::repofile::read_to_string(dir.join(f)).ok())
+        .map(|t| settings_paths(&strip_comments(&t)))
+        .unwrap_or_default();
+    let kotlin = scripts[root].0.ends_with(".kts");
+    let text = std::mem::take(&mut scripts[root].1);
+    let mut kept = String::new();
+    let mut bodies: Vec<(String, String)> = Vec::new();
+    let mut rest = text.as_str();
+    while !rest.is_empty() {
+        let end = rest.find('\n').map_or(rest.len(), |i| i + 1);
+        let line = &rest[..end];
+        let path = line
+            .strip_prefix("project(")
+            .and_then(|r| quoted(r))
+            .and_then(|(p, tail)| {
+                let tail = tail.trim_start().strip_prefix(')')?.trim();
+                (tail == "{" && p.starts_with(':')).then_some(p)
+            });
+        let open = path.and_then(|_| line.find('{'));
+        match (
+            path,
+            open.and_then(|o| balanced(&rest[o..], '{', '}').map(|b| (o, b))),
+        ) {
+            (Some(path), Some((o, body))) => {
+                bodies.push((path.to_string(), body.to_string()));
+                rest = &rest[o + body.len() + 2..];
+            }
+            _ => {
+                kept.push_str(line);
+                rest = &rest[end..];
+            }
+        }
+    }
+    scripts[root].1 = kept;
+    for (path, body) in bodies {
+        let project_dir = settings
+            .iter()
+            .find(|(p, _)| *p == path)
+            .map_or_else(|| path[1..].replace(':', "/"), |(_, d)| d.clone());
+        let in_dir = |f: &str| {
+            Path::new(f)
+                .parent()
+                .and_then(Path::to_str)
+                .is_some_and(|d| d == project_dir)
+        };
+        if let Some(i) = scripts.iter().position(|(f, _)| in_dir(f)) {
+            scripts[i].1.push('\n');
+            scripts[i].1.push_str(&body);
+        } else {
+            let name = if kotlin {
+                "build.gradle.kts"
+            } else {
+                "build.gradle"
+            };
+            scripts.push((format!("{project_dir}/{name}"), body));
+        }
+    }
+}
+
 fn properties(path: &Path) -> BTreeMap<String, String> {
     let text = fleetreach_core::repofile::read_to_string(path).unwrap_or_default();
     text.lines()
@@ -799,7 +925,8 @@ fn map_entries(text: &str, out: &mut Vec<(String, String)>) {
         let Some((name, open)) = l.split_once('=') else {
             continue;
         };
-        let name = name.trim();
+        // kafka's `libs += [ ... ]` adds to an `ext { libs = [:] }` map.
+        let name = name.trim().trim_end_matches('+').trim_end();
         let plain = !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
         if plain && open.trim() == "[" {
             current = Some(name.to_string());
@@ -3874,6 +4001,14 @@ fn read_declaration(
             .trim_end_matches(".asProvider");
         let aliases = context.aliases(path);
         if aliases.is_empty() {
+            // No catalog entry: a Groovy map named `libs` (kafka's `libs += [ k: "g:a:v" ]`).
+            if let Some(literal) = context.vars.get(&format!("libs.{path}")).cloned() {
+                match coordinate(&literal, &context.vars) {
+                    Ok(c) => add(module, c, platform),
+                    Err(e) => module.unread.push(e),
+                }
+                return;
+            }
             module
                 .unread
                 .push(format!("`libs.{path}` is not in the catalog"));
@@ -4559,6 +4694,77 @@ set = ["a-b", "e"]
         let r = resolve_gradle(&dir, &repo);
         assert_eq!(versions(&r, "g:a"), ["1"]);
         assert!(versions(&r, "g:log").is_empty(), "{:?}", r.packages);
+    }
+
+    #[test]
+    fn a_root_project_block_configures_that_project() {
+        // kafka: the root build.gradle's `project(':clients') { dependencies { ... } }` blocks
+        // are each project's build; the projects have no build file of their own.
+        let repo = Mem(BTreeMap::from([pom("a", "1", &[]), pom("a", "2", &[])]));
+        let dir = tree(
+            "project-blocks",
+            &[
+                ("settings.gradle", "include 'lib', 'app'\n"),
+                (
+                    "build.gradle",
+                    "subprojects {\n    apply plugin: 'java'\n}\n\
+                     project(':lib') {\n    dependencies {\n        implementation 'g:a:1'\n    }\n}\n\
+                     project(':app') {\n    dependencies {\n        implementation 'g:a:2'\n    }\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:a"), ["1", "2"], "{:?}", r.missing);
+    }
+
+    #[test]
+    fn a_libs_map_added_to_names_coordinates() {
+        // kafka's gradle/dependencies.gradle: `versions += [ k: "v" ]`, `libs += [ k:
+        // "g:a:$versions.k" ]`, named as `libs.k` with no version catalog.
+        let repo = Mem(BTreeMap::from([pom("a", "1", &[])]));
+        let dir = tree(
+            "libs-map",
+            &[
+                (
+                    "gradle/dependencies.gradle",
+                    "ext {\n  versions = [:]\n  libs = [:]\n}\n\
+                     versions += [\n  a: \"1\",\n]\n\
+                     libs += [\n  a: \"g:a:$versions.a\",\n]\n",
+                ),
+                (
+                    "build.gradle",
+                    "apply from: \"$rootDir/gradle/dependencies.gradle\"\n\
+                     dependencies {\n    implementation libs.a\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:a"), ["1"], "{:?}", r.missing);
+    }
+
+    #[test]
+    fn the_libs_catalog_can_live_in_another_toml_file() {
+        // armeria: the settings apply a script that creates `libs` from the root's
+        // `dependencies.toml`, read by its own code.
+        let repo = Mem(BTreeMap::from([pom("a", "1", &[])]));
+        let dir = tree(
+            "catalog-file",
+            &[
+                ("settings.gradle", "apply from: \"${rootDir}/gradle/catalog.gradle\"\n"),
+                (
+                    "gradle/catalog.gradle",
+                    "def file = new File(\"${rootProject.projectDir}/dependencies.toml\")\n\
+                     dependencyResolutionManagement {\n    versionCatalogs {\n        create(\"libs\") { libs ->\n        }\n    }\n}\n",
+                ),
+                (
+                    "dependencies.toml",
+                    "[versions]\na = \"1\"\n\n[libraries.a]\nmodule = \"g:a\"\nversion.ref = \"a\"\n",
+                ),
+                ("build.gradle", "dependencies {\n    implementation libs.a\n}\n"),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:a"), ["1"], "{:?}", r.missing);
     }
 
     #[test]

@@ -911,17 +911,22 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   containers (`docs/differential/gradle`: `run.sh` copies a repo, runs `faDeps` from
   `init.gradle` over the compile, runtime, test-compile and test-runtime classpaths, 3.5 GB,
   20-minute kill; `compare.py` scores). Corpus: the 103 JVM builds of 311 sparse clones in
-  ~/fa-testbed/gradle (208 Android/KMP skipped, they need the Android SDK). **56 resolved**;
-  47 fail for reasons of their own (dead plugin repositories, toolchains Gradle cannot fetch
-  on arm64, files the sparse clone lacks, plugins that need a full checkout). On the same POMs
-  (Gradle's own download cache), **88.1% of 9,550 modules at Gradle's version, 91.4% by name**,
-  from 59.7% and 70.0% for the reader before this round; median repo 100% exact, 51 of 56 at
-  90% or more. **97.9% and 99.3% on the 51 builds whose dependencies no build plugin adds**:
-  the five others (ideavim and MinecraftDev on the IntelliJ Platform plugin, Paper and
-  WorldEdit on paperweight's dev bundle, minecolonies on ForgeGradle) hold most of the
+  ~/fa-testbed/gradle (208 Android/KMP skipped, they need the Android SDK). **59 resolved**
+  (kafka, armeria and MCCustomSkinLoader recovered on scratch copies: every declared project
+  directory and the upstream directory tree created empty, empty test sources, one fetched
+  file each); 44 fail for reasons of their own (dead plugin repositories, toolchains Gradle
+  cannot fetch on arm64, files the sparse clone lacks, plugins that need a full checkout,
+  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **87.0% of
+  11,446 modules at Gradle's version, 90.9% by name** (the 56 first builds: 88.1% and 91.4%,
+  from 59.7% and 70.0%); median repo 100% exact, 52 of 59 at 90% or more. **96.2% and 98.7%
+  on the 53 builds whose dependencies no build plugin adds**: the six others (ideavim and
+  MinecraftDev on the IntelliJ Platform plugin, Paper and WorldEdit on paperweight's dev
+  bundle, minecolonies on ForgeGradle, MCCustomSkinLoader on its own buildSrc plugin that
+  reads Minecraft's library manifest) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 170 misses remain in
-  the 51 builds, ihub-pub's included. Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 377 misses remain in
+  the 53 builds, ihub-pub's included (armeria 195: its `[boms]` and flag scripts are its own
+  code). Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
   that Gradle never builds as part of the project. Later rules: the main classpath resolved
   without test dependencies (mybatis-plus's starter-test modules, 117 misses corpus-wide),
@@ -974,7 +979,9 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   unseen Kotlin versions reported (Charlatano 100%), a runtime classpath without
   `compileOnly`, processor or API-variant-only dependencies (gradle-versions-plugin 100%),
   branches a default build skips outside `dependencies { }` (logstash's FIPS libraries),
-  configuration-wide excludes (conductor's Logback), buildscript
+  configuration-wide excludes (conductor's Logback), root `project(':p') { }` blocks and
+  `libs += [...]` maps (kafka 409 of 421), the `libs` catalog from the TOML its script names
+  (armeria 1,129 of 1,324), buildscript
   `classpath` plugin versions with `apply plugin:` (spring-integration-samples 333 to 414),
   `lib."k"` (mybatis-plus 236 to 340), `set('k', v)` properties and POM relocations, which
   Gradle keeps and adds the target of, unlike Maven, which replaces (spring-integration-samples
