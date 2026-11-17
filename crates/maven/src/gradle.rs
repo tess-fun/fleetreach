@@ -3414,7 +3414,11 @@ fn read_declaration(
         }
         // The Spring Boot plugin's BOM, at the version the plugin is declared with (even one
         // declared `apply false`).
-        if rest.starts_with("SpringBootPlugin.BOM_COORDINATES") {
+        // Imported or written out in full (isolating-the-domain).
+        let bom = rest
+            .strip_prefix("org.springframework.boot.gradle.plugin.")
+            .unwrap_or(rest);
+        if bom.starts_with("SpringBootPlugin.BOM_COORDINATES") {
             if let Some(version) = context.plugins.get(SPRING_BOOT) {
                 let c = Coordinate {
                     group: "org.springframework.boot".to_string(),
@@ -4946,6 +4950,47 @@ set = ["a-b", "e"]
             ]),
             "{missing:?}"
         );
+    }
+
+    #[test]
+    fn a_dependency_stays_out_only_when_every_path_excludes_it() {
+        // isolating-the-domain: thymeleaf-spring5 excludes ognl from thymeleaf,
+        // thymeleaf-extras-java8time does not, and Gradle keeps ognl. Excluded on both
+        // paths, y stays out.
+        let with = |a: &str, deps: &str| {
+            (
+                format!("g:{a}:1"),
+                format!("<project><groupId>g</groupId><artifactId>{a}</artifactId><version>1</version><dependencies>{deps}</dependencies></project>"),
+            )
+        };
+        let common = "<dependency><groupId>g</groupId><artifactId>common</artifactId><version>1</version><exclusions>";
+        let repo = Mem(BTreeMap::from([
+            with(
+                "spring",
+                &format!("{common}<exclusion><groupId>g</groupId><artifactId>x</artifactId></exclusion><exclusion><groupId>g</groupId><artifactId>y</artifactId></exclusion></exclusions></dependency>"),
+            ),
+            with(
+                "extras",
+                &format!("{common}<exclusion><groupId>g</groupId><artifactId>y</artifactId></exclusion></exclusions></dependency>"),
+            ),
+            with(
+                "common",
+                "<dependency><groupId>g</groupId><artifactId>x</artifactId><version>1</version></dependency>\
+                 <dependency><groupId>g</groupId><artifactId>y</artifactId><version>1</version></dependency>",
+            ),
+            pom("x", "1", &[]),
+            pom("y", "1", &[]),
+        ]));
+        let dir = tree(
+            "all-paths-exclusion",
+            &[(
+                "build.gradle",
+                "dependencies {\n    implementation 'g:spring:1'\n    implementation 'g:extras:1'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:x"), ["1"], "{:?}", r.missing);
+        assert!(versions(&r, "g:y").is_empty(), "{:?}", r.packages);
     }
 
     #[test]

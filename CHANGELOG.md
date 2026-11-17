@@ -46,8 +46,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 87.3% of the 9,550 modules at Gradle's version and 90.9% by name, up from 59.7% and
-  70.0% on the same POMs; 97.0% and 98.8% on the 51 builds whose dependencies no build plugin
+  now lists 87.4% of the 9,550 modules at Gradle's version and 90.9% by name, up from 59.7% and
+  70.0% on the same POMs; 97.1% and 98.8% on the 51 builds whose dependencies no build plugin
   adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
@@ -114,7 +114,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   earlier (`isJava9Compatible()`, `java8Compatible`, `isCompatibleWith(VERSION_1_9)`) are
   taken as true, the JDK that runs Gradle being 17 or later (Gradle 9 requires it), so
   grpc-spring's `@Generated` workaround dependencies are listed; a check for a later
-  release stays undecided. Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  release stays undecided. A dependency an exclusion removes stays out only when every path to its
+  parent excludes it, as in Gradle: thymeleaf-spring5 excludes ognl from thymeleaf,
+  thymeleaf-extras-java8time does not, so ognl and javassist are listed
+  (isolating-the-domain 98.8% to 100%; Hystrix, Timefold, grpc-spring and moshi gain too).
+  `platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES)`,
+  written out in full, is read like the imported name. Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over

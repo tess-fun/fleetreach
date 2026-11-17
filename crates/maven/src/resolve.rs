@@ -1958,6 +1958,10 @@ fn walk(
     // Each winner's own depth and path exclusions: Maven widens a winner's scope but keeps its
     // subtree (keycloak reaches guava first with `*` excluded, then at compile by grpc).
     let mut winners: BTreeMap<MgmtKey, (usize, Vec<(String, String)>)> = BTreeMap::new();
+    // Gradle: the exclusions every path to a module so far shares. A dependency stays out
+    // only when every path excludes it (isolating-the-domain: thymeleaf-spring5 excludes ognl
+    // from thymeleaf, thymeleaf-extras-java8time does not, and ognl is on the classpath).
+    let mut shared_exclusions: BTreeMap<MgmtKey, Vec<(String, String)>> = BTreeMap::new();
     // The widest scope of occurrences a range pin passed over before its winner.
     let mut skipped_scope: BTreeMap<MgmtKey, String> = BTreeMap::new();
     // (dependency, depth, parent node, scope, inherited exclusions, root management)
@@ -2118,7 +2122,10 @@ fn walk(
                 existing.scope.clone_from(&scope);
                 existing.dev = matches!(scope.as_str(), "test" | "provided");
                 let version = existing.version.clone();
-                let (depth, exclusions) = winners.get(&key).cloned().unwrap_or((depth, exclusions));
+                let (depth, exclusions) = winners
+                    .get(&key)
+                    .cloned()
+                    .unwrap_or_else(|| (depth, exclusions.clone()));
                 if let Some(eff) = r.remote(&dep.group, &dep.artifact, &version, 0) {
                     request_constraints(&eff, dep.platform, requests.as_deref_mut());
                     enqueue_children(
@@ -2130,6 +2137,41 @@ fn walk(
                         &mut queue,
                         r.compile_only,
                     );
+                }
+            }
+            if let Some(seen) = shared_exclusions.get_mut(&key) {
+                // What both exclude, wildcards included: `io.netty:*` on one path and
+                // `io.netty:netty-codec` on the other leave netty-codec out on both.
+                let covers = |set: &[(String, String)], (g, a): &(String, String)| {
+                    set.iter()
+                        .any(|(pg, pa)| (pg == "*" || pg == g) && (pa == "*" || pa == a))
+                };
+                let mut kept: Vec<(String, String)> = seen
+                    .iter()
+                    .filter(|e| covers(&exclusions, e))
+                    .cloned()
+                    .collect();
+                for e in &exclusions {
+                    if covers(seen, e) && !kept.contains(e) {
+                        kept.push(e.clone());
+                    }
+                }
+                // Narrower when something `seen` excluded is no longer excluded.
+                let narrower = seen.iter().any(|e| !covers(&kept, e));
+                if narrower {
+                    seen.clone_from(&kept);
+                    let (version, scope) = (existing.version.clone(), existing.scope.clone());
+                    if let Some(eff) = r.remote(&dep.group, &dep.artifact, &version, 0) {
+                        enqueue_children(
+                            &eff,
+                            &scope,
+                            &kept,
+                            (depth, root_ix),
+                            &name,
+                            &mut queue,
+                            r.compile_only,
+                        );
+                    }
                 }
             }
             continue;
@@ -2233,7 +2275,9 @@ fn walk(
                 scope: scope.clone(),
             },
         );
-        if !r.gradle {
+        if r.gradle {
+            shared_exclusions.insert(key.clone(), exclusions.clone());
+        } else {
             r.chosen.insert(key.clone(), version.clone());
             winners.insert(key.clone(), (depth, exclusions.clone()));
         }
