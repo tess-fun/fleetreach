@@ -3474,7 +3474,7 @@ fn read_script(text: &str, context: &mut Context) -> Module {
 fn read_project_script(text: &str, context: &mut Context) -> Module {
     let mut module = Module::default();
     let mut blocks: Vec<Block> = Vec::new();
-    let mut text = catalog_lookups(text, &context.catalog);
+    let mut text = null_branches(&catalog_lookups(text, &context.catalog), &context.vars);
     match catalog_platform(&text, &context.catalog, &context.vars) {
         Ok(Some(written)) => text.push_str(&written),
         Ok(None) => {}
@@ -4679,6 +4679,75 @@ fn expand_lists(text: &str, lists: &BTreeMap<String, Vec<String>>) -> String {
         out.push('\n');
     }
     out
+}
+
+/// `val v = findProperty("k")?.toString()` with k unset is null in a default build, so a
+/// declaration `cfg(if (v == null) A else B)` declares A (and `v != null` declares B), as
+/// CosId's `managedVersions(if (springBootVersion == null) platform(...) else ...)` does.
+/// Any other shape is left as written, and reported where it is read.
+fn null_branches(text: &str, vars: &BTreeMap<String, String>) -> String {
+    let mut null: BTreeSet<&str> = BTreeSet::new();
+    for line in text.lines() {
+        let l = line.trim();
+        let Some(rest) = l.strip_prefix("val ").or_else(|| l.strip_prefix("var ")) else {
+            continue;
+        };
+        let Some((name, value)) = rest.split_once('=') else {
+            continue;
+        };
+        let value = value.trim();
+        let value = value
+            .strip_suffix("?.toString()")
+            .or_else(|| value.strip_suffix(" as String?"))
+            .unwrap_or(value);
+        let value = value.strip_prefix("project.").unwrap_or(value);
+        let Some((key, tail)) = value.strip_prefix("findProperty(").and_then(quoted) else {
+            continue;
+        };
+        if tail.trim() == ")" && !vars.contains_key(key) {
+            null.insert(name.trim());
+        }
+    }
+    if null.is_empty() || !text.contains("(if (") {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    for line in text.lines() {
+        out.push_str(&null_branch(line, &null).unwrap_or_else(|| line.to_string()));
+        out.push('\n');
+    }
+    out
+}
+
+fn null_branch(line: &str, null: &BTreeSet<&str>) -> Option<String> {
+    let (call, rest) = line.split_once("(if (")?;
+    let (test, rest) = rest.split_once(") ")?;
+    let (name, is_null) = if let Some(n) = test.strip_suffix(" == null") {
+        (n.trim(), true)
+    } else {
+        (test.strip_suffix(" != null")?.trim(), false)
+    };
+    if !null.contains(name) {
+        return None;
+    }
+    // `A else B)`: A runs to the ` else ` at paren depth 0.
+    let mut depth = 0i32;
+    let mut split = None;
+    for (i, c) in rest.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            _ if depth == 0 && rest[i..].starts_with(" else ") => {
+                split = Some(i);
+                break;
+            }
+            _ => {}
+        }
+    }
+    let at = split?;
+    let (yes, no) = (&rest[..at], rest[at + " else ".len()..].strip_suffix(')')?);
+    let taken = if is_null { yes } else { no };
+    Some(format!("{call}({})", taken.trim()))
 }
 
 /// A platform project built from the whole catalog (pulsar's `pulsar-dependencies`):
@@ -6193,6 +6262,45 @@ set = ["a-b", "e"]
         assert!(r.missing.is_empty(), "{:?}", r.missing);
         assert_eq!(versions(&r, "g:inner"), ["2"], "{:?}", r.packages);
         assert_eq!(versions(&r, "g:lib"), ["1"]);
+    }
+
+    #[test]
+    fn an_inline_if_on_an_unset_property_takes_its_null_branch() {
+        // CosId: `managedVersions(if (springBootVersion == null) platform(...) else
+        // enforcedPlatform(...))`, springBootVersion being `findProperty(...)?.toString()`.
+        let bom = |v: &str| {
+            (
+                format!("g:bom:{v}"),
+                format!(
+                    "<project><groupId>g</groupId><artifactId>bom</artifactId><version>{v}</version>\
+                     <packaging>pom</packaging><dependencyManagement><dependencies><dependency>\
+                     <groupId>g</groupId><artifactId>x</artifactId><version>{v}</version>\
+                     </dependency></dependencies></dependencyManagement></project>"
+                ),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            bom("1"),
+            bom("2"),
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+        ]));
+        for (test, want) in [("== null", "1"), ("!= null", "2")] {
+            let dir = tree(
+                &format!("null-branch-{}", &test[..1]),
+                &[(
+                    "build.gradle.kts",
+                    &format!(
+                        "plugins {{\n    java\n}}\nval boot = findProperty(\"boot\")?.toString()\n\
+                         dependencies {{\n    implementation(if (boot {test}) platform(\"g:bom:1\") else platform(\"g:bom:2\"))\n\
+                         \x20   implementation(\"g:x\")\n}}\n"
+                    ),
+                )],
+            );
+            let r = resolve_gradle(&dir, &repo);
+            assert!(r.missing.is_empty(), "{:?}", r.missing);
+            assert_eq!(versions(&r, "g:x"), [want], "{test}: {:?}", r.packages);
+        }
     }
 
     #[test]

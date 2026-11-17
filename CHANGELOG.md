@@ -235,6 +235,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checker-qual: 4.4.0 to compile, worldedit's 3.48.3 to run the tests). Under the Spring
   plugin a compile-only version still versions an unversioned test declaration of the same
   module. 143 packages Gradle does not list dropped out, none it does.
+- **An inline `if` on an unset property is read.** With `val v = findProperty("k")?.toString()`
+  and k set nowhere, a declaration `cfg(if (v == null) A else B)` declares A, as a default
+  build does (CosId's convention plugin puts the Spring Boot BOM on every classpath so).
+  CosId: 90.7% to 100% of 259 modules, 75 fewer packages Gradle does not list.
 - **A platform built from the whole catalog is read.** A Java platform project that loops
   over `libraryAliases` (pulsar's `pulsar-dependencies`), making BOM-named modules platforms
   and every other alias a constraint, is read as the declarations the loop makes, with its
