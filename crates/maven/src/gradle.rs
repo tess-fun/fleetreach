@@ -211,15 +211,29 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         }
     }
     apply_conventions(&conventions, &mut modules);
-    // `platform(project(":p"))` takes the platform project's versions, by its default path.
-    let by_path: BTreeMap<String, usize> = scripts
+    // `platform(project(":p"))` takes the platform project's versions, by its path: the
+    // directory's by default, or what the settings script names it (conductor renames every
+    // child `conductor-*`, pulsar moves projects to other directories).
+    let settings = ["settings.gradle", "settings.gradle.kts"]
         .iter()
-        .enumerate()
-        .filter_map(|(i, (file, _))| {
-            let dir = Path::new(file).parent()?.to_str()?;
-            Some((format!(":{}", dir.replace('/', ":")), i))
-        })
-        .collect();
+        .find_map(|f| fleetreach_core::repofile::read_to_string(dir.join(f)).ok())
+        .map(|t| settings_paths(&strip_comments(&t)))
+        .unwrap_or_default();
+    let mut by_path: BTreeMap<String, usize> = BTreeMap::new();
+    for (i, (file, _)) in scripts.iter().enumerate() {
+        let Some(dir) = Path::new(file).parent().and_then(Path::to_str) else {
+            continue;
+        };
+        by_path.insert(format!(":{}", dir.replace('/', ":")), i);
+    }
+    for (i, (file, _)) in scripts.iter().enumerate() {
+        let Some(dir) = Path::new(file).parent().and_then(Path::to_str) else {
+            continue;
+        };
+        for (path, _) in settings.iter().filter(|(_, d)| d == dir) {
+            by_path.insert(path.clone(), i);
+        }
+    }
     let managed: Vec<(Vec<Coordinate>, Vec<Coordinate>)> = modules
         .iter()
         .map(|m| {
@@ -806,6 +820,137 @@ fn kotlin_constants(text: &str, vars: &mut BTreeMap<String, String>, twice: &mut
 }
 
 /// The string at the start of `text` and what follows it.
+/// The project paths a settings script gives, with each project's directory relative to the
+/// root: its `include`s, `project(":p").projectDir = file("d")`, `project(":p").name = "n"`
+/// and `rootProject.children.each { it.name = "x-${it.name}" }`, applied in order.
+fn settings_paths(text: &str) -> Vec<(String, String)> {
+    fn rename(projects: &mut [(String, String)], from: &str, to: &str) {
+        let below = format!("{from}:");
+        for (path, _) in projects.iter_mut() {
+            if path == from {
+                *path = to.to_string();
+            } else if let Some(rest) = path.strip_prefix(&below) {
+                *path = format!("{to}:{rest}");
+            }
+        }
+    }
+    let mut projects: Vec<(String, String)> = Vec::new();
+    let lines: Vec<&str> = text.lines().collect();
+    let mut i = 0;
+    while i < lines.len() {
+        let line = lines[i].trim();
+        i += 1;
+        if let Some(rest) = line
+            .strip_prefix("include")
+            .filter(|r| r.starts_with([' ', '(', '\'', '"']))
+        {
+            // `include 'a',` / `include(` / a trailing `\` go on to the next lines.
+            let mut statement = rest.to_string();
+            while i < lines.len() {
+                let t = statement.trim_end();
+                let open = statement.matches('(').count() > statement.matches(')').count();
+                if !(open || t.ends_with(',') || t.ends_with('\\')) {
+                    break;
+                }
+                statement.push(' ');
+                statement.push_str(lines[i].trim());
+                i += 1;
+            }
+            for name in strings(&statement) {
+                let segments: Vec<&str> = name.trim_start_matches(':').split(':').collect();
+                for n in 1..=segments.len() {
+                    let path = format!(":{}", segments[..n].join(":"));
+                    if !projects.iter().any(|(p, _)| *p == path) {
+                        projects.push((path, segments[..n].join("/")));
+                    }
+                }
+            }
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("project(") {
+            let Some((path, tail)) = quoted(rest.trim_start()) else {
+                continue;
+            };
+            let path = format!(":{}", path.trim_start_matches(':'));
+            let tail = tail.trim_start().trim_start_matches(')').trim_start();
+            if let Some(value) = tail.strip_prefix(".projectDir").map(str::trim_start) {
+                let Some(value) = value.strip_prefix('=') else {
+                    continue;
+                };
+                let Some(dir) = strings(value).pop() else {
+                    continue;
+                };
+                let dir = [
+                    "${rootDir}/",
+                    "$rootDir/",
+                    "${settingsDir}/",
+                    "$settingsDir/",
+                    "./",
+                ]
+                .iter()
+                .fold(dir.as_str(), |d, p| d.strip_prefix(p).unwrap_or(d))
+                .trim_end_matches('/')
+                .to_string();
+                if dir.contains('$') || dir.starts_with(['/', '.']) {
+                    continue;
+                }
+                match projects.iter_mut().find(|(p, _)| *p == path) {
+                    Some(project) => project.1 = dir,
+                    None => projects.push((path, dir)),
+                }
+            } else if let Some(value) = tail.strip_prefix(".name").map(str::trim_start) {
+                let Some(name) = value.strip_prefix('=').and_then(|v| strings(v).pop()) else {
+                    continue;
+                };
+                if name.contains('$') {
+                    continue;
+                }
+                let parent = path.rsplit_once(':').map_or("", |(p, _)| p);
+                rename(&mut projects, &path, &format!("{parent}:{name}"));
+            }
+            continue;
+        }
+        // `rootProject.children.each { it.name = "conductor-${it.name}" }`, the block on one
+        // line or a few.
+        if line.starts_with("rootProject.children.each")
+            || line.starts_with("rootProject.children.forEach")
+        {
+            let mut block = line.to_string();
+            while i < lines.len() && block.matches('{').count() > block.matches('}').count() {
+                block.push(' ');
+                block.push_str(lines[i].trim());
+                i += 1;
+            }
+            let var = block
+                .split_once('{')
+                .and_then(|(_, b)| b.split_once("->"))
+                .map_or("it", |(v, _)| v.trim())
+                .to_string();
+            let own = format!("${{{var}.name}}");
+            let Some(template) = block
+                .split_once(&format!("{var}.name"))
+                .and_then(|(_, t)| t.trim_start().strip_prefix('='))
+                .and_then(|t| strings(t).into_iter().next())
+                .filter(|t| t.contains(&own))
+            else {
+                continue;
+            };
+            let children: Vec<String> = projects
+                .iter()
+                .map(|(p, _)| p.clone())
+                .filter(|p| p.matches(':').count() == 1)
+                .collect();
+            for child in children {
+                let named = template.replace(&own, &child[1..]);
+                if !named.contains('$') {
+                    rename(&mut projects, &child, &format!(":{named}"));
+                }
+            }
+        }
+    }
+    projects
+}
+
 fn quoted(text: &str) -> Option<(&str, &str)> {
     let q = text.chars().next().filter(|c| *c == '"' || *c == '\'')?;
     // A Groovy `${...}` may hold quotes of its own (`"${lib["x"]}"`): skip over it.
@@ -3906,6 +4051,59 @@ set = ["a-b", "e"]
         assert_eq!(scope_of("jmhImplementation"), "test");
         assert_eq!(scope_of("benchmarkImplementation"), "test");
         assert_eq!(scope_of("modImplementation"), "compile");
+    }
+
+    #[test]
+    fn project_paths_follow_the_settings_script() {
+        // conductor names every child `conductor-*` and moves some to other directories;
+        // Hystrix and kafka rename single projects. `project(":conductor-lib")` is lib/.
+        let paths = settings_paths(
+            "include 'lib', 'app', \\\n  'contrib/tool', 'storage:api'\n\
+             rootProject.children.each {it.name=\"conductor-${it.name}\"}\n\
+             project(':conductor-sched').projectDir = file('scheduler/core')\n\
+             project(':conductor-contrib/tool').name = 'tool'\n\
+             project(':conductor-storage:api').name = 'storage-api'\n\
+             project(':x').projectDir = new File(rootDir, 'tools/x')\n",
+        );
+        let path_of = |dir: &str| {
+            paths
+                .iter()
+                .filter(|(_, d)| d == dir)
+                .map(|(p, _)| p.as_str())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(path_of("lib"), [":conductor-lib"]);
+        assert_eq!(path_of("scheduler/core"), [":conductor-sched"]);
+        assert_eq!(path_of("contrib/tool"), [":tool"]);
+        assert_eq!(path_of("storage/api"), [":conductor-storage:storage-api"]);
+        assert_eq!(path_of("tools/x"), [":x"]);
+
+        let repo = Mem(BTreeMap::from([pom("x", "1", &[])]));
+        let dir = tree(
+            "settings-paths",
+            &[
+                (
+                    "settings.gradle.kts",
+                    "include(\n    \"lib\",\n    \"app\"\n)\n\
+                     project(\":lib\").projectDir = file(\"modules/lib\")\n",
+                ),
+                (
+                    "modules/lib/build.gradle",
+                    "dependencies {\n    api 'g:x:1'\n}\n",
+                ),
+                (
+                    "app/build.gradle",
+                    "dependencies {\n    implementation project(':lib')\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(
+            r.missing.iter().all(|m| !m.contains("project `:lib`")),
+            "{:?}",
+            r.missing
+        );
+        assert_eq!(versions(&r, "g:x"), ["1"]);
     }
 
     #[test]

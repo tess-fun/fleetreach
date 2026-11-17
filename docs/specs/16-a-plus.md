@@ -916,11 +916,11 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   on arm64, files the sparse clone lacks, plugins that need a full checkout). On the same POMs
   (Gradle's own download cache), **87.0% of 9,550 modules at Gradle's version, 90.8% by name**,
   from 59.7% and 70.0% for the reader before this round; median repo 98.1% exact, 48 of 56 at
-  90% or more. **96.7% and 98.7% on the 51 builds whose dependencies no build plugin adds**:
+  90% or more. **96.8% and 98.7% on the 51 builds whose dependencies no build plugin adds**:
   the five others (ideavim and MinecraftDev on the IntelliJ Platform plugin, Paper and
   WorldEdit on paperweight's dev bundle, minecolonies on ForgeGradle) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 264 misses remain in
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 262 misses remain in
   the 51 builds, ihub-pub's included. Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
   that Gradle never builds as part of the project. Later rules: the main classpath resolved
@@ -943,7 +943,10 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   platform), convention plugins applied to the projects using them with the catalog API
   (`findLibrary`/`findVersion` and helpers) and `findProperty(...) != "x"` read, constraints
   on tool configurations dropped (caffeine 87.4%, 50 fewer extras corpus-wide; CosId's
-  `managedVersions(if (p == null) platform(...) else ...)` stays unread), buildscript
+  `managedVersions(if (p == null) platform(...) else ...)` stays unread), project paths from the
+  settings script (`projectDir`, `.name`, `rootProject.children.each` renames; conductor 99.0%
+  to 99.6%; pulsar -3 where its convention's `eachDependency { useVersion(...) }` on every
+  Jackson module, code, now meets more of the graph), buildscript
   `classpath` plugin versions with `apply plugin:` (spring-integration-samples 333 to 414),
   `lib."k"` (mybatis-plus 236 to 340), `set('k', v)` properties and POM relocations, which
   Gradle keeps and adds the target of, unlike Maven, which replaces (spring-integration-samples

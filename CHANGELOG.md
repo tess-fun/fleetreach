@@ -47,7 +47,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
   now lists 87.0% of the 9,550 modules at Gradle's version and 90.8% by name, up from 59.7% and
-  70.0% on the same POMs; 96.7% and 98.7% on the 51 builds whose dependencies no build plugin
+  70.0% on the same POMs; 96.8% and 98.7% on the 51 builds whose dependencies no build plugin
   adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
@@ -85,7 +85,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `libs.findVersion("x").get()`, and one-line helpers over either), as is
   `findProperty("k")?.toString() != "false"` with the property unset. A constraint on a
   tool's own configuration (`checkstyle`) manages none of the classpaths (caffeine 86.3% to
-  87.4% and 23 fewer packages Gradle does not list, gradle-versions-plugin 27 fewer). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  87.4% and 23 fewer packages Gradle does not list, gradle-versions-plugin 27 fewer). Project paths follow the settings script:
+  `project(':p').projectDir = file('d')`, `project(':p').name = 'n'` and
+  `rootProject.children.each { it.name = "x-${it.name}" }`, so a dependency on a renamed or
+  moved project brings its dependencies (conductor names every child `conductor-*`: its
+  dependents now take Spring Boot's bson 5.8.1 while `:conductor-ai` keeps the 4.11.0 it
+  declares; 99.0% to 99.6% and 27 fewer packages Gradle does not list). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over
