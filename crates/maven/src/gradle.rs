@@ -55,8 +55,11 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     }
     // `val v = extra["k"] as String` and `extra["k"] = Versions.K` name another variable,
     // known once every literal is read.
+    let mut later = Vec::new();
     for (name, key) in aliases {
-        if let Some(value) = vars.get(&key).cloned() {
+        if key.starts_with("libs.versions.") {
+            later.push((name, key));
+        } else if let Some(value) = vars.get(&key).cloned() {
             match vars.get(&name) {
                 Some(known) if *known != value => {
                     seen_twice.insert(name);
@@ -111,6 +114,12 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
     for (alias, version) in &catalog.versions {
         vars.entry(format!("libs.versions.{alias}"))
             .or_insert_with(|| version.clone());
+    }
+    // `val kotlinVersion = libs.versions.kotlin.get()`, once the catalog is read.
+    for (name, key) in later {
+        if let Some(value) = vars.get(&key).cloned() {
+            vars.entry(name).or_insert(value);
+        }
     }
     let mut plugins = catalog.plugins.clone();
     // A convention plugin often applies Kotlin, with its version set on the plugin's library.
@@ -223,6 +232,50 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         }
     }
     apply_conventions(&conventions, &mut modules);
+    // The Kotlin plugin adds the `kotlin-test` variant for the framework the tests run on
+    // next to a `kotlin-test` dependency: JUnit 5 with `useJUnitPlatform()`, TestNG with
+    // `useTestNG()`, else JUnit 4 (grpc-spring's kotlin-test-junit5, moshi's kotlin-test-junit).
+    let framework = |text: &str| {
+        if text.contains("useJUnitPlatform") {
+            Some("junit5")
+        } else if text.contains("useTestNG") {
+            Some("testng")
+        } else if text.contains("useJUnit") {
+            Some("junit")
+        } else {
+            None
+        }
+    };
+    let root_framework = scripts
+        .iter()
+        .find(|(f, _)| f == "build.gradle" || f == "build.gradle.kts")
+        .and_then(|(_, t)| framework(t));
+    for (module, (_, text)) in modules.iter_mut().zip(&scripts) {
+        if !module
+            .applied
+            .iter()
+            .any(|id| id == KOTLIN_JVM || id == "kotlin")
+        {
+            continue;
+        }
+        let variant = framework(text).or(root_framework).unwrap_or("junit");
+        let added: Vec<Declared> = module
+            .deps
+            .iter()
+            .filter(|d| {
+                d.coordinate.group == "org.jetbrains.kotlin"
+                    && d.coordinate.artifact == "kotlin-test"
+            })
+            .map(|d| Declared {
+                coordinate: Coordinate {
+                    artifact: format!("kotlin-test-{variant}"),
+                    ..d.coordinate.clone()
+                },
+                ..d.clone()
+            })
+            .collect();
+        module.deps.extend(added);
+    }
     // `platform(project(":p"))` takes the platform project's versions, by its path: the
     // directory's by default, or what the settings script names it (conductor renames every
     // child `conductor-*`, pulsar moves projects to other directories).
@@ -724,6 +777,11 @@ fn map_reference(text: &str) -> Option<String> {
 /// dotted name such as `Versions.KOTLIN`.
 fn variable_reference(value: &str) -> Option<String> {
     let mut v = value.trim();
+    // `System.getenv("MOSHI_KOTLIN_VERSION") ?: libs.versions.kotlin.get()`: the environment
+    // is not read, so its fallback.
+    if v.starts_with("System.getenv(") {
+        return variable_reference(v.split_once("?:")?.1);
+    }
     for suffix in [" as String?", " as String", "!!", ".toString()", ".get()"] {
         v = v.strip_suffix(suffix).unwrap_or(v).trim_end();
     }
@@ -1738,6 +1796,25 @@ const SPRING_BOOT: &str = "org.springframework.boot";
 fn classpath_plugin(line: &str, vars: &BTreeMap<String, String>) -> Option<(&'static str, String)> {
     let rest = line.strip_prefix("classpath")?;
     let rest = rest.trim_start().trim_start_matches('(').trim_start();
+    // `classpath(kotlin("gradle-plugin", version = kotlinVersion))` (moshi).
+    if let Some(inner) = rest.strip_prefix("kotlin(") {
+        let (module, tail) = quoted(inner.trim_start())?;
+        if module != "gradle-plugin" {
+            return None;
+        }
+        let tail = tail.trim_start().strip_prefix(',')?.trim_start();
+        let tail = tail
+            .strip_prefix("version")
+            .and_then(|t| t.trim_start().strip_prefix('='))
+            .unwrap_or(tail)
+            .trim();
+        let value = tail.trim_end_matches(')').trim();
+        let version = match quoted(value) {
+            Some((v, _)) => expand(v, vars).ok()?,
+            None => vars.get(value)?.clone(),
+        };
+        return Some((KOTLIN_JVM, version));
+    }
     let (text, _) = quoted(rest)?;
     let c = coordinate(text, vars).ok()?;
     let id = match (c.group.as_str(), c.artifact.as_str()) {
@@ -4781,6 +4858,76 @@ set = ["a-b", "e"]
                 .collect();
             assert_eq!(got, expected, "{gradle}: {:?}", r.missing);
         }
+    }
+
+    #[test]
+    fn kotlin_test_brings_the_test_frameworks_variant() {
+        // moshi: the Kotlin plugin on the buildscript classpath at
+        // `System.getenv(...) ?: libs.versions.kotlin.get()`, JUnit 4 by default; grpc-spring's
+        // root `useJUnitPlatform()` makes it JUnit 5.
+        let kotlin = |a: &str| {
+            (
+                format!("org.jetbrains.kotlin:{a}:2.0.0"),
+                format!("<project><groupId>org.jetbrains.kotlin</groupId><artifactId>{a}</artifactId><version>2.0.0</version></project>"),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            kotlin("kotlin-stdlib"),
+            kotlin("kotlin-test"),
+            kotlin("kotlin-test-junit"),
+            kotlin("kotlin-test-junit5"),
+        ]));
+        let variants = |root_extra: &str| {
+            let root = format!(
+                "buildscript {{\n  dependencies {{\n\
+                 \x20   val kotlinVersion = System.getenv(\"K\") ?: libs.versions.kotlin.get()\n\
+                 \x20   classpath(kotlin(\"gradle-plugin\", version = kotlinVersion))\n  }}\n}}\n{root_extra}"
+            );
+            let r = resolve_gradle(
+                &tree(
+                    "kotlin-test",
+                    &[
+                        ("settings.gradle.kts", "include(\":app\")\n"),
+                        (
+                            "gradle/libs.versions.toml",
+                            "[versions]\nkotlin = \"2.0.0\"\n",
+                        ),
+                        ("build.gradle.kts", root.as_str()),
+                        (
+                            "app/build.gradle.kts",
+                            "plugins {\n  kotlin(\"jvm\")\n}\n\
+                             dependencies {\n  testImplementation(kotlin(\"test\"))\n}\n",
+                        ),
+                    ],
+                ),
+                &repo,
+            );
+            let found: BTreeSet<String> = r
+                .packages
+                .iter()
+                .filter(|p| p.name.starts_with("org.jetbrains.kotlin:kotlin-test"))
+                .map(|p| format!("{}:{}", p.name, p.version))
+                .collect();
+            (found, r.missing)
+        };
+        let (found, missing) = variants("");
+        assert_eq!(
+            found,
+            BTreeSet::from([
+                "org.jetbrains.kotlin:kotlin-test:2.0.0".to_string(),
+                "org.jetbrains.kotlin:kotlin-test-junit:2.0.0".to_string(),
+            ]),
+            "{missing:?}"
+        );
+        let (found, missing) = variants("subprojects {\n  tasks.test { useJUnitPlatform() }\n}\n");
+        assert_eq!(
+            found,
+            BTreeSet::from([
+                "org.jetbrains.kotlin:kotlin-test:2.0.0".to_string(),
+                "org.jetbrains.kotlin:kotlin-test-junit5:2.0.0".to_string(),
+            ]),
+            "{missing:?}"
+        );
     }
 
     #[test]
