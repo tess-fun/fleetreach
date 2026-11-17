@@ -620,6 +620,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             exported: false,
             runtime_only: false,
             local: false,
+            soft: false,
         })
         .collect();
     if !unused.is_empty() {
@@ -682,12 +683,27 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             passes.push(Pass::Full);
         }
         let split = passes.len() > 1;
+        // With Kotlin applied, the Spring Boot plugin sets `kotlin.version` to the Kotlin
+        // plugin's version unless the build does, so the Boot BOM's Kotlin follows it
+        // (mmorpg's game-server: 2.2.0 over Boot 3.0.4's 1.7.22; its root, without Boot, 1.7.22).
+        let applies = |id: &str| module.applied.iter().any(|a| a == id);
+        let boot_kotlin = (applies(SPRING_BOOT)
+            && applies(KOTLIN_JVM)
+            && !context.vars.contains_key("kotlin.version"))
+        .then(|| context.plugins.get(KOTLIN_JVM))
+        .flatten()
+        .map(|kotlin| {
+            let mut vars = context.vars.clone();
+            vars.insert("kotlin.version".to_string(), kotlin.clone());
+            vars
+        });
+        let dm_overrides = boot_kotlin.as_ref().unwrap_or(&context.vars);
         for &pass in &passes {
             match resolve_gradle_module(
                 &module.to_pom(pass),
                 source,
                 if module.dm {
-                    &context.vars
+                    dm_overrides
                 } else {
                     &no_overrides
                 },
@@ -2738,6 +2754,9 @@ struct Declared {
     runtime_only: bool,
     /// On this project's own classpaths only, never on a consumer's (Spring's `optional`).
     local: bool,
+    /// A version a plugin adds (the Kotlin plugin's standard library at its own version): the
+    /// Spring dependency-management plugin still manages it, as it would an unversioned one.
+    soft: bool,
 }
 
 /// One of the classpaths a build file is resolved for.
@@ -2841,7 +2860,7 @@ impl Module {
             keep: self
                 .deps
                 .iter()
-                .filter(|d| d.coordinate.version.is_some())
+                .filter(|d| d.coordinate.version.is_some() && !d.soft)
                 .map(|d| (d.coordinate.group.clone(), d.coordinate.artifact.clone()))
                 .collect(),
             strict_boms: shared
@@ -3832,6 +3851,7 @@ fn jupiter_suite(line: &str, context: &Context, module: &mut Module) {
             exported: false,
             runtime_only,
             local: false,
+            soft: false,
         });
     }
 }
@@ -3884,6 +3904,7 @@ fn gretty_apis(text: &str, context: &Context, module: &mut Module) {
             exported: false,
             runtime_only: false,
             local: true,
+            soft: false,
         });
     }
 }
@@ -5033,6 +5054,7 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
                 exported: false,
                 runtime_only: true,
                 local: false,
+                soft: false,
             });
         }
         // Spring Boot applies its BOM through the dependency-management plugin, and only
@@ -5080,6 +5102,7 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
                 exported: false,
                 runtime_only: false,
                 local: false,
+                soft: false,
             });
         }
     } else if id == KOTLIN_JVM
@@ -5108,6 +5131,8 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
             exported: true,
             runtime_only: false,
             local: false,
+            // A BOM the Spring plugin imports manages it (mmorpg's Boot 3.0.4: 1.7.22).
+            soft: true,
         });
     }
 }
@@ -5221,6 +5246,7 @@ fn kotlin_dsl(context: &Context, module: &mut Module) {
             exported: false,
             runtime_only: false,
             local: false,
+            soft: false,
         });
     }
 }
@@ -6505,6 +6531,7 @@ fn read_declaration(
                     exported,
                     runtime_only,
                     local,
+                    soft: false,
                 });
             }
             module.platforms.push(c);
@@ -6522,6 +6549,7 @@ fn read_declaration(
                 exported,
                 runtime_only,
                 local,
+                soft: false,
             });
         }
     };
@@ -6580,6 +6608,7 @@ fn read_declaration(
                         exported,
                         runtime_only,
                         local,
+                        soft: false,
                     });
                 }
                 module.platforms.push(c);
@@ -7581,6 +7610,57 @@ set = ["a-b", "e"]
         assert!(r.missing.is_empty(), "{:?}", r.missing);
         assert_eq!(versions(&r, "g:inner"), ["2"], "{:?}", r.packages);
         assert_eq!(versions(&r, "g:lib"), ["1"]);
+    }
+
+    #[test]
+    fn the_spring_bom_manages_the_kotlin_plugins_standard_library() {
+        // mmorpg: under the dependency-management plugin, Boot 3.0.4's BOM manages the
+        // standard library the Kotlin plugin adds (the root: 1.7.22, not the plugin's 2.2.0);
+        // in a project that also applies Boot, Boot sets `kotlin.version` to the plugin's.
+        let kotlin = |v: &str| {
+            (
+                format!("org.jetbrains.kotlin:kotlin-stdlib:{v}"),
+                format!("<project><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-stdlib</artifactId><version>{v}</version></project>"),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            kotlin("1.7.22"),
+            kotlin("2.0.0"),
+            (
+                "org.springframework.boot:spring-boot-dependencies:3.0.4".to_string(),
+                "<project><groupId>org.springframework.boot</groupId><artifactId>spring-boot-dependencies</artifactId>\
+                 <version>3.0.4</version><packaging>pom</packaging><properties><kotlin.version>1.7.22</kotlin.version></properties>\
+                 <dependencyManagement><dependencies><dependency><groupId>org.jetbrains.kotlin</groupId>\
+                 <artifactId>kotlin-stdlib</artifactId><version>${kotlin.version}</version></dependency>\
+                 </dependencies></dependencyManagement></project>"
+                    .to_string(),
+            ),
+        ]));
+        let root = "buildscript {\n    dependencies {\n\
+             \x20       classpath(\"org.springframework.boot:spring-boot-gradle-plugin:3.0.4\")\n\
+             \x20       classpath 'io.spring.gradle:dependency-management-plugin:1.1.4'\n\
+             \x20       classpath \"org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.0\"\n    }\n}\n\
+             apply plugin: 'kotlin'\napply plugin: 'io.spring.dependency-management'\n\
+             dependencyManagement {\n    imports {\n\
+             \x20       mavenBom \"org.springframework.boot:spring-boot-dependencies:3.0.4\"\n    }\n}\n";
+        let app = "apply plugin: 'org.springframework.boot'\napply plugin: 'kotlin'\n\
+                   apply plugin: 'io.spring.dependency-management'\n";
+        let dir = tree(
+            "kotlin-under-spring",
+            &[
+                ("settings.gradle", "include 'app'\n"),
+                ("build.gradle", root),
+                ("app/build.gradle", app),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(
+            versions(&r, "org.jetbrains.kotlin:kotlin-stdlib"),
+            ["1.7.22", "2.0.0"],
+            "{:?}",
+            r.packages
+        );
     }
 
     #[test]

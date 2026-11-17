@@ -933,7 +933,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   bundle, minecolonies on ForgeGradle, MCCustomSkinLoader on its own buildSrc plugin that
   reads Minecraft's library manifest) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 102 misses. 134 misses remain in
+  (its own settings plugin supplies the catalog and BOMs), 102 misses. 128 misses remain in
   the 69 builds, ihub-pub's included (komga 10, from compose-desktop's host-dependent `currentOs`, armeria 3: a `strictly`
   ecj, one benchmark project's kotlin-stdlib-common, scala 3's scala-library). Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
@@ -1003,11 +1003,11 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   main classpath, a platform's nested platforms listed and managing with an
   `enforcedPlatform` forcing only its own constraints and version (kestra 234 to 477 of 478),
   named catalogs created from a TOML file (spotless's `pinnedLibs`, 60 to 86 of 87), the
-  Spring plugin's `dependencySet` entries (mmorpg 121 to 141 of 144; its root's Kotlin stdlib
-  1.7.22 under both the Spring and Kotlin plugins stays unexplained), build-logic plugin
+  Spring plugin's `dependencySet` entries (mmorpg 121 to 141 of 144), the Kotlin plugin's
+  standard library managed by an imported Boot BOM, with Boot plus Kotlin setting
+  `kotlin.version` to the Kotlin plugin's (mmorpg 144 of 144), build-logic plugin
   classes registered by id adding their unconditional literal `add(conf, "g:a:v")` and
-  `plugins.apply(...)` calls (Talaiot 118 to 157 of 158), the franzbecker Lombok plugin (LogNet; its Kotlin stdlib under
-  Boot's BOM, like mmorpg's, stays unexplained), LINE gradle-scripts `[boms]` as every project's platform, only where
+  `plugins.apply(...)` calls (Talaiot 118 to 157 of 158), the franzbecker Lombok plugin (LogNet), LINE gradle-scripts `[boms]` as every project's platform, only where
   `gradle/scripts/lib/common-dependencies.gradle` applies `dependenciesTomlBoms` (armeria
   1,129 to 1,293 of 1,324).
   spring-boot (86 of 1,032) declares its BOM in its own buildSrc `bom { library(...) }` DSL,

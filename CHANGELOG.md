@@ -235,6 +235,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checker-qual: 4.4.0 to compile, worldedit's 3.48.3 to run the tests). Under the Spring
   plugin a compile-only version still versions an unversioned test declaration of the same
   module. 143 packages Gradle does not list dropped out, none it does.
+- **The Spring BOM manages the Kotlin plugin's standard library.** The `kotlin-stdlib` the
+  Kotlin plugin adds at its own version is managed by a BOM the Spring dependency-management
+  plugin imports, as an unversioned declaration would be, and a project applying both Spring
+  Boot and Kotlin overrides the BOM's `kotlin.version` with the Kotlin plugin's, as Boot's
+  plugin does (mmorpg's Boot 3.0.4 BOM takes its root to 1.7.22, its Boot projects to the
+  plugin's 2.0.0). mmorpg: 141 to 144 of 144; LogNet's gRPC starter 3 more.
 - **Build variables set inside an `if` are read.** Script variables are read again with each
   `if` chain decided from what the last read settled, until nothing changes, so a value set
   in the branch a default build takes is known (kafka's `versions["scala"]`, set from
