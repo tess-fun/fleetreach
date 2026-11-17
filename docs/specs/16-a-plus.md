@@ -933,7 +933,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   bundle, minecolonies on ForgeGradle, MCCustomSkinLoader on its own buildSrc plugin that
   reads Minecraft's library manifest) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 212 misses remain in
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 211 misses remain in
   the 69 builds, ihub-pub's included (spring-boot 18, from its docs project's `projectsEvaluated` hook that adds every published Java project, armeria 13: OS-specific
   netty transports, one project's JUnit 6.0.2 line, a `strictly` ecj, scala 3's scala-library). Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos

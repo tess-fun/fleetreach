@@ -2167,10 +2167,38 @@ impl Module {
             .filter(|d| match pass {
                 Pass::Main => !matches!(d.scope, "test" | "provided"),
                 Pass::Compile => !matches!(d.scope, "test" | "runtime"),
-                Pass::TestCompile => matches!(d.scope, "compile" | "test") && !d.runtime_only,
-                Pass::Full => true,
+                // `compileOnlyApi` (provided and exported) is on the test compile classpath, a
+                // plain `compileOnly` is not, and neither is on the test runtime one
+                // (PlotSquared's checker-qual: 4.4.0 to compile its tests, worldedit's 3.48.3
+                // to run them).
+                Pass::TestCompile => {
+                    (matches!(d.scope, "compile" | "test") || (d.scope == "provided" && d.exported))
+                        && !d.runtime_only
+                }
+                Pass::Full => d.scope != "provided",
             })
             .collect();
+        // Under the Spring plugin, a declaration this pass leaves out still versions one of
+        // the same module the pass keeps without a version (LogNet's `compileOnly
+        // grpc-netty:${v}` its `testImplementation grpc-netty`), never one with its own.
+        if self.dm {
+            let unversioned = |d: &Declared| {
+                kept.iter().any(|k| {
+                    k.coordinate.version.is_none()
+                        && k.coordinate.group == d.coordinate.group
+                        && k.coordinate.artifact == d.coordinate.artifact
+                })
+            };
+            for d in self
+                .deps
+                .iter()
+                .filter(|d| !d.pom && d.coordinate.version.is_some())
+            {
+                if !kept.iter().any(|k| std::ptr::eq(*k, d)) && unversioned(d) {
+                    managed.push_str(&dep(&d.coordinate, ""));
+                }
+            }
+        }
         let excluded: Vec<&(String, String)> = self
             .excluded
             .iter()
@@ -6152,6 +6180,40 @@ set = ["a-b", "e"]
         assert_eq!(versions(&r, "g:bom"), ["4"]);
         let r = read("line-boms-unused", "");
         assert!(versions(&r, "g:bom").is_empty(), "{:?}", r.packages);
+    }
+
+    #[test]
+    fn compile_only_declarations_stay_off_the_test_runtime_classpath() {
+        // PlotSquared: `compileOnlyApi(checker-qual 4.4.0)` compiles main and tests, and
+        // worldedit's checker-qual 3.48.3 is what the tests run with.
+        let repo = Mem(BTreeMap::from([
+            pom("t", "1", &[("a", "1")]),
+            pom("a", "1", &[]),
+            pom("a", "2", &[]),
+            pom("n", "1", &[]),
+        ]));
+        let dir = tree(
+            "compile-only-test-runtime",
+            &[(
+                "build.gradle",
+                "plugins { id 'java-library' }\ndependencies {\n    compileOnlyApi 'g:a:2'\n    testImplementation 'g:t:1'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:a"), ["1", "2"], "{:?}", r.packages);
+        // Under the Spring plugin, LogNet's `compileOnly grpc-netty:${v}` still versions its
+        // unversioned `testImplementation grpc-netty`.
+        let dir = tree(
+            "compile-only-spring-versions",
+            &[(
+                "build.gradle",
+                "apply plugin: 'java'\napply plugin: 'io.spring.dependency-management'\ndependencies {\n    compileOnly 'g:n:1'\n    testImplementation 'g:n'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        assert_eq!(versions(&r, "g:n"), ["1"]);
     }
 
     #[test]

@@ -229,6 +229,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   p's `api` brings (Talaiot's JNA 5.13, kafka's upgrade tests' slf4j 1.7.25 to 1.7.30, two
   logstash annotations). A named configuration (`project(path: ':p', configuration: 'tests')`)
   still hands over all it holds.
+- **Compile-only declarations stay off the test runtime classpath.** `compileOnly` and
+  `compileOnlyApi` dependencies are no longer resolved onto the test runtime classpath, and
+  `compileOnlyApi` ones are on the test compile classpath, as in Gradle (PlotSquared's
+  checker-qual: 4.4.0 to compile, worldedit's 3.48.3 to run the tests). Under the Spring
+  plugin a compile-only version still versions an unversioned test declaration of the same
+  module. 143 packages Gradle does not list dropped out, none it does.
 - **Gradle's `1.0!!` version shorthand is read** as `strictly("1.0")` (kestra's platform
   pins kotlp so), no longer reported as a version of its own.
 - **spring-boot's own BOM DSL is read.** Its buildSrc `org.springframework.boot.bom` plugin
