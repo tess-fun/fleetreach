@@ -46,8 +46,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the POMs did not name. `.module` files are fetched with `--maven-fetch` like POMs.
 - **The Gradle reader is measured against real Gradle, and reads much more.** On 56 real
   Gradle builds resolved by Gradle 8.14 in containers (four classpaths per project), fleetreach
-  now lists 87.0% of the 9,550 modules at Gradle's version and 90.8% by name, up from 59.7% and
-  70.0% on the same POMs; 96.8% and 98.7% on the 51 builds whose dependencies no build plugin
+  now lists 87.1% of the 9,550 modules at Gradle's version and 90.8% by name, up from 59.7% and
+  70.0% on the same POMs; 96.9% and 98.7% on the 51 builds whose dependencies no build plugin
   adds. The main classpath is resolved without the test dependencies, as Gradle resolves each
   configuration on its own, so a test library no longer raises a version the shipped code
   uses. The compile classpath is resolved on its own too: a sibling project's
@@ -90,7 +90,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `rootProject.children.each { it.name = "x-${it.name}" }`, so a dependency on a renamed or
   moved project brings its dependencies (conductor names every child `conductor-*`: its
   dependents now take Spring Boot's bson 5.8.1 while `:conductor-ai` keeps the 4.11.0 it
-  declares; 99.0% to 99.6% and 27 fewer packages Gradle does not list). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  declares; 99.0% to 99.6% and 27 fewer packages Gradle does not list). `resolutionStrategy.eachDependency` rules
+  are read where their conditions are on `requested.group` and `requested.name` (`==`, `!=`,
+  `startsWith`, `&&`, nested `if` and `else`) and the version is a literal, a variable or the
+  catalog's: every request a rule matches takes its version, in the root's `allprojects` or
+  `subprojects` for every project, in a convention plugin for the projects that apply it, and
+  in a test `configurations.matching` block for the tests only (pulsar's Jackson rule 97.4% to
+  98.5% and 33 fewer packages Gradle does not list; conductor's lz4 floors, 99.9%). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over

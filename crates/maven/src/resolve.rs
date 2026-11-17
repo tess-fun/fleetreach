@@ -1659,6 +1659,39 @@ pub(crate) struct Enforced {
     /// `enforcedPlatform(...)`: BOMs and versions forced over everything, `keep` included.
     pub strict_boms: Vec<(String, String, String)>,
     pub strict_versions: Vec<(String, String, String)>,
+    /// `resolutionStrategy.eachDependency { ... useVersion(v) }`: the version every request
+    /// a rule matches takes, a later rule overriding an earlier one.
+    pub rules: Vec<VersionRule>,
+}
+
+/// One `useVersion` branch of an `eachDependency` rule, with the conditions around it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct VersionRule {
+    pub conditions: Vec<RuleCondition>,
+    pub version: String,
+}
+
+/// `requested.group == "g"`, `requested.name.startsWith("n")`, or the negation of one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RuleCondition {
+    pub on_name: bool,
+    pub prefix: bool,
+    pub value: String,
+    pub negated: bool,
+}
+
+impl VersionRule {
+    pub(crate) fn matches(&self, group: &str, artifact: &str) -> bool {
+        self.conditions.iter().all(|c| {
+            let field = if c.on_name { artifact } else { group };
+            let hit = if c.prefix {
+                field.starts_with(&c.value)
+            } else {
+                field == c.value
+            };
+            hit != c.negated
+        })
+    }
 }
 
 pub(crate) fn resolve_gradle_module(
@@ -1747,6 +1780,31 @@ pub(crate) fn resolve_gradle_module(
         for (key, version) in requests {
             if !forced.contains_key(&key) {
                 raised |= raise(&mut pins, key, &version);
+            }
+        }
+        // A rule sets the version of each request it matches; the walk shows which are met.
+        for p in &packages {
+            let Some((group, artifact)) = p.name.split_once(':') else {
+                continue;
+            };
+            let Some(rule) = enforced
+                .rules
+                .iter()
+                .rev()
+                .find(|r| r.matches(group, artifact))
+            else {
+                continue;
+            };
+            let key = (
+                group.to_string(),
+                artifact.to_string(),
+                "jar".to_string(),
+                String::new(),
+            );
+            if forced.get(&key) != Some(&rule.version) {
+                forced.insert(key.clone(), rule.version.clone());
+                pins.insert(key, rule.version.clone());
+                raised = true;
             }
         }
         if !raised && before == pins.len() {

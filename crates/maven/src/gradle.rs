@@ -8,7 +8,9 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
 
-use crate::resolve::{resolve_gradle_module, Enforced, PomSource, Resolution, ResolvedDep};
+use crate::resolve::{
+    resolve_gradle_module, Enforced, PomSource, Resolution, ResolvedDep, RuleCondition, VersionRule,
+};
 
 const SKIPPED_DIRS: &[&str] = &[".git", ".gradle", "build", "node_modules", "target", "out"];
 const MAX_FILES: usize = 2000;
@@ -177,6 +179,13 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         let mut module = read_script(text, &mut context);
         module.forced = forced_versions(text, &context.vars, &mut missing);
         module.forced.extend(settings_forced.iter().cloned());
+        for (rule, test_only, shared) in version_rules(text, &context.vars) {
+            if shared {
+                module.shared.rules.push((rule, test_only));
+            } else {
+                module.rules.push((rule, test_only));
+            }
+        }
         // Build logic runs at build time and never ships; a convention plugin's own
         // declarations belong to the projects that apply it.
         let convention = conventions.values().any(|&c| c == i);
@@ -205,6 +214,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             module.constraints.extend_from_slice(&shared.constraints);
             module.deps.extend_from_slice(&shared.deps);
             module.dm |= shared.dm;
+            module.rules.extend_from_slice(&shared.rules);
             module
                 .project_platforms
                 .extend_from_slice(&shared.project_platforms);
@@ -382,7 +392,8 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         let mut main = BTreeSet::new();
         let mut passes: Vec<Pass> = Vec::new();
         // A force on test configurations only leaves the main classpath to itself.
-        let test_force = module.forced.iter().any(|(_, test_only)| *test_only);
+        let test_force = module.forced.iter().any(|(_, test_only)| *test_only)
+            || module.rules.iter().any(|(_, test_only)| *test_only);
         if has_main && (has_test || has_runtime || test_force) {
             passes.push(Pass::Main);
         }
@@ -1038,6 +1049,9 @@ struct Module {
     /// `resolutionStrategy.force("g:a:v")`: versions forced over conflict resolution, the
     /// flag set when only test configurations are forced.
     forced: Vec<(Coordinate, bool)>,
+    /// `resolutionStrategy.eachDependency` rules, the flag set when only test
+    /// configurations take them.
+    rules: Vec<(VersionRule, bool)>,
     /// The plugin ids the file applies, for convention plugins of the build's own.
     applied: Vec<String>,
     /// The file applies the Spring dependency-management plugin, whose `mavenBom` imports
@@ -1048,6 +1062,8 @@ struct Module {
 #[derive(Debug, Default)]
 struct Shared {
     dm: bool,
+    /// `eachDependency` rules in the root's `allprojects { }` or `subprojects { }`.
+    rules: Vec<(VersionRule, bool)>,
     deps: Vec<Declared>,
     platforms: Vec<Coordinate>,
     constraints: Vec<Coordinate>,
@@ -1105,6 +1121,14 @@ impl Module {
                         .map(|(c, _)| c),
                 )
                 .filter_map(triple)
+                .collect(),
+            rules: self
+                .rules
+                .iter()
+                .filter(|(_, test_only)| {
+                    !test_only || matches!(pass, Pass::TestCompile | Pass::Full)
+                })
+                .map(|(r, _)| r.clone())
                 .collect(),
         }
     }
@@ -1397,6 +1421,275 @@ fn forced_versions(
         }
     }
     out
+}
+
+/// `resolutionStrategy.eachDependency { ... }` rules: each `useVersion(v)` with the
+/// `requested.group` / `requested.name` conditions around it (`==`, `!=`, `startsWith`,
+/// `&&`, nested `if` and `else`). A branch on anything else is not read; a rule on one named
+/// configuration other than the classpaths, or on the buildscript, sets nothing read here.
+/// Each comes with whether only test configurations take it and whether the root's
+/// `allprojects { }` / `subprojects { }` gives it to every project.
+fn version_rules(text: &str, vars: &BTreeMap<String, String>) -> Vec<(VersionRule, bool, bool)> {
+    let text = strip_comments(text);
+    let mut out = Vec::new();
+    let mut openers: Vec<String> = Vec::new();
+    let mut at = 0;
+    while let Some(found) = text[at..].find("eachDependency") {
+        let start = at + found;
+        // The blocks open around it, and what its own line says before it.
+        for line in text[at..start].split_inclusive('\n') {
+            // Each block is known by its whole line, quotes kept: `configurations.matching
+            // { it.name.startsWith('test') }.configureEach {` is a test one.
+            for c in code_only(line).chars() {
+                match c {
+                    '{' => openers.push(line.trim().to_string()),
+                    '}' => {
+                        openers.pop();
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let line_start = text[..start].rfind('\n').map_or(0, |i| i + 1);
+        let own = text[line_start..start].to_string();
+        let Some(open) = text[start..].find('{').map(|i| start + i) else {
+            break;
+        };
+        let Some(body) = balanced(&text[open..], '{', '}') else {
+            break;
+        };
+        at = open + body.len() + 2;
+        // `body` was taken out of the text: the scan for braces resumes after it.
+        let context: Vec<&str> = openers
+            .iter()
+            .map(String::as_str)
+            .chain([own.trim()])
+            .filter(|o| !o.is_empty())
+            .collect();
+        if context.iter().any(|o| o.starts_with("buildscript")) {
+            continue;
+        }
+        let shared = context
+            .iter()
+            .any(|o| o.starts_with("allprojects") || o.starts_with("subprojects"));
+        // The innermost block that names configurations.
+        let scope = context.iter().rev().find(|o| {
+            o.contains("configurations")
+                || *o == &"all"
+                || o.starts_with("all ")
+                || o.contains("configureEach")
+        });
+        let Some(scope) = scope else {
+            continue;
+        };
+        let test_only = scope.contains("\"test") || scope.contains("'test");
+        let every = scope.contains("configureEach")
+            || scope.contains(".all")
+            || scope.starts_with("all")
+            || scope.trim_end_matches(['{', ' ']) == "configurations";
+        if !(test_only || every) {
+            continue;
+        }
+        let mut rules = Vec::new();
+        rule_statements(body, &[], vars, &mut rules);
+        out.extend(rules.into_iter().map(|r| (r, test_only, shared)));
+    }
+    out
+}
+
+/// What is between an opening `open` at the start of `text` and its match.
+fn balanced(text: &str, open: char, close: char) -> Option<&str> {
+    let mut depth = 0usize;
+    for (i, c) in text.char_indices() {
+        if c == open {
+            depth += 1;
+        } else if c == close {
+            depth = depth.checked_sub(1)?;
+            if depth == 0 {
+                return Some(&text[open.len_utf8()..i]);
+            }
+        }
+    }
+    None
+}
+
+fn rule_statements(
+    body: &str,
+    conditions: &[RuleCondition],
+    vars: &BTreeMap<String, String>,
+    out: &mut Vec<VersionRule>,
+) {
+    let mut rest = body;
+    loop {
+        rest = rest.trim_start_matches(|c: char| c.is_whitespace() || c == ';');
+        if rest.is_empty() {
+            return;
+        }
+        if let Some(after) = rest
+            .strip_prefix("if")
+            .filter(|a| a.trim_start().starts_with('('))
+        {
+            let after = after.trim_start();
+            let Some(cond) = balanced(after, '(', ')') else {
+                return;
+            };
+            let (then, tail) = branch(&after[cond.len() + 2..]);
+            let parsed = rule_conditions(cond);
+            if let Some(parsed) = &parsed {
+                let mut inner = conditions.to_vec();
+                inner.extend(parsed.iter().cloned());
+                rule_statements(then, &inner, vars, out);
+            }
+            rest = tail;
+            let trimmed = rest.trim_start();
+            if let Some(other) = trimmed.strip_prefix("else") {
+                let (otherwise, tail) = branch(other);
+                // `else` negates a single condition; of several, it is not read.
+                if let Some([one]) = parsed.as_deref() {
+                    let mut inner = conditions.to_vec();
+                    inner.push(RuleCondition {
+                        negated: !one.negated,
+                        ..one.clone()
+                    });
+                    rule_statements(otherwise, &inner, vars, out);
+                }
+                rest = tail;
+            }
+            continue;
+        }
+        let call = ["details.useVersion", "it.useVersion", "useVersion"]
+            .iter()
+            .find_map(|p| rest.strip_prefix(p));
+        if let Some(arg) = call {
+            let arg = arg.trim_start();
+            let (value, tail) = match arg.strip_prefix('(') {
+                Some(_) => match balanced(arg, '(', ')') {
+                    Some(inner) => (inner, &arg[inner.len() + 2..]),
+                    None => return,
+                },
+                None => {
+                    let end = arg.find(['\n', ';', '}']).unwrap_or(arg.len());
+                    (&arg[..end], &arg[end..])
+                }
+            };
+            if let Some(version) = rule_version(value.trim(), vars) {
+                if !conditions.is_empty() {
+                    out.push(VersionRule {
+                        conditions: conditions.to_vec(),
+                        version,
+                    });
+                }
+            }
+            rest = tail;
+            continue;
+        }
+        // Anything else (`when`, `because`, assignments): to the end of its line, or of the
+        // block it opens.
+        let end = rest.find('\n').unwrap_or(rest.len());
+        let line = &rest[..end];
+        match line.find('{') {
+            Some(i) => match balanced(&rest[i..], '{', '}') {
+                Some(inner) => rest = &rest[i + inner.len() + 2..],
+                None => return,
+            },
+            None => rest = &rest[end..],
+        }
+    }
+}
+
+/// An `if`'s body: a `{ }` block or the one statement on its line, and what follows.
+fn branch(text: &str) -> (&str, &str) {
+    let trimmed = text.trim_start();
+    if trimmed.starts_with('{') {
+        if let Some(inner) = balanced(trimmed, '{', '}') {
+            return (inner, &trimmed[inner.len() + 2..]);
+        }
+        return ("", "");
+    }
+    let end = trimmed.find('\n').unwrap_or(trimmed.len());
+    // `if (c) useVersion("a") else useVersion("b")` on one line.
+    let end = trimmed[..end].find(" else ").map_or(end, |i| i + 1);
+    (&trimmed[..end], &trimmed[end..])
+}
+
+fn rule_conditions(cond: &str) -> Option<Vec<RuleCondition>> {
+    if cond.contains("||") {
+        return None;
+    }
+    cond.split("&&")
+        .map(|atom| {
+            let mut atom = atom.trim();
+            let mut negated = false;
+            if let Some(inner) = atom.strip_prefix('!') {
+                negated = true;
+                atom = inner.trim();
+            }
+            while atom.starts_with('(') && atom.ends_with(')') {
+                atom = atom[1..atom.len() - 1].trim();
+            }
+            let atom = atom
+                .strip_prefix("details.")
+                .or_else(|| atom.strip_prefix("it."))
+                .unwrap_or(atom);
+            let rest = atom.strip_prefix("requested.")?;
+            let (on_name, rest) = if let Some(r) = rest.strip_prefix("group") {
+                (false, r)
+            } else {
+                (true, rest.strip_prefix("name")?)
+            };
+            let rest = rest.trim_start();
+            let (prefix, rest) = if let Some(r) = rest.strip_prefix(".startsWith(") {
+                (true, r.trim_end().strip_suffix(')')?)
+            } else if let Some(r) = rest.strip_prefix("==") {
+                (false, r)
+            } else {
+                let r = rest.strip_prefix("!=")?;
+                negated = !negated;
+                (false, r)
+            };
+            let rest = rest.trim();
+            let (value, tail) = quoted(rest)?;
+            if !tail.trim().is_empty() || value.contains('$') {
+                return None;
+            }
+            Some(RuleCondition {
+                on_name,
+                prefix,
+                value: value.to_string(),
+                negated,
+            })
+        })
+        .collect()
+}
+
+/// `"1.2"`, `libs.versions.x.get()`, `catalog.findVersion("x").get().requiredVersion` or a
+/// variable the build defines.
+fn rule_version(value: &str, vars: &BTreeMap<String, String>) -> Option<String> {
+    if value.starts_with(['"', '\'']) {
+        let (text, tail) = quoted(value)?;
+        if !tail.trim().is_empty() {
+            return None;
+        }
+        return expand(text, vars).ok().filter(|v| !v.is_empty());
+    }
+    let catalog = |alias: &str| {
+        vars.get(&format!("libs.versions.{alias}"))
+            .or_else(|| vars.get(&format!("libs.versions.{}", accessor(alias))))
+            .cloned()
+    };
+    if let Some(at) = value.find("findVersion(") {
+        let (alias, _) = quoted(value[at + "findVersion(".len()..].trim_start())?;
+        return catalog(alias);
+    }
+    if let Some(path) = value.strip_prefix("libs.versions.") {
+        let path = [".requiredVersion", ".get()", ".asProvider()"]
+            .iter()
+            .fold(path, |p, s| p.strip_suffix(s).unwrap_or(p));
+        let path = path.strip_suffix(".get()").unwrap_or(path);
+        let path = path.strip_suffix(".asProvider()").unwrap_or(path);
+        return catalog(path);
+    }
+    vars.get(value).cloned()
 }
 
 const GRADLE_VERSION: &str = "GradleVersion.current().version";
@@ -2555,6 +2848,7 @@ fn apply_conventions(conventions: &BTreeMap<String, usize>, modules: &mut [Modul
         let mut project_platforms = Vec::new();
         let mut project_deps = Vec::new();
         let mut forced = Vec::new();
+        let mut rules = Vec::new();
         let mut dm = false;
         for &c in &order {
             used.insert(c);
@@ -2565,6 +2859,7 @@ fn apply_conventions(conventions: &BTreeMap<String, usize>, modules: &mut [Modul
             project_platforms.extend(from.project_platforms.iter().cloned());
             project_deps.extend(from.project_deps.iter().cloned());
             forced.extend(from.forced.iter().cloned());
+            rules.extend(from.rules.iter().cloned());
             dm |= from.dm;
         }
         let module = &mut modules[i];
@@ -2579,6 +2874,8 @@ fn apply_conventions(conventions: &BTreeMap<String, usize>, modules: &mut [Modul
         module.project_platforms.extend(project_platforms);
         module.project_deps.extend(project_deps);
         module.forced.extend(forced);
+        rules.append(&mut module.rules);
+        module.rules = rules;
         module.dm |= dm;
     }
     for &c in conventions.values() {
@@ -4566,6 +4863,122 @@ set = ["a-b", "e"]
         // Forced on the test classpaths only: 2 ships, 1 is what the tests run with.
         assert_eq!(
             of("g:t"),
+            [("1".to_string(), true), ("2".to_string(), false)],
+            "{:?}",
+            r.missing
+        );
+    }
+
+    #[test]
+    fn each_dependency_rules_set_the_versions_they_match() {
+        // conductor's root `allprojects { configurations { all { eachDependency } } }` pins
+        // lz4 in every project; pulsar's convention sets every Jackson module but one to the
+        // catalog's version, the one through a nested `if`/`else`.
+        let rules = version_rules(
+            "configurations.configureEach {\n\
+             \x20   resolutionStrategy.eachDependency {\n\
+             \x20       if (requested.group.startsWith(\"com.fasterxml.jackson\")) {\n\
+             \x20           if (requested.name == \"jackson-annotations\") {\n\
+             \x20               useVersion(catalog.findVersion(\"jackson-annotations\").get().requiredVersion)\n\
+             \x20           } else {\n\
+             \x20               useVersion(libs.versions.jackson.get())\n\
+             \x20           }\n\
+             \x20       }\n\
+             \x20   }\n\
+             }\n\
+             buildscript {\n    configurations.all { resolutionStrategy.eachDependency {\n\
+             \x20       if (requested.group == \"b\") { useVersion(\"9\") }\n    } }\n}\n\
+             configurations.spotbugs {\n    resolutionStrategy.eachDependency {\n\
+             \x20       if (requested.group == \"s\") { useVersion(\"9\") }\n    }\n}\n\
+             configurations.all {\n    resolutionStrategy.eachDependency {\n\
+             \x20       if (requested.group == \"v\" || requested.group == \"w\") { useVersion(\"9\") }\n\
+             \x20       if (version(requested.version) < version(\"2\")) { useVersion(\"9\") }\n    }\n}\n",
+            &BTreeMap::from([
+                ("libs.versions.jackson".to_string(), "2.21.8".to_string()),
+                ("libs.versions.jackson-annotations".to_string(), "2.21".to_string()),
+            ]),
+        );
+        let read: Vec<(String, bool, bool, String)> = rules
+            .iter()
+            .map(|(r, test, shared)| {
+                let cond = r
+                    .conditions
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "{}{}{}{}",
+                            if c.negated { "!" } else { "" },
+                            if c.on_name { "name" } else { "group" },
+                            if c.prefix { "^" } else { "=" },
+                            c.value
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                (cond, *test, *shared, r.version.clone())
+            })
+            .collect();
+        assert_eq!(
+            read,
+            [
+                (
+                    "group^com.fasterxml.jackson name=jackson-annotations".to_string(),
+                    false,
+                    false,
+                    "2.21".to_string()
+                ),
+                (
+                    "group^com.fasterxml.jackson !name=jackson-annotations".to_string(),
+                    false,
+                    false,
+                    "2.21.8".to_string()
+                ),
+            ]
+        );
+
+        let repo = Mem(BTreeMap::from([
+            pom("lib", "1", &[("x", "2"), ("y", "2")]),
+            pom("x", "1", &[]),
+            pom("x", "2", &[]),
+            pom("y", "1", &[]),
+            pom("y", "2", &[]),
+        ]));
+        let dir = tree(
+            "each-dependency",
+            &[
+                ("settings.gradle", "include 'app'\n"),
+                ("gradle/libs.versions.toml", "[versions]\nyv = \"1\"\n"),
+                (
+                    "build.gradle",
+                    "allprojects {\n    configurations {\n        all {\n\
+                     \x20           resolutionStrategy.eachDependency { details ->\n\
+                     \x20               if (details.requested.group == 'g' && details.requested.name == 'x') {\n\
+                     \x20                   details.useVersion '1'\n\
+                     \x20               }\n            }\n        }\n    }\n}\n",
+                ),
+                (
+                    "app/build.gradle",
+                    "dependencies {\n    implementation 'g:lib:1'\n}\n\
+                     configurations.matching { it.name.startsWith('test') }.configureEach {\n\
+                     \x20   resolutionStrategy.eachDependency {\n\
+                     \x20       if (requested.name != 'x' && requested.name.startsWith('y')) useVersion(libs.versions.yv.get())\n\
+                     \x20   }\n}\n",
+                ),
+            ],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        let of = |name: &str| -> Vec<(String, bool)> {
+            r.packages
+                .iter()
+                .filter(|p| p.name == name)
+                .map(|p| (p.version.clone(), p.dev))
+                .collect()
+        };
+        assert_eq!(of("g:x"), [("1".to_string(), false)], "{:?}", r.missing);
+        assert_eq!(of("g:lib"), [("1".to_string(), false)], "{:?}", r.missing);
+        // Set on the test classpaths only: 2 ships, 1 is what the tests run with.
+        assert_eq!(
+            of("g:y"),
             [("1".to_string(), true), ("2".to_string(), false)],
             "{:?}",
             r.missing
