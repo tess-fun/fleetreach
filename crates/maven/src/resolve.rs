@@ -1604,6 +1604,11 @@ fn enqueue_children(
         if compile_only && child_scope == "runtime" {
             continue;
         }
+        // And a runtime classpath takes nothing a `.module` lists in its API variant alone
+        // (log4j-api's bnd annotations are on zaproxy's compile classpath only).
+        if !compile_only && child_scope == COMPILE_ONLY_API {
+            continue;
+        }
         let Some(next_scope) = propagate(scope, &child_scope) else {
             continue;
         };

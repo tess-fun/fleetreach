@@ -1225,7 +1225,9 @@ struct Declared {
 /// One of the classpaths a build file is resolved for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pass {
-    /// Compile and runtime, without test dependencies.
+    /// `runtimeClasspath`: what the main code ships with, without test dependencies or the
+    /// `compileOnly` and processor ones (gradle-versions-plugin's compile-only kotlin-stdlib
+    /// 2.4.10 leaves okio's 1.9.21 at runtime).
     Main,
     /// `compileClasspath`: what the main sources compile against.
     Compile,
@@ -1379,7 +1381,7 @@ impl Module {
             .iter()
             .chain(&self.via_projects)
             .filter(|d| match pass {
-                Pass::Main => d.scope != "test",
+                Pass::Main => !matches!(d.scope, "test" | "provided"),
                 Pass::Compile => !matches!(d.scope, "test" | "runtime"),
                 Pass::TestCompile => matches!(d.scope, "compile" | "test") && !d.runtime_only,
                 Pass::Full => true,
@@ -4406,6 +4408,55 @@ set = ["a-b", "e"]
         let r = resolve_gradle(&dir, &repo);
         assert_eq!(versions(&r, "g:smart"), ["1", "2"]);
         assert_eq!(versions(&r, "g:path"), ["1"]);
+    }
+
+    #[test]
+    fn a_compile_only_version_stays_off_the_runtime_classpath() {
+        // gradle-versions-plugin: `compileOnly(libs.kotlin.stdlib)` 2.4.10 is on the compile
+        // classpath only; the runtime classpath keeps okio's 1.9.21.
+        let repo = Mem(BTreeMap::from([
+            pom("a", "1", &[("lib", "1")]),
+            pom("lib", "1", &[]),
+            pom("lib", "2", &[]),
+        ]));
+        let dir = tree(
+            "compile-only-runtime",
+            &[(
+                "build.gradle",
+                "dependencies {\n  implementation 'g:a:1'\n  compileOnly 'g:lib:2'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:lib"), ["1", "2"]);
+    }
+
+    #[test]
+    fn an_api_variant_only_dependency_stays_off_the_runtime_classpath() {
+        // zaproxy: log4j-api's apiElements alone lists bnd's annotations 7.1.0, which the
+        // build's `compileOnly` 7.4.0 raises; the runtime classpath has neither.
+        let marker = "<!-- do_not_remove: published-with-gradle-metadata -->";
+        let json = r#"{"formatVersion":"1.1","variants":[
+            {"name":"apiElements","attributes":{"org.gradle.usage":"java-api","org.gradle.category":"library"},
+              "dependencies":[{"group":"g","module":"bnd","version":{"requires":"1"}}]},
+            {"name":"runtimeElements","attributes":{"org.gradle.usage":"java-runtime","org.gradle.category":"library"}}]}"#;
+        let repo = Mem(BTreeMap::from([
+            (
+                "g:log:1".to_string(),
+                format!("<project>{marker}<groupId>g</groupId><artifactId>log</artifactId><version>1</version></project>"),
+            ),
+            ("g:log:1.module".to_string(), json.to_string()),
+            pom("bnd", "1", &[]),
+            pom("bnd", "2", &[]),
+        ]));
+        let dir = tree(
+            "api-only-runtime",
+            &[(
+                "build.gradle",
+                "dependencies {\n  implementation 'g:log:1'\n  compileOnly 'g:bnd:2'\n}\n",
+            )],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:bnd"), ["2"]);
     }
 
     #[test]

@@ -920,7 +920,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   the five others (ideavim and MinecraftDev on the IntelliJ Platform plugin, Paper and
   WorldEdit on paperweight's dev bundle, minecolonies on ForgeGradle) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 103 misses. 171 misses remain in
+  (its own settings plugin supplies the catalog and BOMs), 103 misses. 170 misses remain in
   the 51 builds, ihub-pub's included. Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
   that Gradle never builds as part of the project. Later rules: the main classpath resolved
@@ -971,7 +971,8 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   configurations read from its sources (Spring's `optional`), Gradle's own version order
   (306,536 pairs identical to Gradle 8.14.3; spring-framework 100%), settings'
   `pluginManagement` plugin versions and Kotlin 1.8.0's `kotlin-stdlib-jdk8` default, other
-  unseen Kotlin versions reported (Charlatano 100%), buildscript
+  unseen Kotlin versions reported (Charlatano 100%), a runtime classpath without
+  `compileOnly`, processor or API-variant-only dependencies (gradle-versions-plugin 100%), buildscript
   `classpath` plugin versions with `apply plugin:` (spring-integration-samples 333 to 414),
   `lib."k"` (mybatis-plus 236 to 340), `set('k', v)` properties and POM relocations, which
   Gradle keeps and adds the target of, unlike Maven, which replaces (spring-integration-samples

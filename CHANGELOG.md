@@ -153,7 +153,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   applies bare, and Kotlin 1.8.0 adds `kotlin-stdlib-jdk8` as its standard library, as
   Gradle shows; a Kotlin plugin version real Gradle was not seen with (between 1.8.0 and
   1.9.23, or older) is reported rather than given a guessed library (Charlatano 36 to 52
-  of 52). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
+  of 52). The runtime classpath leaves out `compileOnly` and annotation-processor
+  dependencies, and what a `.module` lists in its API variant alone, as Gradle's
+  `runtimeClasspath` does: a compile-only version no longer raises what ships
+  (gradle-versions-plugin's kotlin-stdlib stays at okio's 1.9.21 at runtime, 100%), and 17
+  fewer packages Gradle never lists across the corpus (zaproxy's log4j bnd annotations). Dependency `exclude` rules and `transitive = false` are applied (an artifact declared
   twice keeps only the exclusions both declarations share), which drops about 180 packages
   Gradle never puts on a classpath. Versions the Spring dependency-management plugin manages
   (its `mavenBom` imports, its `dependency` entries, Spring Boot's BOM) now win over
