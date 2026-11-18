@@ -23,6 +23,8 @@ false clean.
 [Compare](https://tess-fun.github.io/fleetreach/compare/osv-scanner/) ·
 [Changelog](CHANGELOG.md)
 
+![fleetreach ranking fixes across a fleet, an Alpine image in the same queue, a what-if check of a bump and the chain behind log4j-core](assets/demo/fleetreach.gif)
+
 A real run on a demo fleet of nine services in six languages: 211 findings become 38 bumps,
 ranked by CISA KEV, EPSS and each repo's exposure, and 2 of them are for today:
 
