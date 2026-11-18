@@ -52,15 +52,20 @@ pub fn enabled(config: &Config) -> bool {
 /// context and no defaults are configured.
 pub fn annotate(report: &mut FleetReport, config: &Config, inputs: Inputs) {
     let enabled = enabled(config);
-    let contexts: BTreeMap<RepoId, RepoContext> = config
+    // Images share the repo id namespace and take the same context fields (`[[image]]`
+    // with `exposure` and `owner`), so their findings are decided and owned like a repo's.
+    let ids = config
         .repos
         .iter()
-        .filter_map(|repo| {
-            let own = config.context.get(&repo.id);
+        .map(|repo| &repo.id)
+        .chain(config.images.iter().map(|image| &image.id));
+    let contexts: BTreeMap<RepoId, RepoContext> = ids
+        .filter_map(|id| {
+            let own = config.context.get(id);
             if !enabled && own.is_none() {
                 return None;
             }
-            Some((repo.id.clone(), resolve(&repo.id, own, config, enabled)))
+            Some((id.clone(), resolve(id, own, config, enabled)))
         })
         .collect();
     report.context = contexts.values().cloned().collect();
@@ -544,5 +549,23 @@ mod tests {
         assert!(r.ssvc.is_none());
         assert_eq!(r.context[0].owner.as_deref(), Some("team"));
         assert_eq!(r.context[0].exposure, None);
+    }
+
+    #[test]
+    fn an_image_is_decided_and_owned_like_a_repo() {
+        let cfg = r#"
+            [[image]]
+            id = "a"
+            path = "."
+            owner = "storefront"
+            exposure = "open"
+            mission_impact = "mission-failure"
+            safety_impact = "negligible"
+        "#;
+        let mut r = report(serde_json::json!({}), serde_json::json!({}));
+        let d = decide_one(cfg, &mut r, KNOWN);
+        assert_eq!(d.outcome, Outcome::Immediate);
+        assert_eq!(d.owner.as_deref(), Some("storefront"));
+        assert_eq!(r.context[0].exposure, Some(Exposure::Open));
     }
 }

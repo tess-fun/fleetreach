@@ -616,6 +616,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An image's owner and exposure were ignored.** `owner`, `exposure`, `mission_impact`
+  and `safety_impact` on an `[[image]]` were read but never applied, so image findings had
+  no SSVC decision and no owner. Images now take their context the same way repos do.
 - **The fix queue named versions an OS image never had.** An Alpine, Debian or RPM fix lost
   its package revision, so musl `1.2.4-r1` was told to "bump" to `1.2.4` (older than what
   was installed) instead of `1.2.4-r3`, and fixes on later releases (curl's 17 advisories)
