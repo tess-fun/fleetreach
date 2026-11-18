@@ -3,7 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/fleetreach-packagist.svg)](https://crates.io/crates/fleetreach-packagist)
 [![docs.rs](https://img.shields.io/docsrs/fleetreach-packagist)](https://docs.rs/fleetreach-packagist)
 [![CI](https://github.com/tess-fun/fleetreach/actions/workflows/ci.yml/badge.svg)](https://github.com/tess-fun/fleetreach/actions/workflows/ci.yml)
-[![MSRV](https://img.shields.io/badge/MSRV-1.89-blue)](#minimum-supported-rust-version)
+[![MSRV](https://img.shields.io/badge/MSRV-1.97-blue)](#minimum-supported-rust-version)
 [![License](https://img.shields.io/crates/l/fleetreach-packagist.svg)](#license)
 
 <!-- Generated from `src/lib.rs` doc comments by cargo-rdme. Do not edit by hand; run `cargo rdme`. -->
@@ -54,7 +54,7 @@ let findings = scan_offline(Path::new("/srv/app"), &db, &RepoId("app".into()))?;
 
 ## Minimum supported Rust version
 
-1.89. An MSRV increase is treated as a minor-version bump.
+1.97. An MSRV increase is treated as a minor-version bump.
 
 <!-- cargo-rdme end -->
 

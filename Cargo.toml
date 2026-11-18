@@ -43,9 +43,9 @@ exclude = [
 version = "1.6.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-# Effective MSRV of the whole dependency closure: rustsec declares 1.88, but a
-# transitive dep (smol_str, via gix) requires 1.89. Verified in CI (msrv job).
-rust-version = "1.89"
+# Effective MSRV of the whole dependency closure: rustsec declares 1.88, but oxc
+# (crates/sinks' JavaScript parser) requires 1.97. Verified in CI (msrv job).
+rust-version = "1.97"
 repository = "https://github.com/tess-fun/fleetreach"
 homepage = "https://tess-fun.github.io/fleetreach/"
 readme = "README.md"

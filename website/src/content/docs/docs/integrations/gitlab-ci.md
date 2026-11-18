@@ -10,7 +10,7 @@ through `glab`, and works the same on gitlab.com and self-managed GitLab.
 
 ```yaml title=".gitlab-ci.yml"
 fleet-audit:
-  image: rust:1.89            # or any image; fleetreach is one static binary
+  image: rust:1.97            # or any image; fleetreach is one static binary
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
   variables:

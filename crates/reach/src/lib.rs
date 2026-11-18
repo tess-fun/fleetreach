@@ -66,7 +66,7 @@
 //!
 //! # Minimum supported Rust version
 //!
-//! 1.89. An MSRV increase is treated as a minor-version bump.
+//! 1.97. An MSRV increase is treated as a minor-version bump.
 //!
 //! # Safety
 //!

@@ -106,15 +106,15 @@ jobs:
           '
 
   msrv:
-    name: MSRV (1.89)
+    name: MSRV (1.97)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # The effective MSRV is driven by the whole closure (smol_str, via gix),
-      # not just rustsec — so verify the declared rust-version actually builds.
-      # `+1.89.0` overrides rust-toolchain.toml's pin.
-      - run: rustup toolchain install 1.89.0 --profile minimal
-      - run: cargo +1.89.0 check --workspace --locked
+      # The effective MSRV is driven by the whole closure (oxc, the npm sink
+      # reader's parser, needs 1.97), not just rustsec, so verify the declared
+      # rust-version actually builds. `+1.97.0` overrides rust-toolchain.toml's pin.
+      - run: rustup toolchain install 1.97.0 --profile minimal
+      - run: cargo +1.97.0 check --workspace --locked
 
   deny:
     name: cargo-deny

@@ -3,7 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/fleetreach-report.svg)](https://crates.io/crates/fleetreach-report)
 [![docs.rs](https://img.shields.io/docsrs/fleetreach-report)](https://docs.rs/fleetreach-report)
 [![CI](https://github.com/tess-fun/fleetreach/actions/workflows/ci.yml/badge.svg)](https://github.com/tess-fun/fleetreach/actions/workflows/ci.yml)
-[![MSRV](https://img.shields.io/badge/MSRV-1.89-blue)](#minimum-supported-rust-version)
+[![MSRV](https://img.shields.io/badge/MSRV-1.97-blue)](#minimum-supported-rust-version)
 [![License](https://img.shields.io/crates/l/fleetreach-report.svg)](#license)
 
 <!-- Generated from `src/lib.rs` doc comments by cargo-rdme. Do not edit by hand; run `cargo rdme`. -->
@@ -39,7 +39,7 @@ assert!(table.contains("RUSTSEC-2024-0001"));
 
 ## Minimum supported Rust version
 
-1.89. An MSRV increase is treated as a minor-version bump.
+1.97. An MSRV increase is treated as a minor-version bump.
 
 <!-- cargo-rdme end -->
 

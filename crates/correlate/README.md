@@ -3,7 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/fleetreach-correlate.svg)](https://crates.io/crates/fleetreach-correlate)
 [![docs.rs](https://img.shields.io/docsrs/fleetreach-correlate)](https://docs.rs/fleetreach-correlate)
 [![CI](https://github.com/tess-fun/fleetreach/actions/workflows/ci.yml/badge.svg)](https://github.com/tess-fun/fleetreach/actions/workflows/ci.yml)
-[![MSRV](https://img.shields.io/badge/MSRV-1.89-blue)](#minimum-supported-rust-version)
+[![MSRV](https://img.shields.io/badge/MSRV-1.97-blue)](#minimum-supported-rust-version)
 [![License](https://img.shields.io/crates/l/fleetreach-correlate.svg)](#license)
 
 <!-- Generated from `src/lib.rs` doc comments by cargo-rdme. Do not edit by hand; run `cargo rdme`. -->
@@ -35,7 +35,7 @@ assert_eq!(correlated.vulnerabilities[0].occurrences.len(), 2);
 
 ## Minimum supported Rust version
 
-1.89. An MSRV increase is treated as a minor-version bump.
+1.97. An MSRV increase is treated as a minor-version bump.
 
 <!-- cargo-rdme end -->
 

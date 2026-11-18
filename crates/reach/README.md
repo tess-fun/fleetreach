@@ -3,7 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/fleetreach-reach.svg)](https://crates.io/crates/fleetreach-reach)
 [![docs.rs](https://img.shields.io/docsrs/fleetreach-reach)](https://docs.rs/fleetreach-reach)
 [![CI](https://github.com/tess-fun/fleetreach/actions/workflows/ci.yml/badge.svg)](https://github.com/tess-fun/fleetreach/actions/workflows/ci.yml)
-[![MSRV](https://img.shields.io/badge/MSRV-1.89-blue)](#minimum-supported-rust-version)
+[![MSRV](https://img.shields.io/badge/MSRV-1.97-blue)](#minimum-supported-rust-version)
 [![License](https://img.shields.io/crates/l/fleetreach-reach.svg)](#license)
 
 <!-- Generated from `src/lib.rs` doc comments by cargo-rdme. Do not edit by hand; run `cargo rdme`. -->
@@ -75,7 +75,7 @@ per-crate fragments and answers the query.
 
 ## Minimum supported Rust version
 
-1.89. An MSRV increase is treated as a minor-version bump.
+1.97. An MSRV increase is treated as a minor-version bump.
 
 ## Safety
 

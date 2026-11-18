@@ -552,6 +552,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **MSRV raised from 1.89 to 1.97.** oxc 0.158, the JavaScript parser the npm sink reader
+  uses, needs Rust 1.97; the MSRV CI job and badges follow.
 - **`--reachability` runs about 4x faster on npm and PyPI repos.** The npm and PyPI import
   graphs analyzed one repo at a time, reading every installed file serially; repos, installed
   packages and first-party files are now read in parallel. On 40 real npm and PyPI repos a
