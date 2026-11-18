@@ -18,7 +18,7 @@ workspace = true
 thiserror = { workspace = true }
 # Seeded per process, so names in a crafted assembly cannot flood one bucket.
 foldhash = "0.2"
-fleetreach-sinks = { path = "../sinks", version = "1.6.0" }
+fleetreach-sinks = { path = "../sinks", version = "1.7.0" }
 
 [dev-dependencies]
 serde_json = { workspace = true }

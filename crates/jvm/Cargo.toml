@@ -16,7 +16,7 @@ workspace = true
 
 [dependencies]
 cafebabe = "0.9"
-fleetreach-sinks = { path = "../sinks", version = "1.6.0" }
+fleetreach-sinks = { path = "../sinks", version = "1.7.0" }
 thiserror = { workspace = true }
 # Seeded per process, so names in a crafted class cannot flood one bucket.
 foldhash = "0.2"
