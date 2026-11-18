@@ -616,6 +616,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The fix queue named versions an OS image never had.** An Alpine, Debian or RPM fix lost
+  its package revision, so musl `1.2.4-r1` was told to "bump" to `1.2.4` (older than what
+  was installed) instead of `1.2.4-r3`, and fixes on later releases (curl's 17 advisories)
+  were listed one by one instead of as one bump. The revision is kept and compared in
+  order.
 - **A busy or rate-limited POM repository no longer reads as missing POMs without a word.**
   A 429 or 5xx is retried three times (waiting as `Retry-After` asks, at most 10 s); if the
   repository still refuses, fleetreach stops asking it for the rest of the run and says so

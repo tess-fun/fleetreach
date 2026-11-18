@@ -184,7 +184,7 @@ pub fn remediations(report: &FleetReport) -> Vec<RemediationItem> {
     for ((ecosystem, package), findings) in groups {
         let (fixable, nofix): (Vec<&VulnFinding>, Vec<&VulnFinding>) = findings
             .into_iter()
-            .partition(|f| finding_floor(&finding_patched(f)).is_some());
+            .partition(|f| finding_floor(&finding_patched(f), has_revision(ecosystem)).is_some());
 
         let fleet = report
             .package_versions
@@ -218,7 +218,7 @@ pub fn remediations(report: &FleetReport) -> Vec<RemediationItem> {
             .unwrap_or(Version::new(0, 0, 0));
         let Some(start) = fixable
             .iter()
-            .filter_map(|f| finding_target(&finding_patched(f), &group_lb))
+            .filter_map(|f| finding_target(&finding_patched(f), &group_lb, has_revision(ecosystem)))
             .max()
         else {
             continue; // unreachable given the partition, but never panic
@@ -228,16 +228,18 @@ pub fn remediations(report: &FleetReport) -> Vec<RemediationItem> {
             .flat_map(|f| {
                 finding_patched(f)
                     .iter()
-                    .filter_map(req_floor)
+                    .filter_map(|r| req_floor(r, has_revision(ecosystem)))
                     .collect::<Vec<_>>()
             })
             .filter(|v| *v >= start)
             .collect();
         floors.sort();
         floors.dedup();
-        let common = floors
-            .into_iter()
-            .find(|v| fixable.iter().all(|f| satisfied_by(&finding_patched(f), v)));
+        let common = floors.into_iter().find(|v| {
+            fixable
+                .iter()
+                .all(|f| satisfied_by(&finding_patched(f), v, has_revision(ecosystem)))
+        });
         if let Some(candidate) = common {
             let action = upgrade_action(&fixable, &candidate);
             items.push(build(&fixable, action));
@@ -247,7 +249,9 @@ pub fn remediations(report: &FleetReport) -> Vec<RemediationItem> {
                     .into_iter()
                     .max()
                     .unwrap_or(Version::new(0, 0, 0));
-                if let Some(target) = finding_target(&finding_patched(f), &lb) {
+                if let Some(target) =
+                    finding_target(&finding_patched(f), &lb, has_revision(ecosystem))
+                {
                     let action = upgrade_action(&[f], &target);
                     items.push(build(&[f], action));
                 }
@@ -381,7 +385,7 @@ fn alternatives(
             .filter_map(|f| {
                 let mut floors: Vec<Version> = finding_patched(f)
                     .iter()
-                    .filter_map(req_floor)
+                    .filter_map(|r| req_floor(r, has_revision(f.ecosystem)))
                     .filter(|v| line(v) == key && *v >= floor)
                     .collect();
                 floors.sort();
@@ -393,7 +397,7 @@ fn alternatives(
         };
         let (mut clears, mut leaves_open): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
         for f in &on_line {
-            if satisfied_by(&finding_patched(f), &candidate) {
+            if satisfied_by(&finding_patched(f), &candidate, has_revision(f.ecosystem)) {
                 clears.push(f.advisory_id.clone());
             } else {
                 leaves_open.push(f.advisory_id.clone());
@@ -503,23 +507,35 @@ fn finding_reach(f: &VulnFinding) -> ReachTier {
 
 /// The minimal lower-bound version a single requirement permits (its floor). An
 /// upper-bound-only req (`<2.0`) has no floor and yields `None`.
-fn req_floor(req: &VersionReq) -> Option<Version> {
+///
+/// For an OS package (`revision`) the pre-release part is kept: there it is the package
+/// revision of the SemVer rendering (apk's `1.2.4-r3` is `1.2.4-r.3`), not a pre-release,
+/// and dropping it names a version the distro never shipped and that sorts above what is
+/// installed (musl `1.2.4-r.1` "bumped" to `1.2.4`, older than its own `-r1`).
+fn req_floor(req: &VersionReq, revision: bool) -> Option<Version> {
     req.comparators.iter().find_map(|c| match c.op {
-        Op::Exact | Op::Greater | Op::GreaterEq | Op::Tilde | Op::Caret => Some(Version::new(
-            c.major,
-            c.minor.unwrap_or(0),
-            c.patch.unwrap_or(0),
-        )),
+        Op::Exact | Op::Greater | Op::GreaterEq | Op::Tilde | Op::Caret => {
+            let mut v = Version::new(c.major, c.minor.unwrap_or(0), c.patch.unwrap_or(0));
+            if revision {
+                v.pre = c.pre.clone();
+            }
+            Some(v)
+        }
         _ => None,
     })
+}
+
+/// Whether an ecosystem's SemVer rendering carries a package revision in its pre-release.
+fn has_revision(ecosystem: Ecosystem) -> bool {
+    matches!(ecosystem, Ecosystem::Deb | Ecosystem::Apk | Ecosystem::Rpm)
 }
 
 /// Whether any forward fix is namable for a finding (drives fixable/no-fix
 /// partition). `patched` is OR semantics — a version is safe if it matches *any*
 /// req (see [`Occurrence::is_vulnerable`]) — so this is true iff some req has a
 /// lower bound. `None` means no fix is published (empty set) or none is namable.
-fn finding_floor(patched: &[VersionReq]) -> Option<Version> {
-    patched.iter().filter_map(req_floor).min()
+fn finding_floor(patched: &[VersionReq], revision: bool) -> Option<Version> {
+    patched.iter().filter_map(|r| req_floor(r, revision)).min()
 }
 
 /// The version to actually upgrade *to*: the smallest req floor at or above the
@@ -527,8 +543,11 @@ fn finding_floor(patched: &[VersionReq]) -> Option<Version> {
 /// set spans an older line too. Falls back to the highest available fix when every
 /// fix predates `lb` (pathological — the only published fixes are on a line below
 /// what's installed).
-fn finding_target(patched: &[VersionReq], lb: &Version) -> Option<Version> {
-    let mut floors: Vec<Version> = patched.iter().filter_map(req_floor).collect();
+fn finding_target(patched: &[VersionReq], lb: &Version, revision: bool) -> Option<Version> {
+    let mut floors: Vec<Version> = patched
+        .iter()
+        .filter_map(|r| req_floor(r, revision))
+        .collect();
     floors.sort();
     floors
         .iter()
@@ -538,8 +557,28 @@ fn finding_target(patched: &[VersionReq], lb: &Version) -> Option<Version> {
 }
 
 /// Whether a version lands in a finding's safe set (matches any patched req).
-fn satisfied_by(patched: &[VersionReq], v: &Version) -> bool {
-    patched.iter().any(|r| r.matches(v))
+///
+/// For an OS package (`revision`) each bound compares by plain order, revision included:
+/// SemVer matching lets a pre-release satisfy only a bound on its own `x.y.z`, so curl
+/// `8.12.0-r.0` would not count as `>=8.4.0-r.0`.
+fn satisfied_by(patched: &[VersionReq], v: &Version, revision: bool) -> bool {
+    if !revision {
+        return patched.iter().any(|r| r.matches(v));
+    }
+    patched.iter().any(|r| {
+        r.comparators.iter().all(|c| {
+            let mut bound = Version::new(c.major, c.minor.unwrap_or(0), c.patch.unwrap_or(0));
+            bound.pre = c.pre.clone();
+            match c.op {
+                Op::GreaterEq => *v >= bound,
+                Op::Greater => *v > bound,
+                Op::Less => *v < bound,
+                Op::LessEq => *v <= bound,
+                Op::Exact => *v == bound,
+                _ => r.matches(v),
+            }
+        })
+    })
 }
 
 /// One finding per package it names, each holding only that package's occurrences.
@@ -733,6 +772,59 @@ mod tests {
         assert_eq!(it.repos, 1);
         assert_eq!(it.occurrences, 1);
         assert_eq!(it.current, [Version::new(1, 0, 0)]);
+    }
+
+    #[test]
+    fn an_os_package_keeps_its_revision_and_batches_by_order() {
+        // An apk version is rendered as SemVer with its revision as the pre-release
+        // (musl `1.2.4-r1` is `1.2.4-r.1`). The fix is `1.2.4-r3`, never a bare `1.2.4`
+        // (which is apk's `-r0`, older than what is installed); and curl's fixes at
+        // `-r0` of later releases batch into one bump, as plain order says they do.
+        let apk = |id: &str, pkg: &str, installed: &str, fixed: &str| VulnFinding {
+            ecosystem: Ecosystem::Apk,
+            ..vuln(
+                id,
+                Severity::High,
+                vec![in_repo("img", pkg, installed, &[fixed])],
+            )
+        };
+        let r = report_of(vec![
+            apk("ALPINE-1", "alpine/musl", "1.2.4-r.1", ">=1.2.4-r.3"),
+            apk("ALPINE-2", "alpine/curl", "8.3.0-r.0", ">=8.4.0-r.0"),
+            apk("ALPINE-3", "alpine/curl", "8.3.0-r.0", ">=8.12.0-r.0"),
+        ]);
+        let to = |package: &str| {
+            let items = remediations(&r);
+            let item = items
+                .iter()
+                .filter(|i| i.package == package)
+                .collect::<Vec<_>>();
+            assert_eq!(item.len(), 1, "{package}: {items:?}");
+            match &item[0].action {
+                Action::Upgrade { to, .. } => to.to_string(),
+                Action::NoFixAvailable => panic!("{package}: no fix"),
+            }
+        };
+        assert_eq!(to("alpine/musl"), "1.2.4-r.3");
+        assert_eq!(to("alpine/curl"), "8.12.0-r.0");
+    }
+
+    #[test]
+    fn a_semver_pre_release_fix_still_names_its_release() {
+        // Outside OS packages a pre-release fix floor names the release, as before.
+        let r = report_of(vec![vuln(
+            "GHSA-1",
+            Severity::High,
+            vec![in_repo("app", "foo", "1.0.0", &[">=2.0.0-rc.3"])],
+        )]);
+        let items = remediations(&r);
+        assert_eq!(
+            items[0].action,
+            Action::Upgrade {
+                to: Version::new(2, 0, 0),
+                breaking: true,
+            }
+        );
     }
 
     #[test]
