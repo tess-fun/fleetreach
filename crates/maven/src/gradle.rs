@@ -194,11 +194,16 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         }
     }
     let mut extended_by = BTreeMap::new();
+    let mut created = BTreeSet::new();
+    let mut extending = BTreeSet::new();
     for (_, text) in &scripts {
-        for line in text.lines() {
-            extends_from(line.trim(), &mut extended_by);
-        }
+        extends_from_text(text, &mut extended_by);
+        created_configurations(text, &mut created);
+        extended_names(text, &mut extending);
     }
+    // One a build extends from code is on some classpath (CosId's `managedVersions`, which
+    // `configurations.configureEach { extendsFrom(managedVersions) }` puts on each).
+    created.retain(|name| !extending.contains(name));
     let lombok = scripts.iter().find_map(|(_, t)| lombok_extension(t, &vars));
     let local_configurations = local_configurations(dir);
     let mut lists: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -234,6 +239,8 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         local: false,
         local_configurations,
         custom: false,
+        created,
+        tool: false,
         dependency_set: None,
     };
     // The kordamp enforcer's `ForceDependencies` rule in the settings forces its versions on
@@ -621,6 +628,7 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
             runtime_only: false,
             local: false,
             soft: false,
+            tool: false,
         })
         .collect();
     if !unused.is_empty() {
@@ -654,7 +662,13 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         // the main classpath first; what only the compile classpath (without runtime
         // dependencies) or the full (test) resolution adds is off the runtime classpath.
         // What projects bring counts too (a project of only `testImplementation project(...)`).
-        let every = || module.deps.iter().chain(&module.via_projects);
+        let every = || {
+            module
+                .deps
+                .iter()
+                .chain(&module.via_projects)
+                .filter(|d| !d.tool)
+        };
         let has_test = every().any(|d| d.scope == "test");
         let has_main = every().any(|d| d.scope != "test");
         let mut main = BTreeSet::new();
@@ -681,6 +695,9 @@ pub fn resolve_gradle(dir: &Path, source: &dyn PomSource) -> Resolution {
         }
         if has_test || test_force || test_managed || !has_main {
             passes.push(Pass::Full);
+        }
+        if module.deps.iter().any(|d| d.tool) {
+            passes.push(Pass::Tool);
         }
         let split = passes.len() > 1;
         // With Kotlin applied, the Spring Boot plugin sets `kotlin.version` to the Kotlin
@@ -2757,6 +2774,9 @@ struct Declared {
     /// A version a plugin adds (the Kotlin plugin's standard library at its own version): the
     /// Spring dependency-management plugin still manages it, as it would an unversioned one.
     soft: bool,
+    /// Declared on a tool's own configuration (`spotbugs`, `checkstyle`, `errorprone`), which
+    /// Gradle resolves apart from every classpath.
+    tool: bool,
 }
 
 /// One of the classpaths a build file is resolved for.
@@ -2774,6 +2794,9 @@ enum Pass {
     TestCompile,
     /// Everything, tests included.
     Full,
+    /// The tools' own configurations, which extend no classpath: spotbugs' asm 9.11 does not
+    /// raise caffeine's test asm-util from the asm BOM's 9.10.1.
+    Tool,
 }
 
 #[derive(Debug, Default)]
@@ -2843,7 +2866,18 @@ impl Module {
         // The Spring plugin's later imports override earlier ones: the root's shared block
         // runs before this file.
         let from = self.shared_from.unwrap_or(self.platforms.len());
-        let (own, shared) = self.platforms.split_at(from);
+        let none: &[Coordinate] = &[];
+        let managing = pass != Pass::Tool || self.dm;
+        let (own, shared) = if managing {
+            self.platforms.split_at(from)
+        } else {
+            (none, none)
+        };
+        let constraints = if managing {
+            &self.constraints[..]
+        } else {
+            none
+        };
         Enforced {
             boms: shared
                 .iter()
@@ -2851,8 +2885,7 @@ impl Module {
                 .filter(|c| c.enforced)
                 .filter_map(triple)
                 .collect(),
-            versions: self
-                .constraints
+            versions: constraints
                 .iter()
                 .filter(|c| c.enforced)
                 .filter_map(triple)
@@ -2869,8 +2902,7 @@ impl Module {
                 .filter(|c| c.strict)
                 .filter_map(triple)
                 .collect(),
-            strict_versions: self
-                .constraints
+            strict_versions: constraints
                 .iter()
                 .filter(|c| c.strict)
                 .chain(
@@ -2915,7 +2947,13 @@ impl Module {
             )
         };
         let mut managed = String::new();
-        let applies = |c: &&Coordinate| matches!(pass, Pass::TestCompile | Pass::Full) || !c.test;
+        // A tool's configuration takes no classpath's platforms or constraints; only the
+        // Spring plugin manages every configuration.
+        let applies = |c: &&Coordinate| match pass {
+            Pass::Tool => self.dm,
+            Pass::TestCompile | Pass::Full => true,
+            Pass::Main | Pass::Compile => !c.test,
+        };
         for p in self.platforms.iter().filter(applies) {
             managed.push_str(&dep(p, "<type>pom</type><scope>import</scope>"));
         }
@@ -2927,7 +2965,9 @@ impl Module {
             .deps
             .iter()
             .chain(&self.via_projects)
+            .filter(|d| d.tool == (pass == Pass::Tool))
             .filter(|d| match pass {
+                Pass::Tool => true,
                 Pass::Main => !matches!(d.scope, "test" | "provided"),
                 Pass::Compile => !matches!(d.scope, "test" | "runtime"),
                 // `compileOnlyApi` (provided and exported) is on the test compile classpath, a
@@ -3852,6 +3892,7 @@ fn jupiter_suite(line: &str, context: &Context, module: &mut Module) {
             runtime_only,
             local: false,
             soft: false,
+            tool: false,
         });
     }
 }
@@ -3905,6 +3946,7 @@ fn gretty_apis(text: &str, context: &Context, module: &mut Module) {
             runtime_only: false,
             local: true,
             soft: false,
+            tool: false,
         });
     }
 }
@@ -4168,6 +4210,11 @@ struct Context {
     /// Whether its configuration is a tool's own (`checkstyle`), which no classpath read here
     /// extends: its constraints manage nothing read.
     custom: bool,
+    /// Configurations a build script creates itself (`configurations.register("ecj")`).
+    created: BTreeSet<String>,
+    /// Whether the declaration being read is on a configuration Gradle resolves on its own:
+    /// a known tool's (`TOOL_CONFIGURATIONS`) or one the build creates that nothing extends.
+    tool: bool,
     /// `testImplementation.extendsFrom testShadow`: a custom configuration to the standard one
     /// that takes it in, so it gets that one's scope.
     extended_by: BTreeMap<String, String>,
@@ -4301,6 +4348,113 @@ fn fold_rich_versions(text: &str) -> String {
     out
 }
 
+/// Configurations of code-quality and build tools that Gradle or the plugin resolves apart
+/// from every classpath, extending none of them.
+const TOOL_CONFIGURATIONS: &[&str] = &[
+    "checkstyle",
+    "pmd",
+    "codenarc",
+    "jacocoAgent",
+    "jacocoAnt",
+    "spotbugs",
+    "spotbugsPlugins",
+    "errorprone",
+    "detekt",
+    "detektPlugins",
+    "ktlint",
+    "pitest",
+];
+
+/// The configurations a script creates: `configurations.register("x")`,
+/// `configurations.create("x")` and `val x by configurations.creating` (or `registering`).
+fn created_configurations(text: &str, out: &mut BTreeSet<String>) {
+    let plain = |n: &str| !n.is_empty() && n.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    for line in text.lines() {
+        let line = line.trim();
+        for call in ["configurations.register(", "configurations.create("] {
+            if let Some(rest) = line.split_once(call).map(|(_, r)| r) {
+                let name = rest
+                    .trim_start()
+                    .trim_start_matches(['"', '\''])
+                    .split(['"', '\''])
+                    .next()
+                    .unwrap_or_default();
+                if rest.trim_start().starts_with(['"', '\'']) && plain(name) {
+                    out.insert(name.to_string());
+                }
+            }
+        }
+        if let Some(rest) = line.strip_prefix("val ") {
+            if let Some((name, by)) = rest.split_once(" by ") {
+                let by = by.trim();
+                if (by.starts_with("configurations.creating")
+                    || by.starts_with("configurations.registering"))
+                    && plain(name.trim())
+                {
+                    out.insert(name.trim().to_string());
+                }
+            }
+        }
+    }
+}
+
+/// Every configuration a script passes to `extendsFrom`, in any form.
+fn extended_names(text: &str, out: &mut BTreeSet<String>) {
+    for (_, rest) in text
+        .match_indices("extendsFrom")
+        .map(|(i, _)| text.split_at(i + 11))
+    {
+        let args = rest.trim_start().trim_start_matches('(');
+        let args = args.split([')', '\n', '{']).next().unwrap_or_default();
+        for arg in args.split(',') {
+            let arg = arg.trim();
+            let arg = arg.strip_prefix("configurations.").unwrap_or(arg);
+            let name: String = arg
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect();
+            if !name.is_empty() {
+                out.insert(name);
+            }
+        }
+    }
+}
+
+/// Each `extends_from` line of a script, and each `extendsFrom(b)` inside a
+/// `configurations.a { }` block (Paper's `configurations.api { extendsFrom(apiAndDocs) }`).
+fn extends_from_text(text: &str, out: &mut BTreeMap<String, String>) {
+    // The configuration whose block is open, and the brace depth its body sits at.
+    let mut open: Option<(String, i64)> = None;
+    let mut depth: i64 = 0;
+    for line in text.lines() {
+        let line = line.trim();
+        extends_from(line, out);
+        let block = line
+            .strip_prefix("configurations.")
+            .and_then(|rest| rest.split_once('{'))
+            .map(|(name, body)| (name.trim(), body))
+            .filter(|(name, _)| {
+                name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') && !name.is_empty()
+            });
+        if let Some((name, body)) = block {
+            if body.trim_start().starts_with("extendsFrom") {
+                extends_from(&format!("{name}.{}", body.trim()), out);
+            }
+            if open.is_none() {
+                open = Some((name.to_string(), depth + 1));
+            }
+        } else if let Some((name, at)) = &open {
+            if depth == *at && line.starts_with("extendsFrom") {
+                extends_from(&format!("{name}.{line}"), out);
+            }
+        }
+        depth += line.matches('{').count() as i64 - line.matches('}').count() as i64;
+        if open.as_ref().is_some_and(|(_, at)| depth < *at) {
+            open = None;
+        }
+    }
+}
+
 /// `a.extendsFrom b, c`, `a.extendsFrom(b)` or `configurations.a.extendsFrom(b)`: each custom
 /// configuration named, to the standard one `a` that takes it in.
 fn extends_from(line: &str, out: &mut BTreeMap<String, String>) {
@@ -4407,9 +4561,7 @@ enum Block {
 /// extensions in `compileOnly`.
 fn read_script(text: &str, context: &mut Context) -> Module {
     let mut own = BTreeMap::new();
-    for line in text.lines() {
-        extends_from(line.trim(), &mut own);
-    }
+    extends_from_text(text, &mut own);
     if own.is_empty() {
         return read_project_script(text, context);
     }
@@ -5055,6 +5207,7 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
                 runtime_only: true,
                 local: false,
                 soft: false,
+                tool: false,
             });
         }
         // Spring Boot applies its BOM through the dependency-management plugin, and only
@@ -5103,6 +5256,7 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
                 runtime_only: false,
                 local: false,
                 soft: false,
+                tool: false,
             });
         }
     } else if id == KOTLIN_JVM
@@ -5133,6 +5287,7 @@ fn apply_plugin(line: &str, context: &Context, module: &mut Module) {
             local: false,
             // A BOM the Spring plugin imports manages it (mmorpg's Boot 3.0.4: 1.7.22).
             soft: true,
+            tool: false,
         });
     }
 }
@@ -5247,6 +5402,7 @@ fn kotlin_dsl(context: &Context, module: &mut Module) {
             runtime_only: false,
             local: false,
             soft: false,
+            tool: false,
         });
     }
 }
@@ -6413,6 +6569,8 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
     context.processor = is_processor(configuration);
     context.runtime_only = configuration.to_ascii_lowercase().contains("runtimeonly");
     context.custom = !local && !is_configuration(&name) && !context.extended_by.contains_key(&name);
+    context.tool = context.custom
+        && (TOOL_CONFIGURATIONS.contains(&name.as_str()) || context.created.contains(&name));
     if local {
         context.exported = false;
         context.local = true;
@@ -6434,6 +6592,7 @@ fn read_entry(line: &str, block: Block, context: &mut Context, module: &mut Modu
     context.runtime_only = false;
     context.local = false;
     context.custom = false;
+    context.tool = false;
 }
 
 /// Whether a configuration's dependencies reach the compile classpath of a project that
@@ -6518,6 +6677,7 @@ fn read_declaration(
     let runtime_only = context.runtime_only;
     let local = context.local;
     let custom = context.custom;
+    let tool = context.tool;
     let add = |module: &mut Module, c: Coordinate, platform: bool| {
         if platform && processor {
             // A processor's platform manages that path only; it lists nothing either.
@@ -6532,9 +6692,14 @@ fn read_declaration(
                     runtime_only,
                     local,
                     soft: false,
+                    tool,
                 });
             }
-            module.platforms.push(c);
+            // A tool's own platform (caffeine's `roseau(platform(libs.jackson.bom))`)
+            // manages that tool alone, through the declaration above.
+            if !tool {
+                module.platforms.push(c);
+            }
         } else if block == Block::Constraints {
             // A constraint without a version (a `because` only) manages nothing.
             if c.version.is_some() && !custom {
@@ -6550,6 +6715,7 @@ fn read_declaration(
                 runtime_only,
                 local,
                 soft: false,
+                tool,
             });
         }
     };
@@ -6609,6 +6775,7 @@ fn read_declaration(
                         runtime_only,
                         local,
                         soft: false,
+                        tool: false,
                     });
                 }
                 module.platforms.push(c);
@@ -6772,6 +6939,8 @@ mod tests {
             local: false,
             local_configurations: BTreeSet::new(),
             custom: false,
+            created: BTreeSet::new(),
+            tool: false,
             lists: BTreeMap::new(),
             dependency_set: None,
         }
@@ -7661,6 +7830,73 @@ set = ["a-b", "e"]
             "{:?}",
             r.packages
         );
+    }
+
+    #[test]
+    fn a_tools_configuration_resolves_on_its_own() {
+        // caffeine: spotbugs 4.10.5 brings asm-util 9.11, yet the tests keep 9.10.1. The
+        // project's platforms manage no tool, and a tool's own platform (roseau's jackson)
+        // manages no classpath. A configuration the build creates is a tool's (`ecj`), unless
+        // code extends a classpath from it (CosId's `managedVersions`).
+        let bom = |name: &str, artifact: &str, v: &str| {
+            (
+                format!("g:{name}:1"),
+                format!(
+                    "<project><groupId>g</groupId><artifactId>{name}</artifactId><version>1</version>\
+                     <packaging>pom</packaging><dependencyManagement><dependencies><dependency>\
+                     <groupId>g</groupId><artifactId>{artifact}</artifactId><version>{v}</version>\
+                     </dependency></dependencies></dependencyManagement></project>"
+                ),
+            )
+        };
+        let repo = Mem(BTreeMap::from([
+            pom("util", "1", &[]),
+            pom("util", "2", &[]),
+            pom("util", "3", &[]),
+            pom("other", "1", &[]),
+            pom("other", "2", &[]),
+            pom("runner", "1", &[("util", "1")]),
+            pom("spotbugs", "1", &[("util", "2")]),
+            pom("roseau", "1", &[("util", "2")]),
+            pom("ecj", "1", &[("other", "2")]),
+            bom("main-bom", "other", "1"),
+            bom("tool-bom", "util", "3"),
+        ]));
+        let script = "plugins {\n    id(\"java\")\n}\n\
+             val ecj = configurations.register(\"ecj\")\n\
+             val roseau = configurations.register(\"roseau\")\n\
+             dependencies {\n\
+             \x20   implementation(enforcedPlatform(\"g:main-bom:1\"))\n\
+             \x20   testImplementation(\"g:runner:1\")\n\
+             \x20   testImplementation(\"g:other:1\")\n\
+             \x20   spotbugs(\"g:spotbugs:1\")\n\
+             \x20   roseau(\"g:roseau:1\")\n\
+             \x20   roseau(platform(\"g:tool-bom:1\"))\n\
+             \x20   ecj(\"g:ecj:1\")\n}\n";
+        let dir = tree(
+            "tool-configurations",
+            &[("settings.gradle.kts", ""), ("build.gradle.kts", script)],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert!(r.missing.is_empty(), "{:?}", r.missing);
+        // The tests: the runner's 1. The tools: roseau's platform's 3 over spotbugs' 2.
+        assert_eq!(versions(&r, "g:util"), ["1", "3"], "{:?}", r.packages);
+        // The enforced platform holds the tests at 1, not ecj at its 2.
+        assert_eq!(versions(&r, "g:other"), ["1", "2"], "{:?}", r.packages);
+
+        // Extended from code, a created configuration manages the classpaths.
+        let script = "plugins {\n    id(\"java\")\n}\n\
+             val managed = configurations.create(\"managed\")\n\
+             configurations.configureEach {\n    if (this != managed) {\n        extendsFrom(managed)\n    }\n}\n\
+             dependencies {\n\
+             \x20   managed(platform(\"g:tool-bom:1\"))\n\
+             \x20   testImplementation(\"g:runner:1\")\n}\n";
+        let dir = tree(
+            "managed-configuration",
+            &[("settings.gradle.kts", ""), ("build.gradle.kts", script)],
+        );
+        let r = resolve_gradle(&dir, &repo);
+        assert_eq!(versions(&r, "g:util"), ["3"], "{:?}", r.packages);
     }
 
     #[test]
@@ -9108,6 +9344,16 @@ set = ["a-b", "e"]
         ] {
             extends_from(line, &mut map);
         }
+        extends_from_text(
+            "configurations.api {\n    extendsFrom(apiAndDocs)\n}\n\
+             configurations.compileOnly { extendsFrom(docs) }\n\
+             configurations.foo {\n    extendsFrom(baz)\n}\nextendsFrom(loose)\n",
+            &mut map,
+        );
+        assert_eq!(map["apiAndDocs"], "api");
+        assert_eq!(map["docs"], "compileOnly");
+        assert!(!map.contains_key("baz"));
+        assert!(!map.contains_key("loose"));
         assert_eq!(map["testShadow"], "testImplementation");
         assert_eq!(map["shade"], "implementation");
         assert_eq!(map["bundled"], "implementation");

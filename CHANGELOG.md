@@ -235,6 +235,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checker-qual: 4.4.0 to compile, worldedit's 3.48.3 to run the tests). Under the Spring
   plugin a compile-only version still versions an unversioned test declaration of the same
   module. 143 packages Gradle does not list dropped out, none it does.
+- **A tool's configuration is resolved on its own.** What a known tool's configuration
+  holds (`spotbugs`, `checkstyle`, `pmd`, `errorprone`, `detekt`, `ktlint` and the like), or one
+  the build creates itself (`configurations.register("ecj")`) that no `extendsFrom` names, no
+  longer competes with the test classpath, and the project's platforms manage it only under
+  the Spring dependency-management plugin; a platform declared on the tool's configuration
+  manages that tool alone. A `configurations.api { extendsFrom(apiAndDocs) }` block is read
+  (Paper). caffeine: 185 to 188 of 190 (spotbugs' asm 9.11 and jna 5.18.1 off the tests).
 - **The Spring BOM manages the Kotlin plugin's standard library.** The `kotlin-stdlib` the
   Kotlin plugin adds at its own version is managed by a BOM the Spring dependency-management
   plugin imports, as an unversioned declaration would be, and a project applying both Spring

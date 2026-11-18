@@ -924,7 +924,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   Gradle 3.5, bnd is a Bnd workspace, cortinico's main build has no dependencies of its own,
   elasticsearch's build plugins need its whole build-tools tree, beyond the 3.5 GB harness) for reasons of their own (dead plugin repositories, toolchains Gradle
   cannot fetch on arm64, files the sparse clone lacks, plugins that need a full checkout,
-  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **90.9% of
+  wrappers that need JDK 8). On the same POMs (Gradle's own download cache), **91.0% of
   14,878 modules at Gradle's version, 92.9% by name** (spring-boot 100% of 1,032 once its own
   `bom { library(...) }` buildSrc DSL and its docs project's `projectsEvaluated` hook are read, from 8.3%; the 56 first builds: 88.1% and 91.4%,
   from 59.7% and 70.0%); median repo 100% exact, 69 of 76 at 90% or more. **99.0% and 99.7%
@@ -933,7 +933,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   bundle, minecolonies on ForgeGradle, MCCustomSkinLoader on its own buildSrc plugin that
   reads Minecraft's library manifest) hold most of the
   misses, which a static read cannot see by design; ihub-pub's plugins are in the same class
-  (its own settings plugin supplies the catalog and BOMs), 102 misses. 128 misses remain in
+  (its own settings plugin supplies the catalog and BOMs), 102 misses. 125 misses remain in
   the 69 builds, ihub-pub's included (komga 10, from compose-desktop's host-dependent `currentOs`, armeria 3: a `strictly`
   ecj, one benchmark project's kotlin-stdlib-common, scala 3's scala-library). Packages fleetreach lists that Gradle does not fell from 3,064 to 2,870
   once exclusions were read; most of the rest are fixture and example builds inside the repos
@@ -1005,7 +1005,9 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   named catalogs created from a TOML file (spotless's `pinnedLibs`, 60 to 86 of 87), the
   Spring plugin's `dependencySet` entries (mmorpg 121 to 141 of 144), the Kotlin plugin's
   standard library managed by an imported Boot BOM, with Boot plus Kotlin setting
-  `kotlin.version` to the Kotlin plugin's (mmorpg 144 of 144), build-logic plugin
+  `kotlin.version` to the Kotlin plugin's (mmorpg 144 of 144), tool configurations resolved
+  on their own (known tools' and those the build creates that no `extendsFrom` names; caffeine
+  185 to 188 of 190, spotbugs' asm 9.11 off the tests), build-logic plugin
   classes registered by id adding their unconditional literal `add(conf, "g:a:v")` and
   `plugins.apply(...)` calls (Talaiot 118 to 157 of 158), the franzbecker Lombok plugin (LogNet), LINE gradle-scripts `[boms]` as every project's platform, only where
   `gradle/scripts/lib/common-dependencies.gradle` applies `dependenciesTomlBoms` (armeria
