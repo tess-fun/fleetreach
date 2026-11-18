@@ -1,6 +1,6 @@
 # Spec 16: A+ on every matrix row by 1.8.0
 
-Status: in progress (1.6.0: the list implemented and released, E3 moved to 1.7.0; E2 gates missed, 40 pilot records reviewed; 1.7.0: rpm images released early in 1.6.0) · Written 2026-11-02 after the 1.5.0 release, revised the same day
+Status: in progress (1.6.0: the list implemented and released, E3 moved to 1.7.0; E2 gates missed, 40 pilot records reviewed; 1.7.0: the second phases released, rpm images early in 1.6.0; 1.8.0 next) · Written 2026-11-02 after the 1.5.0 release, revised the same day
 (three releases instead of two; a path to A+ researched for every row) · Supersedes the
 "out of scope" parts of [spec 14](14-out-of-scope.md) for containers, curated research,
 hosted triage and malware analysis (user decisions of 2026-11-02, not re-argued here)
@@ -770,7 +770,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     PRs on Bitbucket, Azure DevOps and Gitea/Forgejo, Swift/Hex/Julia manifest edits.
     Poetry and Pipenv stay excluded unless their lock commands can be proven not to build
     sdists.
-    **Status: schedules, grouping, automerge and rollout implemented 2026-11-12, for 1.7.0**
+    **Status: schedules, grouping, automerge and rollout implemented 2026-11-12, released in 1.7.0**
     (`crates/cli/src/fix_policy.rs`, `[settings.fix]`). Grouping presets are `package`,
     `repo` and `ssvc`; `owner` is not one, since a request lives in one repo and a repo has
     one owner, so it would equal `repo`. A grouped branch applies and re-scans each bump on
@@ -824,7 +824,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
     (trends, SLA, owner queues, campaigns) and actions that edit triage files. Auth: none on
     localhost; behind a reverse proxy it trusts a configured identity header only from
     configured proxy addresses and records that identity in the log. No database.
-    **Status: implemented 2026-11-12, for 1.7.0** (`crates/cli/src/serve.rs`, `server.rs`,
+    **Status: implemented 2026-11-12, released in 1.7.0** (`crates/cli/src/serve.rs`, `server.rs`,
     feature `serve`). The overview is the history report; `/triage` lists the newest run's
     findings with filters, and a form records a decision through the same writer as
     `triage set` (Open question 2: files only, no git). Loopback-only by default, with the
@@ -1444,7 +1444,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   with each release.
 - **Research gate**: if the 1.7.0 measurement misses the bar, the gap is published with the
   number, and 1.8.0 work shifts to whatever the misses have in common.
-- **Status: phase 2 exploit maturity and fix-commit ranges implemented 2026-11-13, unreleased.**
+- **Status: phase 2 exploit maturity and fix-commit ranges implemented 2026-11-13, released in 1.7.0.**
   - *Exploit maturity* (`crates/cli/src/exploits.rs`): `db sync --source exploits` reads
     Metasploit's `modules_metadata_base.json` (exploit module = mature, auxiliary = proof of
     concept), nuclei's `cves.json` and Exploit-DB's `files_exploits.csv` into
@@ -1746,7 +1746,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Proof**: alerts per 1,000 benign packages per alert type, measured on the top 5,000 npm
   and PyPI packages and `~/fa-testbed` (as the typosquat signal's 1.6 per 1,000). Recall
   from synthetic fixtures modelled on public reports, not live samples.
-- **Status: implemented 2026-11-12, for 1.7.0** (`crates/cli/src/capabilities.rs`,
+- **Status: implemented 2026-11-12, released in 1.7.0** (`crates/cli/src/capabilities.rs`,
   `scan --capabilities`, its own flag since it downloads; `--signals` stays offline). User
   chose the top 1,000 of each instead of 5,000 (download size). Benign rates, latest
   releases: npm top 1,000 (npm-high-impact) 6 per 1,000 warn, 2 standalone (esbuild, pnpm
@@ -1791,7 +1791,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   a sentence naming a license in prose and source headers are not read. NOTICE files and
   conflicts stay 1.7.0.
 
-  **Status: 1.7.0 part implemented 2026-11-12, unreleased** (`crates/cli/src/notice.rs`,
+  **Status: 1.7.0 part implemented 2026-11-12, released in 1.7.0** (`crates/cli/src/notice.rs`,
   `license_conflicts.rs`, `licenses --notice DIR`, `[[repo]] license`, `[settings.licenses]
   conflicts`). Attribution files against license-checker 25.0.1 (`--production`) on three
   installed npm trees (Matomo, Plausible's assets, this repo's website; 578 packages both name):
@@ -1893,7 +1893,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
 - **Effort**: M. **Release**: 1.6.0 + 1.7.0.
 - **Proof**: official schemas; NTIA check vs `sbomqs`; hashes checked against registry
   downloads.
-- **Status: SPDX 3.0.1 JSON-LD and `--check-ntia` implemented 2026-11-12, for 1.7.0**
+- **Status: SPDX 3.0.1 JSON-LD and `--check-ntia` implemented 2026-11-12, released in 1.7.0**
   (`crates/report/src/spdx3.rs`, `crates/cli/src/ntia.rs`). All 18 demo documents (with and
   without `--report`) and two real repos (870 packages, hashes, a development scope) pass
   `spdx3-validate` 0.0.7, which checks the SPDX 3.0.1 JSON schema and SHACL model; a document
@@ -1933,7 +1933,7 @@ Each row: A+ criteria (short form; the full list is in capability-excellence.md)
   `docs/differential/sbom_os.py` over 27 images, Syft and Trivy, CycloneDX and SPDX, 108 documents:
   OS findings identical to the image's own scan in 104; the 4 others are SPDX documents of images
   with module builds, which carry no stream label and say so in a coverage gap. SPDX 3.0 JSON-LD
-  input implemented 2026-11-12, for 1.7.0: the demo fleet scanned from its own SPDX 3 SBOMs gives
+  input implemented 2026-11-12, released in 1.7.0: the demo fleet scanned from its own SPDX 3 SBOMs gives
   the 254 findings, direct flags and coverage notes its CycloneDX SBOMs give. **Left**: SPDX 3
   from other generators is untested (Syft 1.56 writes SPDX 2.3 only; sbom-tool here has no
   .NET runtime); SPDX as YAML, RDF or XML is refused; GitLab release
