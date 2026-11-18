@@ -1,16 +1,16 @@
 ---
-title: fleetreach, fleet-wide dependency security audit
-description: Scan every repository and container image in your organisation at once, across 12 ecosystems, and fix what clears the most repos first. One open-source binary, no server, fails closed.
+title: fleetreach, dependency risk for everything you ship
+description: One offline binary for the whole dependency security job across every repository and container image you own. Inventory, detection, prioritisation, verified fixes, VEX, SBOMs and SLA evidence, across 12 ecosystems and 20+ Linux distributions. No server, never a false clean.
 template: splash
 hero:
-  title: See how far every vulnerability reaches across your fleet
-  tagline: fleetreach scans all your repositories and container images in one run, across 12 ecosystems, and tells you which fix clears the most of them, who owns it, and what changed since yesterday. One binary. No server. Never a false clean.
+  title: From every dependency you ship to proof that it was fixed
+  tagline: fleetreach reads every repository and container image you own, across 12 ecosystems and 20+ Linux distributions. It ranks what to fix by exploitation, reachability and exposure, opens the verified fix, and writes the SBOM, VEX and SLA evidence that shows it was done. One binary, offline, no server. Never a false clean.
   actions:
     - text: Get started
       link: /fleetreach/docs/getting-started/installation/
       icon: right-arrow
-    - text: See it on a demo fleet
-      link: /fleetreach/docs/getting-started/first-scan/
+    - text: Find your use case
+      link: /fleetreach/use-cases/platform-security-teams/
       variant: minimal
     - text: GitHub
       link: https://github.com/tess-fun/fleetreach
@@ -43,11 +43,13 @@ import { Card, CardGrid, LinkCard, Tabs, TabItem } from "@astrojs/starlight/comp
   </TabItem>
 </Tabs>
 
-## The fix queue for nine repos in six languages
+## 211 findings, 38 fixes, 2 for today
 
-A real run on the [demo fleet](/fleetreach/docs/getting-started/first-scan/): Rust, npm,
-Python, Go, Ruby and Java services, with CISA KEV and EPSS. Log4Shell leads because it is
-being exploited and the repo is internet-facing, not because of its CVSS score alone.
+A real run on the [demo fleet](/fleetreach/docs/getting-started/first-scan/): nine services
+in Rust, npm, Python, Go, Ruby and Java. Per-repo scanners report 211 findings, 15 of them
+critical. fleetreach turns them into 38 bumps, one per package, each clearing every advisory it has in every
+repo, and SSVC marks 2 of them for today. Log4Shell leads because it is being exploited
+and the repo is internet-facing, not because of its CVSS score.
 
 {/* run: fleetreach scan -f remediation --enrich | head -n 9 */}
 ```console
@@ -64,71 +66,92 @@ $ fleetreach scan -f remediation --enrich | head -n 9
 ```
 {/* /run */}
 
-## One fix, many repos
+## The code and the image it ships in, in one queue
 
-Per-repo scanners give you one report per repo. fleetreach correlates them: the same
-package in several repos is one decision, ranked by how many repos it clears.
+`storefront-web` is the checkout-web service built on Alpine 3.18. The same queue holds the
+Node packages, the GitHub Action that builds it, and the OS packages under it, and the scan
+warns that Alpine 3.18 is past its end of life.
 
-{/* run: fleetreach scan -f packages | head -n 9 */}
+{/* run: fleetreach scan -c ecosystems/images.toml -f remediation --enrich | head -n 11 */}
 ```console
-$ fleetreach scan -f packages | head -n 9
-┌───────┬────────┬────────────┬────────────┬──────────┬──────────┬─────────┬─────────────────────────────────────────────────────┐
-│ Repos ┆ Direct ┆ Transitive ┆ Advisories ┆ Severity ┆ Fix      ┆ Exploit ┆ Package                                             │
-╞═══════╪════════╪════════════╪════════════╪══════════╪══════════╪═════════╪═════════════════════════════════════════════════════╡
-│ 2     ┆ 2      ┆ 0          ┆ 25         ┆ high     ┆ manifest ┆ -       ┆ axios (npm)                                         │
-├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
-│ 2     ┆ 2      ┆ 0          ┆ 10         ┆ high     ┆ manifest ┆ -       ┆ urllib3 (pypi)                                      │
-├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
-│ 2     ┆ 2      ┆ 0          ┆ 6          ┆ high     ┆ manifest ┆ -       ┆ lodash (npm)                                        │
-├╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+$ fleetreach scan -c ecosystems/images.toml -f remediation --enrich | head -n 11
+┌────┬──────────────┬──────────────────────────────────────────────────────────┬──────────────┬───────────────────────┬───────┬─────────┬──────────────┬───────────┐
+│ #  ┆ SSVC         ┆ Action                                                   ┆ Severity     ┆ Resolves              ┆ Repos ┆ Reach   ┆ Exploit      ┆ Bump risk │
+╞════╪══════════════╪══════════════════════════════════════════════════════════╪══════════════╪═══════════════════════╪═══════╪═════════╪══════════════╪═══════════╡
+│ 1  ┆ out-of-cycle ┆ bump tj-actions/changed-files 44.0.0 → 46.0.1 (breaking) ┆ high 8.6     ┆ GHSA-mrrh-fwg8-r2c3   ┆ 1     ┆ unknown ┆ KEV EPSS 72% ┆ high      │
+├╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌┤
+│ 2  ┆ scheduled    ┆ bump minimist 1.2.5 → 1.2.6                              ┆ critical     ┆ GHSA-xvch-5gv4-984h   ┆ 2     ┆ unknown ┆ EPSS 5%      ┆ low       │
+├╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌┤
+│ 3  ┆ scheduled    ┆ bump alpine/curl 8.3.0-r.0 → 8.12.0-r.0                  ┆ critical 9.8 ┆ 17 advisories         ┆ 1     ┆ unknown ┆ -            ┆ low       │
+├╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌┤
+│ 4  ┆ scheduled    ┆ bump alpine/expat 2.5.0-r.1 → 2.7.0-r.0                  ┆ critical 9.8 ┆ 8 advisories          ┆ 1     ┆ unknown ┆ -            ┆ low       │
+├╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌┤
 ```
 {/* /run */}
 
-## What it does
+## The whole job, not one step of it
+
+Most tools cover one step and hand off to the next. fleetreach covers all of them from the
+same files, so the finding you prioritise is the one you fix, suppress and report on.
 
 <CardGrid>
-  <Card title="Ranks fixes across the fleet" icon="list-format">
-    Impact, blast radius, package rollups and a batched fix queue: one bump per package that
-    clears every advisory it has, in every repo.
+  <Card title="Inventory" icon="list-format">
+    Lockfiles in 12 ecosystems, container images on 20+ distributions, Go and Rust binaries,
+    jars and gems inside images, SBOMs from other tools, and whole orgs on GitHub, GitLab,
+    Gitea, Forgejo, Bitbucket and Azure DevOps.
   </Card>
-  <Card title="Prioritises by real risk" icon="warning">
-    CISA KEV, FIRST EPSS and SSVC decisions from each repo's exposure and impact, so an
-    internet-facing service outranks an internal tool.
+  <Card title="Detect" icon="magnifier">
+    OSV, RustSec, vendor feeds and CSAF VEX from Red Hat and SUSE, known malware, and
+    supply-chain signals: install scripts, typosquats, fresh releases, abandoned packages.
   </Card>
-  <Card title="Opens verified fixes" icon="approve-check">
-    Lock-only bumps on branches, each re-scanned before it is pushed, as pull or merge
-    requests on GitHub and GitLab.
+  <Card title="Prioritise" icon="warning">
+    CISA KEV, EPSS, public exploits and SSVC decisions from each repo's exposure. Import
+    chains from your own code in eight ecosystems, and sound call graphs for Rust, Java and .NET that can set
+    aside what is never called.
   </Card>
-  <Card title="Fails closed" icon="error">
-    A repo it cannot read is an error, a partly read source is labelled, and exit code 2
-    means "not complete". Never a false clean.
+  <Card title="Fix" icon="approve-check">
+    A batched fix queue, `whatif` to see what a bump clears before any edit, and fix pull
+    requests on six forges, each re-scanned before it is pushed.
   </Card>
-  <Card title="Tracks it over time" icon="random">
-    History, SLAs per SSVC outcome or severity, time to fix, Slack and webhook
-    notifications, issues per owner, and a static HTML report.
+  <Card title="Decide" icon="pencil">
+    Triage decisions kept as files in git, VEX read from OpenVEX, CycloneDX, CSAF and signed
+    OCI attestations, and VEX written back that Trivy and Grype honour.
   </Card>
-  <Card title="Produces the evidence" icon="document">
-    CycloneDX and SPDX SBOMs, OpenVEX, SARIF for code scanning, and license policy
-    reports, from the same files.
+  <Card title="Prove" icon="document">
+    CycloneDX and SPDX SBOMs with NTIA checks, license policy and NOTICE files, SARIF for
+    code scanning, and a coverage record that names anything that was not read.
   </Card>
-  <Card title="Proves reachability" icon="magnifier">
-    Import-graph witness chains for npm and Python, and a sound call-graph analysis for
-    Rust that can safely suppress what is never called.
+  <Card title="Operate" icon="random">
+    History, SLAs that never reset, time to fix, drift between scans, Slack and webhook
+    notifications, issues per owner, an HTML report and a local triage UI.
   </Card>
-  <Card title="Runs anywhere" icon="laptop">
-    One static binary. Reads lockfiles, runs no package code, works offline and in
-    air-gapped networks.
+  <Card title="Run anywhere" icon="laptop">
+    One static binary that reads files and runs no package code. Works offline and
+    air-gapped from a hash-checked advisory bundle, and exits 2 when coverage is incomplete.
   </Card>
 </CardGrid>
 
-## 12 ecosystems and container images, each with its own version rules
+## Use cases
 
 <CardGrid>
-  <LinkCard title="Rust" description="Cargo.lock, RustSec" href="/fleetreach/docs/ecosystems/rust/" />
-  <LinkCard title="Go" description="go.mod, govulncheck or OSV" href="/fleetreach/docs/ecosystems/go/" />
+  <LinkCard title="Run a vulnerability program" href="/fleetreach/use-cases/platform-security-teams/" description="one nightly job, a queue per team, SLAs and fix PRs" />
+  <LinkCard title="Cut alert noise" href="/fleetreach/use-cases/reduce-alert-noise/" description="SSVC, reachability and VEX instead of a CVSS sort" />
+  <LinkCard title="Secure container images" href="/fleetreach/use-cases/container-images/" description="OS packages, binaries and the app inside, by layer" />
+  <LinkCard title="Gate pull requests" href="/fleetreach/use-cases/pull-request-gate/" description="fail on what a change adds, not on old debt" />
+  <LinkCard title="Respond to an incident" href="/fleetreach/use-cases/incident-response/" description="every affected repo, the chain and the owner, in minutes" />
+  <LinkCard title="Produce compliance evidence" href="/fleetreach/use-cases/compliance-and-sboms/" description="SBOMs, VEX, licenses and SLA history" />
+  <LinkCard title="Audit a client's code" href="/fleetreach/use-cases/consultancies-and-audits/" description="offline, read-only, honest about its limits" />
+  <LinkCard title="Maintain open source" href="/fleetreach/use-cases/open-source-maintainers/" description="every repo you maintain, in one free run" />
+</CardGrid>
+
+## What it reads
+
+<CardGrid>
+  <LinkCard title="Rust" description="Cargo.lock, RustSec, audited binaries" href="/fleetreach/docs/ecosystems/rust/" />
+  <LinkCard title="Go" description="go.mod, binaries, govulncheck or OSV" href="/fleetreach/docs/ecosystems/go/" />
   <LinkCard title="npm" description="npm, pnpm, Yarn, Bun" href="/fleetreach/docs/ecosystems/npm/" />
   <LinkCard title="Python" description="uv, Poetry, Pipenv, requirements" href="/fleetreach/docs/ecosystems/pypi/" />
-  <LinkCard title="Java" description="Maven pom.xml, Gradle lockfiles" href="/fleetreach/docs/ecosystems/maven/" />
+  <LinkCard title="Java" description="Maven and Gradle, resolved like the real tools" href="/fleetreach/docs/ecosystems/maven/" />
   <LinkCard title="Ruby" description="Gemfile.lock" href="/fleetreach/docs/ecosystems/rubygems/" />
   <LinkCard title="PHP" description="composer.lock" href="/fleetreach/docs/ecosystems/packagist/" />
   <LinkCard title=".NET" description="NuGet lock and project files" href="/fleetreach/docs/ecosystems/nuget/" />
@@ -136,16 +159,21 @@ $ fleetreach scan -f packages | head -n 9
   <LinkCard title="Swift" description="Package.resolved" href="/fleetreach/docs/ecosystems/swift/" />
   <LinkCard title="Elixir" description="mix.lock" href="/fleetreach/docs/ecosystems/hex/" />
   <LinkCard title="Julia" description="Manifest.toml" href="/fleetreach/docs/ecosystems/julia/" />
-  <LinkCard title="Container images" description="dpkg, apk, rpm and language packages" href="/fleetreach/docs/ecosystems/container-images/" />
+  <LinkCard title="Container images" description="Debian, Ubuntu, Alpine, Wolfi, Red Hat, SUSE, Amazon and more" href="/fleetreach/docs/ecosystems/container-images/" />
 </CardGrid>
 
 ## Checked against the real thing
 
+Every comparator and resolver is checked against the tool it imitates, on real projects,
+and every difference is either fixed or explained.
+
 <div class="fr-grid">
-  <div class="fr-stat"><strong>710,000+</strong><span>Maven version pairs agreeing with Apache Maven's own comparator</span></div>
+  <div class="fr-stat"><strong>3,555 of 3,555</strong><span>Maven packages identical to real Maven 3.9.9 on 14 real repositories, without running Maven</span></div>
+  <div class="fr-stat"><strong>217 images</strong><span>compared with Trivy and Grype, every difference explained</span></div>
+  <div class="fr-stat"><strong>2.4 million</strong><span>version pairs agreeing with dpkg, apk-tools, rpm and Apache Maven</span></div>
   <div class="fr-stat"><strong>100%</strong><span>recall on real npm and PyPI lockfiles, zero false cleans</span></div>
-  <div class="fr-stat"><strong>85 of 85</strong><span>Spring Boot artifacts matching <code>mvn dependency:list</code>, without running Maven</span></div>
   <div class="fr-stat"><strong>72 of 72</strong><span>SSVC decisions matching CERT/CC's published table</span></div>
+  <div class="fr-stat"><strong>6,727 of 6,727</strong><span>.NET methods that ran in real apps found by the static call graph</span></div>
 </div>
 
 [How fleetreach is validated](/fleetreach/docs/concepts/accuracy/)
@@ -166,8 +194,8 @@ Findings go to the GitHub Security tab as SARIF. For a whole org, schedule one j
 ## Works with
 
 <CardGrid>
+  <LinkCard title="Trivy and Grype" href="/fleetreach/docs/integrations/trivy-and-grype/" description="they honour the VEX it writes" />
   <LinkCard title="Dependency-Track" href="/fleetreach/docs/integrations/dependency-track/" description="feed it an SBOM per repo" />
-  <LinkCard title="Trivy and Grype" href="/fleetreach/docs/integrations/trivy-and-grype/" description="share OpenVEX statements" />
   <LinkCard title="Renovate and Dependabot" href="/fleetreach/docs/integrations/renovate-and-dependabot/" description="fleet priorities alongside per-repo bots" />
   <LinkCard title="Slack, Jira, webhooks" href="/fleetreach/docs/integrations/slack/" description="new, fixed and overdue, per team" />
 </CardGrid>
@@ -176,8 +204,8 @@ Findings go to the GitHub Security tab as SARIF. For a whole org, schedule one j
 
 | | Scope | Answers | Shape |
 |---|---|---|---|
-| **fleetreach** | every repo, one run | which fix clears the most repos, for whom, by when | one binary |
-| osv-scanner, Trivy, Grype | one project or directory | is this project vulnerable? | one binary |
+| **fleetreach** | every repo and image, one run | what to fix first, for whom, by when, and the proof it was done | one binary |
+| osv-scanner, Trivy, Grype | one project, directory or image | is this vulnerable? | one binary |
 | Dependabot, Renovate | one repo at a time | which updates to open | hosted bot |
 | Dependency-Track | a portfolio of SBOMs | what components are where | a server you run |
 

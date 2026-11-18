@@ -19,6 +19,9 @@ fleetreach.
 | NuGet | `NuGet.Versioning` | 100% of the corpus |
 | Julia | Julia `VersionNumber` | 100% of the corpus |
 | RubyGems | `Gem::Version` (RubyGems 3.3+) | golden tests pinned |
+| Debian, Ubuntu | dpkg 1.21 | 619,997 |
+| Alpine, Wolfi | apk-tools 2.14 | 619,999 |
+| rpm distributions | rpm 4.20 `rpm.vercmp` | 538,780 |
 
 The differential runs found real bugs that are now fixed, for example Maven 3.9 treating
 `.X` as `-X`, and Composer including `X`'s prereleases in `>=X`.
@@ -30,8 +33,12 @@ The differential runs found real bugs that are now fixed, for example Maven 3.9 
 - **PyPI:** 100% recall and precision on 3,000 advisories. Matching the enumerated version
   lists is required: range-only matching missed 220 of 600.
 - **bun.lock:** the same 4,829 packages as osv-scanner on four large projects.
-- **Maven:** a Spring Boot 2.7 project resolves to the same 85 artifacts and versions as
-  `mvn dependency:list`.
+- **Maven:** on 14 real repositories, 3,555 of 3,555 resolved packages are identical to
+  `mvn dependency:tree` from Maven 3.9.9, without running Maven. Module by module on 30
+  more, 1,999 of 2,136 modules are identical, and the other 137 differ only by profiles that
+  Maven activates by the machine's OS or CPU.
+- **.NET call graph:** of 6,727 methods the .NET runtime compiled while the test apps ran,
+  the static call graph missed none.
 
 ## Features checked against independent sources
 

@@ -1,0 +1,22 @@
+# The fleet for the container image examples: the storefront's Alpine image next to the
+# checkout repo its app comes from. images/storefront-web is a root filesystem: Alpine 3.18,
+# its apk database and the Node app in /app. Paths are relative to this file.
+[settings.osv]
+dir = "../data/osv"
+
+[settings.context.defaults]
+exposure       = "controlled"
+mission_impact = "degraded"
+safety_impact  = "negligible"
+
+[[repo]]
+id       = "checkout-web"
+path     = "../repos/checkout-web"
+owner    = "team-storefront"
+exposure = "open"
+
+[[image]]
+id       = "storefront-web"
+path     = "../images/storefront-web"
+owner    = "team-storefront"
+exposure = "open"

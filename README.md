@@ -10,9 +10,10 @@
 [![MSRV](https://img.shields.io/badge/MSRV-1.97-blue)](#license)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 
-**Fleet-wide dependency security audit.** fleetreach scans every repository in your
-organisation in one run, across 12 ecosystems and container images, and tells you which fix
-clears the most of them, who owns it, and what changed since the last run. One binary, no server, and never a
+**Dependency risk for everything you ship.** fleetreach reads every repository and
+container image you own, across 12 ecosystems and 20+ Linux distributions. It ranks what to
+fix by exploitation, reachability and exposure, opens the verified fix, and writes the SBOM,
+VEX and SLA evidence that shows it was done. One binary, offline, no server, and never a
 false clean.
 
 **[Documentation](https://tess-fun.github.io/fleetreach/)** ·
@@ -22,7 +23,8 @@ false clean.
 [Compare](https://tess-fun.github.io/fleetreach/compare/osv-scanner/) ·
 [Changelog](CHANGELOG.md)
 
-A real run on a demo fleet of nine services in six languages, with CISA KEV and EPSS:
+A real run on a demo fleet of nine services in six languages: 211 findings become 38 bumps,
+ranked by CISA KEV, EPSS and each repo's exposure, and 2 of them are for today:
 
 <!-- run: fleetreach scan -f remediation --enrich | head -n 9 -->
 ```console
@@ -74,27 +76,34 @@ Exit codes are the CI contract: `0` clean, `1` findings, `2` something could not
 
 ## What it does
 
-- **Finds your repos.** Lists them from a GitHub, GitLab, Bitbucket, Azure DevOps or Gitea
-  org, or reads the ones you name.
-- **Scans container images.** OS and language packages from image archives, root filesystems
-  or a registry, ranked with the repos. Every difference from Trivy and Grype on 217 public
-  images is [explained](https://tess-fun.github.io/fleetreach/docs/concepts/image-differential/).
-- **Ranks fixes across the fleet.** Impact, blast radius (direct vs transitive) and a
-  batched fix queue: one bump per package that clears every advisory it has, with a bump
-  risk taken from what the fleet already runs.
-- **Prioritises by real risk.** CISA KEV, FIRST EPSS, and CISA/CERT SSVC decisions from each
-  repo's exposure and impact.
-- **Opens verified fixes.** `fix plan` and `fix apply` make lock-only bumps on branches,
-  re-scan each one, and open pull or merge requests on GitHub or GitLab.
-- **Tracks it over time.** History with no database, SLAs, time to fix, notifications to
-  Slack or webhooks, one issue per owner, and a static HTML report. Triage decisions live in
-  files you review like code.
-- **Produces the evidence.** CycloneDX 1.7, SPDX 2.3 and SPDX 3 SBOMs, OpenVEX, SARIF for GitHub code
-  scanning, and license policy checks.
-- **Proves reachability.** Import-graph witness chains for npm and Python, and a sound MIR
-  call-graph analysis for Rust.
-- **Flags supply-chain risk.** Install scripts, git dependencies, tag-pinned actions,
-  typosquats, brand-new releases, known malware, and registry health with `--health`.
+- **Inventory.** Lockfiles in 12 ecosystems, container images on 20+ distributions, Go and
+  Rust binaries, jars and gems inside images, and SBOMs from other tools. Lists repos from
+  GitHub, GitLab, Gitea, Forgejo, Bitbucket and Azure DevOps.
+- **Detect.** OSV, RustSec, vendor feeds and Red Hat and SUSE CSAF VEX, known malware, and
+  supply-chain signals: install scripts, typosquats, tag-pinned actions, brand-new releases,
+  deprecated or abandoned packages, and what a new version can do that the last could not.
+- **Prioritise.** CISA KEV, EPSS, public exploits and SSVC decisions from each repo's
+  exposure. Import chains from your own code in eight ecosystems, and call graphs for Rust,
+  Java and .NET that can set aside what is never called.
+- **Fix.** A batched queue (one bump per package that clears every advisory it has, in
+  every repo), `whatif` to see what a bump clears and adds before any edit, and `fix apply`
+  pull requests on six forges, each re-scanned before it is pushed.
+- **Decide.** Triage decisions as files in git; VEX read from OpenVEX, CycloneDX, CSAF and
+  signed OCI attestations, and written back in forms Trivy and Grype honour.
+- **Prove.** CycloneDX 1.7, SPDX 2.3 and SPDX 3 SBOMs with NTIA checks, license policy and
+  NOTICE files, SARIF, and a coverage record that names anything that was not read.
+- **Operate.** History with no database, SLAs that never reset, time to fix, drift between
+  scans, pull-request gates on what a change adds, Slack and webhook notifications, one issue
+  per owner, an HTML report and a local triage UI (`fleetreach serve`).
+
+Use cases with real output: [vulnerability programs](https://tess-fun.github.io/fleetreach/use-cases/platform-security-teams/),
+[cutting alert noise](https://tess-fun.github.io/fleetreach/use-cases/reduce-alert-noise/),
+[container images](https://tess-fun.github.io/fleetreach/use-cases/container-images/),
+[pull-request gates](https://tess-fun.github.io/fleetreach/use-cases/pull-request-gate/),
+[incident response](https://tess-fun.github.io/fleetreach/use-cases/incident-response/),
+[compliance evidence](https://tess-fun.github.io/fleetreach/use-cases/compliance-and-sboms/),
+[audits](https://tess-fun.github.io/fleetreach/use-cases/consultancies-and-audits/) and
+[open-source maintainers](https://tess-fun.github.io/fleetreach/use-cases/open-source-maintainers/).
 
 ## Ecosystems
 
@@ -111,7 +120,8 @@ Exit codes are the CI contract: `0` clean, `1` findings, `2` something could not
 | Container images | `docker save` and OCI archives, root filesystems, `docker://` registries: dpkg, apk and rpm packages and the language packages inside |
 
 Each ecosystem uses a port of its own version comparator, checked against the real one
-(Maven's over 710,000 version pairs). Nothing is built and no package code runs, so it is
+(Maven's over 710,000 version pairs, and dpkg, apk-tools and rpm over 1.7 million), and
+the Maven resolver matches real Maven on 3,555 of 3,555 packages from 14 real repositories. Nothing is built and no package code runs, so it is
 safe to point at any repository. See
 [Ecosystems](https://tess-fun.github.io/fleetreach/docs/ecosystems/) and
 [Accuracy](https://tess-fun.github.io/fleetreach/docs/concepts/accuracy/).
